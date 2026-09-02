@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "validated_at": "2026-09-03T01:35:00+08:00",
+  "image": "cairn-x-enricher:local",
+  "image_id": "sha256:9954fac52efc26189f5839945c07450b93ae638b2f9cc6f42e8a89103b0b3fa3",
+  "size_bytes": 7227496,
+  "platform": "linux/amd64",
+  "builder": "golang:1.26.8-alpine3.23",
+  "runtime": "scratch",
+  "build_args": {
+    "VERSION": "0.1.0-local",
+    "COMMIT": "local",
+    "BUILD_DATE": "2026-09-03T00:00:00Z"
+  },
+  "notes": [
+    "The first two attempts reached proxy.golang.org but timed out from the local Docker network.",
+    "The successful validation build overrode the non-secret GOPROXY build argument; CI retains the official default."
+  ]
+}

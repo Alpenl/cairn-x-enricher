@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "validated_at": "2026-09-03T01:35:37+08:00",
+  "checks": {
+    "binary_starts": true,
+    "version_metadata": true,
+    "non_root_user": "65532:65532",
+    "healthcheck": "healthy",
+    "read_only_filesystem": true,
+    "all_capabilities_dropped": true,
+    "no_new_privileges": true,
+    "worker_claim": true,
+    "responses_x_search_contract": true,
+    "strict_json_output": true,
+    "lease_completion": true,
+    "related_link_deduplication": true,
+    "credential_history_scan": true
+  },
+  "fixture": {
+    "production_services_contacted": false,
+    "job_id": 42,
+    "claimed": 1,
+    "completed": 1,
+    "failed": 0
+  }
+}

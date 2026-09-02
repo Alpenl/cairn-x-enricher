@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "complexity": "L2",
+  "project": {
+    "type": "single Go service",
+    "module": "github.com/Alpenl/cairn-x-enricher",
+    "entrypoint": "./cmd/cairn-x-enricher",
+    "go_version": "1.26.8"
+  },
+  "analysis": {
+    "1_repository_shape": "single-module repository",
+    "2_runtime": "long-running scheduler plus HTTP health server",
+    "3_build_system": "Go modules and go build",
+    "4_dependencies": "CloudWeGo Eino, Cobra, godotenv",
+    "5_external_services": ["Cairn Share Worker", "xAI-compatible Responses API"],
+    "6_persistent_storage": "none in container; D1 is accessed through Worker HTTP API",
+    "7_network": "outbound HTTPS and inbound health port 8080",
+    "8_configuration": "environment variables with startup validation",
+    "9_secrets": ["CAIRN_ENRICHER_TOKEN", "XAI_API_KEY"],
+    "10_build_artifact": "statically linked Linux binary",
+    "11_platforms": ["linux/amd64", "linux/arm64"],
+    "12_user": "numeric non-root 65532:65532",
+    "13_filesystem": "read-only; optional tmpfs at /tmp",
+    "14_healthcheck": "/cairn-x-enricher healthcheck",
+    "15_shutdown": "SIGINT/SIGTERM with configurable graceful timeout",
+    "16_migrations": "owned by the separate Cairn Share Worker deployment",
+    "17_release": "GitHub Release archives and GHCR multi-architecture image"
+  },
+  "risks": [
+    "Production startup performs an immediate batch and may call a paid API",
+    "Worker migration and dedicated secret must exist before service startup",
+    "Build context must exclude the local .env file"
+  ]
+}

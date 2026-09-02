@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "generated": [
+    "Dockerfile",
+    ".dockerignore",
+    "compose.yaml"
+  ],
+  "decisions": {
+    "builder": "golang:1.26.8-alpine3.23",
+    "runtime": "scratch",
+    "binary": "CGO-disabled static executable",
+    "user": "65532:65532",
+    "healthcheck": "application's healthcheck subcommand",
+    "secret_handling": "runtime environment only",
+    "cache": "BuildKit Go module and compiler caches"
+  },
+  "build_network": "GOPROXY is an overridable build argument with the official Go proxy as its default",
+  "release_platforms": ["linux/amd64", "linux/arm64"]
+}

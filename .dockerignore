@@ -1,0 +1,14 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+bin
+dist
+coverage.out
+*.prof
+docker-build
+docs
+README.md
+CHANGELOG.md
+SECURITY.md

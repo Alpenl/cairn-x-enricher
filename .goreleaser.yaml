@@ -1,0 +1,58 @@
+version: 2
+
+project_name: cairn-x-enricher
+
+builds:
+  - id: cairn-x-enricher
+    main: ./cmd/cairn-x-enricher
+    binary: cairn-x-enricher
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - >-
+        -s -w
+        -X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Version={{.Version}}
+        -X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Commit={{.Commit}}
+        -X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Date={{.Date}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: binaries
+    ids:
+      - cairn-x-enricher
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+release:
+  github:
+    owner: Alpenl
+    name: cairn-x-enricher
+  draft: false
+  prerelease: auto
