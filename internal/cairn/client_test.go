@@ -180,7 +180,11 @@ func TestClientRejectsUnsafeImageReferences(t *testing.T) {
 	if _, err := NewClient(server.URL, "token", server.Client()).ListBookmarks(context.Background(), BookmarkQuery{}); err == nil {
 		t.Fatal("ListBookmarks() error = nil, want invalid image reference error")
 	}
-	if _, err := NewClient(server.URL, "token", server.Client()).GetImage(context.Background(), "../secret"); err == nil {
+	response, err := NewClient(server.URL, "token", server.Client()).GetImage(context.Background(), "../secret")
+	if response != nil {
+		_ = response.Body.Close()
+	}
+	if err == nil {
 		t.Fatal("GetImage() error = nil, want invalid key error")
 	}
 }
