@@ -142,9 +142,8 @@ func (p *Processor) processJob(ctx context.Context, job *cairn.Job) error {
 		if reportErr := p.queue.Fail(ctx, job.ID, job.LeaseToken, message); reportErr != nil {
 			logger.ErrorContext(ctx, "failed to report enrichment failure", "error", reportErr)
 			return fmt.Errorf("report enrichment failure: %w", reportErr)
-		} else {
-			logger.WarnContext(ctx, "enrichment failed", "error", message)
 		}
+		logger.WarnContext(ctx, "enrichment failed", "error", message)
 		return err
 	}
 

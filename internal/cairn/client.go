@@ -118,7 +118,11 @@ func NewClient(baseURL, token string, httpClient *http.Client) *Client {
 // Claim atomically leases the next eligible X bookmark, or returns nil when empty.
 func (c *Client) Claim(ctx context.Context) (*Job, error) {
 	response, err := c.do(ctx, http.MethodPost, "/api/enrichment/jobs/claim", nil)
-	return decodeClaimResponse(response, err)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	return decodeClaimResponse(response)
 }
 
 // ClaimByID atomically leases a selected X bookmark for a manual run.
@@ -128,17 +132,14 @@ func (c *Client) ClaimByID(ctx context.Context, id int64) (*Job, error) {
 	}
 	path := fmt.Sprintf("/api/enrichment/jobs/%d/claim", id)
 	response, err := c.do(ctx, http.MethodPost, path, nil)
-	return decodeClaimResponse(response, err)
-}
-
-func decodeClaimResponse(response *http.Response, requestErr error) (*Job, error) {
-	if requestErr != nil {
-		return nil, requestErr
-	}
-	if response == nil {
-		return nil, errors.New("claim response is nil")
+	if err != nil {
+		return nil, err
 	}
 	defer func() { _ = response.Body.Close() }()
+	return decodeClaimResponse(response)
+}
+
+func decodeClaimResponse(response *http.Response) (*Job, error) {
 
 	if response.StatusCode == http.StatusNoContent {
 		return nil, nil
