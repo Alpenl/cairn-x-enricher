@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Cairn X Enricher</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #20252b;
+      background: #f4f6f7;
+      font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 280px; background: #f4f6f7; }
+    header { background: #20252b; color: #fff; border-bottom: 4px solid #15a36d; }
+    .bar, main, footer { width: min(1040px, calc(100% - 32px)); margin: 0 auto; }
+    .bar { min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    h1 { margin: 0; font-size: 22px; line-height: 1.25; letter-spacing: 0; }
+    .subtitle { margin: 4px 0 0; color: #c8d0d5; font-size: 13px; }
+    .service-state { display: inline-flex; align-items: center; gap: 9px; min-width: 126px; justify-content: flex-end; font-size: 14px; font-weight: 700; }
+    .dot { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; background: #a6afb5; box-shadow: 0 0 0 3px rgb(166 175 181 / 18%); }
+    .dot.good { background: #31cf8c; box-shadow: 0 0 0 3px rgb(49 207 140 / 18%); }
+    .dot.warn { background: #ffc857; box-shadow: 0 0 0 3px rgb(255 200 87 / 18%); }
+    .dot.bad { background: #ff6b66; box-shadow: 0 0 0 3px rgb(255 107 102 / 18%); }
+    main { padding: 30px 0 36px; }
+    .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+    h2 { margin: 0; font-size: 15px; line-height: 1.4; letter-spacing: 0; }
+    .checked { color: #66717a; font-size: 12px; text-align: right; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .metric { min-height: 108px; padding: 18px; background: #fff; border: 1px solid #dce2e5; border-radius: 6px; }
+    .metric-label { color: #66717a; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .metric-value { display: block; margin-top: 12px; font-size: 30px; line-height: 1; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .metric-value.good { color: #087a51; }
+    .metric-value.bad { color: #b43a37; }
+    .detail { margin-top: 24px; border-top: 1px solid #cfd7db; }
+    .row { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 20px; padding: 13px 2px; border-bottom: 1px solid #dce2e5; }
+    .row dt { color: #66717a; font-size: 13px; }
+    .row dd { margin: 0; min-width: 0; font-size: 13px; font-weight: 650; overflow-wrap: anywhere; }
+    .error { color: #a62e2b; white-space: pre-wrap; }
+    .muted { color: #66717a; font-weight: 500; }
+    footer { display: flex; justify-content: space-between; gap: 16px; padding: 20px 0 28px; border-top: 1px solid #dce2e5; color: #66717a; font-size: 12px; }
+    a { color: #1267a6; text-underline-offset: 3px; }
+    .endpoints { display: flex; flex-wrap: wrap; gap: 14px; }
+    @media (max-width: 720px) {
+      .bar { min-height: 88px; align-items: flex-start; padding: 18px 0; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .row { grid-template-columns: 120px minmax(0, 1fr); }
+      footer { flex-direction: column; }
+    }
+    @media (max-width: 420px) {
+      .bar, main, footer { width: min(100% - 24px, 1040px); }
+      .bar { display: block; }
+      .service-state { justify-content: flex-start; margin-top: 12px; }
+      main { padding-top: 22px; }
+      .section-head { display: block; }
+      .checked { margin-top: 5px; text-align: left; }
+      .metric { min-height: 96px; padding: 14px; }
+      .metric-value { font-size: 26px; }
+      .row { grid-template-columns: 1fr; gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div>
+        <h1>Cairn X Enricher</h1>
+        <p class="subtitle">Scheduled bookmark processing service</p>
+      </div>
+      <div class="service-state" aria-live="polite">
+        <span id="state-dot" class="dot"></span>
+        <span id="state-label">Connecting</span>
+      </div>
+    </div>
+  </header>
+  <main>
+    <section aria-labelledby="batch-heading">
+      <div class="section-head">
+        <h2 id="batch-heading">Latest batch</h2>
+        <span id="checked" class="checked">Waiting for status</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><span class="metric-label">Claimed</span><strong id="claimed" class="metric-value">-</strong></div>
+        <div class="metric"><span class="metric-label">Completed</span><strong id="completed" class="metric-value good">-</strong></div>
+        <div class="metric"><span class="metric-label">Failed</span><strong id="failed" class="metric-value">-</strong></div>
+        <div class="metric"><span class="metric-label">Duration</span><strong id="duration" class="metric-value">-</strong></div>
+      </div>
+    </section>
+    <dl class="detail">
+      <div class="row"><dt>Last run</dt><dd id="last-run">-</dd></div>
+      <div class="row"><dt>Last success</dt><dd id="last-success">-</dd></div>
+      <div class="row"><dt>Started</dt><dd id="started">-</dd></div>
+      <div class="row"><dt>Build</dt><dd id="build">-</dd></div>
+      <div class="row"><dt>Latest error</dt><dd id="last-error" class="muted">None</dd></div>
+    </dl>
+  </main>
+  <footer>
+    <span>Read-only operational status</span>
+    <nav class="endpoints" aria-label="Service endpoints">
+      <a href="/healthz">Health JSON</a>
+      <a href="/readyz">Readiness JSON</a>
+      <a href="/status">Full status JSON</a>
+    </nav>
+  </footer>
+  <script>
+    const byId = (id) => document.getElementById(id);
+    const formatDate = (value) => value ? new Date(value).toLocaleString() : "Not yet";
+    const formatDuration = (nanoseconds) => {
+      if (!Number.isFinite(nanoseconds)) return "-";
+      const milliseconds = nanoseconds / 1000000;
+      if (milliseconds < 1000) return `${Math.round(milliseconds)} ms`;
+      return `${(milliseconds / 1000).toFixed(1)} s`;
+    };
+    const setState = (kind, label) => {
+      byId("state-dot").className = `dot ${kind}`;
+      byId("state-label").textContent = label;
+    };
+    const render = (status) => {
+      const stats = status.last_stats || {};
+      const failed = Number(stats.failed || 0);
+      byId("claimed").textContent = stats.claimed ?? "-";
+      byId("completed").textContent = stats.completed ?? "-";
+      byId("failed").textContent = stats.failed ?? "-";
+      byId("failed").className = `metric-value ${failed > 0 ? "bad" : ""}`;
+      byId("duration").textContent = formatDuration(stats.duration);
+      byId("last-run").textContent = formatDate(status.last_run_at);
+      byId("last-success").textContent = formatDate(status.last_success_at);
+      byId("started").textContent = formatDate(status.started_at);
+      const build = status.build || {};
+      const commit = build.commit && build.commit !== "none" ? build.commit.slice(0, 8) : "local";
+      byId("build").textContent = `${build.version || "dev"} / ${commit}`;
+      const error = status.last_error || "";
+      byId("last-error").textContent = error || "None";
+      byId("last-error").className = error ? "error" : "muted";
+      byId("checked").textContent = `Updated ${new Date().toLocaleTimeString()}`;
+      if (!status.ready) setState("bad", "Not ready");
+      else if (error || failed > 0) setState("warn", "Needs attention");
+      else setState("good", "Operational");
+    };
+    const refresh = async () => {
+      try {
+        const response = await fetch("/status", { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        render(await response.json());
+      } catch (_) {
+        setState("bad", "Unavailable");
+        byId("checked").textContent = `Update failed ${new Date().toLocaleTimeString()}`;
+      }
+    };
+    refresh();
+    setInterval(refresh, 10000);
+  </script>
+</body>
+</html>

@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.1]
+
+- 增加内嵌的只读服务状态页，展示健康状态、最近批次统计、构建版本和错误摘要。
+- 增加根页面安全响应头、精确路由和回归测试。
+- 增加 Momax NAS 专用 Compose，通过 `8088` 提供局域网状态页且仅使用 Actions 发布镜像。
+
+容器：`ghcr.io/alpenl/cairn-x-enricher:0.1.1`
+
 ## [0.1.0]
 
 首个可运行版本：

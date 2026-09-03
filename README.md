@@ -54,6 +54,7 @@ go run ./cmd/cairn-x-enricher serve
 
 `serve` 启动后立即执行一批任务，之后按 `POLL_INTERVAL` 运行，并在 `127.0.0.1:8080` 暴露：
 
+- `/`：只读运行状态页面，每 10 秒刷新一次匿名统计。
 - `/healthz`：进程存活。
 - `/readyz`：服务就绪。
 - `/status`：最近一批的匿名统计和错误状态。
@@ -75,6 +76,7 @@ ghcr.io/alpenl/cairn-x-enricher:<version>
 ```
 
 完整部署顺序和 Cloudflare 前置改造见 [docs/deployment.md](docs/deployment.md) 与 [docs/cloudflare-backend.md](docs/cloudflare-backend.md)。
+Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网状态页映射到 `8088`；该清单只拉取 GitHub Actions 发布的镜像，不在 NAS 本地构建。
 
 ## 发布
 
