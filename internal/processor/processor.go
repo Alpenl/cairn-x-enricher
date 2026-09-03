@@ -18,6 +18,7 @@ const maxFailureMessageBytes = 1_800
 // Queue leases work and conditionally stores outcomes.
 type Queue interface {
 	Claim(context.Context) (*cairn.Job, error)
+	StoreImages(context.Context, int64, string, []string) ([]cairn.ImageRef, error)
 	Complete(context.Context, int64, cairn.Completion) error
 	Fail(context.Context, int64, string, string) error
 }
@@ -134,32 +135,48 @@ func (p *Processor) processJob(ctx context.Context, job *cairn.Job) error {
 		Attempt: job.Attempt,
 	})
 	if err != nil {
-		if ctx.Err() != nil {
-			logger.WarnContext(ctx, "enrichment interrupted", "error", ctx.Err())
-			return ctx.Err()
+		return p.reportFailure(ctx, logger, job, err)
+	}
+
+	images := []cairn.ImageRef{}
+	if len(result.ImageURLs) > 0 {
+		images, err = p.queue.StoreImages(ctx, job.ID, job.LeaseToken, result.ImageURLs)
+		if err != nil {
+			return p.reportFailure(ctx, logger, job, fmt.Errorf("store enrichment images: %w", err))
 		}
-		message := boundedError(err)
-		if reportErr := p.queue.Fail(ctx, job.ID, job.LeaseToken, message); reportErr != nil {
-			logger.ErrorContext(ctx, "failed to report enrichment failure", "error", reportErr)
-			return fmt.Errorf("report enrichment failure: %w", reportErr)
-		}
-		logger.WarnContext(ctx, "enrichment failed", "error", message)
-		return err
 	}
 
 	completion := cairn.Completion{
-		LeaseToken:   job.LeaseToken,
-		OriginalText: result.OriginalText,
-		Summary:      result.Summary,
-		RelatedLinks: result.RelatedLinks,
-		Model:        result.Model,
+		LeaseToken:       job.LeaseToken,
+		AITitle:          result.AITitle,
+		OriginalLanguage: result.OriginalLanguage,
+		OriginalText:     result.OriginalText,
+		TranslatedText:   result.TranslatedText,
+		Summary:          result.Summary,
+		RelatedLinks:     result.RelatedLinks,
+		Images:           images,
+		Model:            result.Model,
 	}
 	if err := p.queue.Complete(ctx, job.ID, completion); err != nil {
 		logger.ErrorContext(ctx, "failed to store enrichment", "error", err)
 		return fmt.Errorf("store enrichment: %w", err)
 	}
-	logger.InfoContext(ctx, "enrichment completed", "related_links", len(result.RelatedLinks))
+	logger.InfoContext(ctx, "enrichment completed", "related_links", len(result.RelatedLinks), "images", len(images))
 	return nil
+}
+
+func (p *Processor) reportFailure(ctx context.Context, logger *slog.Logger, job *cairn.Job, err error) error {
+	if ctx.Err() != nil {
+		logger.WarnContext(ctx, "enrichment interrupted", "error", ctx.Err())
+		return ctx.Err()
+	}
+	message := boundedError(err)
+	if reportErr := p.queue.Fail(ctx, job.ID, job.LeaseToken, message); reportErr != nil {
+		logger.ErrorContext(ctx, "failed to report enrichment failure", "error", reportErr)
+		return fmt.Errorf("report enrichment failure: %w", reportErr)
+	}
+	logger.WarnContext(ctx, "enrichment failed", "error", message)
+	return err
 }
 
 func boundedError(err error) string {

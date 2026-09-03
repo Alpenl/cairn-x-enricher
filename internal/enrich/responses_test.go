@@ -31,7 +31,12 @@ func TestResponsesClientForcesXSearchAndParsesStructuredOutput(t *testing.T) {
 		}
 		messages := body["input"].([]any)
 		content := messages[0].(map[string]any)["content"].(string)
-		if !strings.Contains(content, "https://x.com/user/status/42") || !strings.Contains(content, "忽略广告和无关链接") {
+		for _, required := range []string{"https://x.com/user/status/42", "约20个简体中文字符", "原始语言", "完整简体中文译文", "pbs.twimg.com/media", "忽略广告和无关项"} {
+			if !strings.Contains(content, required) {
+				t.Errorf("prompt does not contain %q: %q", required, content)
+			}
+		}
+		if strings.Contains(content, "later") {
 			t.Errorf("prompt = %q", content)
 		}
 
@@ -43,7 +48,7 @@ func TestResponsesClientForcesXSearchAndParsesStructuredOutput(t *testing.T) {
             {"type":"reasoning","status":"completed"},
             {"type":"custom_tool_call","name":"x_thread_fetch","status":"completed"},
             {"type":"message","status":"completed","content":[
-              {"type":"output_text","text":"{\"original_text\":\"source\",\"summary\":\"summary\",\"related_links\":[\"https://example.com/a\"]}"}
+              {"type":"output_text","text":"{\"ai_title\":\"人工智能生成的测试中文标题\",\"original_language\":\"en\",\"original_text\":\"source\",\"translated_text\":\"中文译文\",\"summary\":\"summary\",\"related_links\":[\"https://example.com/a\"],\"image_urls\":[\"https://pbs.twimg.com/media/abc?format=jpg&name=large\"]}"}
             ]}
           ]
         }`))
@@ -57,7 +62,7 @@ func TestResponsesClientForcesXSearchAndParsesStructuredOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	if !candidate.SearchVerified || candidate.Result.OriginalText != "source" || candidate.Result.Model != "grok-4.6-20260901" {
+	if !candidate.SearchVerified || candidate.Result.AITitle != "人工智能生成的测试中文标题" || candidate.Result.OriginalText != "source" || candidate.Result.TranslatedText != "中文译文" || len(candidate.Result.ImageURLs) != 1 || candidate.Result.Model != "grok-4.6-20260901" {
 		t.Fatalf("Generate() = %+v", candidate)
 	}
 }
@@ -69,7 +74,7 @@ func TestResponsesClientRejectsMalformedStructuredOutput(t *testing.T) {
           "model":"grok-test",
           "output":[
             {"type":"custom_tool_call","name":"x_thread_fetch","status":"completed"},
-            {"type":"message","status":"completed","content":[{"type":"output_text","text":"{\"original_text\":\"text\",\"summary\":\"summary\",\"related_links\":[],\"extra\":true}"}]}
+            {"type":"message","status":"completed","content":[{"type":"output_text","text":"{\"ai_title\":\"人工智能生成的测试中文标题\",\"original_language\":\"en\",\"original_text\":\"text\",\"translated_text\":\"译文\",\"summary\":\"summary\",\"related_links\":[],\"image_urls\":[],\"extra\":true}"}]}
           ]
         }`))
 	}))

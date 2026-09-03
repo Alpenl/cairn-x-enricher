@@ -24,13 +24,15 @@ pending
 | `internal/enrich` | xAI Responses 协议、Eino 工作流、严格输出校验 |
 | `internal/processor` | 有界并发、批处理和失败上报 |
 | `internal/health` | liveness、readiness 和最近一批状态 |
-| `internal/dashboard` | 中文管理页面、同源查询 API 和有界人工处理队列 |
+| `internal/dashboard` | 中文收藏列表、独立阅读页、同源查询/图片代理和有界人工处理队列 |
 | `internal/config` | 环境变量解析及启动时校验 |
 
 人工任务先按 ID 在 Worker 原子领取，再进入本机有界队列。定时任务与人工任务最终都通过 `processor.Process` 的共享信号量，因此总模型并发不会超过 `MAX_CONCURRENCY`。
 
 ## LLM 契约
 
-请求只使用 `POST /responses`，强制 `tool_choice=required` 和 `tools=[{"type":"x_search"}]`，并通过 strict JSON Schema 要求 `original_text`、`summary`、`related_links` 三个字段。提示词保持为一句，字段形状不在提示词里重复。
+请求只使用 `POST /responses`，强制 `tool_choice=required` 和 `tools=[{"type":"x_search"}]`。strict JSON Schema 要求模型一次返回 `ai_title`、`original_language`、`original_text`、`translated_text`、`summary`、`related_links` 和 `image_urls`；提示词明确原文保持原始语言、译文使用简体中文，标题约 20 个简体中文字符。
 
-适配器白名单识别官方 `x_search_call`，同时兼容目标端点实测返回的 `x_thread_fetch`、`x_keyword_search`、`x_semantic_search`、`x_user_search` 自定义调用。没有搜索证据、没有且仅有一个输出块、结构不合法或 URL 不安全时，任务失败而不写入结果。
+适配器白名单识别官方 `x_search_call`，同时兼容目标端点实测返回的 `x_thread_fetch`、`x_keyword_search`、`x_semantic_search`、`x_user_search` 自定义调用。没有搜索证据、没有且仅有一个输出块、结构不合法、标题不是合理长度的中文或 URL 不安全时，任务失败而不写入结果。
+
+图片 URL 仅允许 `pbs.twimg.com/media`。模型结果通过校验后，Go 服务先让 Worker 在当前 lease 下抓取图片并写入 R2，再把 R2 对象引用随文本结果提交到 D1。Worker 完成事务前会确认引用对象存在；页面只能通过 Go 服务的同源 `/api/images/{key...}` 代理读取图片。

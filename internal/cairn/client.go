@@ -9,11 +9,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 )
 
-const maxResponseBytes = 1 << 20
+const maxResponseBytes = 12 << 20
+
+var imageKeyPattern = regexp.MustCompile(`^enrichment/[1-9][0-9]*/[0-9a-f]{64}\.(?:jpg|png|webp|gif|avif)$`)
 
 // Job is one X bookmark leased from the Worker queue.
 type Job struct {
@@ -28,47 +31,63 @@ type Job struct {
 
 // Completion is the validated enrichment payload written back to Cairn Share.
 type Completion struct {
-	LeaseToken   string   `json:"lease_token"`
-	OriginalText string   `json:"original_text"`
-	Summary      string   `json:"summary"`
-	RelatedLinks []string `json:"related_links"`
-	Model        string   `json:"model"`
+	LeaseToken       string     `json:"lease_token"`
+	AITitle          string     `json:"ai_title"`
+	OriginalLanguage string     `json:"original_language"`
+	OriginalText     string     `json:"original_text"`
+	TranslatedText   string     `json:"translated_text"`
+	Summary          string     `json:"summary"`
+	RelatedLinks     []string   `json:"related_links"`
+	Images           []ImageRef `json:"images"`
+	Model            string     `json:"model"`
+}
+
+// ImageRef identifies one validated image stored in the Worker's R2 bucket.
+type ImageRef struct {
+	Key         string `json:"key"`
+	ContentType string `json:"content_type"`
 }
 
 // Bookmark is the secret-free enrichment state shown in the management UI.
 type Bookmark struct {
-	ID          int64    `json:"id"`
-	URL         string   `json:"url"`
-	Note        string   `json:"note"`
-	CreatedAt   string   `json:"created_at"`
-	Status      string   `json:"status"`
-	Attempts    int      `json:"attempts"`
-	NextRetryAt string   `json:"next_retry_at,omitempty"`
-	Summary     string   `json:"summary,omitempty"`
-	RelatedURLs []string `json:"related_links"`
-	Model       string   `json:"model,omitempty"`
-	Error       string   `json:"error,omitempty"`
-	UpdatedAt   string   `json:"updated_at,omitempty"`
-	EnrichedAt  string   `json:"enriched_at,omitempty"`
+	ID               int64      `json:"id"`
+	URL              string     `json:"url"`
+	Note             string     `json:"note"`
+	CreatedAt        string     `json:"created_at"`
+	Status           string     `json:"status"`
+	Processable      bool       `json:"processable,omitempty"`
+	Attempts         int        `json:"attempts"`
+	NextRetryAt      string     `json:"next_retry_at,omitempty"`
+	AITitle          string     `json:"ai_title,omitempty"`
+	OriginalLanguage string     `json:"original_language,omitempty"`
+	OriginalText     string     `json:"original_text,omitempty"`
+	TranslatedText   string     `json:"translated_text,omitempty"`
+	Summary          string     `json:"summary,omitempty"`
+	RelatedURLs      []string   `json:"related_links"`
+	Images           []ImageRef `json:"images"`
+	Model            string     `json:"model,omitempty"`
+	Error            string     `json:"error,omitempty"`
+	UpdatedAt        string     `json:"updated_at,omitempty"`
+	EnrichedAt       string     `json:"enriched_at,omitempty"`
 }
 
-// BookmarkDetail adds the full source text to a bookmark list item.
+// BookmarkDetail preserves the detail endpoint's named response type.
 type BookmarkDetail struct {
 	Bookmark
-	OriginalText string `json:"original_text,omitempty"`
 }
 
-// BookmarkCounts contains queue-wide counts for X bookmarks.
+// BookmarkCounts contains queue-wide counts for all bookmarks.
 type BookmarkCounts struct {
-	Total      int `json:"total"`
-	Pending    int `json:"pending"`
-	Processing int `json:"processing"`
-	Completed  int `json:"completed"`
-	Failed     int `json:"failed"`
-	Exhausted  int `json:"exhausted"`
+	Total       int `json:"total"`
+	Pending     int `json:"pending"`
+	Processing  int `json:"processing"`
+	Completed   int `json:"completed"`
+	Failed      int `json:"failed"`
+	Exhausted   int `json:"exhausted"`
+	Unsupported int `json:"unsupported"`
 }
 
-// BookmarkPage is one newest-first page of X bookmarks.
+// BookmarkPage is one newest-first page of bookmarks.
 type BookmarkPage struct {
 	Items        []Bookmark     `json:"items"`
 	NextBeforeID *int64         `json:"next_before_id"`
@@ -193,8 +212,10 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 	if page.Items == nil {
 		page.Items = []Bookmark{}
 	}
-	for _, item := range page.Items {
-		if item.ID < 1 || item.URL == "" || !validBookmarkStatus(item.Status) {
+	for index := range page.Items {
+		item := &page.Items[index]
+		normalizeBookmarkCollections(item)
+		if item.ID < 1 || item.URL == "" || !validBookmarkStatus(item.Status) || !validBookmarkImages(*item) {
 			return BookmarkPage{}, errors.New("bookmark list contains an invalid item")
 		}
 	}
@@ -223,6 +244,10 @@ func (c *Client) GetBookmark(ctx context.Context, id int64) (BookmarkDetail, err
 	if detail.ID < 1 || detail.URL == "" || !validBookmarkStatus(detail.Status) {
 		return BookmarkDetail{}, errors.New("bookmark detail is invalid")
 	}
+	normalizeBookmarkCollections(&detail.Bookmark)
+	if !validBookmarkImages(detail.Bookmark) {
+		return BookmarkDetail{}, errors.New("bookmark detail contains an invalid image")
+	}
 	return detail, nil
 }
 
@@ -238,6 +263,57 @@ func (c *Client) Complete(ctx context.Context, id int64, completion Completion) 
 		return apiError(response)
 	}
 	return nil
+}
+
+// StoreImages asks the Worker to fetch validated X media and persist it in R2.
+func (c *Client) StoreImages(ctx context.Context, id int64, leaseToken string, imageURLs []string) ([]ImageRef, error) {
+	path := fmt.Sprintf("/api/enrichment/jobs/%d/images", id)
+	response, err := c.do(ctx, http.MethodPost, path, struct {
+		LeaseToken string   `json:"lease_token"`
+		ImageURLs  []string `json:"image_urls"`
+	}{LeaseToken: leaseToken, ImageURLs: imageURLs})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return nil, apiError(response)
+	}
+	var payload struct {
+		Images []ImageRef `json:"images"`
+	}
+	if err := decodeJSON(response.Body, &payload); err != nil {
+		return nil, fmt.Errorf("decode stored images: %w", err)
+	}
+	if payload.Images == nil {
+		payload.Images = []ImageRef{}
+	}
+	for _, image := range payload.Images {
+		if !validImageRef(image) || !strings.HasPrefix(image.Key, fmt.Sprintf("enrichment/%d/", id)) {
+			return nil, errors.New("stored image response contains an invalid object")
+		}
+	}
+	return payload.Images, nil
+}
+
+// GetImage opens one R2-backed image response for the dashboard proxy.
+func (c *Client) GetImage(ctx context.Context, key string) (*http.Response, error) {
+	if !imageKeyPattern.MatchString(key) {
+		return nil, errors.New("invalid image key")
+	}
+	segments := strings.Split(key, "/")
+	for index := range segments {
+		segments[index] = url.PathEscape(segments[index])
+	}
+	response, err := c.do(ctx, http.MethodGet, "/api/enrichment/images/"+strings.Join(segments, "/"), nil)
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != http.StatusOK {
+		defer func() { _ = response.Body.Close() }()
+		return nil, apiError(response)
+	}
+	return response, nil
 }
 
 // Fail records an attempt failure while the supplied lease is current.
@@ -306,9 +382,40 @@ func apiError(response *http.Response) error {
 
 func validBookmarkStatus(status string) bool {
 	switch status {
-	case "pending", "processing", "completed", "failed", "exhausted":
+	case "pending", "processing", "completed", "failed", "exhausted", "unsupported":
 		return true
 	default:
 		return false
 	}
+}
+
+func validImageRef(image ImageRef) bool {
+	if !imageKeyPattern.MatchString(image.Key) {
+		return false
+	}
+	switch image.ContentType {
+	case "image/jpeg", "image/png", "image/webp", "image/gif", "image/avif":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeBookmarkCollections(bookmark *Bookmark) {
+	if bookmark.RelatedURLs == nil {
+		bookmark.RelatedURLs = []string{}
+	}
+	if bookmark.Images == nil {
+		bookmark.Images = []ImageRef{}
+	}
+}
+
+func validBookmarkImages(bookmark Bookmark) bool {
+	prefix := fmt.Sprintf("enrichment/%d/", bookmark.ID)
+	for _, image := range bookmark.Images {
+		if !validImageRef(image) || !strings.HasPrefix(image.Key, prefix) {
+			return false
+		}
+	}
+	return true
 }

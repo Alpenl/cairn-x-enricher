@@ -1,6 +1,6 @@
 # Cairn X Enricher
 
-一个独立于 Cairn Share App 的 Go 后台服务。它定时从 Cairn Share 的 Cloudflare Worker 领取尚未处理的 X 收藏，用 Grok 的 Responses API 和服务端 `x_search` 读取原帖及评论，再把原文、简短总结和内容相关链接写回 D1。
+一个独立于 Cairn Share App 的 Go 后台服务。它定时从 Cairn Share 的 Cloudflare Worker 领取尚未处理的 X 收藏，用 Grok Responses API 和服务端 `x_search` 读取原帖及评论，再把 AI 中文标题、原始语言全文、完整简体中文译文、摘要和内容相关链接写回 D1；相关图片复制到 Cloudflare R2。
 
 现有 App 不需要更新：原有 `/api/links` 请求、响应和鉴权均保持不变。新增队列字段和 `/api/enrichment/*` 内部接口只服务于本项目。
 
@@ -12,15 +12,16 @@ Cairn Share App -> 原有 Worker API -> D1 links
                                       v
 定时器 -> 内部 claim API -> Eino 工作流 -> Grok /responses + x_search
   ^                                              |
-  +--------- complete/fail API <- 校验后的 JSON -+
+  +--- complete/fail API <- 校验后的 JSON + R2 图片归档
 
-浏览器 -> NAS 中文处理台 -> 内部列表/指定 claim API -> 同一处理流程
+浏览器 -> NAS 收藏阅读库 -> 全部收藏/独立阅读页/指定 claim -> 同一处理流程
 ```
 
 核心保证：
 
 - Worker 用原子更新和 15 分钟 lease 分发任务，支持多实例并发而不重复领取。
 - 成功结果只有在响应包含已完成的 X Search 证据且通过严格 JSON/URL 校验后才写入。
+- 图片只接受 `https://pbs.twimg.com/media/...`，由 Worker 校验响应类型与大小后写入 R2，浏览器不接触 Cloudflare token。
 - 失败由 Worker 按 `1m / 5m / 30m / 2h` 退避，最多尝试 5 次。
 - URL 或备注被 App 修改时，已有增强结果自动失效并重新入队。
 - 日志不会输出 API key、完整提示词或模型响应。
@@ -56,9 +57,11 @@ go run ./cmd/cairn-x-enricher serve
 
 `serve` 启动后立即执行一批任务，之后按 `POLL_INTERVAL` 运行，并在 `127.0.0.1:8080` 暴露：
 
-- `/`：中文 X 收藏处理台，可查看、搜索、筛选和触发处理。
+- `/`：中文收藏列表，可搜索、筛选、批量处理并显示当前运行版本。
+- `/bookmarks/{id}`：独立阅读页，展示 AI 标题、手动备注、图片、摘要和双语全文。
 - `/api/bookmarks`：处理台的同源收藏列表代理。
 - `/api/bookmarks/{id}`：包含完整原文的单条详情。
+- `/api/images/{key...}`：受控的 R2 图片同源代理。
 - `/api/bookmarks/process`：提交最多 10 个收藏 ID 立即处理。
 - `/healthz`：进程存活。
 - `/readyz`：服务就绪。
@@ -81,7 +84,7 @@ ghcr.io/alpenl/cairn-x-enricher:<version>
 ```
 
 完整部署顺序和 Cloudflare 前置改造见 [docs/deployment.md](docs/deployment.md) 与 [docs/cloudflare-backend.md](docs/cloudflare-backend.md)。
-Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网处理台映射到 `8088`；该清单只拉取 GitHub Actions 发布的镜像，不在 NAS 本地构建。
+Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网阅读库映射到 `8088`；页面展示 Cloudflare 中全部收藏，只有 X 链接可以触发模型处理。旧版已完成记录会继续显示原内容，只有手动重新处理后才会生成新版标题、译文和图片。该清单只拉取 GitHub Actions 发布的镜像，不在 NAS 本地构建。
 
 ## 发布
 

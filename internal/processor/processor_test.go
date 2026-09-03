@@ -18,6 +18,8 @@ type fakeQueue struct {
 	claimErr    error
 	completions map[int64]cairn.Completion
 	failures    map[int64]string
+	imageURLs   map[int64][]string
+	imageErr    error
 }
 
 func (q *fakeQueue) Claim(context.Context) (*cairn.Job, error) {
@@ -41,6 +43,19 @@ func (q *fakeQueue) Complete(_ context.Context, id int64, completion cairn.Compl
 	return nil
 }
 
+func (q *fakeQueue) StoreImages(_ context.Context, id int64, _ string, imageURLs []string) ([]cairn.ImageRef, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.imageErr != nil {
+		return nil, q.imageErr
+	}
+	q.imageURLs[id] = append([]string(nil), imageURLs...)
+	return []cairn.ImageRef{{
+		Key:         "enrichment/1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+		ContentType: "image/jpeg",
+	}}, nil
+}
+
 func (q *fakeQueue) Fail(_ context.Context, id int64, _ string, message string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -57,10 +72,14 @@ func (e fakeEnricher) Enrich(_ context.Context, input enrich.Input) (enrich.Resu
 		return enrich.Result{}, errors.New("model failure")
 	}
 	return enrich.Result{
-		OriginalText: "source",
-		Summary:      "summary",
-		RelatedLinks: []string{"https://example.com/source"},
-		Model:        "grok-test",
+		AITitle:          "人工智能生成的测试中文标题",
+		OriginalLanguage: "en",
+		OriginalText:     "source",
+		TranslatedText:   "中文译文",
+		Summary:          "summary",
+		RelatedLinks:     []string{"https://example.com/source"},
+		ImageURLs:        []string{"https://pbs.twimg.com/media/source?format=jpg"},
+		Model:            "grok-test",
 	}, nil
 }
 
@@ -80,6 +99,9 @@ func TestRunCompletesClaimedJobs(t *testing.T) {
 	}
 	if len(queue.completions) != 2 || queue.completions[1].LeaseToken != "lease-1" {
 		t.Fatalf("completions = %#v", queue.completions)
+	}
+	if len(queue.imageURLs[1]) != 1 || len(queue.completions[1].Images) != 1 {
+		t.Fatalf("image persistence = URLs %#v, completion %#v", queue.imageURLs, queue.completions[1])
 	}
 }
 
@@ -117,11 +139,29 @@ func TestRunReturnsClaimError(t *testing.T) {
 	}
 }
 
+func TestProcessReportsImagePersistenceFailure(t *testing.T) {
+	queue := newFakeQueue()
+	queue.imageErr = errors.New("R2 unavailable")
+	processor := New(queue, fakeEnricher{}, discardLogger(), 1)
+	job := &cairn.Job{ID: 9, URL: "https://x.com/a/status/9", Attempt: 1, LeaseToken: "lease-9"}
+
+	if err := processor.Process(context.Background(), job); err == nil {
+		t.Fatal("Process() error = nil, want image persistence error")
+	}
+	if queue.failures[9] != "store enrichment images: R2 unavailable" {
+		t.Fatalf("failure = %q", queue.failures[9])
+	}
+	if _, exists := queue.completions[9]; exists {
+		t.Fatal("completion was stored after image persistence failed")
+	}
+}
+
 func newFakeQueue(jobs ...*cairn.Job) *fakeQueue {
 	return &fakeQueue{
 		jobs:        jobs,
 		completions: make(map[int64]cairn.Completion),
 		failures:    make(map[int64]string),
+		imageURLs:   make(map[int64][]string),
 	}
 }
 

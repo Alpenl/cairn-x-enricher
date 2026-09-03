@@ -4,137 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Cairn X 收藏处理台</title>
-  <style>
-    :root {
-      color-scheme: light;
-      font-family: Inter, "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: #20252b;
-      background: #f4f6f7;
-      font-synthesis: none;
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-width: 300px; background: #f4f6f7; }
-    button, input { font: inherit; letter-spacing: 0; }
-    button { cursor: pointer; }
-    button:disabled { cursor: not-allowed; opacity: .55; }
-    a { color: #1267a6; text-underline-offset: 3px; }
-    header { background: #20252b; color: #fff; border-bottom: 4px solid #18a874; }
-    .shell { width: min(1160px, calc(100% - 32px)); margin: 0 auto; }
-    .topbar { min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-    h1 { margin: 0; font-size: 22px; line-height: 1.3; letter-spacing: 0; }
-    .service-meta { margin: 4px 0 0; color: #c8d0d5; font-size: 12px; }
-    .service-state { display: inline-flex; align-items: center; gap: 9px; min-width: 112px; justify-content: flex-end; font-size: 14px; font-weight: 700; }
-    .dot { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; background: #a6afb5; box-shadow: 0 0 0 3px rgb(166 175 181 / 18%); }
-    .dot.good { background: #31cf8c; box-shadow: 0 0 0 3px rgb(49 207 140 / 18%); }
-    .dot.warn { background: #ffc857; box-shadow: 0 0 0 3px rgb(255 200 87 / 18%); }
-    .dot.bad { background: #ff6b66; box-shadow: 0 0 0 3px rgb(255 107 102 / 18%); }
-    main { padding: 26px 0 40px; }
-    .toolbar { display: grid; grid-template-columns: minmax(260px, 1fr) auto; gap: 12px; align-items: center; }
-    .search { display: flex; min-width: 0; }
-    .search input { width: 100%; min-height: 40px; padding: 0 12px; color: #20252b; background: #fff; border: 1px solid #b9c3c8; border-right: 0; border-radius: 5px 0 0 5px; outline: none; }
-    .search input:focus { border-color: #1267a6; box-shadow: inset 0 0 0 1px #1267a6; }
-    .button { min-height: 40px; padding: 0 15px; border: 1px solid #1267a6; border-radius: 5px; background: #1267a6; color: #fff; font-weight: 700; white-space: nowrap; }
-    .button:hover:not(:disabled) { background: #0c568d; border-color: #0c568d; }
-    .search .button { border-radius: 0 5px 5px 0; }
-    .button.secondary { border-color: #b9c3c8; background: #fff; color: #313940; }
-    .button.secondary:hover:not(:disabled) { background: #e9eef0; border-color: #89969d; }
-    .button.compact { min-height: 34px; padding: 0 11px; font-size: 13px; }
-    .toolbar-actions { display: flex; gap: 8px; }
-    .counts { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 20px 0 0; border: 1px solid #d5dde1; border-radius: 6px; overflow: hidden; background: #fff; }
-    .count-tab { min-height: 68px; padding: 10px 8px; border: 0; border-right: 1px solid #dce2e5; background: #fff; color: #5e6971; text-align: center; }
-    .count-tab:last-child { border-right: 0; }
-    .count-tab:hover { background: #f0f4f5; }
-    .count-tab.active { background: #e7f2f8; color: #0d5c8d; box-shadow: inset 0 -3px 0 #1681bd; }
-    .count-tab strong { display: block; color: #20252b; font-size: 21px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-    .count-tab span { display: block; margin-top: 6px; font-size: 12px; font-weight: 650; }
-    .list-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 22px 0 10px; }
-    .select-control { display: inline-flex; align-items: center; gap: 9px; color: #535f67; font-size: 13px; }
-    input[type="checkbox"] { width: 17px; height: 17px; margin: 0; accent-color: #1267a6; }
-    .selection-actions { display: flex; align-items: center; gap: 10px; }
-    .updated { color: #6a757d; font-size: 12px; }
-    .bookmark-list { display: grid; gap: 10px; }
-    .bookmark { display: grid; grid-template-columns: 24px minmax(0, 1fr) 132px; gap: 14px; padding: 17px; background: #fff; border: 1px solid #d6dee2; border-radius: 6px; }
-    .bookmark.selected { border-color: #65a7cc; box-shadow: inset 3px 0 0 #1681bd; }
-    .bookmark-main { min-width: 0; }
-    .bookmark-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-    .bookmark-title { margin: 8px 0 4px; font-size: 16px; line-height: 1.45; letter-spacing: 0; overflow-wrap: anywhere; }
-    .bookmark-url { display: block; max-width: 100%; color: #1267a6; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .meta { color: #737d84; font-size: 12px; }
-    .badge { display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px; border-radius: 4px; font-size: 12px; font-weight: 750; }
-    .badge.pending { background: #e8f1f6; color: #155b7e; }
-    .badge.processing { background: #fff1c9; color: #7a5200; }
-    .badge.completed { background: #dcf3e8; color: #08734c; }
-    .badge.failed { background: #ffe5df; color: #a33a30; }
-    .badge.exhausted { background: #ece7ee; color: #63496c; }
-    .summary { margin: 13px 0 0; padding: 0 0 0 12px; border-left: 3px solid #83b7d2; color: #313940; font-size: 14px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .empty-summary { color: #7a858c; }
-    .related { display: flex; flex-wrap: wrap; gap: 7px 12px; margin-top: 11px; font-size: 12px; }
-    .error { margin: 11px 0 0; color: #ad342e; font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .item-actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
-    .source-panel { grid-column: 2 / -1; padding-top: 15px; border-top: 1px solid #dce2e5; }
-    .source-panel h3 { margin: 0 0 9px; font-size: 13px; letter-spacing: 0; }
-    .source-text { margin: 0; max-height: 420px; overflow: auto; color: #30383e; font: 13px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .empty-state, .loading-state { padding: 52px 12px; border-top: 1px solid #d2dade; border-bottom: 1px solid #d2dade; color: #6b767e; text-align: center; }
-    .more { display: flex; justify-content: center; margin-top: 16px; }
-    .toast { position: fixed; right: 20px; bottom: 20px; z-index: 10; max-width: min(420px, calc(100% - 40px)); padding: 12px 15px; border-radius: 5px; background: #20252b; color: #fff; font-size: 13px; line-height: 1.5; box-shadow: 0 8px 24px rgb(22 29 34 / 24%); }
-    .toast.bad { background: #8f2d29; }
-    footer { padding: 18px 0 28px; border-top: 1px solid #d6dee2; color: #6a757d; font-size: 12px; }
-    .footer-row { display: flex; justify-content: space-between; gap: 16px; }
-    .footer-links { display: flex; flex-wrap: wrap; gap: 14px; }
-    [hidden] { display: none !important; }
-    @media (max-width: 820px) {
-      .counts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-      .count-tab:nth-child(3) { border-right: 0; }
-      .count-tab:nth-child(-n+3) { border-bottom: 1px solid #dce2e5; }
-      .bookmark { grid-template-columns: 24px minmax(0, 1fr); }
-      .item-actions { grid-column: 2; flex-direction: row; flex-wrap: wrap; }
-      .source-panel { grid-column: 2; }
-    }
-    @media (max-width: 600px) {
-      .shell { width: min(100% - 24px, 1160px); }
-      .topbar { min-height: 92px; align-items: flex-start; padding: 17px 0; }
-      h1 { font-size: 20px; }
-      .service-state { margin-top: 4px; }
-      main { padding-top: 18px; }
-      .toolbar { grid-template-columns: 1fr; }
-      .toolbar-actions .button { flex: 1; }
-      .counts { margin-top: 14px; }
-      .count-tab { min-height: 62px; }
-      .list-head { align-items: flex-start; }
-      .selection-actions { align-items: flex-end; flex-direction: column; }
-      .bookmark { gap: 11px; padding: 14px 12px; }
-      .item-actions { display: grid; grid-template-columns: 1fr 1fr; }
-      .item-actions .button:only-child { grid-column: 1 / -1; }
-      .footer-row { flex-direction: column; }
-    }
-    @media (max-width: 380px) {
-      .topbar { display: block; }
-      .service-state { justify-content: flex-start; margin-top: 11px; }
-      .updated { display: none; }
-      .bookmark { grid-template-columns: 20px minmax(0, 1fr); }
-      .source-panel, .item-actions { grid-column: 1 / -1; }
-    }
-  </style>
+  <title>Cairn 收藏阅读库</title>
+  <link rel="stylesheet" href="/assets/dashboard.css">
+  <script src="/assets/common.js" defer></script>
+  <script src="/assets/list.js" defer></script>
 </head>
 <body>
-  <header>
-    <div class="shell topbar">
-      <div>
-        <h1>Cairn X 收藏处理台</h1>
-        <p id="service-meta" class="service-meta">正在连接服务</p>
+  <header class="site-header">
+    <div class="shell header-row">
+      <div class="brand-block">
+        <h1>Cairn 收藏阅读库</h1>
+        <div class="build-row">
+          <span class="version-badge">当前版本 <strong id="current-version">读取中</strong></span>
+          <span id="service-meta" class="service-meta">正在连接服务</span>
+        </div>
       </div>
       <div class="service-state" aria-live="polite">
-        <span id="state-dot" class="dot"></span>
+        <span id="state-dot" class="state-dot"></span>
         <span id="state-label">连接中</span>
       </div>
     </div>
   </header>
 
-  <main class="shell">
+  <main class="shell list-page">
     <div class="toolbar">
       <form id="search-form" class="search" role="search">
-        <input id="search-input" type="search" maxlength="200" autocomplete="off" placeholder="搜索链接、备注或总结" aria-label="搜索收藏">
+        <input id="search-input" type="search" maxlength="200" autocomplete="off" placeholder="搜索 AI 标题、备注、译文或总结" aria-label="搜索收藏">
         <button class="button" type="submit">搜索</button>
       </form>
       <div class="toolbar-actions">
@@ -150,6 +45,7 @@
       <button class="count-tab" type="button" role="tab" aria-selected="false" data-status="completed"><strong id="count-completed">-</strong><span>已完成</span></button>
       <button class="count-tab" type="button" role="tab" aria-selected="false" data-status="failed"><strong id="count-failed">-</strong><span>待重试</span></button>
       <button class="count-tab" type="button" role="tab" aria-selected="false" data-status="exhausted"><strong id="count-exhausted">-</strong><span>已终止</span></button>
+      <button class="count-tab" type="button" role="tab" aria-selected="false" data-status="unsupported"><strong id="count-unsupported">-</strong><span>其他</span></button>
     </div>
 
     <div class="list-head">
@@ -164,12 +60,12 @@
     </div>
 
     <div id="loading" class="loading-state">正在读取收藏</div>
-    <div id="empty" class="empty-state" hidden>没有符合条件的 X 收藏</div>
-    <section id="bookmark-list" class="bookmark-list" aria-label="X 收藏列表"></section>
+    <div id="empty" class="empty-state" hidden>没有符合条件的收藏</div>
+    <section id="bookmark-list" class="bookmark-list" aria-label="收藏列表"></section>
     <div class="more"><button id="load-more" class="button secondary" type="button" hidden>加载更多</button></div>
   </main>
 
-  <footer>
+  <footer class="site-footer">
     <div class="shell footer-row">
       <span id="build-info">Cairn X Enricher</span>
       <nav class="footer-links" aria-label="服务接口">
@@ -179,339 +75,5 @@
     </div>
   </footer>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-
-  <script>
-    const state = {
-      items: [],
-      selected: new Set(),
-      status: "all",
-      search: "",
-      nextBeforeId: null,
-      loading: false,
-      details: new Map(),
-      expanded: new Set()
-    };
-
-    const byId = (id) => document.getElementById(id);
-    const statusLabels = {
-      pending: "待处理",
-      processing: "处理中",
-      completed: "已完成",
-      failed: "待重试",
-      exhausted: "已终止"
-    };
-    const errorLabels = {
-      job_busy: "该收藏正在处理中",
-      not_found: "收藏不存在",
-      backend_error: "Cloudflare 后端暂时不可用",
-      queue_full: "本机处理队列已满"
-    };
-
-    function element(tag, className, text) {
-      const node = document.createElement(tag);
-      if (className) node.className = className;
-      if (text !== undefined) node.textContent = text;
-      return node;
-    }
-
-    function formatDate(value) {
-      if (!value) return "-";
-      return new Intl.DateTimeFormat("zh-CN", {
-        year: "numeric", month: "2-digit", day: "2-digit",
-        hour: "2-digit", minute: "2-digit"
-      }).format(new Date(value));
-    }
-
-    function shortURL(value) {
-      try {
-        const parsed = new URL(value);
-        return parsed.hostname + parsed.pathname;
-      } catch (_) {
-        return value;
-      }
-    }
-
-    function showToast(message, bad = false) {
-      const toast = byId("toast");
-      toast.textContent = message;
-      toast.className = bad ? "toast bad" : "toast";
-      toast.hidden = false;
-      clearTimeout(showToast.timer);
-      showToast.timer = setTimeout(() => { toast.hidden = true; }, 4200);
-    }
-
-    function setServiceState(kind, label) {
-      byId("state-dot").className = `dot ${kind}`;
-      byId("state-label").textContent = label;
-    }
-
-    async function refreshServiceStatus() {
-      try {
-        const response = await fetch("/status", { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const status = await response.json();
-        const build = status.build || {};
-        const commit = build.commit && build.commit !== "none" ? build.commit.slice(0, 8) : "local";
-        byId("service-meta").textContent = `版本 ${build.version || "dev"} · ${commit}`;
-        byId("build-info").textContent = `Cairn X Enricher ${build.version || "dev"}`;
-        if (!status.ready) setServiceState("bad", "未就绪");
-        else if (status.last_error) setServiceState("warn", "需要检查");
-        else setServiceState("good", "运行正常");
-      } catch (_) {
-        setServiceState("bad", "连接失败");
-        byId("service-meta").textContent = "无法读取服务状态";
-      }
-    }
-
-    function updateCounts(counts) {
-      byId("count-total").textContent = counts.total ?? 0;
-      byId("count-pending").textContent = counts.pending ?? 0;
-      byId("count-processing").textContent = counts.processing ?? 0;
-      byId("count-completed").textContent = counts.completed ?? 0;
-      byId("count-failed").textContent = counts.failed ?? 0;
-      byId("count-exhausted").textContent = counts.exhausted ?? 0;
-    }
-
-    function syncSelectionControls() {
-      const visibleIDs = state.items.map((item) => item.id);
-      const selectedVisible = visibleIDs.filter((id) => state.selected.has(id)).length;
-      const allSelected = visibleIDs.length > 0 && selectedVisible === Math.min(visibleIDs.length, 10);
-      byId("select-all").checked = allSelected;
-      byId("select-all").indeterminate = selectedVisible > 0 && !allSelected;
-      byId("process-selected").disabled = state.selected.size === 0 || state.loading;
-      byId("process-selected").textContent = `处理选中（${state.selected.size}）`;
-    }
-
-    function createRelatedLinks(urls) {
-      const container = element("div", "related");
-      for (const value of urls || []) {
-        const link = element("a", "", shortURL(value));
-        link.href = value;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        container.append(link);
-      }
-      return container;
-    }
-
-    function renderSource(article, item) {
-      const existing = article.querySelector(".source-panel");
-      if (existing) existing.remove();
-      if (!state.expanded.has(item.id)) return;
-
-      const panel = element("section", "source-panel");
-      panel.dataset.sourceId = String(item.id);
-      const heading = element("h3", "", "原文");
-      panel.append(heading);
-      const detail = state.details.get(item.id);
-      if (!detail) {
-        panel.append(element("div", "meta", "正在读取原文"));
-      } else {
-        panel.append(element("pre", "source-text", detail.original_text || "暂无原文"));
-      }
-      article.append(panel);
-    }
-
-    async function toggleSource(item, article, button) {
-      if (state.expanded.has(item.id)) {
-        state.expanded.delete(item.id);
-        button.textContent = "查看原文";
-        renderSource(article, item);
-        return;
-      }
-      state.expanded.add(item.id);
-      button.textContent = "收起原文";
-      renderSource(article, item);
-      if (state.details.has(item.id)) return;
-      try {
-        const response = await fetch(`/api/bookmarks/${item.id}`, { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        state.details.set(item.id, await response.json());
-        renderSource(article, item);
-      } catch (_) {
-        state.expanded.delete(item.id);
-        button.textContent = "查看原文";
-        renderSource(article, item);
-        showToast("读取原文失败", true);
-      }
-    }
-
-    function renderItems() {
-      const list = byId("bookmark-list");
-      list.replaceChildren();
-      byId("empty").hidden = state.items.length > 0 || state.loading;
-
-      for (const item of state.items) {
-        const article = element("article", state.selected.has(item.id) ? "bookmark selected" : "bookmark");
-        article.dataset.id = String(item.id);
-
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.checked = state.selected.has(item.id);
-        checkbox.setAttribute("aria-label", `选择收藏 ${item.id}`);
-        checkbox.addEventListener("change", () => {
-          if (checkbox.checked && state.selected.size >= 10) {
-            checkbox.checked = false;
-            showToast("每次最多选择 10 条收藏", true);
-            return;
-          }
-          if (checkbox.checked) state.selected.add(item.id);
-          else state.selected.delete(item.id);
-          article.classList.toggle("selected", checkbox.checked);
-          syncSelectionControls();
-        });
-        article.append(checkbox);
-
-        const content = element("div", "bookmark-main");
-        const top = element("div", "bookmark-top");
-        top.append(element("span", `badge ${item.status}`, statusLabels[item.status] || item.status));
-        top.append(element("span", "meta", `#${item.id}`));
-        top.append(element("span", "meta", formatDate(item.created_at)));
-        if (item.attempts > 0) top.append(element("span", "meta", `尝试 ${item.attempts} 次`));
-        content.append(top);
-
-        content.append(element("h2", "bookmark-title", item.note || `X 收藏 #${item.id}`));
-        const sourceLink = element("a", "bookmark-url", item.url);
-        sourceLink.href = item.url;
-        sourceLink.target = "_blank";
-        sourceLink.rel = "noopener noreferrer";
-        sourceLink.title = item.url;
-        content.append(sourceLink);
-
-        if (item.summary) content.append(element("p", "summary", item.summary));
-        else if (item.status !== "processing") content.append(element("p", "summary empty-summary", "尚未生成总结"));
-        if (item.related_links && item.related_links.length) content.append(createRelatedLinks(item.related_links));
-        if (item.error) content.append(element("p", "error", item.error));
-        if (item.status === "failed" && item.next_retry_at) {
-          content.append(element("p", "meta", `下次重试：${formatDate(item.next_retry_at)}`));
-        }
-        if (item.enriched_at) content.append(element("p", "meta", `处理完成：${formatDate(item.enriched_at)}${item.model ? ` · ${item.model}` : ""}`));
-        article.append(content);
-
-        const actions = element("div", "item-actions");
-        const processButton = element("button", "button compact", item.status === "completed" ? "重新处理" : "立即处理");
-        processButton.type = "button";
-        processButton.disabled = item.status === "processing";
-        if (item.status === "processing") processButton.textContent = "处理中";
-        processButton.addEventListener("click", () => processIDs([item.id]));
-        actions.append(processButton);
-
-        if (item.enriched_at || item.summary) {
-          const sourceButton = element("button", "button secondary compact", state.expanded.has(item.id) ? "收起原文" : "查看原文");
-          sourceButton.type = "button";
-          sourceButton.addEventListener("click", () => toggleSource(item, article, sourceButton));
-          actions.append(sourceButton);
-        }
-        article.append(actions);
-        renderSource(article, item);
-        list.append(article);
-      }
-      syncSelectionControls();
-    }
-
-    async function loadBookmarks(reset = true, silent = false) {
-      if (state.loading) return;
-      state.loading = true;
-      if (!silent) byId("loading").hidden = false;
-      byId("refresh").disabled = true;
-      syncSelectionControls();
-      try {
-        const params = new URLSearchParams({ limit: "20" });
-        if (state.status !== "all") params.set("status", state.status);
-        if (state.search) params.set("q", state.search);
-        if (!reset && state.nextBeforeId) params.set("before_id", String(state.nextBeforeId));
-        const response = await fetch(`/api/bookmarks?${params}`, { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const page = await response.json();
-        state.items = reset ? page.items : state.items.concat(page.items);
-        state.nextBeforeId = page.next_before_id;
-        updateCounts(page.counts || {});
-        byId("load-more").hidden = !state.nextBeforeId;
-        byId("updated").textContent = `更新于 ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
-        renderItems();
-      } catch (_) {
-        if (!silent) showToast("读取收藏失败，请检查 Cloudflare 后端", true);
-      } finally {
-        state.loading = false;
-        byId("loading").hidden = true;
-        byId("refresh").disabled = false;
-        syncSelectionControls();
-      }
-    }
-
-    async function processIDs(ids) {
-      const chosen = state.items.filter((item) => ids.includes(item.id));
-      if (chosen.some((item) => item.status === "completed")) {
-        if (!window.confirm("选中内容包含已完成项目，继续会重新调用模型。确认处理？")) return;
-      }
-      try {
-        const response = await fetch("/api/bookmarks/process", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ids })
-        });
-        const result = await response.json();
-        const accepted = result.accepted || [];
-        const rejected = result.rejected || [];
-        for (const id of accepted) state.selected.delete(id);
-        if (accepted.length) showToast(`已提交 ${accepted.length} 条处理请求`);
-        if (rejected.length) {
-          const reasons = rejected.map((item) => errorLabels[item.error] || "请求失败");
-          showToast(`${rejected.length} 条未提交：${[...new Set(reasons)].join("、")}`, true);
-        }
-        await loadBookmarks(true, true);
-      } catch (_) {
-        showToast("提交处理请求失败", true);
-      }
-    }
-
-    byId("search-form").addEventListener("submit", (event) => {
-      event.preventDefault();
-      state.search = byId("search-input").value.trim();
-      byId("clear-search").hidden = !state.search;
-      state.selected.clear();
-      loadBookmarks(true);
-    });
-    byId("clear-search").addEventListener("click", () => {
-      byId("search-input").value = "";
-      state.search = "";
-      byId("clear-search").hidden = true;
-      loadBookmarks(true);
-    });
-    byId("refresh").addEventListener("click", () => loadBookmarks(true));
-    byId("load-more").addEventListener("click", () => loadBookmarks(false));
-    byId("process-selected").addEventListener("click", () => processIDs([...state.selected]));
-    byId("select-all").addEventListener("change", (event) => {
-      if (event.target.checked) {
-        for (const item of state.items) {
-          if (state.selected.size >= 10) break;
-          state.selected.add(item.id);
-        }
-      } else {
-        state.selected.clear();
-      }
-      renderItems();
-    });
-    byId("status-tabs").addEventListener("click", (event) => {
-      const tab = event.target.closest("[data-status]");
-      if (!tab || tab.dataset.status === state.status) return;
-      state.status = tab.dataset.status;
-      state.selected.clear();
-      for (const node of document.querySelectorAll("[data-status]")) {
-        const active = node === tab;
-        node.classList.toggle("active", active);
-        node.setAttribute("aria-selected", String(active));
-      }
-      loadBookmarks(true);
-    });
-
-    refreshServiceStatus();
-    loadBookmarks(true);
-    setInterval(() => {
-      if (document.hidden) return;
-      refreshServiceStatus();
-      if (state.items.some((item) => item.status === "processing")) loadBookmarks(true, true);
-    }, 5000);
-  </script>
 </body>
 </html>

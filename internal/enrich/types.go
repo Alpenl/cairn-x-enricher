@@ -12,10 +12,14 @@ type Input struct {
 
 // Result is the validated content persisted for a bookmark.
 type Result struct {
-	OriginalText string
-	Summary      string
-	RelatedLinks []string
-	Model        string
+	AITitle          string
+	OriginalLanguage string
+	OriginalText     string
+	TranslatedText   string
+	Summary          string
+	RelatedLinks     []string
+	ImageURLs        []string
+	Model            string
 }
 
 // Candidate combines model output with protocol-level search evidence.

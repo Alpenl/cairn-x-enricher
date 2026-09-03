@@ -1,6 +1,6 @@
 services:
   enricher:
-    image: ghcr.io/alpenl/cairn-x-enricher:0.2.0
+    image: ghcr.io/alpenl/cairn-x-enricher:0.3.0
     container_name: cairn-x-enricher
     env_file:
       - .env

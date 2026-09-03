@@ -13,7 +13,7 @@ import (
 
 const (
 	maxModelResponseBytes = 4 << 20
-	promptTemplate        = "读取这个 X 链接。返回原文、简短摘要，以及原文或评论中与主题直接相关的最终链接；忽略广告和无关链接。\nURL: %s"
+	promptTemplate        = "读取此 X 帖及相关评论。严格返回：约20个简体中文字符的标题；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅与内容直接相关的最终链接；原帖或相关评论中的图片原始媒体 URL（仅 pbs.twimg.com/media）。无图或无链接返回空数组，忽略广告和无关项。\nURL: %s"
 )
 
 // ResponsesClient implements the xAI-specific Responses wire protocol.
@@ -127,9 +127,13 @@ func (c *ResponsesClient) Generate(ctx context.Context, input Input) (Candidate,
 	}
 
 	var wire struct {
-		OriginalText string   `json:"original_text"`
-		Summary      string   `json:"summary"`
-		RelatedLinks []string `json:"related_links"`
+		AITitle          string   `json:"ai_title"`
+		OriginalLanguage string   `json:"original_language"`
+		OriginalText     string   `json:"original_text"`
+		TranslatedText   string   `json:"translated_text"`
+		Summary          string   `json:"summary"`
+		RelatedLinks     []string `json:"related_links"`
+		ImageURLs        []string `json:"image_urls"`
 	}
 	if err := decodeStrictJSON(strings.NewReader(outputTexts[0]), &wire); err != nil {
 		return Candidate{}, fmt.Errorf("decode structured model output: %w", err)
@@ -141,10 +145,14 @@ func (c *ResponsesClient) Generate(ctx context.Context, input Input) (Candidate,
 	return Candidate{
 		Input: input,
 		Result: Result{
-			OriginalText: wire.OriginalText,
-			Summary:      wire.Summary,
-			RelatedLinks: wire.RelatedLinks,
-			Model:        model,
+			AITitle:          wire.AITitle,
+			OriginalLanguage: wire.OriginalLanguage,
+			OriginalText:     wire.OriginalText,
+			TranslatedText:   wire.TranslatedText,
+			Summary:          wire.Summary,
+			RelatedLinks:     wire.RelatedLinks,
+			ImageURLs:        wire.ImageURLs,
+			Model:            model,
 		},
 		SearchVerified: searchVerified,
 	}, nil
@@ -169,14 +177,24 @@ func enrichmentSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"original_text": map[string]any{"type": "string"},
-			"summary":       map[string]any{"type": "string"},
+			"ai_title":          map[string]any{"type": "string"},
+			"original_language": map[string]any{"type": "string"},
+			"original_text":     map[string]any{"type": "string"},
+			"translated_text":   map[string]any{"type": "string"},
+			"summary":           map[string]any{"type": "string"},
 			"related_links": map[string]any{
 				"type":  "array",
 				"items": map[string]any{"type": "string"},
 			},
+			"image_urls": map[string]any{
+				"type":  "array",
+				"items": map[string]any{"type": "string"},
+			},
 		},
-		"required":             []string{"original_text", "summary", "related_links"},
+		"required": []string{
+			"ai_title", "original_language", "original_text", "translated_text",
+			"summary", "related_links", "image_urls",
+		},
 		"additionalProperties": false,
 	}
 }
