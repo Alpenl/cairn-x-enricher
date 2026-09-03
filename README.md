@@ -13,6 +13,8 @@ Cairn Share App -> 原有 Worker API -> D1 links
 定时器 -> 内部 claim API -> Eino 工作流 -> Grok /responses + x_search
   ^                                              |
   +--------- complete/fail API <- 校验后的 JSON -+
+
+浏览器 -> NAS 中文处理台 -> 内部列表/指定 claim API -> 同一处理流程
 ```
 
 核心保证：
@@ -54,7 +56,10 @@ go run ./cmd/cairn-x-enricher serve
 
 `serve` 启动后立即执行一批任务，之后按 `POLL_INTERVAL` 运行，并在 `127.0.0.1:8080` 暴露：
 
-- `/`：只读运行状态页面，每 10 秒刷新一次匿名统计。
+- `/`：中文 X 收藏处理台，可查看、搜索、筛选和触发处理。
+- `/api/bookmarks`：处理台的同源收藏列表代理。
+- `/api/bookmarks/{id}`：包含完整原文的单条详情。
+- `/api/bookmarks/process`：提交最多 10 个收藏 ID 立即处理。
 - `/healthz`：进程存活。
 - `/readyz`：服务就绪。
 - `/status`：最近一批的匿名统计和错误状态。
@@ -76,7 +81,7 @@ ghcr.io/alpenl/cairn-x-enricher:<version>
 ```
 
 完整部署顺序和 Cloudflare 前置改造见 [docs/deployment.md](docs/deployment.md) 与 [docs/cloudflare-backend.md](docs/cloudflare-backend.md)。
-Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网状态页映射到 `8088`；该清单只拉取 GitHub Actions 发布的镜像，不在 NAS 本地构建。
+Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网处理台映射到 `8088`；该清单只拉取 GitHub Actions 发布的镜像，不在 NAS 本地构建。
 
 ## 发布
 
@@ -88,7 +93,7 @@ Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网�
 
 ## 安全
 
-不要提交 `.env`。任何曾出现在聊天、终端历史或日志中的 API key 都应立即轮换，再更新运行环境。漏洞报告流程见 [SECURITY.md](SECURITY.md)。
+不要提交 `.env`。处理台不向浏览器发送 Worker token 或模型密钥，但会展示收藏内容并允许触发付费模型请求，因此端口 `8088` 只应开放在可信局域网，不应配置公网端口转发。任何曾出现在聊天、终端历史或日志中的 API key 都应立即轮换，再更新运行环境。漏洞报告流程见 [SECURITY.md](SECURITY.md)。
 
 ## License
 

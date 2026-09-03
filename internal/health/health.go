@@ -1,7 +1,6 @@
 package health
 
 import (
-	_ "embed"
 	"encoding/json"
 	"net/http"
 	"sync"
@@ -10,9 +9,6 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/buildinfo"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 )
-
-//go:embed index.html
-var dashboardHTML []byte
 
 // Snapshot is the public, secret-free service status payload.
 type Snapshot struct {
@@ -69,15 +65,6 @@ func (t *Tracker) Snapshot() Snapshot {
 // Handler serves liveness, readiness, and latest-batch status endpoints.
 func (t *Tracker) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", func(writer http.ResponseWriter, _ *http.Request) {
-		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-		writer.Header().Set("Cache-Control", "no-store")
-		writer.Header().Set("Content-Security-Policy", "default-src 'none'; connect-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
-		writer.Header().Set("Referrer-Policy", "no-referrer")
-		writer.Header().Set("X-Content-Type-Options", "nosniff")
-		writer.WriteHeader(http.StatusOK)
-		_, _ = writer.Write(dashboardHTML)
-	})
 	mux.HandleFunc("GET /healthz", func(writer http.ResponseWriter, _ *http.Request) {
 		writeJSON(writer, http.StatusOK, map[string]bool{"ok": true})
 	})

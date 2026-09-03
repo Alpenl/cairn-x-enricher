@@ -19,6 +19,7 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/buildinfo"
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/config"
+	"github.com/Alpenl/cairn-x-enricher/internal/dashboard"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
@@ -74,7 +75,7 @@ func newRootCommand() *cobra.Command {
 			logger := newLogger(cfg.LogLevel)
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
-			worker, err := newProcessor(ctx, cfg, logger)
+			worker, _, err := newProcessor(ctx, cfg, logger)
 			if err != nil {
 				return err
 			}
@@ -140,14 +141,15 @@ func newRootCommand() *cobra.Command {
 }
 
 func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	worker, err := newProcessor(ctx, cfg, logger)
+	worker, queue, err := newProcessor(ctx, cfg, logger)
 	if err != nil {
 		return err
 	}
 	tracker := health.NewTracker()
+	management := dashboard.New(ctx, tracker, queue, worker, logger, cfg.MaxConcurrency)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           tracker.Handler(),
+		Handler:           management.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
@@ -214,7 +216,11 @@ func runScheduler(
 	}
 }
 
-func newProcessor(ctx context.Context, cfg config.Config, logger *slog.Logger) (*processor.Processor, error) {
+func newProcessor(
+	ctx context.Context,
+	cfg config.Config,
+	logger *slog.Logger,
+) (*processor.Processor, *cairn.Client, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConns = 20
 	transport.MaxIdleConnsPerHost = 10
@@ -237,9 +243,9 @@ func newProcessor(ctx context.Context, cfg config.Config, logger *slog.Logger) (
 	)
 	workflow, err := enrich.NewWorkflow(ctx, model)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return processor.New(queue, workflow, logger, cfg.MaxConcurrency), nil
+	return processor.New(queue, workflow, logger, cfg.MaxConcurrency), queue, nil
 }
 
 func newLogger(level string) *slog.Logger {

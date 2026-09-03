@@ -2,7 +2,7 @@
 
 ## 边界
 
-本服务是独立部署单元，不链接、不打包也不修改 Android App。它只依赖 Cairn Share Worker 的三个内部 HTTP 操作：领取、完成和失败。Worker 是 D1 前面的唯一数据访问层，避免把 Cloudflare 控制面 D1 REST API 当作高频应用数据 API。
+本服务是独立部署单元，不链接、不打包也不修改 Android App。它通过 Cairn Share Worker 的内部 HTTP 操作读取收藏、领取任务、完成和上报失败。Worker 是 D1 前面的唯一数据访问层，避免把 Cloudflare 控制面 D1 REST API 当作高频应用数据 API。
 
 ## 一次任务的状态变化
 
@@ -24,7 +24,10 @@ pending
 | `internal/enrich` | xAI Responses 协议、Eino 工作流、严格输出校验 |
 | `internal/processor` | 有界并发、批处理和失败上报 |
 | `internal/health` | liveness、readiness 和最近一批状态 |
+| `internal/dashboard` | 中文管理页面、同源查询 API 和有界人工处理队列 |
 | `internal/config` | 环境变量解析及启动时校验 |
+
+人工任务先按 ID 在 Worker 原子领取，再进入本机有界队列。定时任务与人工任务最终都通过 `processor.Process` 的共享信号量，因此总模型并发不会超过 `MAX_CONCURRENCY`。
 
 ## LLM 契约
 

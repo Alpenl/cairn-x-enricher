@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
@@ -30,28 +29,6 @@ func TestHandlerAndRunState(t *testing.T) {
 	snapshot := tracker.Snapshot()
 	if snapshot.LastRunAt == nil || snapshot.LastError != "backend unavailable" || snapshot.LastStats == nil {
 		t.Fatalf("Snapshot() = %+v", snapshot)
-	}
-}
-
-func TestDashboard(t *testing.T) {
-	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	response := httptest.NewRecorder()
-	NewTracker().Handler().ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("GET / status = %d", response.Code)
-	}
-	if got := response.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
-		t.Fatalf("GET / Content-Type = %q", got)
-	}
-	if response.Header().Get("Content-Security-Policy") == "" {
-		t.Fatal("GET / is missing Content-Security-Policy")
-	}
-	body := response.Body.String()
-	for _, want := range []string{"Cairn X Enricher", "fetch(\"/status\"", "Latest batch"} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("GET / body does not contain %q", want)
-		}
 	}
 }
 

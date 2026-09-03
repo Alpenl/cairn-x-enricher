@@ -16,7 +16,7 @@ chmod 600 .env
 ## 3. 启动固定版本镜像
 
 ```bash
-export IMAGE_TAG=0.1.0
+export IMAGE_TAG=0.2.0
 docker compose pull
 docker compose up -d
 docker compose ps
@@ -33,5 +33,7 @@ curl -fsS http://127.0.0.1:8080/status
 
 - 容器健康：`GET /healthz`。
 - 最近批次：`GET /status`。
+- 中文处理台：`GET /`；只允许通过可信局域网访问。
+- 收藏列表：`GET /api/bookmarks`；人工处理：`POST /api/bookmarks/process`。
 - 日志：结构化 JSON，按 `link_id` 和 `attempt` 关联，不记录凭据或模型原文。
 - D1：检查 `enrichment_status`、`enrichment_error` 和 `enrichment_updated_at`。

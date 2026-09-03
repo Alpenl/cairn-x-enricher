@@ -37,6 +37,7 @@ type Processor struct {
 	enricher    enrich.Enricher
 	logger      *slog.Logger
 	concurrency int
+	slots       chan struct{}
 }
 
 // New creates a Processor over a queue and enrichment workflow.
@@ -46,7 +47,19 @@ func New(queue Queue, enricher enrich.Enricher, logger *slog.Logger, concurrency
 		enricher:    enricher,
 		logger:      logger,
 		concurrency: concurrency,
+		slots:       make(chan struct{}, concurrency),
 	}
+}
+
+// Process handles one already-leased job while respecting the shared concurrency limit.
+func (p *Processor) Process(ctx context.Context, job *cairn.Job) error {
+	select {
+	case p.slots <- struct{}{}:
+		defer func() { <-p.slots }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return p.processJob(ctx, job)
 }
 
 // Run processes up to maxJobs and stops early on queue infrastructure errors.
@@ -94,7 +107,7 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 					return
 				}
 				claimed.Add(1)
-				if !p.processJob(runCtx, job) {
+				if err := p.Process(runCtx, job); err != nil {
 					failed.Add(1)
 					return
 				}
@@ -111,7 +124,7 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 	return stats, firstErr
 }
 
-func (p *Processor) processJob(ctx context.Context, job *cairn.Job) bool {
+func (p *Processor) processJob(ctx context.Context, job *cairn.Job) error {
 	logger := p.logger.With("link_id", job.ID, "attempt", job.Attempt)
 	logger.InfoContext(ctx, "enrichment started")
 	result, err := p.enricher.Enrich(ctx, enrich.Input{
@@ -123,15 +136,16 @@ func (p *Processor) processJob(ctx context.Context, job *cairn.Job) bool {
 	if err != nil {
 		if ctx.Err() != nil {
 			logger.WarnContext(ctx, "enrichment interrupted", "error", ctx.Err())
-			return false
+			return ctx.Err()
 		}
 		message := boundedError(err)
 		if reportErr := p.queue.Fail(ctx, job.ID, job.LeaseToken, message); reportErr != nil {
 			logger.ErrorContext(ctx, "failed to report enrichment failure", "error", reportErr)
+			return fmt.Errorf("report enrichment failure: %w", reportErr)
 		} else {
 			logger.WarnContext(ctx, "enrichment failed", "error", message)
 		}
-		return false
+		return err
 	}
 
 	completion := cairn.Completion{
@@ -143,10 +157,10 @@ func (p *Processor) processJob(ctx context.Context, job *cairn.Job) bool {
 	}
 	if err := p.queue.Complete(ctx, job.ID, completion); err != nil {
 		logger.ErrorContext(ctx, "failed to store enrichment", "error", err)
-		return false
+		return fmt.Errorf("store enrichment: %w", err)
 	}
 	logger.InfoContext(ctx, "enrichment completed", "related_links", len(result.RelatedLinks))
-	return true
+	return nil
 }
 
 func boundedError(err error) string {

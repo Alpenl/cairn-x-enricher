@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -31,6 +33,54 @@ type Completion struct {
 	Summary      string   `json:"summary"`
 	RelatedLinks []string `json:"related_links"`
 	Model        string   `json:"model"`
+}
+
+// Bookmark is the secret-free enrichment state shown in the management UI.
+type Bookmark struct {
+	ID          int64    `json:"id"`
+	URL         string   `json:"url"`
+	Note        string   `json:"note"`
+	CreatedAt   string   `json:"created_at"`
+	Status      string   `json:"status"`
+	Attempts    int      `json:"attempts"`
+	NextRetryAt string   `json:"next_retry_at,omitempty"`
+	Summary     string   `json:"summary,omitempty"`
+	RelatedURLs []string `json:"related_links"`
+	Model       string   `json:"model,omitempty"`
+	Error       string   `json:"error,omitempty"`
+	UpdatedAt   string   `json:"updated_at,omitempty"`
+	EnrichedAt  string   `json:"enriched_at,omitempty"`
+}
+
+// BookmarkDetail adds the full source text to a bookmark list item.
+type BookmarkDetail struct {
+	Bookmark
+	OriginalText string `json:"original_text,omitempty"`
+}
+
+// BookmarkCounts contains queue-wide counts for X bookmarks.
+type BookmarkCounts struct {
+	Total      int `json:"total"`
+	Pending    int `json:"pending"`
+	Processing int `json:"processing"`
+	Completed  int `json:"completed"`
+	Failed     int `json:"failed"`
+	Exhausted  int `json:"exhausted"`
+}
+
+// BookmarkPage is one newest-first page of X bookmarks.
+type BookmarkPage struct {
+	Items        []Bookmark     `json:"items"`
+	NextBeforeID *int64         `json:"next_before_id"`
+	Counts       BookmarkCounts `json:"counts"`
+}
+
+// BookmarkQuery controls server-side filtering and pagination.
+type BookmarkQuery struct {
+	Limit    int
+	BeforeID int64
+	Status   string
+	Search   string
 }
 
 // APIError reports a stable error returned by the Cairn Share Worker.
@@ -68,8 +118,25 @@ func NewClient(baseURL, token string, httpClient *http.Client) *Client {
 // Claim atomically leases the next eligible X bookmark, or returns nil when empty.
 func (c *Client) Claim(ctx context.Context) (*Job, error) {
 	response, err := c.do(ctx, http.MethodPost, "/api/enrichment/jobs/claim", nil)
-	if err != nil {
-		return nil, err
+	return decodeClaimResponse(response, err)
+}
+
+// ClaimByID atomically leases a selected X bookmark for a manual run.
+func (c *Client) ClaimByID(ctx context.Context, id int64) (*Job, error) {
+	if id < 1 {
+		return nil, errors.New("bookmark ID must be positive")
+	}
+	path := fmt.Sprintf("/api/enrichment/jobs/%d/claim", id)
+	response, err := c.do(ctx, http.MethodPost, path, nil)
+	return decodeClaimResponse(response, err)
+}
+
+func decodeClaimResponse(response *http.Response, requestErr error) (*Job, error) {
+	if requestErr != nil {
+		return nil, requestErr
+	}
+	if response == nil {
+		return nil, errors.New("claim response is nil")
 	}
 	defer func() { _ = response.Body.Close() }()
 
@@ -88,6 +155,74 @@ func (c *Client) Claim(ctx context.Context) (*Job, error) {
 		return nil, errors.New("claim response is missing required fields")
 	}
 	return &job, nil
+}
+
+// ListBookmarks returns a filtered newest-first page for the management UI.
+func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (BookmarkPage, error) {
+	values := make(url.Values)
+	if query.Limit > 0 {
+		values.Set("limit", strconv.Itoa(query.Limit))
+	}
+	if query.BeforeID > 0 {
+		values.Set("before_id", strconv.FormatInt(query.BeforeID, 10))
+	}
+	if query.Status != "" && query.Status != "all" {
+		values.Set("status", query.Status)
+	}
+	if query.Search != "" {
+		values.Set("q", query.Search)
+	}
+	path := "/api/enrichment/jobs"
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	response, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return BookmarkPage{}, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return BookmarkPage{}, apiError(response)
+	}
+
+	var page BookmarkPage
+	if err := decodeJSON(response.Body, &page); err != nil {
+		return BookmarkPage{}, fmt.Errorf("decode bookmark list: %w", err)
+	}
+	if page.Items == nil {
+		page.Items = []Bookmark{}
+	}
+	for _, item := range page.Items {
+		if item.ID < 1 || item.URL == "" || !validBookmarkStatus(item.Status) {
+			return BookmarkPage{}, errors.New("bookmark list contains an invalid item")
+		}
+	}
+	return page, nil
+}
+
+// GetBookmark returns one X bookmark including its full source text.
+func (c *Client) GetBookmark(ctx context.Context, id int64) (BookmarkDetail, error) {
+	if id < 1 {
+		return BookmarkDetail{}, errors.New("bookmark ID must be positive")
+	}
+	path := fmt.Sprintf("/api/enrichment/jobs/%d", id)
+	response, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return BookmarkDetail{}, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return BookmarkDetail{}, apiError(response)
+	}
+
+	var detail BookmarkDetail
+	if err := decodeJSON(response.Body, &detail); err != nil {
+		return BookmarkDetail{}, fmt.Errorf("decode bookmark detail: %w", err)
+	}
+	if detail.ID < 1 || detail.URL == "" || !validBookmarkStatus(detail.Status) {
+		return BookmarkDetail{}, errors.New("bookmark detail is invalid")
+	}
+	return detail, nil
 }
 
 // Complete commits a successful result while the supplied lease is current.
@@ -166,4 +301,13 @@ func apiError(response *http.Response) error {
 	}
 	_ = json.NewDecoder(io.LimitReader(response.Body, 8<<10)).Decode(&payload)
 	return &APIError{StatusCode: response.StatusCode, Code: payload.Code}
+}
+
+func validBookmarkStatus(status string) bool {
+	switch status {
+	case "pending", "processing", "completed", "failed", "exhausted":
+		return true
+	default:
+		return false
+	}
 }

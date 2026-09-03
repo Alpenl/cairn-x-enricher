@@ -23,11 +23,16 @@
 
 | 请求 | 成功响应 | 用途 |
 | --- | --- | --- |
+| `GET /api/enrichment/jobs` | `200` page | 分页列出 X 收藏、处理状态和队列总数 |
 | `POST /api/enrichment/jobs/claim` | `200` job 或 `204` | 原子领取最早的 X 链接 |
+| `GET /api/enrichment/jobs/{id}` | `200` detail | 读取单条收藏及完整原文 |
+| `POST /api/enrichment/jobs/{id}/claim` | `200` job | 原子领取指定收藏用于人工处理或重新处理 |
 | `POST /api/enrichment/jobs/{id}/complete` | `200` | 以匹配 lease 写入结果 |
 | `POST /api/enrichment/jobs/{id}/fail` | `200` | 记录失败并计算退避时间 |
 
-不要把内部 token 配置成 `CAIRN_API_TOKEN`，也不要把这些内部响应暴露给 App。
+指定领取会为新的人工处理周期重置尝试次数，但保留旧结果直到新结果成功写入；有效的 `processing` lease 返回 `409 job_busy`，避免重复模型调用。列表不返回 lease token，完整原文只由单条详情返回。
+
+不要把内部 token 配置成 `CAIRN_API_TOKEN`，也不要把这些内部响应暴露给 App。NAS 页面经 Go 同源 API 使用这些接口，浏览器不持有内部 token。
 
 ## 部署命令
 
