@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>后台 · Cairn 收藏</title>
+  <link rel="stylesheet" href="/assets/dashboard.css">
+  <script src="/assets/common.js" defer></script>
+  <script src="/assets/backstage.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <a class="icon-btn" href="/" title="返回收藏" aria-label="返回收藏">
+      <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M12 4.5 6.5 10l5.5 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+    </a>
+    <span class="mark">后台</span>
+    <div style="width: 32px;"></div>
+  </header>
+
+  <main class="back-col">
+    <h1 id="back-title" class="back-title">正在读取服务状态</h1>
+    <p id="back-state" class="back-state"></p>
+
+    <p id="back-sub" class="back-sub" hidden></p>
+    <div id="back-list"></div>
+
+    <p id="back-foot" class="back-foot"></p>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

@@ -96,10 +96,10 @@ func TestHandlerServesChineseDashboardAndBookmarkData(t *testing.T) {
 
 	root := httptest.NewRecorder()
 	server.Handler().ServeHTTP(root, httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil))
-	if root.Code != http.StatusOK || !strings.Contains(root.Body.String(), "Cairn 收藏阅读库") {
+	if root.Code != http.StatusOK || !strings.Contains(root.Body.String(), "Cairn 收藏") {
 		t.Fatalf("GET / = %d %q", root.Code, root.Body.String())
 	}
-	for _, label := range []string{"当前版本", "搜索 AI 标题、备注、译文或总结", "/assets/list.js"} {
+	for _, label := range []string{"搜索标题、备注、摘要或译文", "/assets/home.js", "/backstage"} {
 		if !strings.Contains(root.Body.String(), label) {
 			t.Errorf("GET / does not contain %q", label)
 		}
@@ -119,15 +119,27 @@ func TestHandlerServesChineseDashboardAndBookmarkData(t *testing.T) {
 	if reader.Code != http.StatusOK {
 		t.Fatalf("GET /bookmarks/7 = %d", reader.Code)
 	}
-	for _, label := range []string{"原始语言全文", "简体中文全文", "手动备注", "/assets/reader.js"} {
+	for _, label := range []string{"展开原文", "下一条", "/assets/reader.js"} {
 		if !strings.Contains(reader.Body.String(), label) {
 			t.Errorf("GET /bookmarks/7 does not contain %q", label)
 		}
 	}
 
+	backstage := httptest.NewRecorder()
+	server.Handler().ServeHTTP(backstage, httptest.NewRequestWithContext(ctx, http.MethodGet, "/backstage", nil))
+	if backstage.Code != http.StatusOK || !strings.Contains(backstage.Body.String(), "/assets/backstage.js") {
+		t.Fatalf("GET /backstage = %d %q", backstage.Code, backstage.Body.String())
+	}
+
+	script := httptest.NewRecorder()
+	server.Handler().ServeHTTP(script, httptest.NewRequestWithContext(ctx, http.MethodGet, "/assets/home.js", nil))
+	if script.Code != http.StatusOK || !strings.Contains(script.Header().Get("Content-Type"), "text/javascript") {
+		t.Fatalf("GET /assets/home.js = %d %q", script.Code, script.Header().Get("Content-Type"))
+	}
+
 	stylesheet := httptest.NewRecorder()
 	server.Handler().ServeHTTP(stylesheet, httptest.NewRequestWithContext(ctx, http.MethodGet, "/assets/dashboard.css", nil))
-	if stylesheet.Code != http.StatusOK || !strings.Contains(stylesheet.Header().Get("Content-Type"), "text/css") || !strings.Contains(stylesheet.Body.String(), ".bilingual-grid") {
+	if stylesheet.Code != http.StatusOK || !strings.Contains(stylesheet.Header().Get("Content-Type"), "text/css") || !strings.Contains(stylesheet.Body.String(), ".feature") {
 		t.Fatalf("GET /assets/dashboard.css = %d %q", stylesheet.Code, stylesheet.Header().Get("Content-Type"))
 	}
 
@@ -231,6 +243,7 @@ func TestHandlerRejectsInvalidManagementRequests(t *testing.T) {
 		want        int
 	}{
 		{http.MethodGet, "/api/bookmarks?limit=99", "", "", http.StatusBadRequest},
+		{http.MethodGet, "/api/bookmarks?limit=40", "", "", http.StatusOK},
 		{http.MethodGet, "/api/bookmarks/0", "", "", http.StatusBadRequest},
 		{http.MethodPost, "/api/bookmarks/process", `{"ids":[]}`, "application/json", http.StatusBadRequest},
 		{http.MethodPost, "/api/bookmarks/process", `{"ids":[1]}`, "text/plain", http.StatusBadRequest},

@@ -3,77 +3,41 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light">
-  <title>Cairn 收藏阅读库</title>
+  <meta name="color-scheme" content="dark">
+  <title>Cairn 收藏</title>
   <link rel="stylesheet" href="/assets/dashboard.css">
   <script src="/assets/common.js" defer></script>
-  <script src="/assets/list.js" defer></script>
+  <script src="/assets/home.js" defer></script>
 </head>
 <body>
-  <header class="site-header">
-    <div class="shell header-row">
-      <div class="brand-block">
-        <h1>Cairn 收藏阅读库</h1>
-        <div class="build-row">
-          <span class="version-badge">当前版本 <strong id="current-version">读取中</strong></span>
-          <span id="service-meta" class="service-meta">正在连接服务</span>
-        </div>
-      </div>
-      <div class="service-state" aria-live="polite">
-        <span id="state-dot" class="state-dot"></span>
-        <span id="state-label">连接中</span>
-      </div>
-    </div>
+  <header class="top">
+    <a class="mark" href="/">CAIRN</a>
+    <form class="find" id="find-form" role="search">
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="9" cy="9" r="5.6" stroke="currentColor" stroke-width="1.6"></circle>
+        <path d="M13.2 13.2 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
+      </svg>
+      <input id="find" type="search" maxlength="200" autocomplete="off" placeholder="搜索标题、备注、摘要或译文" aria-label="搜索收藏">
+    </form>
+    <a class="icon-btn" id="backstage-link" href="/backstage" title="后台" aria-label="后台">
+      <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="10" r="2.3" stroke="currentColor" stroke-width="1.5"></circle>
+        <path d="M10 3.4v2M10 14.6v2M3.4 10h2M14.6 10h2M5.4 5.4l1.4 1.4M13.2 13.2l1.4 1.4M14.6 5.4l-1.4 1.4M6.8 13.2l-1.4 1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+      </svg>
+    </a>
   </header>
 
-  <main class="shell list-page">
-    <div class="toolbar">
-      <form id="search-form" class="search" role="search">
-        <input id="search-input" type="search" maxlength="200" autocomplete="off" placeholder="搜索 AI 标题、备注、译文或总结" aria-label="搜索收藏">
-        <button class="button" type="submit">搜索</button>
-      </form>
-      <div class="toolbar-actions">
-        <button id="clear-search" class="button secondary" type="button" hidden>清除</button>
-        <button id="refresh" class="button secondary" type="button">刷新</button>
-      </div>
-    </div>
-
-    <div id="status-tabs" class="counts" role="tablist" aria-label="处理状态">
-      <button class="count-tab active" type="button" role="tab" aria-selected="true" data-status="all"><strong id="count-total">-</strong><span>全部</span></button>
-      <button class="count-tab" type="button" role="tab" aria-selected="false" data-status="pending"><strong id="count-pending">-</strong><span>待处理</span></button>
-      <button class="count-tab" type="button" role="tab" aria-selected="false" data-status="processing"><strong id="count-processing">-</strong><span>处理中</span></button>
-      <button class="count-tab" type="button" role="tab" aria-selected="false" data-status="completed"><strong id="count-completed">-</strong><span>已完成</span></button>
-      <button class="count-tab" type="button" role="tab" aria-selected="false" data-status="failed"><strong id="count-failed">-</strong><span>待重试</span></button>
-      <button class="count-tab" type="button" role="tab" aria-selected="false" data-status="exhausted"><strong id="count-exhausted">-</strong><span>已终止</span></button>
-      <button class="count-tab" type="button" role="tab" aria-selected="false" data-status="unsupported"><strong id="count-unsupported">-</strong><span>其他</span></button>
-    </div>
-
-    <div class="list-head">
-      <label class="select-control">
-        <input id="select-all" type="checkbox">
-        <span>选择本页（最多 10 条）</span>
-      </label>
-      <div class="selection-actions">
-        <span id="updated" class="updated">尚未刷新</span>
-        <button id="process-selected" class="button compact" type="button" disabled>处理选中（0）</button>
-      </div>
-    </div>
-
-    <div id="loading" class="loading-state">正在读取收藏</div>
-    <div id="empty" class="empty-state" hidden>没有符合条件的收藏</div>
-    <section id="bookmark-list" class="bookmark-list" aria-label="收藏列表"></section>
-    <div class="more"><button id="load-more" class="button secondary" type="button" hidden>加载更多</button></div>
+  <main class="stage">
+    <p id="result-count" class="result-count" hidden></p>
+    <div id="feature-band" class="band" hidden>今天<i></i><em id="feature-band-count"></em></div>
+    <div id="feature" class="feature"></div>
+    <div id="stream"></div>
+    <p id="loading" class="line-note">正在读取收藏</p>
+    <p id="empty" class="line-note" hidden>没有找到符合的收藏</p>
+    <p id="tail" class="line-note" hidden>已经到最早的一条了</p>
+    <div id="sentinel"></div>
   </main>
 
-  <footer class="site-footer">
-    <div class="shell footer-row">
-      <span id="build-info">Cairn X Enricher</span>
-      <nav class="footer-links" aria-label="服务接口">
-        <a href="/healthz">健康状态</a>
-        <a href="/status">运行详情</a>
-      </nav>
-    </div>
-  </footer>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

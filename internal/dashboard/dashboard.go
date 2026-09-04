@@ -22,7 +22,7 @@ import (
 
 const (
 	defaultPageSize  = 20
-	maxPageSize      = 20
+	maxPageSize      = 60
 	maxManualBatch   = 10
 	manualQueueDepth = 100
 	maxSearchLength  = 200
@@ -35,14 +35,20 @@ var indexHTML []byte
 //go:embed reader.html
 var readerHTML []byte
 
+//go:embed backstage.html
+var backstageHTML []byte
+
 //go:embed dashboard.css
 var dashboardCSS []byte
 
 //go:embed common.js
 var commonJS []byte
 
-//go:embed list.js
-var listJS []byte
+//go:embed home.js
+var homeJS []byte
+
+//go:embed backstage.js
+var backstageJS []byte
 
 //go:embed reader.js
 var readerJS []byte
@@ -104,14 +110,20 @@ func (s *Server) Handler() http.Handler {
 		servePage(writer, indexHTML)
 	})
 	mux.HandleFunc("GET /bookmarks/{id}", serveReader)
+	mux.HandleFunc("GET /backstage", func(writer http.ResponseWriter, _ *http.Request) {
+		servePage(writer, backstageHTML)
+	})
 	mux.HandleFunc("GET /assets/dashboard.css", func(writer http.ResponseWriter, _ *http.Request) {
 		serveAsset(writer, "text/css; charset=utf-8", dashboardCSS)
 	})
 	mux.HandleFunc("GET /assets/common.js", func(writer http.ResponseWriter, _ *http.Request) {
 		serveAsset(writer, "text/javascript; charset=utf-8", commonJS)
 	})
-	mux.HandleFunc("GET /assets/list.js", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "text/javascript; charset=utf-8", listJS)
+	mux.HandleFunc("GET /assets/home.js", func(writer http.ResponseWriter, _ *http.Request) {
+		serveAsset(writer, "text/javascript; charset=utf-8", homeJS)
+	})
+	mux.HandleFunc("GET /assets/backstage.js", func(writer http.ResponseWriter, _ *http.Request) {
+		serveAsset(writer, "text/javascript; charset=utf-8", backstageJS)
 	})
 	mux.HandleFunc("GET /assets/reader.js", func(writer http.ResponseWriter, _ *http.Request) {
 		serveAsset(writer, "text/javascript; charset=utf-8", readerJS)

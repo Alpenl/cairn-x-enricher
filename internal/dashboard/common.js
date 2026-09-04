@@ -1,21 +1,21 @@
 (() => {
   "use strict";
 
-  const statusLabels = Object.freeze({
-    pending: "待处理",
-    processing: "处理中",
-    completed: "已完成",
-    failed: "待重试",
-    exhausted: "已终止",
-    unsupported: "其他"
-  });
-
   const errorLabels = Object.freeze({
-    job_busy: "该收藏正在处理中",
-    not_found: "收藏不存在",
+    job_busy: "这条正在处理中",
+    not_found: "这条收藏不存在",
     backend_error: "Cloudflare 后端暂时不可用",
     queue_full: "本机处理队列已满",
     invalid_ids: "所选收藏无效"
+  });
+
+  const waitingText = Object.freeze({
+    pending: "正在排队，稍后会生成中文标题与译文",
+    processing: "正在生成中文标题与译文",
+    failed: "上次没有读取成功，稍后会自动重试",
+    exhausted: "这条没能读取，去后台可以再试一次",
+    unsupported: "不是 X 链接，只保留了链接和备注",
+    completed: "由旧版本处理，重新处理可以补齐内容"
   });
 
   const byId = (id) => document.getElementById(id);
@@ -27,23 +27,51 @@
     return node;
   }
 
-  function formatDate(value) {
-    if (!value) return "-";
+  function parseDate(value) {
+    if (!value) return null;
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "-";
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function formatDate(value) {
+    const date = parseDate(value);
+    if (!date) return "-";
     return new Intl.DateTimeFormat("zh-CN", {
       year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
+      month: "long",
+      day: "numeric"
+    }).format(date);
+  }
+
+  function formatDateTime(value) {
+    const date = parseDate(value);
+    if (!date) return "-";
+    return new Intl.DateTimeFormat("zh-CN", {
+      month: "long",
+      day: "numeric",
       hour: "2-digit",
       minute: "2-digit"
     }).format(date);
   }
 
+  function startOfDay(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  }
+
+  function bucketLabel(value) {
+    const date = parseDate(value);
+    if (!date) return "更早";
+    const days = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86400000);
+    if (days <= 0) return "今天";
+    if (days < 7) return "近七天";
+    if (days < 30) return "近三十天";
+    return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long" }).format(date);
+  }
+
   function shortURL(value) {
     try {
       const parsed = new URL(value);
-      return parsed.hostname + parsed.pathname;
+      return parsed.hostname.replace(/^www\./, "") + parsed.pathname;
     } catch (_) {
       return value;
     }
@@ -51,6 +79,25 @@
 
   function imagePath(key) {
     return "/api/images/" + String(key).split("/").map(encodeURIComponent).join("/");
+  }
+
+  function firstImage(item) {
+    const images = Array.isArray(item.images) ? item.images : [];
+    return images.length > 0 ? imagePath(images[0].key) : "";
+  }
+
+  function displayTitle(item) {
+    if (item.ai_title) return { text: item.ai_title, raw: false };
+    return { text: shortURL(item.url), raw: true };
+  }
+
+  function displaySummary(item) {
+    if (item.summary) return { text: item.summary, wait: false };
+    return { text: waitingText[item.status] || "还没有生成内容", wait: true };
+  }
+
+  function needsAttention(item) {
+    return item.status === "failed" || item.status === "exhausted";
   }
 
   function showToast(message, bad = false) {
@@ -63,32 +110,14 @@
     showToast.timer = setTimeout(() => { toast.hidden = true; }, 4200);
   }
 
-  function setServiceState(kind, label) {
-    const dot = byId("state-dot");
-    const stateLabel = byId("state-label");
-    if (dot) dot.className = `state-dot ${kind}`;
-    if (stateLabel) stateLabel.textContent = label;
+  async function fetchJSON(path) {
+    const response = await fetch(path, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
   }
 
-  async function refreshServiceStatus() {
-    try {
-      const response = await fetch("/status", { cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const status = await response.json();
-      const build = status.build || {};
-      const commit = build.commit && build.commit !== "none" ? build.commit.slice(0, 8) : "local";
-      const version = build.version || "dev";
-      if (byId("current-version")) byId("current-version").textContent = version;
-      if (byId("service-meta")) byId("service-meta").textContent = `提交 ${commit}`;
-      if (byId("build-info")) byId("build-info").textContent = `Cairn X Enricher ${version}`;
-      if (!status.ready) setServiceState("bad", "未就绪");
-      else if (status.last_error) setServiceState("warn", "需要检查");
-      else setServiceState("good", "运行正常");
-    } catch (_) {
-      setServiceState("bad", "连接失败");
-      if (byId("current-version")) byId("current-version").textContent = "未知";
-      if (byId("service-meta")) byId("service-meta").textContent = "无法读取服务状态";
-    }
+  async function fetchStatus() {
+    return fetchJSON("/status");
   }
 
   async function submitProcessing(ids) {
@@ -113,15 +142,22 @@
   }
 
   window.CairnUI = Object.freeze({
+    bucketLabel,
     byId,
+    displaySummary,
+    displayTitle,
     element,
     errorLabels,
+    fetchJSON,
+    fetchStatus,
+    firstImage,
     formatDate,
+    formatDateTime,
     imagePath,
-    refreshServiceStatus,
+    needsAttention,
     shortURL,
     showToast,
-    statusLabels,
-    submitProcessing
+    submitProcessing,
+    waitingText
   });
 })();
