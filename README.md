@@ -23,6 +23,8 @@ Cairn Share App -> 原有 Worker API -> D1 links
 - 成功结果只有在响应包含已完成的 X Search 证据且通过严格 JSON/URL 校验后才写入。
 - 图片只接受 `https://pbs.twimg.com/media/...`，由 Worker 校验响应类型与大小后写入 R2，浏览器不接触 Cloudflare token。
 - 失败由 Worker 按 `1m / 5m / 30m / 2h` 退避，最多尝试 5 次。
+- 模型端点的临时 `408/429/5xx` 会在单次队列 attempt 内短重试；如果完整线程读取慢失败，会降级为只读原帖的结构化请求，避免上游抖动直接耗尽业务重试次数。
+- 失败或耗尽记录如果已经保留 `original_text`，会直接用现有原文补齐标题、语言、译文和摘要；后台也支持粘贴原文后生成。
 - URL 或备注被 App 修改时，已有增强结果自动失效并重新入队。
 - 日志不会输出 API key、完整提示词或模型响应。
 
@@ -60,10 +62,12 @@ go run ./cmd/cairn-x-enricher serve
 - `/`：内容优先的收藏首页。最近四条配图展示，其余按时间分组成三列速览，向下滚动继续加载；顶部搜索框直接搜标题、备注、摘要和译文，命中处高亮。
 - `/bookmarks/{id}`：阅读页，展示 AI 标题、手动备注、图片、摘要和中文全文，原文默认收起。
 - `/backstage`：后台页，只展示服务状态和需要人工处理的失败收藏，平时不需要打开。
+- `/api/backstage`：后台页使用的聚合状态，统一返回最近处理记录、失败计数和可手动重试条目。
 - `/api/bookmarks`：处理台的同源收藏列表代理。
 - `/api/bookmarks/{id}`：包含完整原文的单条详情。
 - `/api/images/{key...}`：受控的 R2 图片同源代理。
 - `/api/bookmarks/process`：提交最多 10 个收藏 ID 立即处理。
+- `/api/bookmarks/{id}/source`：提交人工补充的原帖正文，绕过 X Search 直接生成标题、语言、译文和摘要。
 - `/healthz`：进程存活。
 - `/readyz`：服务就绪。
 - `/status`：最近一批的匿名统计和错误状态。

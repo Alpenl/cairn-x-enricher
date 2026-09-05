@@ -32,6 +32,20 @@ func TestHandlerAndRunState(t *testing.T) {
 	}
 }
 
+func TestTrackerKeepsLastWorkStatsAcrossEmptyBatches(t *testing.T) {
+	tracker := NewTracker()
+	tracker.Record(processor.Stats{Claimed: 2, Completed: 2}, nil)
+	tracker.Record(processor.Stats{}, nil)
+
+	snapshot := tracker.Snapshot()
+	if snapshot.LastStats == nil || snapshot.LastStats.Claimed != 0 {
+		t.Fatalf("LastStats = %+v, want latest empty batch", snapshot.LastStats)
+	}
+	if snapshot.LastWorkStats == nil || snapshot.LastWorkStats.Claimed != 2 || snapshot.LastWorkStats.Completed != 2 {
+		t.Fatalf("LastWorkStats = %+v, want last non-empty batch", snapshot.LastWorkStats)
+	}
+}
+
 func TestHandlerReturnsNotFoundForUnknownPath(t *testing.T) {
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/missing", nil)
 	response := httptest.NewRecorder()

@@ -6,7 +6,8 @@
     not_found: "这条收藏不存在",
     backend_error: "Cloudflare 后端暂时不可用",
     queue_full: "本机处理队列已满",
-    invalid_ids: "所选收藏无效"
+    invalid_ids: "所选收藏无效",
+    invalid_source: "原文不能为空或过长"
   });
 
   const waitingText = Object.freeze({
@@ -141,6 +142,27 @@
     };
   }
 
+  async function submitSource(id, originalText) {
+    const response = await fetch(`/api/bookmarks/${id}/source`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ original_text: originalText })
+    });
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch (_) {
+      payload = {};
+    }
+    if (!response.ok && !Array.isArray(payload.rejected)) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    return {
+      accepted: Array.isArray(payload.accepted) ? payload.accepted : [],
+      rejected: Array.isArray(payload.rejected) ? payload.rejected : []
+    };
+  }
+
   window.CairnUI = Object.freeze({
     bucketLabel,
     byId,
@@ -158,6 +180,7 @@
     shortURL,
     showToast,
     submitProcessing,
+    submitSource,
     waitingText
   });
 })();

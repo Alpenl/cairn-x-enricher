@@ -12,13 +12,15 @@ import (
 
 // Snapshot is the public, secret-free service status payload.
 type Snapshot struct {
-	Ready       bool             `json:"ready"`
-	StartedAt   time.Time        `json:"started_at"`
-	LastRunAt   *time.Time       `json:"last_run_at,omitempty"`
-	LastSuccess *time.Time       `json:"last_success_at,omitempty"`
-	LastError   string           `json:"last_error,omitempty"`
-	LastStats   *processor.Stats `json:"last_stats,omitempty"`
-	Build       buildinfo.Info   `json:"build"`
+	Ready         bool             `json:"ready"`
+	StartedAt     time.Time        `json:"started_at"`
+	LastRunAt     *time.Time       `json:"last_run_at,omitempty"`
+	LastSuccess   *time.Time       `json:"last_success_at,omitempty"`
+	LastWorkAt    *time.Time       `json:"last_work_at,omitempty"`
+	LastError     string           `json:"last_error,omitempty"`
+	LastStats     *processor.Stats `json:"last_stats,omitempty"`
+	LastWorkStats *processor.Stats `json:"last_work_stats,omitempty"`
+	Build         buildinfo.Info   `json:"build"`
 }
 
 // Tracker stores thread-safe health and latest-batch state.
@@ -43,6 +45,10 @@ func (t *Tracker) Record(stats processor.Stats, err error) {
 	now := time.Now().UTC()
 	t.snapshot.LastRunAt = &now
 	t.snapshot.LastStats = &stats
+	if stats.HasWork() {
+		t.snapshot.LastWorkAt = &now
+		t.snapshot.LastWorkStats = &stats
+	}
 	if err != nil || stats.Failed > 0 {
 		if err != nil {
 			t.snapshot.LastError = err.Error()

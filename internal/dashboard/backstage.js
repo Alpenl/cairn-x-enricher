@@ -2,8 +2,49 @@
   "use strict";
 
   const ui = window.CairnUI;
-  const ATTENTION_STATUSES = ["failed", "exhausted"];
   const REFRESH_INTERVAL = 15000;
+
+  function retryIcon() {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "15");
+    svg.setAttribute("height", "15");
+    svg.setAttribute("viewBox", "0 0 20 20");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "M15.8 7.8A6 6 0 1 0 16 10m0-5v3.1h-3.1");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "1.6");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    svg.append(path);
+    return svg;
+  }
+
+  function sourceIcon() {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "15");
+    svg.setAttribute("height", "15");
+    svg.setAttribute("viewBox", "0 0 20 20");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "M7 4.5h6M7 8h6M7 11.5h3.5M5.5 2.8h9A1.7 1.7 0 0 1 16.2 4.5v11a1.7 1.7 0 0 1-1.7 1.7h-9a1.7 1.7 0 0 1-1.7-1.7v-11a1.7 1.7 0 0 1 1.7-1.7Z");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "1.5");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    svg.append(path);
+    return svg;
+  }
+
+  function setRetryLabel(button, label) {
+    button.replaceChildren(retryIcon(), ui.element("span", "", label));
+  }
+
+  function setSourceLabel(button, label) {
+    button.replaceChildren(sourceIcon(), ui.element("span", "", label));
+  }
 
   function reasonFor(item) {
     if (item.status === "exhausted") {
@@ -16,6 +57,7 @@
   }
 
   function attentionRow(item) {
+    const shell = ui.element("div", "back-item");
     const row = ui.element("div", "back-row");
     const body = ui.element("div", "u");
     const link = ui.element("a", "back-url", ui.shortURL(item.url));
@@ -24,13 +66,16 @@
     body.append(ui.element("div", "back-why", reasonFor(item)));
     row.append(body);
 
-    const action = ui.element("button", "text-btn", "再试一次");
+    const actions = ui.element("div", "back-actions");
+    const action = ui.element("button", "retry-btn");
     action.type = "button";
+    setRetryLabel(action, "再试一次");
     action.addEventListener("click", async () => {
       action.disabled = true;
       try {
         const result = await ui.submitProcessing([item.id]);
         if (result.accepted.length > 0) {
+          setRetryLabel(action, "已提交");
           ui.showToast("已提交处理请求");
           setTimeout(refresh, 900);
         } else {
@@ -43,59 +88,94 @@
         action.disabled = false;
       }
     });
-    row.append(action);
-    return row;
+    actions.append(action);
+
+    const sourceAction = ui.element("button", "retry-btn retry-btn-secondary");
+    sourceAction.type = "button";
+    setSourceLabel(sourceAction, "粘贴原文");
+    actions.append(sourceAction);
+    row.append(actions);
+
+    const sourceForm = ui.element("form", "source-form");
+    sourceForm.hidden = true;
+    const textarea = ui.element("textarea", "source-input");
+    textarea.name = "original_text";
+    textarea.maxLength = 100000;
+    textarea.placeholder = "粘贴原帖原文";
+    textarea.rows = 8;
+    const sourceSubmit = ui.element("button", "retry-btn");
+    sourceSubmit.type = "submit";
+    setSourceLabel(sourceSubmit, "提交生成");
+    const sourceCancel = ui.element("button", "text-btn", "取消");
+    sourceCancel.type = "button";
+    const sourceFooter = ui.element("div", "source-actions");
+    sourceFooter.append(sourceSubmit, sourceCancel);
+    sourceForm.append(textarea, sourceFooter);
+
+    sourceAction.addEventListener("click", () => {
+      sourceForm.hidden = !sourceForm.hidden;
+      if (!sourceForm.hidden) textarea.focus();
+    });
+    sourceCancel.addEventListener("click", () => {
+      sourceForm.hidden = true;
+    });
+    sourceForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const sourceText = textarea.value.trim();
+      if (!sourceText) {
+        ui.showToast("原文不能为空", true);
+        return;
+      }
+      sourceSubmit.disabled = true;
+      sourceAction.disabled = true;
+      try {
+        const result = await ui.submitSource(item.id, sourceText);
+        if (result.accepted.length > 0) {
+          setSourceLabel(sourceSubmit, "已提交");
+          ui.showToast("已提交原文生成请求");
+          setTimeout(refresh, 900);
+        } else {
+          const code = result.rejected[0]?.error;
+          ui.showToast(ui.errorLabels[code] || "原文生成请求未被接受", true);
+          sourceSubmit.disabled = false;
+          sourceAction.disabled = false;
+        }
+      } catch (_) {
+        ui.showToast("提交原文失败", true);
+        sourceSubmit.disabled = false;
+        sourceAction.disabled = false;
+      }
+    });
+
+    shell.append(row, sourceForm);
+    return shell;
   }
 
-  function describeService(status, counts) {
-    const parts = [];
-    const stats = status?.last_stats;
-    if (stats) {
-      parts.push(`最近一批领取 ${stats.claimed ?? 0} 条，完成 ${stats.completed ?? 0} 条，失败 ${stats.failed ?? 0} 条。`);
-    }
-    if ((counts.pending ?? 0) + (counts.processing ?? 0) > 0) {
-      parts.push(`队列里还有 ${(counts.pending ?? 0) + (counts.processing ?? 0)} 条在等待处理。`);
-    }
-    parts.push("新收藏一般在几分钟内出现在列表里，平时不需要打开这一页。");
-    return parts.join("");
+  function attentionText(total, shown) {
+    if (total > shown) return `需要你看一眼的 ${total} 条（显示最近 ${shown} 条）`;
+    return `需要你看一眼的 ${shown} 条`;
   }
 
   async function refresh() {
-    let status = null;
+    let summary = null;
     try {
-      status = await ui.fetchStatus();
-    } catch (_) {
-      status = null;
-    }
-
-    let counts = {};
-    const attention = [];
-    try {
-      for (const name of ATTENTION_STATUSES) {
-        const page = await ui.fetchJSON(`/api/bookmarks?limit=20&status=${name}`);
-        counts = page.counts || counts;
-        for (const item of Array.isArray(page.items) ? page.items : []) attention.push(item);
-      }
+      summary = await ui.fetchJSON("/api/backstage");
     } catch (_) {
       ui.byId("back-title").textContent = "读取失败";
       ui.byId("back-state").textContent = "无法读取 Cloudflare 后端，请检查网络和 CAIRN_ENRICHER_TOKEN。";
       return;
     }
 
+    const counts = summary.counts || {};
+    const attention = Array.isArray(summary.attention) ? summary.attention : [];
     const title = ui.byId("back-title");
-    if (status && !status.ready) {
-      title.textContent = "服务未就绪";
-    } else if (status?.last_error) {
-      title.textContent = "最近一批有错误";
-    } else {
-      title.textContent = "一切正常";
-    }
+    title.textContent = summary.title || "一切正常";
 
     const state = ui.byId("back-state");
-    state.textContent = describeService(status, counts);
-    if (status?.last_error) {
+    state.textContent = summary.state || "";
+    if (summary.last_error) {
       state.append(document.createElement("br"));
-      state.append(document.createTextNode(status.last_error));
+      state.append(document.createTextNode(summary.last_error));
     }
 
     const sub = ui.byId("back-sub");
@@ -104,12 +184,13 @@
     if (attention.length === 0) {
       sub.hidden = true;
     } else {
-      sub.textContent = `需要你看一眼的 ${attention.length} 条`;
+      const total = Number.isFinite(summary.attention_total) ? summary.attention_total : attention.length;
+      sub.textContent = attentionText(total, attention.length);
       sub.hidden = false;
       for (const item of attention) list.append(attentionRow(item));
     }
 
-    const build = status?.build || {};
+    const build = summary.build || {};
     const version = build.version || "dev";
     const commit = build.commit && build.commit !== "none" ? build.commit.slice(0, 8) : "local";
     ui.byId("back-foot").textContent =

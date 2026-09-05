@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestResponsesClientForcesXSearchAndParsesStructuredOutput(t *testing.T) {
@@ -88,6 +89,7 @@ func TestResponsesClientRejectsMalformedStructuredOutput(t *testing.T) {
 
 func TestResponsesClientReturnsSanitizedHTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Retry-After", "0")
 		writer.WriteHeader(http.StatusTooManyRequests)
 		_, _ = writer.Write([]byte(`{"error":{"message":"rate limited"}}`))
 	}))
@@ -101,5 +103,160 @@ func TestResponsesClientReturnsSanitizedHTTPError(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "secret-key") {
 		t.Fatal("error contains API key")
+	}
+}
+
+func TestResponsesClientRetriesTransientHTTPFailures(t *testing.T) {
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls < 3 {
+			writer.Header().Set("Retry-After", "0")
+			writer.WriteHeader(http.StatusBadGateway)
+			_, _ = writer.Write([]byte(`{"error":{"message":"Upstream service temporarily unavailable"}}`))
+			return
+		}
+
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{
+          "status":"completed",
+          "model":"grok-test",
+          "output":[
+            {"type":"x_search_call","status":"completed"},
+            {"type":"message","status":"completed","content":[
+              {"type":"output_text","text":"{\"ai_title\":\"人工智能生成的测试中文标题\",\"original_language\":\"en\",\"original_text\":\"source\",\"translated_text\":\"中文译文\",\"summary\":\"summary\",\"related_links\":[],\"image_urls\":[]}"}
+            ]}
+          ]
+        }`))
+	}))
+	defer server.Close()
+
+	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client())
+	candidate, err := client.Generate(context.Background(), Input{ID: 9, URL: "https://x.com/a/status/9", Attempt: 5})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if calls != 3 {
+		t.Fatalf("calls = %d, want 3", calls)
+	}
+	if candidate.Result.AITitle != "人工智能生成的测试中文标题" {
+		t.Fatalf("Generate() = %+v", candidate)
+	}
+}
+
+func TestResponsesClientFallsBackToPostOnlyPromptAfterTransientHTTPFailures(t *testing.T) {
+	var sawFallback bool
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var body struct {
+			Input []struct {
+				Content string `json:"content"`
+			} `json:"input"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if len(body.Input) != 1 {
+			t.Fatalf("input = %+v", body.Input)
+		}
+		if !strings.Contains(body.Input[0].Content, "不要展开全量评论") {
+			writer.Header().Set("Retry-After", "0")
+			writer.WriteHeader(http.StatusBadGateway)
+			_, _ = writer.Write([]byte(`{"error":{"message":"Upstream service temporarily unavailable"}}`))
+			return
+		}
+		sawFallback = true
+		if !strings.Contains(request.Header.Get("Idempotency-Key"), "-post-1") {
+			t.Fatalf("fallback Idempotency-Key = %q", request.Header.Get("Idempotency-Key"))
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{
+          "status":"completed",
+          "model":"grok-test",
+          "output":[
+            {"type":"x_search_call","status":"completed"},
+            {"type":"message","status":"completed","content":[
+              {"type":"output_text","text":"{\"ai_title\":\"公众号三年经验与创作工作流\",\"original_language\":\"zh\",\"original_text\":\"source\",\"translated_text\":\"中文译文\",\"summary\":\"summary\",\"related_links\":[],\"image_urls\":[]}"}
+            ]}
+          ]
+        }`))
+	}))
+	defer server.Close()
+
+	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client())
+	candidate, err := client.Generate(context.Background(), Input{ID: 12, URL: "https://x.com/a/status/12", Attempt: 5})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if !sawFallback {
+		t.Fatal("fallback prompt was not used")
+	}
+	if candidate.Result.AITitle != "公众号三年经验与创作工作流" {
+		t.Fatalf("Generate() = %+v", candidate)
+	}
+}
+
+func TestResponsesClientTransformsTrustedSourceWithoutXSearch(t *testing.T) {
+	sourceText := "这是人工粘贴的原帖原文，包含完整内容。"
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Idempotency-Key") != "cairn-link-20-attempt-6-source-1" {
+			t.Fatalf("Idempotency-Key = %q", request.Header.Get("Idempotency-Key"))
+		}
+		var body map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if _, exists := body["tools"]; exists {
+			t.Fatalf("trusted source request includes tools: %#v", body["tools"])
+		}
+		messages := body["input"].([]any)
+		content := messages[0].(map[string]any)["content"].(string)
+		for _, required := range []string{"不要搜索", "原文:", sourceText} {
+			if !strings.Contains(content, required) {
+				t.Fatalf("source prompt does not contain %q: %q", required, content)
+			}
+		}
+
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{
+          "status":"completed",
+          "model":"grok-test",
+          "output":[
+            {"type":"message","status":"completed","content":[
+              {"type":"output_text","text":"{\"ai_title\":\"人工原文生成标题\",\"original_language\":\"zh\",\"original_text\":\"model copy\",\"translated_text\":\"这是人工粘贴的原帖原文，包含完整内容。\",\"summary\":\"summary\",\"related_links\":[],\"image_urls\":[\"https://pbs.twimg.com/media/ignored?format=jpg\"]}"}
+            ]}
+          ]
+        }`))
+	}))
+	defer server.Close()
+
+	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client())
+	candidate, err := client.Generate(context.Background(), Input{
+		ID: 20, URL: "https://x.com/a/status/20", Attempt: 6,
+		SourceText:   sourceText,
+		RelatedLinks: []string{"https://example.com/existing"},
+	})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if !candidate.SearchVerified {
+		t.Fatal("trusted source candidate was not marked verified")
+	}
+	if candidate.Result.OriginalText != sourceText {
+		t.Fatalf("OriginalText = %q", candidate.Result.OriginalText)
+	}
+	if len(candidate.Result.RelatedLinks) != 1 || candidate.Result.RelatedLinks[0] != "https://example.com/existing" {
+		t.Fatalf("RelatedLinks = %#v", candidate.Result.RelatedLinks)
+	}
+	if len(candidate.Result.ImageURLs) != 0 {
+		t.Fatalf("ImageURLs = %#v", candidate.Result.ImageURLs)
+	}
+}
+
+func TestSlowModelFailuresSkipSamePromptRetry(t *testing.T) {
+	if shouldRetryModelRequest(http.StatusBadGateway, 1, slowModelFailure) {
+		t.Fatal("slow model failure should move to fallback instead of retrying the same prompt")
+	}
+	if !shouldRetryModelRequest(http.StatusBadGateway, 1, time.Second) {
+		t.Fatal("fast transient model failure should retry")
 	}
 }

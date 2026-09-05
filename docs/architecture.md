@@ -36,3 +36,5 @@ pending
 适配器白名单识别官方 `x_search_call`，同时兼容目标端点实测返回的 `x_thread_fetch`、`x_keyword_search`、`x_semantic_search`、`x_user_search` 自定义调用。没有搜索证据、没有且仅有一个输出块、结构不合法、标题不是合理长度的中文或 URL 不安全时，任务失败而不写入结果。
 
 图片 URL 仅允许 `pbs.twimg.com/media`。模型结果通过校验后，Go 服务先让 Worker 在当前 lease 下抓取图片并写入 R2，再把 R2 对象引用随文本结果提交到 D1。Worker 完成事务前会确认引用对象存在；页面只能通过 Go 服务的同源 `/api/images/{key...}` 代理读取图片。
+
+当 Worker 中的失败/耗尽记录已经有 `original_text`，或者后台人工提交了原帖正文，服务会跳过 `x_search`，只把可信原文交给模型补齐标题、语言、译文和摘要。这个路径仍使用同一套 strict JSON Schema 和结果校验，但不要求模型返回搜索证据，也不会接受模型新生成的图片 URL。

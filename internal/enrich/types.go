@@ -4,10 +4,12 @@ import "context"
 
 // Input identifies one leased X bookmark to enrich.
 type Input struct {
-	ID      int64
-	URL     string
-	Note    string
-	Attempt int
+	ID           int64
+	URL          string
+	Note         string
+	Attempt      int
+	SourceText   string
+	RelatedLinks []string
 }
 
 // Result is the validated content persisted for a bookmark.

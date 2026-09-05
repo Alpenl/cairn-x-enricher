@@ -127,6 +127,26 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 }
 .text-btn:hover:not(:disabled) { color: var(--ink); border-color: #3d4143; }
 
+.retry-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  min-width: 96px;
+  height: 34px;
+  padding: 0 13px 0 11px;
+  border: 1px solid #34383a;
+  border-radius: 7px;
+  background: var(--sunk);
+  color: var(--ink-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.retry-btn svg { flex: 0 0 auto; }
+.retry-btn:hover:not(:disabled) { color: var(--ink); border-color: #4a4f52; background: #222628; }
+.retry-btn-secondary { background: transparent; }
+
 /* ---------- 首页 ---------- */
 
 .stage { padding: 26px 40px 56px; }
@@ -336,18 +356,41 @@ mark { background: rgba(211, 160, 74, .22); color: var(--ink); border-radius: 2p
   color: var(--ink-3);
   text-transform: uppercase;
 }
+.back-item { border-bottom: 1px solid var(--line); }
 .back-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
   padding: 16px 0;
-  border-bottom: 1px solid var(--line);
 }
 .back-row .u { min-width: 0; }
+.back-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .back-url { font-family: var(--mono); font-size: 13px; color: var(--ink-2); word-break: break-all; }
 .back-why { margin-top: 4px; color: var(--ink-3); font-size: 12.5px; }
 .back-foot { margin: 34px 0 0; color: var(--ink-3); font-size: 12.5px; }
+.source-form {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 18px;
+}
+.source-input {
+  width: 100%;
+  min-height: 156px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--sunk);
+  color: var(--ink);
+  padding: 11px 12px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.65;
+  outline: none;
+}
+.source-input:focus { border-color: #4a4f52; }
+.source-input::placeholder { color: var(--ink-3); }
+.source-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ---------- 提示条 ---------- */
 
@@ -388,4 +431,7 @@ mark { background: rgba(211, 160, 74, .22); color: var(--ink); border-radius: 2p
   .read-title { font-size: 30px; }
   .read-body { font-size: 17.5px; }
   .read-lede { font-size: 18px; }
+  .back-row { flex-direction: column; gap: 10px; }
+  .back-actions { justify-content: flex-start; }
+  .retry-btn { align-self: flex-start; }
 }

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Alpenl/cairn-x-enricher/internal/buildinfo"
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
@@ -27,7 +28,11 @@ const (
 	manualQueueDepth = 100
 	maxSearchLength  = 200
 	maxActionBody    = 4 << 10
+	maxSourceBody    = 128 << 10
+	maxSourceLength  = 100_000
 )
+
+var backstageAttentionStatuses = []string{"failed", "exhausted"}
 
 //go:embed index.html
 var indexHTML []byte
@@ -64,6 +69,12 @@ type Backend interface {
 // JobProcessor handles a job after the Worker has granted its lease.
 type JobProcessor interface {
 	Process(context.Context, *cairn.Job) error
+	ProcessWithSource(context.Context, *cairn.Job, string) error
+}
+
+type manualJob struct {
+	job        *cairn.Job
+	sourceText string
 }
 
 // Server owns the management HTTP surface and bounded manual work queue.
@@ -73,8 +84,18 @@ type Server struct {
 	backend   Backend
 	processor JobProcessor
 	logger    *slog.Logger
-	jobs      chan *cairn.Job
+	jobs      chan manualJob
 	enqueueMu sync.Mutex
+}
+
+type backstageSummary struct {
+	Title          string               `json:"title"`
+	State          string               `json:"state"`
+	LastError      string               `json:"last_error,omitempty"`
+	Attention      []cairn.Bookmark     `json:"attention"`
+	AttentionTotal int                  `json:"attention_total"`
+	Counts         cairn.BookmarkCounts `json:"counts"`
+	Build          buildinfo.Info       `json:"build"`
 }
 
 // New creates a dashboard and starts bounded manual processing workers.
@@ -95,7 +116,7 @@ func New(
 		backend:   backend,
 		processor: jobProcessor,
 		logger:    logger,
-		jobs:      make(chan *cairn.Job, manualQueueDepth),
+		jobs:      make(chan manualJob, manualQueueDepth),
 	}
 	for range workerCount {
 		go server.runWorker()
@@ -137,7 +158,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/bookmarks", s.listBookmarks)
 	mux.HandleFunc("GET /api/bookmarks/{id}", s.getBookmark)
 	mux.HandleFunc("GET /api/images/{key...}", s.getImage)
+	mux.HandleFunc("GET /api/backstage", s.getBackstage)
 	mux.HandleFunc("POST /api/bookmarks/process", s.processBookmarks)
+	mux.HandleFunc("POST /api/bookmarks/{id}/source", s.processBookmarkSource)
 	return mux
 }
 
@@ -221,6 +244,101 @@ func (s *Server) getImage(writer http.ResponseWriter, request *http.Request) {
 	}
 }
 
+func (s *Server) getBackstage(writer http.ResponseWriter, request *http.Request) {
+	summary, err := s.buildBackstageSummary(request.Context())
+	if err != nil {
+		s.writeBackendError(writer, "build backstage summary", 0, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, summary)
+}
+
+func (s *Server) buildBackstageSummary(ctx context.Context) (backstageSummary, error) {
+	status := s.tracker.Snapshot()
+	page, err := s.backend.ListBookmarks(ctx, cairn.BookmarkQuery{Limit: 1})
+	if err != nil {
+		return backstageSummary{}, fmt.Errorf("list bookmark counts: %w", err)
+	}
+	counts := page.Counts
+
+	attention := []cairn.Bookmark{}
+	for _, name := range backstageAttentionStatuses {
+		page, err := s.backend.ListBookmarks(ctx, cairn.BookmarkQuery{Limit: 20, Status: name})
+		if err != nil {
+			return backstageSummary{}, fmt.Errorf("list %s bookmarks: %w", name, err)
+		}
+		counts = mergeBookmarkCounts(counts, page.Counts)
+		attention = append(attention, page.Items...)
+	}
+
+	attentionTotal := counts.Failed + counts.Exhausted
+	if attentionTotal == 0 {
+		attentionTotal = len(attention)
+	}
+	return backstageSummary{
+		Title:          backstageTitle(status, attentionTotal),
+		State:          backstageState(status, counts, attentionTotal),
+		LastError:      status.LastError,
+		Attention:      attention,
+		AttentionTotal: attentionTotal,
+		Counts:         counts,
+		Build:          status.Build,
+	}, nil
+}
+
+func mergeBookmarkCounts(left, right cairn.BookmarkCounts) cairn.BookmarkCounts {
+	return cairn.BookmarkCounts{
+		Total:       max(left.Total, right.Total),
+		Pending:     max(left.Pending, right.Pending),
+		Processing:  max(left.Processing, right.Processing),
+		Completed:   max(left.Completed, right.Completed),
+		Failed:      max(left.Failed, right.Failed),
+		Exhausted:   max(left.Exhausted, right.Exhausted),
+		Unsupported: max(left.Unsupported, right.Unsupported),
+	}
+}
+
+func backstageTitle(status health.Snapshot, attentionTotal int) string {
+	if !status.Ready {
+		return "服务未就绪"
+	}
+	if attentionTotal > 0 {
+		return fmt.Sprintf("需要处理 %d 条", attentionTotal)
+	}
+	if status.LastError != "" {
+		return "最近一批有错误"
+	}
+	return "一切正常"
+}
+
+func backstageState(status health.Snapshot, counts cairn.BookmarkCounts, attentionTotal int) string {
+	parts := []string{}
+	if status.LastWorkStats != nil {
+		stats := status.LastWorkStats
+		parts = append(parts, fmt.Sprintf("最近一次实际处理领取 %d 条，完成 %d 条，失败 %d 条。", stats.Claimed, stats.Completed, stats.Failed))
+		if status.LastStats != nil && !status.LastStats.HasWork() {
+			parts = append(parts, "最近一批没有领取到新任务。")
+		}
+	} else if status.LastStats != nil {
+		if status.LastStats.HasWork() {
+			stats := status.LastStats
+			parts = append(parts, fmt.Sprintf("最近一批领取 %d 条，完成 %d 条，失败 %d 条。", stats.Claimed, stats.Completed, stats.Failed))
+		} else {
+			parts = append(parts, "最近一批没有领取到新任务。")
+		}
+	} else {
+		parts = append(parts, "服务已启动，尚未记录处理批次。")
+	}
+	if queued := counts.Pending + counts.Processing; queued > 0 {
+		parts = append(parts, fmt.Sprintf("队列里还有 %d 条在等待处理。", queued))
+	}
+	if attentionTotal > 0 {
+		parts = append(parts, fmt.Sprintf("还有 %d 条需要人工处理。", attentionTotal))
+	}
+	parts = append(parts, "新收藏一般在几分钟内出现在列表里，平时不需要打开这一页。")
+	return strings.Join(parts, "")
+}
+
 func (s *Server) processBookmarks(writer http.ResponseWriter, request *http.Request) {
 	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" {
@@ -248,10 +366,6 @@ func (s *Server) processBookmarks(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 
-	type rejection struct {
-		ID    int64  `json:"id"`
-		Error string `json:"error"`
-	}
 	accepted := make([]int64, 0, len(ids))
 	rejected := make([]rejection, 0)
 
@@ -273,7 +387,7 @@ func (s *Server) processBookmarks(writer http.ResponseWriter, request *http.Requ
 			rejected = append(rejected, rejection{ID: id, Error: "not_found"})
 			continue
 		}
-		s.jobs <- job
+		s.jobs <- manualJob{job: job}
 		accepted = append(accepted, id)
 	}
 
@@ -287,15 +401,74 @@ func (s *Server) processBookmarks(writer http.ResponseWriter, request *http.Requ
 	})
 }
 
+func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		writeError(writer, http.StatusBadRequest, "invalid_content_type")
+		return
+	}
+
+	request.Body = http.MaxBytesReader(writer, request.Body, maxSourceBody)
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	var body struct {
+		OriginalText string `json:"original_text"`
+	}
+	if err := decoder.Decode(&body); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		writeError(writer, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	sourceText := strings.TrimSpace(body.OriginalText)
+	if sourceText == "" || len(sourceText) > maxSourceLength {
+		writeProcessingResult(writer, http.StatusConflict, nil, []rejection{{ID: id, Error: "invalid_source"}})
+		return
+	}
+
+	s.enqueueMu.Lock()
+	defer s.enqueueMu.Unlock()
+	if len(s.jobs)+1 > cap(s.jobs) {
+		writeError(writer, http.StatusServiceUnavailable, "queue_full")
+		return
+	}
+	job, claimErr := s.backend.ClaimByID(request.Context(), id)
+	if claimErr != nil {
+		code := publicErrorCode(claimErr)
+		s.logger.WarnContext(request.Context(), "manual source claim rejected", "link_id", id, "error", claimErr)
+		writeProcessingResult(writer, http.StatusConflict, nil, []rejection{{ID: id, Error: code}})
+		return
+	}
+	if job == nil {
+		writeProcessingResult(writer, http.StatusConflict, nil, []rejection{{ID: id, Error: "not_found"}})
+		return
+	}
+	s.jobs <- manualJob{job: job, sourceText: sourceText}
+	writeProcessingResult(writer, http.StatusAccepted, []int64{id}, nil)
+}
+
 func (s *Server) runWorker() {
 	for {
 		select {
 		case <-s.ctx.Done():
 			return
-		case job := <-s.jobs:
+		case queued := <-s.jobs:
+			job := queued.job
 			started := time.Now().UTC()
 			stats := processor.Stats{StartedAt: started, Claimed: 1}
-			err := s.processor.Process(s.ctx, job)
+			var err error
+			if queued.sourceText == "" {
+				err = s.processor.Process(s.ctx, job)
+			} else {
+				err = s.processor.ProcessWithSource(s.ctx, job, queued.sourceText)
+			}
 			stats.Duration = time.Since(started)
 			if err != nil {
 				stats.Failed = 1
@@ -307,6 +480,24 @@ func (s *Server) runWorker() {
 			s.tracker.Record(stats, err)
 		}
 	}
+}
+
+type rejection struct {
+	ID    int64  `json:"id"`
+	Error string `json:"error"`
+}
+
+func writeProcessingResult(writer http.ResponseWriter, status int, accepted []int64, rejected []rejection) {
+	if accepted == nil {
+		accepted = []int64{}
+	}
+	if rejected == nil {
+		rejected = []rejection{}
+	}
+	writeJSON(writer, status, map[string]any{
+		"accepted": accepted,
+		"rejected": rejected,
+	})
 }
 
 func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
