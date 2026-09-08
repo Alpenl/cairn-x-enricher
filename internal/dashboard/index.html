@@ -17,7 +17,7 @@
         <circle cx="9" cy="9" r="5.6" stroke="currentColor" stroke-width="1.6"></circle>
         <path d="M13.2 13.2 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
       </svg>
-      <input id="find" type="search" maxlength="200" autocomplete="off" placeholder="搜索标题、备注、摘要或译文" aria-label="搜索收藏">
+      <input id="find" type="search" maxlength="200" autocomplete="off" placeholder="搜索收藏" aria-label="搜索收藏">
     </form>
     <a class="icon-btn" id="backstage-link" href="/backstage" title="后台和重试" aria-label="后台和重试">
       <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -29,6 +29,18 @@
   </header>
 
   <main class="stage">
+    <div class="filters" aria-label="收藏筛选">
+      <label>整理状态<select id="filter-curation_status"><option value="">全部</option><option value="inbox">收件箱</option><option value="kept">精选</option><option value="compiled">已编入笔记</option><option value="drop">搁置</option></select></label>
+      <label>主题<select id="filter-topic" disabled><option value="">全部主题</option></select></label>
+      <label>形态<select id="filter-form" disabled><option value="">全部形态</option></select></label>
+      <label>用途<select id="filter-use" disabled><option value="">全部用途</option></select></label>
+      <label>来源<select id="filter-source"><option value="">全部来源</option><option value="x">X</option><option value="wechat">公众号</option><option value="other">其他</option></select></label>
+      <label>收藏起始日期<input id="filter-since" type="date"></label>
+      <label class="filter-check"><input id="filter-uncertain" type="checkbox">待确认分类</label>
+      <button id="clear-filters" class="text-btn" type="button" hidden>清除筛选</button>
+      <button id="export-markdown" class="icon-btn" type="button" title="导出已加载的收藏" aria-label="导出 Markdown" disabled><img src="/assets/download.svg" width="18" height="18" alt=""></button>
+    </div>
+    <div id="load-error" class="load-error" role="alert" hidden>读取收藏失败 <button id="retry-load" class="text-btn" type="button">重试</button></div>
     <p id="result-count" class="result-count" hidden></p>
     <div id="feature-band" class="band" hidden>今天<i></i><em id="feature-band-count"></em></div>
     <div id="feature" class="feature"></div>

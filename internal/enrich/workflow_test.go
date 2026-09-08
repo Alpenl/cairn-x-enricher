@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
 type generatorFunc func(context.Context, Input) (Candidate, error)
@@ -33,12 +35,15 @@ func TestWorkflowValidatesAndNormalizesModelResult(t *testing.T) {
 					"https://pbs.twimg.com/media/abc?format=jpg&name=large",
 				},
 				Model: " grok-4.6 ",
+				Classification: taxonomy.Classification{Selection: taxonomy.Selection{
+					Topics: []string{"ＡＩ", "invented"}, Form: "工具", Use: "待试",
+				}},
 			},
 			SearchVerified: true,
 		}, nil
 	})
 
-	workflow, err := NewWorkflow(context.Background(), generator)
+	workflow, err := NewWorkflow(context.Background(), generator, testTaxonomy())
 	if err != nil {
 		t.Fatalf("NewWorkflow() error = %v", err)
 	}
@@ -55,6 +60,9 @@ func TestWorkflowValidatesAndNormalizesModelResult(t *testing.T) {
 	if len(result.ImageURLs) != 1 || result.ImageURLs[0] != "https://pbs.twimg.com/media/abc?format=jpg&name=large" {
 		t.Fatalf("ImageURLs = %#v", result.ImageURLs)
 	}
+	if len(result.Classification.Topics) != 1 || result.Classification.Topics[0] != "llm" || !result.Classification.Uncertainty || result.Classification.TaxonomyVersion != "test-v1" || len(result.Classification.DiscardedTags) != 1 {
+		t.Fatalf("unvalidated classification reached workflow output: %+v", result.Classification)
+	}
 }
 
 func TestWorkflowRejectsUnverifiedSearch(t *testing.T) {
@@ -67,7 +75,7 @@ func TestWorkflowRejectsUnverifiedSearch(t *testing.T) {
 			},
 		}, nil
 	})
-	workflow, err := NewWorkflow(context.Background(), generator)
+	workflow, err := NewWorkflow(context.Background(), generator, testTaxonomy())
 	if err != nil {
 		t.Fatalf("NewWorkflow() error = %v", err)
 	}
@@ -90,7 +98,7 @@ func TestWorkflowRejectsUnsafeImageURLAndNonChineseTitle(t *testing.T) {
 		generator := generatorFunc(func(_ context.Context, input Input) (Candidate, error) {
 			return Candidate{Input: input, Result: result, SearchVerified: true}, nil
 		})
-		workflow, err := NewWorkflow(context.Background(), generator)
+		workflow, err := NewWorkflow(context.Background(), generator, testTaxonomy())
 		if err != nil {
 			t.Fatalf("NewWorkflow() error = %v", err)
 		}
@@ -105,11 +113,20 @@ func TestWorkflowPropagatesGeneratorFailure(t *testing.T) {
 	generator := generatorFunc(func(context.Context, Input) (Candidate, error) {
 		return Candidate{}, want
 	})
-	workflow, err := NewWorkflow(context.Background(), generator)
+	workflow, err := NewWorkflow(context.Background(), generator, testTaxonomy())
 	if err != nil {
 		t.Fatalf("NewWorkflow() error = %v", err)
 	}
 	if _, err := workflow.Enrich(context.Background(), Input{}); !errors.Is(err, want) {
 		t.Fatalf("Enrich() error = %v, want wrapped %v", err, want)
+	}
+}
+
+func testTaxonomy() taxonomy.Catalog {
+	return taxonomy.Catalog{
+		Version: "test-v1",
+		Topics:  []taxonomy.Term{{ID: "llm", Label: "LLM", Aliases: []string{"AI", "大模型"}, Active: true}},
+		Forms:   []taxonomy.Term{{ID: "tool", Label: "工具", Active: true}},
+		Uses:    []taxonomy.Term{{ID: "try", Label: "待试", Active: true}},
 	}
 }

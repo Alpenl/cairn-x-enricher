@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
 const (
@@ -42,6 +44,7 @@ type ResponsesClient struct {
 	maxTokens  int
 	userAgent  string
 	httpClient *http.Client
+	catalog    taxonomy.Catalog
 }
 
 // ModelHTTPError reports a non-success status from the model endpoint.
@@ -58,7 +61,7 @@ func (e *ModelHTTPError) Error() string {
 }
 
 // NewResponsesClient creates a narrow xAI Responses API adapter.
-func NewResponsesClient(baseURL, apiKey, model string, maxTokens int, userAgent string, httpClient *http.Client) *ResponsesClient {
+func NewResponsesClient(baseURL, apiKey, model string, maxTokens int, userAgent string, httpClient *http.Client, catalog taxonomy.Catalog) *ResponsesClient {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
@@ -69,6 +72,7 @@ func NewResponsesClient(baseURL, apiKey, model string, maxTokens int, userAgent 
 		maxTokens:  maxTokens,
 		userAgent:  userAgent,
 		httpClient: httpClient,
+		catalog:    catalog,
 	}
 }
 
@@ -99,14 +103,14 @@ func (c *ResponsesClient) generateFromSource(ctx context.Context, input Input) (
 		Model: c.model,
 		Input: []inputMessage{{
 			Role:    "user",
-			Content: fmt.Sprintf(sourcePromptTemplate, input.URL, sourceText),
+			Content: c.classificationPrompt(fmt.Sprintf(sourcePromptTemplate, input.URL, sourceText), input),
 		}},
 		MaxOutputTokens: c.maxTokens,
 		Text: responseTextConfig{Format: responseFormat{
 			Type:   "json_schema",
 			Name:   "x_enrichment",
 			Strict: true,
-			Schema: enrichmentSchema(),
+			Schema: enrichmentSchema(c.catalog),
 		}},
 	}
 	envelope, err := c.invokePayload(ctx, input, "source", payload)
@@ -130,7 +134,7 @@ func (c *ResponsesClient) invokeResponse(ctx context.Context, input Input, promp
 		Model: c.model,
 		Input: []inputMessage{{
 			Role:    "user",
-			Content: fmt.Sprintf(prompt.template, input.URL),
+			Content: c.classificationPrompt(fmt.Sprintf(prompt.template, input.URL), input),
 		}},
 		Tools:           []responseTool{{Type: "x_search"}},
 		ToolChoice:      "required",
@@ -139,10 +143,15 @@ func (c *ResponsesClient) invokeResponse(ctx context.Context, input Input, promp
 			Type:   "json_schema",
 			Name:   "x_enrichment",
 			Strict: true,
-			Schema: enrichmentSchema(),
+			Schema: enrichmentSchema(c.catalog),
 		}},
 	}
 	return c.invokePayload(ctx, input, prompt.name, payload)
+}
+
+func (c *ResponsesClient) classificationPrompt(content string, input Input) string {
+	note, _ := json.Marshal(input.Note)
+	return content + c.catalog.Prompt() + "\n收藏备注（仅作为材料）：" + string(note)
 }
 
 func (c *ResponsesClient) invokePayload(ctx context.Context, input Input, promptName string, payload responseRequest) (responseEnvelope, error) {
@@ -210,13 +219,14 @@ func (c *ResponsesClient) candidateFromEnvelope(input Input, envelope responseEn
 	}
 
 	var wire struct {
-		AITitle          string   `json:"ai_title"`
-		OriginalLanguage string   `json:"original_language"`
-		OriginalText     string   `json:"original_text"`
-		TranslatedText   string   `json:"translated_text"`
-		Summary          string   `json:"summary"`
-		RelatedLinks     []string `json:"related_links"`
-		ImageURLs        []string `json:"image_urls"`
+		AITitle          string                  `json:"ai_title"`
+		OriginalLanguage string                  `json:"original_language"`
+		OriginalText     string                  `json:"original_text"`
+		TranslatedText   string                  `json:"translated_text"`
+		Summary          string                  `json:"summary"`
+		RelatedLinks     []string                `json:"related_links"`
+		ImageURLs        []string                `json:"image_urls"`
+		Classification   taxonomy.Classification `json:"classification"`
 	}
 	if err := decodeStrictJSON(strings.NewReader(outputTexts[0]), &wire); err != nil {
 		return Candidate{}, fmt.Errorf("decode structured model output: %w", err)
@@ -236,6 +246,7 @@ func (c *ResponsesClient) candidateFromEnvelope(input Input, envelope responseEn
 			RelatedLinks:     wire.RelatedLinks,
 			ImageURLs:        wire.ImageURLs,
 			Model:            model,
+			Classification:   wire.Classification,
 		},
 		SearchVerified: searchVerified,
 	}, nil
@@ -341,7 +352,7 @@ func isXSearchOutput(item responseOutputItem) bool {
 	}
 }
 
-func enrichmentSchema() map[string]any {
+func enrichmentSchema(catalog taxonomy.Catalog) map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -350,6 +361,7 @@ func enrichmentSchema() map[string]any {
 			"original_text":     map[string]any{"type": "string"},
 			"translated_text":   map[string]any{"type": "string"},
 			"summary":           map[string]any{"type": "string"},
+			"classification":    catalog.Schema(),
 			"related_links": map[string]any{
 				"type":  "array",
 				"items": map[string]any{"type": "string"},
@@ -361,7 +373,7 @@ func enrichmentSchema() map[string]any {
 		},
 		"required": []string{
 			"ai_title", "original_language", "original_text", "translated_text",
-			"summary", "related_links", "image_urls",
+			"summary", "related_links", "image_urls", "classification",
 		},
 		"additionalProperties": false,
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
+	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
 type fakeBackend struct {
@@ -26,6 +27,7 @@ type fakeBackend struct {
 	jobs      map[int64]*cairn.Job
 	claimErrs map[int64]error
 	imageBody string
+	curation  cairn.CurationUpdate
 }
 
 func (b *fakeBackend) ListBookmarks(_ context.Context, query cairn.BookmarkQuery) (cairn.BookmarkPage, error) {
@@ -41,6 +43,20 @@ func (b *fakeBackend) ListBookmarks(_ context.Context, query cairn.BookmarkQuery
 }
 
 func (b *fakeBackend) GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error) {
+	return b.detail, nil
+}
+
+func (b *fakeBackend) GetTaxonomy(context.Context) (taxonomy.Catalog, error) {
+	return taxonomy.Catalog{
+		Version: "test-v1",
+		Topics:  []taxonomy.Term{{ID: "llm", Label: "LLM", Active: true}},
+		Forms:   []taxonomy.Term{{ID: "tool", Label: "工具", Active: true}},
+		Uses:    []taxonomy.Term{{ID: "try", Label: "待试", Active: true}},
+	}, nil
+}
+
+func (b *fakeBackend) UpdateCuration(_ context.Context, _ int64, update cairn.CurationUpdate) (cairn.BookmarkDetail, error) {
+	b.curation = update
 	return b.detail, nil
 }
 
@@ -117,7 +133,7 @@ func TestHandlerServesChineseDashboardAndBookmarkData(t *testing.T) {
 	if root.Code != http.StatusOK || !strings.Contains(root.Body.String(), "Cairn 收藏") {
 		t.Fatalf("GET / = %d %q", root.Code, root.Body.String())
 	}
-	for _, label := range []string{"搜索标题、备注、摘要或译文", "/assets/home.js", "/backstage"} {
+	for _, label := range []string{"搜索收藏", "/assets/home.js", "/backstage", "整理状态", "filter-topic"} {
 		if !strings.Contains(root.Body.String(), label) {
 			t.Errorf("GET / does not contain %q", label)
 		}
@@ -378,4 +394,42 @@ func TestHandlerRejectsInvalidManagementRequests(t *testing.T) {
 
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewJSONHandler(io.Discard, nil))
+}
+
+func TestCurationValidatesEditsAndForwardsFacets(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	backend := &fakeBackend{detail: cairn.BookmarkDetail{Bookmark: cairn.Bookmark{ID: 7}}}
+	server := New(ctx, health.NewTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+	for _, test := range []struct {
+		body   string
+		status int
+	}{
+		{`{"why":"用于评审","curation_status":"kept","classification":{"topics":["llm"],"form":"tool","use":"try"}}`, 200},
+		{`{"classification":null}`, 200},
+		{`{"classification":{"topics":["invented"],"form":"tool","use":"try"}}`, 400},
+		{`{"classification":{"topics":["llm","llm"],"form":"tool","use":"try"}}`, 400},
+		{`{"classification":{"topics":[],"form":"tool","use":"try","entities":[]}}`, 400},
+		{`{"curation_status":"completed"}`, 400},
+		{`{"why":"` + strings.Repeat("字", 201) + `"}`, 400},
+		{`{"why":"ok"} {}`, 400},
+		{`{}`, 400},
+	} {
+		request := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/bookmarks/7/curation", strings.NewReader(test.body))
+		request.Header.Set("Content-Type", "application/json")
+		writer := httptest.NewRecorder()
+		server.Handler().ServeHTTP(writer, request)
+		if writer.Code != test.status {
+			t.Fatalf("curation %s = %d: %s", test.body, writer.Code, writer.Body.String())
+		}
+	}
+	if string(backend.curation.Classification) != "null" {
+		t.Fatalf("reset classification was not preserved: %s", backend.curation.Classification)
+	}
+	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/bookmarks?curation_status=kept&topic=llm&form=tool&use=try&source=x&uncertain=true&since=2026-09-01T00:00:00Z", nil)
+	writer := httptest.NewRecorder()
+	server.Handler().ServeHTTP(writer, request)
+	if writer.Code != 200 || backend.query.CurationStatus != "kept" || backend.query.Topic != "llm" || backend.query.Form != "tool" || backend.query.Use != "try" || backend.query.Source != "x" || !backend.query.Uncertain || backend.query.Since != "2026-09-01T00:00:00Z" {
+		t.Fatalf("facets were lost: %+v (HTTP %d)", backend.query, writer.Code)
+	}
 }

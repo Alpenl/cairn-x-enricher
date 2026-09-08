@@ -4,6 +4,8 @@
 
 - `worker/migrations/0005_add_x_enrichment.sql`
 - `worker/migrations/0006_add_rich_x_enrichment.sql`
+- `worker/migrations/0007_add_bookmark_curation.sql`
+- `worker/src/curation.ts`、`worker/src/taxonomy.json`
 - `worker/src/index.ts`
 - `worker/test/index.test.ts`
 - `worker/wrangler.jsonc`
@@ -16,6 +18,7 @@
 | Lease | `enrichment_lease_token`, `enrichment_lease_until` |
 | 结果 | `ai_title`, `original_language`, `original_text`, `translated_text`, `summary`, `related_links`, `images`, `enrichment_model` |
 | 诊断 | `enrichment_error`, `enrichment_updated_at`, `enriched_at` |
+| 收藏整理 | `classification`, `curation`, `why`, `curation_status` |
 
 迁移只有 `ADD COLUMN` 和新增索引，不删除或改名现有字段。原 App API 仍显式只选择并返回 `id, url, note, created_at, learned, learned_at`。
 
@@ -28,6 +31,8 @@ Worker 绑定名为 `ENRICHMENT_IMAGES` 的 R2 bucket，生产 bucket 名为 `ca
 | 请求 | 成功响应 | 用途 |
 | --- | --- | --- |
 | `GET /api/enrichment/jobs` | `200` page | 分页列出全部收藏、原文、处理状态和分类总数 |
+| `GET /api/enrichment/taxonomy` | `200` catalog | 统一的版本化主题、形态、用途和别名词表 |
+| `PATCH /api/enrichment/jobs/{id}/curation` | `200` detail | 保存人工原因、整理状态和分类，或恢复自动分类 |
 | `POST /api/enrichment/jobs/claim` | `200` job 或 `204` | 原子领取最早的 X 链接 |
 | `GET /api/enrichment/jobs/{id}` | `200` detail | 读取单条收藏及完整原文 |
 | `POST /api/enrichment/jobs/{id}/claim` | `200` job | 原子领取指定收藏用于人工处理或重新处理 |
@@ -42,6 +47,8 @@ Worker 绑定名为 `ENRICHMENT_IMAGES` 的 R2 bucket，生产 bucket 名为 `ca
 
 不要把内部 token 配置成 `CAIRN_API_TOKEN`，也不要把这些内部响应暴露给 App。NAS 页面经 Go 同源 API 使用这些接口，浏览器不持有内部 token。
 
+收藏分类与整理的完整字段语义、过滤参数、升级兼容性和词表维护见 [收藏管理说明](bookmark-management.md)。分类版必须先应用迁移 0007 并部署对应 Worker，再启动新版 Enricher；旧版 Go 客户端不能解析新增的列表字段，需要配套升级。
+
 ## 部署命令
 
 在 Cairn Share 的 `worker/` 目录执行：
@@ -55,4 +62,4 @@ npm run typecheck
 npx wrangler deploy
 ```
 
-R2 bucket 只需创建一次。迁移和 Worker 部署完成后再启动 `v0.3.0` Enricher，否则富内容写入或图片接口会失败。新增完成字段为可选，迁移与部署之间的短暂窗口仍兼容旧服务。
+R2 bucket 和 secret 只需首次部署时创建，已有部署不需要重复创建或轮换。迁移 0007 和配套 Worker 部署完成后再启动 `v0.5.0` Enricher。迁移完成到 Worker 发布之前仍兼容旧服务；新版 Worker 的列表响应不兼容旧版 Go，切换和回滚顺序见 [部署说明](deployment.md)。

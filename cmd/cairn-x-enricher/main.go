@@ -232,6 +232,10 @@ func newProcessor(
 		},
 	}
 	queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, httpClient)
+	catalog, err := queue.GetTaxonomy(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("load Worker taxonomy (requires curation backend migration): %w", err)
+	}
 	userAgent := "cairn-x-enricher/" + buildinfo.Version
 	model := enrich.NewResponsesClient(
 		cfg.GrokBaseURL,
@@ -240,8 +244,9 @@ func newProcessor(
 		cfg.GrokMaxTokens,
 		userAgent,
 		httpClient,
+		catalog,
 	)
-	workflow, err := enrich.NewWorkflow(ctx, model)
+	workflow, err := enrich.NewWorkflow(ctx, model, catalog)
 	if err != nil {
 		return nil, nil, err
 	}

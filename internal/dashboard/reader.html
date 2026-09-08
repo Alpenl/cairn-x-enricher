@@ -11,13 +11,14 @@
 </head>
 <body>
   <header class="top">
-    <a class="icon-btn" href="/" title="返回收藏" aria-label="返回收藏">
+    <a id="read-back" class="icon-btn" href="/" title="返回收藏" aria-label="返回收藏">
       <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <path d="M12 4.5 6.5 10l5.5 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
       </svg>
     </a>
     <div></div>
-    <div style="display: flex; align-items: center; gap: 8px;">
+    <div class="read-actions">
+      <button id="read-export" class="icon-btn" type="button" title="导出这条收藏" aria-label="导出 Markdown" disabled><img src="/assets/download.svg" width="18" height="18" alt=""></button>
       <button id="read-process" class="text-btn" type="button" hidden>重新处理</button>
       <a class="icon-btn" id="read-source" href="/" target="_blank" rel="noopener noreferrer" title="打开原帖" aria-label="打开原帖">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -36,6 +37,26 @@
       <p id="read-date" class="read-date"></p>
       <h1 id="read-title" class="read-title"></h1>
       <p id="read-note" class="read-note" hidden></p>
+      <div id="read-meta"></div>
+      <p id="read-why" class="read-why" hidden></p>
+      <details id="read-curation" class="curation">
+        <summary>整理收藏</summary>
+        <p id="curation-error" class="curation-error" role="alert" hidden>无法读取标签词表 <button id="retry-taxonomy" class="text-btn" type="button">重试</button></p>
+        <form id="curation-form">
+          <fieldset id="curation-fields" disabled>
+            <label>收藏原因<textarea id="curation-why" maxlength="200" rows="2"></textarea></label>
+            <div id="why-suggestion-block" class="why-suggestion" hidden><span class="suggestion-label">AI 用途建议</span><p id="why-suggestion"></p><button id="use-suggestion" class="text-btn" type="button">采用建议</button></div>
+            <fieldset class="topic-fields"><legend>主题 <span id="topic-count">0/3</span></legend><div id="curation-topics" class="topic-options"></div></fieldset>
+            <div class="curation-selects">
+              <label>形态<select id="curation-form-value"></select></label>
+              <label>用途<select id="curation-use"></select></label>
+              <label>整理状态<select id="curation-status"><option value="inbox">收件箱</option><option value="kept">精选</option><option value="compiled">已编入笔记</option><option value="drop">搁置</option></select></label>
+            </div>
+            <div class="curation-actions"><button id="reset-classification" class="text-btn" type="button" hidden>恢复自动分类</button><span id="curation-dirty" hidden>未保存</span><button id="save-curation" class="text-btn" type="submit">保存整理</button></div>
+          </fieldset>
+        </form>
+      </details>
+      <p id="read-entities" class="read-entities" hidden></p>
       <p id="read-lede" class="read-lede"></p>
       <div id="read-figures"></div>
       <div id="read-body" class="read-body"></div>

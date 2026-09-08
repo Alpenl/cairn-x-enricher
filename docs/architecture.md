@@ -22,6 +22,7 @@ pending
 | --- | --- |
 | `internal/cairn` | 调用 Worker 内部队列 API |
 | `internal/enrich` | xAI Responses 协议、Eino 工作流、严格输出校验 |
+| `internal/taxonomy` | 版本化词表、别名归一化、分类枚举和输出校验 |
 | `internal/processor` | 有界并发、批处理和失败上报 |
 | `internal/health` | liveness、readiness 和最近一批状态 |
 | `internal/dashboard` | 中文收藏列表、独立阅读页、同源查询/图片代理和有界人工处理队列 |
@@ -31,7 +32,11 @@ pending
 
 ## LLM 契约
 
-请求只使用 `POST /responses`，强制 `tool_choice=required` 和 `tools=[{"type":"x_search"}]`。strict JSON Schema 要求模型一次返回 `ai_title`、`original_language`、`original_text`、`translated_text`、`summary`、`related_links` 和 `image_urls`；提示词明确原文保持原始语言、译文使用简体中文，标题约 20 个简体中文字符。
+请求只使用 `POST /responses`，搜索路径强制 `tool_choice=required` 和 `tools=[{"type":"x_search"}]`。strict JSON Schema 要求模型一次返回 `ai_title`、`original_language`、`original_text`、`translated_text`、`summary`、`related_links`、`image_urls` 和 `classification`；提示词明确原文保持原始语言、译文使用简体中文，标题约 20 个简体中文字符。
+
+词表由 Worker 的 `src/taxonomy.json` 统一管理，Go 在启动时读取并验证。所有请求都附词表和枚举，Eino 的校验节点将别名映射为稳定 ID，丢弃未知/停用标签并标记待确认。分类信息不足不会丢弃已经验证的原文和摘要。
+
+人工分类单独写入 `curation`，检索优先于模型 `classification`；人工收藏原因 `why` 和整理状态 `curation_status` 不随模型重跑覆盖。整理状态与 lease/重试状态互不混用。详细数据契约及升级顺序见 [收藏管理说明](bookmark-management.md)。
 
 适配器白名单识别官方 `x_search_call`，同时兼容目标端点实测返回的 `x_thread_fetch`、`x_keyword_search`、`x_semantic_search`、`x_user_search` 自定义调用。没有搜索证据、没有且仅有一个输出块、结构不合法、标题不是合理长度的中文或 URL 不安全时，任务失败而不写入结果。
 

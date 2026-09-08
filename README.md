@@ -4,6 +4,8 @@
 
 现有 App 不需要更新：原有 `/api/links` 请求、响应和鉴权均保持不变。新增队列字段和 `/api/enrichment/*` 内部接口只服务于本项目。
 
+收藏管理支持固定词表分类、人工收藏原因、收件箱/精选/笔记/搁置状态、组合筛选及 Markdown 导出。实现依据的 [Grok 完整讨论与原始手册](docs/bookmark-management.md#讨论归档) 已保存到仓库，具体行为、词表维护和配套升级见 [收藏管理说明](docs/bookmark-management.md)。
+
 ## 数据流
 
 ```text
@@ -27,6 +29,7 @@ Cairn Share App -> 原有 Worker API -> D1 links
 - 失败或耗尽记录如果已经保留 `original_text`，会直接用现有原文补齐标题、语言、译文和摘要；后台也支持粘贴原文后生成。
 - URL 或备注被 App 修改时，已有增强结果自动失效并重新入队。
 - 日志不会输出 API key、完整提示词或模型响应。
+- 标签只从 Worker 提供的版本化词表中选择，未知标签被丢弃并标记待确认；人工整理结果不会被重新处理覆盖。
 
 ## 为什么使用 Eino
 
@@ -59,12 +62,14 @@ go run ./cmd/cairn-x-enricher serve
 
 `serve` 启动后立即执行一批任务，之后按 `POLL_INTERVAL` 运行，并在 `127.0.0.1:8080` 暴露：
 
-- `/`：内容优先的收藏首页。最近四条配图展示，其余按时间分组成三列速览，向下滚动继续加载；顶部搜索框直接搜标题、备注、摘要和译文，命中处高亮。
-- `/bookmarks/{id}`：阅读页，展示 AI 标题、手动备注、图片、摘要和中文全文，原文默认收起。
+- `/`：收藏首页，支持主题、形态、用途、来源、整理状态和时间筛选；搜索覆盖原文、译文、摘要、实体、备注及收藏原因，命中处高亮；当前加载结果可导出 Markdown。
+- `/bookmarks/{id}`：阅读页，展示标题、图片、摘要和全文，原文默认收起；可确认分类、填写收藏原因、修改整理状态并导出单条收藏。
 - `/backstage`：后台页，只展示服务状态和需要人工处理的失败收藏，平时不需要打开。
 - `/api/backstage`：后台页使用的聚合状态，统一返回最近处理记录、失败计数和可手动重试条目。
 - `/api/bookmarks`：处理台的同源收藏列表代理。
 - `/api/bookmarks/{id}`：包含完整原文的单条详情。
+- `/api/taxonomy`：当前标签词表的同源接口。
+- `/api/bookmarks/{id}/curation`：通过 `PATCH` 保存人工整理，不调用模型。
 - `/api/images/{key...}`：受控的 R2 图片同源代理。
 - `/api/bookmarks/process`：提交最多 10 个收藏 ID 立即处理。
 - `/api/bookmarks/{id}/source`：提交人工补充的原帖正文，绕过 X Search 直接生成标题、语言、译文和摘要。
@@ -89,6 +94,7 @@ ghcr.io/alpenl/cairn-x-enricher:<version>
 ```
 
 完整部署顺序和 Cloudflare 前置改造见 [docs/deployment.md](docs/deployment.md) 与 [docs/cloudflare-backend.md](docs/cloudflare-backend.md)。
+分类功能需要配套 Worker 的 `0007_add_bookmark_curation.sql` 及新接口。请配套升级两端；Enricher 启动时会读取并验证词表，旧 Worker 会导致启动失败。不会自动回填历史收藏。
 Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网阅读库映射到 `8088`；页面展示 Cloudflare 中全部收藏，只有 X 链接可以触发模型处理。旧版已完成记录会继续显示原内容，只有手动重新处理后才会生成新版标题、译文和图片。该清单只拉取 GitHub Actions 发布的镜像，不在 NAS 本地构建。
 
 ## 发布

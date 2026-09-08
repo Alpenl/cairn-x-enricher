@@ -68,6 +68,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   align-items: center;
   gap: 9px;
   width: 440px;
+  min-width: 0;
   max-width: 100%;
   height: 32px;
   padding: 0 12px;
@@ -105,6 +106,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   color: var(--ink-3);
 }
 .icon-btn:hover { background: var(--sunk); color: var(--ink-2); }
+.icon-btn img { display: block; filter: invert(.7); }
 .icon-btn.attention::after {
   content: "";
   position: absolute;
@@ -150,6 +152,22 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 /* ---------- 首页 ---------- */
 
 .stage { padding: 26px 40px 56px; }
+
+.filters { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; padding-bottom: 22px; margin-bottom: 22px; border-bottom: 1px solid var(--line); }
+.filters > label { display: grid; gap: 4px; min-width: 110px; color: var(--ink-2); font-size: 12px; }
+.filters select, .filters input[type="date"], .curation select, .curation textarea { min-width: 0; width: 100%; border: 1px solid #3a4042; border-radius: 5px; background: var(--sunk); color: var(--ink); padding: 6px 9px; font: inherit; }
+.filters select { width: 120px; height: 34px; }
+.filters input[type="date"] { width: 154px; height: 34px; }
+.filters > .filter-check { display: flex; align-items: center; gap: 6px; height: 34px; }
+input[type="checkbox"] { accent-color: var(--sage); width: 16px; height: 16px; flex: 0 0 auto; }
+.filters > button { height: 34px; }
+.bookmark-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 3px 10px; margin-top: 8px; color: var(--ink-2); font-family: var(--sans); font-size: 11px; line-height: 1.5; letter-spacing: 0; overflow-wrap: anywhere; }
+.bookmark-meta .curation-state { color: var(--sage); }
+.bookmark-meta .topic-label { color: #8dbbc5; }
+.bookmark-meta .review-state { color: var(--clay); }
+.item .bookmark-meta { margin-top: 5px; }
+.load-error { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 24px 0; color: var(--clay); }
+button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid #8dbbc5; outline-offset: 3px; }
 
 .band {
   display: flex;
@@ -303,6 +321,7 @@ mark { background: rgba(211, 160, 74, .22); color: var(--ink); border-radius: 2p
 /* ---------- 阅读页 ---------- */
 
 .read { width: min(680px, 100%); margin: 0 auto; padding: 30px 20px 80px; }
+.read-actions { display: flex; align-items: center; gap: 8px; }
 .read-date { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; color: var(--ink-3); text-transform: uppercase; }
 .read-title {
   margin: 16px 0 0;
@@ -313,6 +332,28 @@ mark { background: rgba(211, 160, 74, .22); color: var(--ink); border-radius: 2p
 }
 .read-title.raw { font-family: var(--mono); font-size: 20px; font-weight: 400; color: var(--ink-2); word-break: break-all; }
 .read-note { margin: 16px 0 0; color: var(--amber); font-size: 15px; font-style: italic; }
+.read-why { color: var(--sage); font-size: 15px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.read-entities { color: var(--ink-2); font-size: 12px; overflow-wrap: anywhere; }
+.curation { margin-top: 20px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.curation > summary { color: var(--ink-2); cursor: pointer; font-size: 13px; }
+.curation form { margin-top: 16px; }
+.curation fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.curation label { display: grid; gap: 6px; color: var(--ink-2); font-size: 13px; }
+.curation textarea { resize: vertical; min-height: 76px; }
+.curation select { height: 36px; }
+.curation .topic-fields { margin-top: 18px; }
+.topic-fields legend { color: var(--ink-2); font-size: 13px; margin-bottom: 8px; }
+#topic-count { color: var(--ink-3); margin-left: 6px; }
+.topic-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.topic-options .topic-option { display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.curation-selects { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+.curation-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+#curation-dirty { font-size: 12px; color: var(--clay); }
+.why-suggestion { border-left: 2px solid #8dbbc5; margin-top: 12px; padding-left: 12px; font-size: 13px; color: var(--ink-2); }
+.why-suggestion p { margin: 4px 0 8px; overflow-wrap: anywhere; }
+.suggestion-label { color: #8dbbc5; font-size: 11px; }
+.curation-error { color: var(--clay); font-size: 13px; }
+.read-title, .entry-title, .read-body, .read-original, .fcard-title { overflow-wrap: anywhere; }
 .read-lede { margin: 26px 0 0; font-family: var(--serif); font-size: 20px; line-height: 1.75; color: var(--ink-2); }
 .read-figure { margin: 34px 0 0; border-radius: 8px; overflow: hidden; background: var(--sunk); }
 .read-figure img { display: block; width: 100%; height: auto; }
@@ -434,4 +475,9 @@ mark { background: rgba(211, 160, 74, .22); color: var(--ink); border-radius: 2p
   .back-row { flex-direction: column; gap: 10px; }
   .back-actions { justify-content: flex-start; }
   .retry-btn { align-self: flex-start; }
+  .filters { gap: 10px; }
+  .filters > label:not(.filter-check) { flex: 1 1 calc(50% - 10px); min-width: 0; }
+  .filters select, .filters input[type="date"] { width: 100%; }
+  .topic-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .curation-selects { grid-template-columns: minmax(0, 1fr); }
 }

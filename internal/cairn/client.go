@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
 const maxResponseBytes = 12 << 20
@@ -31,15 +33,16 @@ type Job struct {
 
 // Completion is the validated enrichment payload written back to Cairn Share.
 type Completion struct {
-	LeaseToken       string     `json:"lease_token"`
-	AITitle          string     `json:"ai_title"`
-	OriginalLanguage string     `json:"original_language"`
-	OriginalText     string     `json:"original_text"`
-	TranslatedText   string     `json:"translated_text"`
-	Summary          string     `json:"summary"`
-	RelatedLinks     []string   `json:"related_links"`
-	Images           []ImageRef `json:"images"`
-	Model            string     `json:"model"`
+	LeaseToken       string                   `json:"lease_token"`
+	AITitle          string                   `json:"ai_title"`
+	OriginalLanguage string                   `json:"original_language"`
+	OriginalText     string                   `json:"original_text"`
+	TranslatedText   string                   `json:"translated_text"`
+	Summary          string                   `json:"summary"`
+	RelatedLinks     []string                 `json:"related_links"`
+	Images           []ImageRef               `json:"images"`
+	Model            string                   `json:"model"`
+	Classification   *taxonomy.Classification `json:"classification,omitempty"`
 }
 
 // ImageRef identifies one validated image stored in the Worker's R2 bucket.
@@ -50,25 +53,30 @@ type ImageRef struct {
 
 // Bookmark is the secret-free enrichment state shown in the management UI.
 type Bookmark struct {
-	ID               int64      `json:"id"`
-	URL              string     `json:"url"`
-	Note             string     `json:"note"`
-	CreatedAt        string     `json:"created_at"`
-	Status           string     `json:"status"`
-	Processable      bool       `json:"processable,omitempty"`
-	Attempts         int        `json:"attempts"`
-	NextRetryAt      string     `json:"next_retry_at,omitempty"`
-	AITitle          string     `json:"ai_title,omitempty"`
-	OriginalLanguage string     `json:"original_language,omitempty"`
-	OriginalText     string     `json:"original_text,omitempty"`
-	TranslatedText   string     `json:"translated_text,omitempty"`
-	Summary          string     `json:"summary,omitempty"`
-	RelatedURLs      []string   `json:"related_links"`
-	Images           []ImageRef `json:"images"`
-	Model            string     `json:"model,omitempty"`
-	Error            string     `json:"error,omitempty"`
-	UpdatedAt        string     `json:"updated_at,omitempty"`
-	EnrichedAt       string     `json:"enriched_at,omitempty"`
+	ID                     int64                    `json:"id"`
+	URL                    string                   `json:"url"`
+	Note                   string                   `json:"note"`
+	CreatedAt              string                   `json:"created_at"`
+	Status                 string                   `json:"status"`
+	Processable            bool                     `json:"processable,omitempty"`
+	Attempts               int                      `json:"attempts"`
+	NextRetryAt            string                   `json:"next_retry_at,omitempty"`
+	AITitle                string                   `json:"ai_title,omitempty"`
+	OriginalLanguage       string                   `json:"original_language,omitempty"`
+	OriginalText           string                   `json:"original_text,omitempty"`
+	TranslatedText         string                   `json:"translated_text,omitempty"`
+	Summary                string                   `json:"summary,omitempty"`
+	RelatedURLs            []string                 `json:"related_links"`
+	Images                 []ImageRef               `json:"images"`
+	Model                  string                   `json:"model,omitempty"`
+	Error                  string                   `json:"error,omitempty"`
+	UpdatedAt              string                   `json:"updated_at,omitempty"`
+	EnrichedAt             string                   `json:"enriched_at,omitempty"`
+	Source                 string                   `json:"source,omitempty"`
+	Why                    string                   `json:"why"`
+	CurationStatus         string                   `json:"curation_status"`
+	Classification         *taxonomy.Classification `json:"classification,omitempty"`
+	ClassificationReviewed bool                     `json:"classification_reviewed"`
 }
 
 // BookmarkDetail preserves the detail endpoint's named response type.
@@ -96,10 +104,24 @@ type BookmarkPage struct {
 
 // BookmarkQuery controls server-side filtering and pagination.
 type BookmarkQuery struct {
-	Limit    int
-	BeforeID int64
-	Status   string
-	Search   string
+	Limit          int
+	BeforeID       int64
+	Status         string
+	Search         string
+	CurationStatus string
+	Topic          string
+	Form           string
+	Use            string
+	Source         string
+	Uncertain      bool
+	Since          string
+}
+
+// CurationUpdate applies explicit human edits; a null classification restores AI suggestions.
+type CurationUpdate struct {
+	Why            *string         `json:"why,omitempty"`
+	Status         *string         `json:"curation_status,omitempty"`
+	Classification json.RawMessage `json:"classification,omitempty"`
 }
 
 // APIError reports a stable error returned by the Cairn Share Worker.
@@ -192,6 +214,17 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 	if query.Search != "" {
 		values.Set("q", query.Search)
 	}
+	for key, value := range map[string]string{
+		"curation_status": query.CurationStatus, "topic": query.Topic, "form": query.Form,
+		"use": query.Use, "source": query.Source, "since": query.Since,
+	} {
+		if value != "" {
+			values.Set(key, value)
+		}
+	}
+	if query.Uncertain {
+		values.Set("uncertain", "true")
+	}
 	path := "/api/enrichment/jobs"
 	if encoded := values.Encode(); encoded != "" {
 		path += "?" + encoded
@@ -248,6 +281,50 @@ func (c *Client) GetBookmark(ctx context.Context, id int64) (BookmarkDetail, err
 	if !validBookmarkImages(detail.Bookmark) {
 		return BookmarkDetail{}, errors.New("bookmark detail contains an invalid image")
 	}
+	return detail, nil
+}
+
+// GetTaxonomy loads the Worker's single authoritative vocabulary.
+func (c *Client) GetTaxonomy(ctx context.Context) (taxonomy.Catalog, error) {
+	response, err := c.do(ctx, http.MethodGet, "/api/enrichment/taxonomy", nil)
+	if err != nil {
+		return taxonomy.Catalog{}, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return taxonomy.Catalog{}, apiError(response)
+	}
+	var catalog taxonomy.Catalog
+	if err := decodeJSON(response.Body, &catalog); err != nil {
+		return taxonomy.Catalog{}, fmt.Errorf("decode taxonomy: %w", err)
+	}
+	if err := catalog.Validate(); err != nil {
+		return taxonomy.Catalog{}, err
+	}
+	return catalog, nil
+}
+
+// UpdateCuration persists human organization without claiming or re-enriching a link.
+func (c *Client) UpdateCuration(ctx context.Context, id int64, update CurationUpdate) (BookmarkDetail, error) {
+	if id < 1 {
+		return BookmarkDetail{}, errors.New("bookmark ID must be positive")
+	}
+	response, err := c.do(ctx, http.MethodPatch, fmt.Sprintf("/api/enrichment/jobs/%d/curation", id), update)
+	if err != nil {
+		return BookmarkDetail{}, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return BookmarkDetail{}, apiError(response)
+	}
+	var detail BookmarkDetail
+	if err := decodeJSON(response.Body, &detail); err != nil {
+		return BookmarkDetail{}, fmt.Errorf("decode curation result: %w", err)
+	}
+	if detail.ID != id || detail.URL == "" || !validBookmarkStatus(detail.Status) || !validBookmarkImages(detail.Bookmark) {
+		return BookmarkDetail{}, errors.New("curation response is invalid")
+	}
+	normalizeBookmarkCollections(&detail.Bookmark)
 	return detail, nil
 }
 
@@ -402,6 +479,9 @@ func validImageRef(image ImageRef) bool {
 }
 
 func normalizeBookmarkCollections(bookmark *Bookmark) {
+	if bookmark.CurationStatus == "" {
+		bookmark.CurationStatus = "inbox"
+	}
 	if bookmark.RelatedURLs == nil {
 		bookmark.RelatedURLs = []string{}
 	}

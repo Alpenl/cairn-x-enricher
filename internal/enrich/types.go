@@ -1,6 +1,10 @@
 package enrich
 
-import "context"
+import (
+	"context"
+
+	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
+)
 
 // Input identifies one leased X bookmark to enrich.
 type Input struct {
@@ -22,6 +26,7 @@ type Result struct {
 	RelatedLinks     []string
 	ImageURLs        []string
 	Model            string
+	Classification   taxonomy.Classification
 }
 
 // Candidate combines model output with protocol-level search evidence.

@@ -14,11 +14,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/buildinfo"
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
+	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
 const (
@@ -58,12 +60,17 @@ var backstageJS []byte
 //go:embed reader.js
 var readerJS []byte
 
+//go:embed download.svg
+var downloadSVG []byte
+
 // Backend provides the internal Cloudflare data plane used by the dashboard.
 type Backend interface {
 	ListBookmarks(context.Context, cairn.BookmarkQuery) (cairn.BookmarkPage, error)
 	GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error)
 	GetImage(context.Context, string) (*http.Response, error)
 	ClaimByID(context.Context, int64) (*cairn.Job, error)
+	GetTaxonomy(context.Context) (taxonomy.Catalog, error)
+	UpdateCuration(context.Context, int64, cairn.CurationUpdate) (cairn.BookmarkDetail, error)
 }
 
 // JobProcessor handles a job after the Worker has granted its lease.
@@ -149,6 +156,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /assets/reader.js", func(writer http.ResponseWriter, _ *http.Request) {
 		serveAsset(writer, "text/javascript; charset=utf-8", readerJS)
 	})
+	mux.HandleFunc("GET /assets/download.svg", func(writer http.ResponseWriter, _ *http.Request) {
+		serveAsset(writer, "image/svg+xml", downloadSVG)
+	})
 
 	healthHandler := s.tracker.Handler()
 	mux.Handle("GET /healthz", healthHandler)
@@ -156,6 +166,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /status", healthHandler)
 
 	mux.HandleFunc("GET /api/bookmarks", s.listBookmarks)
+	mux.HandleFunc("GET /api/taxonomy", s.getTaxonomy)
+	mux.HandleFunc("PATCH /api/bookmarks/{id}/curation", s.updateCuration)
 	mux.HandleFunc("GET /api/bookmarks/{id}", s.getBookmark)
 	mux.HandleFunc("GET /api/images/{key...}", s.getImage)
 	mux.HandleFunc("GET /api/backstage", s.getBackstage)
@@ -213,6 +225,70 @@ func (s *Server) getBookmark(writer http.ResponseWriter, request *http.Request) 
 	detail, err := s.backend.GetBookmark(request.Context(), id)
 	if err != nil {
 		s.writeBackendError(writer, "get bookmark", id, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, detail)
+}
+
+func (s *Server) getTaxonomy(writer http.ResponseWriter, request *http.Request) {
+	catalog, err := s.backend.GetTaxonomy(request.Context())
+	if err != nil {
+		s.writeBackendError(writer, "get taxonomy", 0, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, catalog)
+}
+
+func (s *Server) updateCuration(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		writeError(writer, http.StatusBadRequest, "invalid_content_type")
+		return
+	}
+	request.Body = http.MaxBytesReader(writer, request.Body, maxActionBody)
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	var update cairn.CurationUpdate
+	if err := decoder.Decode(&update); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		writeError(writer, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	if (update.Why == nil && update.Status == nil && update.Classification == nil) ||
+		(update.Why != nil && utf8.RuneCountInString(*update.Why) > 200) ||
+		(update.Status != nil && !taxonomy.ValidCurationStatus(*update.Status)) {
+		writeError(writer, http.StatusBadRequest, "invalid_curation")
+		return
+	}
+	if update.Classification != nil && string(update.Classification) != "null" {
+		var selection taxonomy.Selection
+		selectionDecoder := json.NewDecoder(strings.NewReader(string(update.Classification)))
+		selectionDecoder.DisallowUnknownFields()
+		if err := selectionDecoder.Decode(&selection); err != nil || selection.Topics == nil {
+			writeError(writer, http.StatusBadRequest, "invalid_curation")
+			return
+		}
+		catalog, err := s.backend.GetTaxonomy(request.Context())
+		if err != nil {
+			s.writeBackendError(writer, "get taxonomy for curation", id, err)
+			return
+		}
+		if err := catalog.ValidateSelection(selection); err != nil {
+			writeError(writer, http.StatusBadRequest, "invalid_curation")
+			return
+		}
+	}
+	detail, err := s.backend.UpdateCuration(request.Context(), id, update)
+	if err != nil {
+		s.writeBackendError(writer, "update curation", id, err)
 		return
 	}
 	writeJSON(writer, http.StatusOK, detail)
@@ -524,10 +600,37 @@ func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 		return cairn.BookmarkQuery{}, errors.New("invalid status")
 	}
 	search := strings.TrimSpace(values.Get("q"))
-	if len(search) > maxSearchLength {
+	if utf8.RuneCountInString(search) > maxSearchLength || len(strings.Fields(search)) > 10 {
 		return cairn.BookmarkQuery{}, errors.New("search is too long")
 	}
-	return cairn.BookmarkQuery{Limit: limit, BeforeID: beforeID, Status: status, Search: search}, nil
+	query := cairn.BookmarkQuery{
+		Limit: limit, BeforeID: beforeID, Status: status, Search: search,
+		CurationStatus: values.Get("curation_status"), Topic: values.Get("topic"),
+		Form: values.Get("form"), Use: values.Get("use"), Source: values.Get("source"), Since: values.Get("since"),
+	}
+	if query.CurationStatus != "" && query.CurationStatus != "all" && !taxonomy.ValidCurationStatus(query.CurationStatus) {
+		return cairn.BookmarkQuery{}, errors.New("invalid curation status")
+	}
+	if query.Source != "" && query.Source != "x" && query.Source != "wechat" && query.Source != "other" {
+		return cairn.BookmarkQuery{}, errors.New("invalid source")
+	}
+	for _, value := range []string{query.Topic, query.Form, query.Use} {
+		if len(value) > 40 || strings.ContainsAny(value, " \t\r\n") {
+			return cairn.BookmarkQuery{}, errors.New("invalid classification filter")
+		}
+	}
+	if raw := values.Get("uncertain"); raw != "" {
+		if raw != "true" {
+			return cairn.BookmarkQuery{}, errors.New("invalid uncertainty filter")
+		}
+		query.Uncertain = true
+	}
+	if query.Since != "" {
+		if _, err := time.Parse(time.RFC3339Nano, query.Since); err != nil {
+			return cairn.BookmarkQuery{}, errors.New("invalid since filter")
+		}
+	}
+	return query, nil
 }
 
 func uniqueIDs(raw []int64) ([]int64, error) {
@@ -577,7 +680,7 @@ func (s *Server) writeBackendError(writer http.ResponseWriter, operation string,
 		case "job_busy":
 			writeError(writer, http.StatusConflict, apiErr.Code)
 			return
-		case "invalid_limit", "invalid_before_id", "invalid_status", "invalid_query":
+		case "invalid_limit", "invalid_before_id", "invalid_status", "invalid_query", "invalid_curation":
 			writeError(writer, http.StatusBadRequest, apiErr.Code)
 			return
 		}

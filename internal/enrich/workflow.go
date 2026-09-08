@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/eino/compose"
+
+	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
 // Workflow is the compiled Eino generation and validation pipeline.
@@ -13,10 +15,20 @@ type Workflow struct {
 }
 
 // NewWorkflow compiles the Eino generation and validation chain.
-func NewWorkflow(ctx context.Context, generator Generator) (*Workflow, error) {
+func NewWorkflow(ctx context.Context, generator Generator, catalog taxonomy.Catalog) (*Workflow, error) {
+	if err := catalog.Validate(); err != nil {
+		return nil, err
+	}
 	chain := compose.NewChain[Input, Result]()
 	chain.AppendLambda(compose.InvokableLambda(generator.Generate))
-	chain.AppendLambda(compose.InvokableLambda(validateCandidate))
+	chain.AppendLambda(compose.InvokableLambda(func(ctx context.Context, candidate Candidate) (Result, error) {
+		result, err := validateCandidate(ctx, candidate)
+		if err != nil {
+			return Result{}, err
+		}
+		result.Classification = catalog.Normalize(result.Classification)
+		return result, nil
+	}))
 	runnable, err := chain.Compile(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("compile Eino enrichment workflow: %w", err)

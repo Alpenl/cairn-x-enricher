@@ -188,12 +188,16 @@ func (p *Processor) processJob(ctx context.Context, job *cairn.Job, sourceText s
 		RelatedLinks:     relatedLinks(result.RelatedLinks, existing.RelatedURLs),
 		Images:           images,
 		Model:            result.Model,
+		Classification:   &result.Classification,
 	}
 	if err := p.queue.Complete(ctx, job.ID, completion); err != nil {
 		logger.ErrorContext(ctx, "failed to store enrichment", "error", err)
 		return fmt.Errorf("store enrichment: %w", err)
 	}
 	logger.InfoContext(ctx, "enrichment completed", "related_links", len(result.RelatedLinks), "images", len(images))
+	if discarded := len(result.Classification.DiscardedTags); discarded > 0 {
+		logger.WarnContext(ctx, "classification requires review", "discarded_tags", discarded)
+	}
 	return nil
 }
 

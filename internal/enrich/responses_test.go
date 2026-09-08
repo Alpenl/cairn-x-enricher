@@ -31,13 +31,20 @@ func TestResponsesClientForcesXSearchAndParsesStructuredOutput(t *testing.T) {
 			t.Errorf("request body = %#v", body)
 		}
 		messages := body["input"].([]any)
+		format := body["text"].(map[string]any)["format"].(map[string]any)
+		schema := format["schema"].(map[string]any)["properties"].(map[string]any)["classification"].(map[string]any)
+		topics := schema["properties"].(map[string]any)["topics"].(map[string]any)
+		ids := topics["items"].(map[string]any)["enum"].([]any)
+		if len(ids) != 1 || ids[0] != "llm" || topics["maxItems"] != float64(3) {
+			t.Errorf("classification schema is not closed: %#v", topics)
+		}
 		content := messages[0].(map[string]any)["content"].(string)
 		for _, required := range []string{"https://x.com/user/status/42", "约20个简体中文字符", "原始语言", "完整简体中文译文", "pbs.twimg.com/media", "忽略广告和无关项"} {
 			if !strings.Contains(content, required) {
 				t.Errorf("prompt does not contain %q: %q", required, content)
 			}
 		}
-		if strings.Contains(content, "later") {
+		if !strings.Contains(content, "later") || !strings.Contains(content, "词表") {
 			t.Errorf("prompt = %q", content)
 		}
 
@@ -56,7 +63,7 @@ func TestResponsesClientForcesXSearchAndParsesStructuredOutput(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewResponsesClient(server.URL+"/v1", "model-key", "grok-4.6", 8192, "test-agent", server.Client())
+	client := NewResponsesClient(server.URL+"/v1", "model-key", "grok-4.6", 8192, "test-agent", server.Client(), testTaxonomy())
 	candidate, err := client.Generate(context.Background(), Input{
 		ID: 42, URL: "https://x.com/user/status/42", Note: "later", Attempt: 3,
 	})
@@ -81,7 +88,7 @@ func TestResponsesClientRejectsMalformedStructuredOutput(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client())
+	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client(), testTaxonomy())
 	if _, err := client.Generate(context.Background(), Input{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1}); err == nil {
 		t.Fatal("Generate() error = nil, want strict JSON error")
 	}
@@ -95,7 +102,7 @@ func TestResponsesClientReturnsSanitizedHTTPError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewResponsesClient(server.URL, "secret-key", "model", 1024, "", server.Client())
+	client := NewResponsesClient(server.URL, "secret-key", "model", 1024, "", server.Client(), testTaxonomy())
 	_, err := client.Generate(context.Background(), Input{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1})
 	var httpErr *ModelHTTPError
 	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusTooManyRequests {
@@ -131,7 +138,7 @@ func TestResponsesClientRetriesTransientHTTPFailures(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client())
+	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client(), testTaxonomy())
 	candidate, err := client.Generate(context.Background(), Input{ID: 9, URL: "https://x.com/a/status/9", Attempt: 5})
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
@@ -182,7 +189,7 @@ func TestResponsesClientFallsBackToPostOnlyPromptAfterTransientHTTPFailures(t *t
 	}))
 	defer server.Close()
 
-	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client())
+	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client(), testTaxonomy())
 	candidate, err := client.Generate(context.Background(), Input{ID: 12, URL: "https://x.com/a/status/12", Attempt: 5})
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
@@ -229,7 +236,7 @@ func TestResponsesClientTransformsTrustedSourceWithoutXSearch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client())
+	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client(), testTaxonomy())
 	candidate, err := client.Generate(context.Background(), Input{
 		ID: 20, URL: "https://x.com/a/status/20", Attempt: 6,
 		SourceText:   sourceText,

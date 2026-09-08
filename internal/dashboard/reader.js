@@ -7,6 +7,113 @@
   const POLL_INTERVAL = 8000;
   let current = null;
   let loading = false;
+  let catalog = null;
+  let dirty = false;
+  let saving = false;
+  ui.byId("read-back").href = `/${window.location.search}`;
+
+  function markDirty(value = true) {
+    dirty = value;
+    ui.byId("curation-dirty").hidden = !dirty;
+  }
+
+  function selection() {
+    return {
+      topics: [...ui.byId("curation-topics").querySelectorAll("input:checked")].map((input) => input.value),
+      form: ui.byId("curation-form-value").value,
+      use: ui.byId("curation-use").value
+    };
+  }
+
+  function updateTopicCount() {
+    const inputs = [...ui.byId("curation-topics").querySelectorAll("input")];
+    const count = inputs.filter((input) => input.checked).length;
+    ui.byId("topic-count").textContent = `${count}/3`;
+    for (const input of inputs) input.disabled = !input.checked && (count >= 3 || input.dataset.inactive === "true");
+  }
+
+  function renderCuration(item) {
+    ui.byId("read-meta").replaceChildren(ui.metadata(item));
+    const why = ui.byId("read-why");
+    why.textContent = item.why || "";
+    why.hidden = !item.why;
+    const entities = item.classification?.entities || [];
+    ui.byId("read-entities").textContent = entities.join(" / ");
+    ui.byId("read-entities").hidden = entities.length === 0;
+    if (!catalog || dirty || saving) return;
+    ui.byId("curation-fields").disabled = false;
+    ui.byId("curation-why").value = item.why || "";
+    ui.byId("curation-status").value = item.curation_status || "inbox";
+    const classification = item.classification || {};
+    ui.byId("why-suggestion").textContent = classification.why_suggestion || "";
+    ui.byId("why-suggestion-block").hidden = !classification.why_suggestion;
+    ui.byId("reset-classification").hidden = !item.classification_reviewed;
+    const topics = ui.byId("curation-topics");
+    topics.replaceChildren();
+    for (const term of catalog.topics) {
+      if (!term.active && !classification.topics?.includes(term.id)) continue;
+      const label = ui.element("label", "topic-option");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = term.id;
+      input.checked = classification.topics?.includes(term.id) || false;
+      input.dataset.inactive = String(!term.active);
+      label.append(input, document.createTextNode(term.label + (term.active ? "" : "（停用）")));
+      topics.append(label);
+    }
+    for (const [id, dimension, value] of [["curation-form-value", "forms", classification.form], ["curation-use", "uses", classification.use]]) {
+      const control = ui.byId(id);
+      ui.fillTerms(control, catalog[dimension].filter((term) => term.active || term.id === value), "未指定", true);
+      control.value = value || "";
+    }
+    updateTopicCount();
+  }
+
+  async function loadTaxonomy() {
+    try {
+      catalog = await ui.loadTaxonomy();
+      ui.byId("curation-error").hidden = true;
+      if (current) renderCuration(current);
+    } catch (_) {
+      ui.byId("curation-error").hidden = false;
+    }
+  }
+
+  async function saveCuration(reset = false) {
+    if (!current || saving || !catalog) return;
+    const whyDraft = ui.byId("curation-why").value;
+    const statusDraft = ui.byId("curation-status").value;
+    const update = reset ? { classification: null } : { why: whyDraft, curation_status: statusDraft };
+    if (!reset) {
+      const before = current.classification || { topics: [], form: "", use: "" };
+      const chosen = selection();
+      const sameTopics = JSON.stringify([...chosen.topics].sort()) === JSON.stringify([...(before.topics || [])].sort());
+      if (!current.classification_reviewed || !sameTopics || chosen.form !== before.form || chosen.use !== before.use) {
+        update.classification = chosen;
+      }
+    }
+    saving = true;
+    ui.byId("curation-fields").disabled = true;
+    try {
+      const item = await ui.fetchJSON(`/api/bookmarks/${bookmarkID}/curation`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(update)
+      });
+      saving = false;
+      markDirty(false);
+      render(item);
+      if (reset && (whyDraft !== (item.why || "") || statusDraft !== item.curation_status)) {
+        ui.byId("curation-why").value = whyDraft;
+        ui.byId("curation-status").value = statusDraft;
+        markDirty();
+      }
+      ui.showToast(reset ? "已恢复自动分类" : "已保存整理");
+    } catch (error) {
+      ui.showToast(ui.errorLabels[error.message] || "保存整理失败", true);
+    } finally {
+      saving = false;
+      ui.byId("curation-fields").disabled = false;
+    }
+  }
 
   function paragraphs(container, text) {
     container.replaceChildren();
@@ -62,6 +169,8 @@
     const note = ui.byId("read-note");
     note.hidden = !item.note;
     note.textContent = item.note || "";
+    renderCuration(item);
+    ui.byId("read-export").disabled = false;
 
     const summary = ui.displaySummary(item);
     const lede = ui.byId("read-lede");
@@ -91,18 +200,21 @@
     const process = ui.byId("read-process");
     const processable = item.processable !== false && item.status !== "unsupported";
     process.hidden = !processable;
-    process.disabled = item.status === "processing" || loading;
+    process.disabled = item.status === "processing";
     if (item.status === "processing") process.textContent = "处理中";
     else process.textContent = item.translated_text ? "重新处理" : "立即处理";
   }
 
   async function loadNeighbour() {
     try {
-      const page = await ui.fetchJSON(`/api/bookmarks?limit=1&before_id=${bookmarkID}`);
+      const params = new URLSearchParams(window.location.search);
+      params.set("limit", "1");
+      params.set("before_id", String(bookmarkID));
+      const page = await ui.fetchJSON(`/api/bookmarks?${params}`);
       const next = Array.isArray(page.items) ? page.items[0] : null;
       if (!next) return;
       const link = ui.byId("read-next");
-      link.href = `/bookmarks/${next.id}`;
+      link.href = ui.bookmarkPath(next.id);
       ui.byId("read-next-title").textContent = ui.displayTitle(next).text;
       link.hidden = false;
     } catch (_) {
@@ -154,6 +266,19 @@
   }
 
   ui.byId("read-process").addEventListener("click", processCurrent);
+  ui.byId("read-export").addEventListener("click", () => { if (current) ui.exportMarkdown([current]); });
+  ui.byId("curation-form").addEventListener("input", () => markDirty());
+  ui.byId("curation-form").addEventListener("change", () => { markDirty(); updateTopicCount(); });
+  ui.byId("curation-form").addEventListener("submit", (event) => { event.preventDefault(); saveCuration(); });
+  ui.byId("reset-classification").addEventListener("click", () => saveCuration(true));
+  ui.byId("retry-taxonomy").addEventListener("click", loadTaxonomy);
+  ui.byId("use-suggestion").addEventListener("click", () => {
+    ui.byId("curation-why").value = current?.classification?.why_suggestion || "";
+    markDirty();
+  });
+  window.addEventListener("beforeunload", (event) => {
+    if (dirty || saving) { event.preventDefault(); event.returnValue = ""; }
+  });
   ui.byId("read-toggle").addEventListener("click", (event) => {
     const panel = ui.byId("read-original");
     const open = panel.hidden;
@@ -164,6 +289,7 @@
   });
 
   if (bookmarkID) {
+    loadTaxonomy();
     loadBookmark();
     loadNeighbour();
   } else {
@@ -172,7 +298,7 @@
   }
 
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || dirty || saving) return;
     if (current?.status === "processing" || current?.status === "pending") loadBookmark(true);
   }, POLL_INTERVAL);
 })();

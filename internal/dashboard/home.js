@@ -6,6 +6,8 @@
   const FEATURE_COUNT = 4;
   const NARROW_FEATURE_COUNT = 1;
   const POLL_INTERVAL = 10000;
+  const filterKeys = ["curation_status", "topic", "form", "use", "source", "since", "uncertain"];
+  const initialParams = new URLSearchParams(window.location.search);
 
   const state = {
     search: new URLSearchParams(window.location.search).get("q")?.trim() || "",
@@ -15,6 +17,13 @@
     bucket: null,
     column: null
   };
+  state.filters = Object.fromEntries(filterKeys.map((key) => [key, initialParams.get(key) || ""]));
+  let activeRequest = null;
+  let requestVersion = 0;
+
+  function filtered() {
+    return Boolean(state.search) || Object.values(state.filters).some(Boolean);
+  }
 
   function shot(item, className, blankClass) {
     const source = ui.firstImage(item);
@@ -68,14 +77,29 @@
       .filter((term) => term.length > 0);
   }
 
+  function searchExcerpt(item, terms) {
+    const summary = ui.displaySummary(item);
+    if (!terms.length) return summary;
+    for (const value of [item.summary, item.translated_text, item.original_text, item.classification?.entities?.join(" / "), item.classification?.why_suggestion, item.note, item.why]) {
+      if (!value) continue;
+      const lower = value.toLowerCase();
+      const positions = terms.map((term) => lower.indexOf(term)).filter((at) => at >= 0);
+      if (!positions.length) continue;
+      const start = Math.max(0, Math.min(...positions) - 60);
+      return { text: (start ? "…" : "") + value.slice(start, start + 220) + (start + 220 < value.length ? "…" : ""), wait: false };
+    }
+    return summary;
+  }
+
   function featureCard(item) {
     const title = ui.displayTitle(item);
     const summary = ui.displaySummary(item);
     const card = ui.element("a", "fcard");
-    card.href = `/bookmarks/${item.id}`;
+    card.href = ui.bookmarkPath(item.id);
     card.append(shot(item, "fshot", "fshot fshot-blank"));
     card.append(ui.element("h2", `fcard-title${title.raw ? " raw" : ""}`, title.text));
-    if (item.note) card.append(ui.element("p", "fcard-note", item.note));
+    card.append(ui.metadata(item));
+    if (item.why || item.note) card.append(ui.element("p", "fcard-note", item.why || item.note));
     card.append(ui.element("p", `fcard-sum${summary.wait ? " wait" : ""}`, summary.text));
     return card;
   }
@@ -84,27 +108,29 @@
     const title = ui.displayTitle(item);
     const summary = ui.displaySummary(item);
     const row = ui.element("a", "item");
-    row.href = `/bookmarks/${item.id}`;
+    row.href = ui.bookmarkPath(item.id);
     row.append(shot(item, "item-shot", "item-blank"));
     const body = ui.element("div");
     body.append(ui.element("h3", `item-title${title.raw ? " raw" : ""}`, title.text));
-    body.append(ui.element("p", `item-sum${summary.wait ? " wait" : ""}`, item.note || summary.text));
+    body.append(ui.element("p", `item-sum${summary.wait ? " wait" : ""}`, item.why || item.note || summary.text));
+    body.append(ui.metadata(item));
     row.append(body);
     return row;
   }
 
   function resultEntry(item, terms) {
     const title = ui.displayTitle(item);
-    const summary = ui.displaySummary(item);
+    const summary = searchExcerpt(item, terms);
     const entry = ui.element("a", "entry");
-    entry.href = `/bookmarks/${item.id}`;
+    entry.href = ui.bookmarkPath(item.id);
     const body = ui.element("div");
     const heading = ui.element("h2", `entry-title${title.raw ? " raw" : ""}`);
     heading.append(highlight(title.text, terms));
     body.append(heading);
-    if (item.note) {
+    body.append(ui.metadata(item));
+    if (item.why || item.note) {
       const note = ui.element("p", "entry-note");
-      note.append(highlight(item.note, terms));
+      note.append(highlight(item.why || item.note, terms));
       body.append(note);
     }
     const text = ui.element("p", `entry-sum${summary.wait ? " wait" : ""}`);
@@ -117,7 +143,7 @@
 
   function appendStream(items) {
     const stream = ui.byId("stream");
-    if (state.search) {
+    if (filtered()) {
       const terms = searchTerms();
       let list = stream.querySelector(".results");
       if (!list) {
@@ -158,7 +184,7 @@
       ui.byId("result-count").hidden = true;
       ui.byId("empty").hidden = items.length > 0;
 
-      if (state.search) {
+      if (filtered()) {
         const count = ui.byId("result-count");
         count.textContent = page.next_before_id
           ? `找到 ${items.length} 条以上`
@@ -181,27 +207,43 @@
 
     const attention = (counts.failed ?? 0) + (counts.exhausted ?? 0) > 0;
     ui.byId("backstage-link").classList.toggle("attention", attention);
+    if (filtered()) {
+      ui.byId("result-count").textContent = `已显示 ${state.items.length} 条${page.next_before_id ? "，还有更多" : ""}`;
+      ui.byId("result-count").hidden = state.items.length === 0;
+    }
+    ui.byId("export-markdown").title = `导出已加载的 ${state.items.length} 条收藏`;
   }
 
   async function load({ append = false, silent = false } = {}) {
-    if (state.loading) return;
+    if (append && state.loading) return;
     if (append && !state.nextBeforeID) return;
+    activeRequest?.abort();
+    activeRequest = new AbortController();
+    const version = ++requestVersion;
     state.loading = true;
+    ui.byId("export-markdown").disabled = true;
+    ui.byId("load-error").hidden = true;
     if (!silent) ui.byId("loading").hidden = false;
     ui.byId("tail").hidden = true;
     try {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
       if (state.search) params.set("q", state.search);
+      for (const [key, value] of Object.entries(state.filters)) if (value) params.set(key, value);
       if (append && state.nextBeforeID) params.set("before_id", String(state.nextBeforeID));
-      const page = await ui.fetchJSON(`/api/bookmarks?${params}`);
+      const page = await ui.fetchJSON(`/api/bookmarks?${params}`, { signal: activeRequest.signal });
+      if (version !== requestVersion) return;
       state.nextBeforeID = page.next_before_id ?? null;
       renderPage(page, append);
       ui.byId("tail").hidden = Boolean(state.nextBeforeID) || state.items.length === 0;
-    } catch (_) {
-      if (!silent) ui.showToast("读取收藏失败，请检查 Cloudflare 后端", true);
+    } catch (error) {
+      if (version !== requestVersion || error.name === "AbortError") return;
+      if (!silent) ui.byId("load-error").hidden = false;
     } finally {
-      state.loading = false;
-      ui.byId("loading").hidden = true;
+      if (version === requestVersion) {
+        state.loading = false;
+        ui.byId("loading").hidden = true;
+        ui.byId("export-markdown").disabled = state.items.length === 0;
+      }
     }
   }
 
@@ -209,11 +251,53 @@
     const next = value.trim();
     if (next === state.search) return;
     state.search = next;
+    changeFilters();
+  }
+
+  function changeFilters() {
     state.nextBeforeID = null;
-    const url = next ? `/?q=${encodeURIComponent(next)}` : "/";
-    window.history.replaceState(null, "", url);
+    state.items = [];
+    ui.byId("stream").replaceChildren();
+    ui.byId("feature").replaceChildren();
+    ui.byId("feature-band").hidden = true;
+    ui.byId("result-count").hidden = true;
+    ui.byId("empty").hidden = true;
+    const params = new URLSearchParams();
+    if (state.search) params.set("q", state.search);
+    for (const [key, value] of Object.entries(state.filters)) if (value) params.set(key, value);
+    window.history.replaceState(null, "", params.size ? `/?${params}` : "/");
+    ui.byId("clear-filters").hidden = !filtered();
     load();
   }
+
+  for (const key of filterKeys) {
+    const control = ui.byId(`filter-${key}`);
+    if (key === "uncertain") control.checked = state.filters[key] === "true";
+    else if (key === "since" && state.filters[key]) {
+      const date = new Date(state.filters[key]);
+      if (Number.isFinite(date.getTime())) control.value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    } else control.value = state.filters[key];
+    control.addEventListener("change", () => {
+      if (key === "uncertain") state.filters[key] = control.checked ? "true" : "";
+      else if (key === "since") state.filters[key] = control.value ? new Date(`${control.value}T00:00:00`).toISOString() : "";
+      else state.filters[key] = control.value;
+      changeFilters();
+    });
+  }
+  ui.byId("clear-filters").addEventListener("click", () => {
+    clearTimeout(searchTimer);
+    state.search = "";
+    ui.byId("find").value = "";
+    for (const key of filterKeys) {
+      state.filters[key] = "";
+      const control = ui.byId(`filter-${key}`);
+      control.value = "";
+      if (key === "uncertain") control.checked = false;
+    }
+    changeFilters();
+  });
+  ui.byId("export-markdown").addEventListener("click", () => ui.exportMarkdown(state.items, Boolean(state.nextBeforeID)));
+  ui.byId("retry-load").addEventListener("click", () => load({ append: state.items.length > 0 }));
 
   let searchTimer = 0;
   ui.byId("find").addEventListener("input", (event) => {
@@ -241,9 +325,24 @@
   }
 
   if (state.search) ui.byId("find").value = state.search;
+  ui.byId("clear-filters").hidden = !filtered();
+  ui.loadTaxonomy().then((catalog) => {
+    for (const [key, dimension, label] of [["topic", "topics", "全部主题"], ["form", "forms", "全部形态"], ["use", "uses", "全部用途"]]) {
+      const control = ui.byId(`filter-${key}`);
+      ui.fillTerms(control, catalog[dimension], label, true);
+      control.value = state.filters[key];
+      control.disabled = false;
+    }
+    for (const holder of document.querySelectorAll(".bookmark-meta")) {
+      // Labels become available after the independent vocabulary request.
+      const anchor = holder.closest("a");
+      const item = state.items.find((entry) => new URL(anchor.href).pathname === `/bookmarks/${entry.id}`);
+      if (item) holder.replaceWith(ui.metadata(item));
+    }
+  }).catch(() => ui.showToast("读取标签词表失败", true));
   load();
   setInterval(() => {
-    if (document.hidden || state.search || state.loading) return;
+    if (document.hidden || filtered() || state.loading) return;
     if (window.scrollY > 240) return;
     const waiting = state.items
       .slice(0, PAGE_SIZE)
