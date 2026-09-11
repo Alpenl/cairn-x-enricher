@@ -7,6 +7,10 @@ linters:
   default: standard
   enable:
     - bodyclose
+    # contextcheck catches an outbound call that drops the caller's context and
+    # uses Background instead. That class of bug makes a stage ignore
+    # cancellation, which is exactly what lets a shutdown hang.
+    - contextcheck
     - errorlint
     - gosec
     - misspell

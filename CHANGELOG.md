@@ -13,6 +13,9 @@
 - 所有执行任务的 goroutine 加 `recover` 保护（定时批处理 worker、人工任务 worker、调度循环、HTTP 服务）。裸 goroutine 的 panic 原本会终止整个进程，现在降级为一次带堆栈的批次失败，进程继续服务。
 - 修复关停时人工队列不被消费的问题：worker 原本与信号 context 共用同一个 context，SIGTERM 一到就退出，导致已入队的任务无人消费，而 `Drain` 还在等一个永远不会归零的计数。现在 worker 使用独立 context，`Drain` 在等空队列之后才停止它们。
 - 关停路径的等待全部加上上限：`batch.Wait()`、`workers.Wait()`、`Drain` 都不会无限阻塞，避免某个忽略取消的阶段让进程永远不退出。HTTP 排空失败时不再提前返回而跳过任务排空。
+- `runServe` 现在会等待调度器结束在途批次，不再在批次运行中直接退出进程。
+- 批次超时只停止领取新任务，不再中断已领取的任务：关停时在途任务会正常跑完并写回结果，而不是被取消后浪费 lease。实测同一场景从 `completed:8 failed:2` 变为 `completed:8 failed:0`。
+- 启用 `contextcheck` 静态检查：任何丢弃调用方 context、改用 `context.Background()` 的对外调用都会在 CI 失败，防止将来某个阶段悄悄变得不可取消。
 - 模型重试加入 ±25% 抖动，避免多实例在共同上游故障后同步重试；慢请求不再叠加第二次长时间等待。
 
 ### 性能

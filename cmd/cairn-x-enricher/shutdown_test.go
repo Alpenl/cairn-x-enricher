@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/config"
+	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 )
@@ -131,3 +133,101 @@ func TestTrackerRecordsNoFailureWhenOnlyWorkIsEmpty(t *testing.T) {
 		t.Fatalf("service became unready after an empty batch: %+v", snapshot)
 	}
 }
+
+func TestWaitForSignalReportsCompletion(t *testing.T) {
+	done := make(chan struct{})
+	go func() { time.Sleep(20 * time.Millisecond); close(done) }()
+	if !waitForSignal(done, time.Second) {
+		t.Fatal("waitForSignal did not observe the closed channel")
+	}
+}
+
+func TestWaitForSignalTimesOutWithoutCompleting(t *testing.T) {
+	// This is the guard that keeps a stuck scheduler from holding the process
+	// open past the shutdown budget.
+	done := make(chan struct{})
+	start := time.Now()
+	if waitForSignal(done, 50*time.Millisecond) {
+		t.Fatal("waitForSignal reported completion for an open channel")
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("waitForSignal blocked for %v", elapsed)
+	}
+}
+
+// The scheduler must return once its context is cancelled, even mid-batch, so
+// runServe can wait for it without risking the shutdown budget.
+func TestSchedulerReturnsOnCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	tracker := health.NewTracker()
+	tracker.MarkStarted()
+
+	queue := &oneJobQueue{}
+	enricher := &slowEnricher{hold: 300 * time.Millisecond}
+	worker := processor.New(queue, enricher, discardLogger(), 1)
+	cfg := config.Config{MaxJobsPerRun: 2, PollInterval: time.Hour, ShutdownTimeout: 5 * time.Second}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runScheduler(ctx, worker, tracker, cfg, discardLogger())
+	}()
+
+	// Let the first batch start, then cancel mid-job.
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	if !waitForSignal(done, 5*time.Second) {
+		t.Fatal("runScheduler did not return after cancellation")
+	}
+	// The in-flight job must have been allowed to finish rather than being
+	// interrupted, which would have wasted its lease.
+	if enricher.calls.Load() == 0 {
+		t.Fatal("the in-flight job never ran")
+	}
+}
+
+// slowEnricher takes a fixed time to finish and ignores cancellation, standing
+// in for an in-flight model call. Run must let it complete rather than
+// interrupting it, so the batch returns shortly after this delay.
+type slowEnricher struct {
+	hold  time.Duration
+	calls atomic.Int64
+}
+
+func (e *slowEnricher) Enrich(context.Context, enrich.Input) (enrich.Result, error) {
+	e.calls.Add(1)
+	time.Sleep(e.hold)
+	return enrich.Result{
+		AITitle: "排空测试使用的中文标题", OriginalLanguage: "en", OriginalText: "s",
+		TranslatedText: "译", Summary: "摘", Model: "m",
+	}, nil
+}
+
+// oneJobQueue hands out a single job and then reports an empty queue.
+type oneJobQueue struct {
+	mu   sync.Mutex
+	used bool
+}
+
+func (q *oneJobQueue) Claim(context.Context) (*cairn.Job, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.used {
+		return nil, nil
+	}
+	q.used = true
+	return &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, LeaseToken: "l", LeaseUntil: "u"}, nil
+}
+
+func (q *oneJobQueue) GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error) {
+	return cairn.BookmarkDetail{}, nil
+}
+
+func (q *oneJobQueue) StoreImages(context.Context, int64, string, []string) ([]cairn.ImageRef, error) {
+	return nil, nil
+}
+
+func (q *oneJobQueue) Complete(context.Context, int64, cairn.Completion) error { return nil }
+
+func (q *oneJobQueue) Fail(context.Context, int64, string, string) error { return nil }

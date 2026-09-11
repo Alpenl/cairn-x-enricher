@@ -352,8 +352,8 @@ func (p *slowProcessor) Process(_ context.Context, job *cairn.Job) error {
 	return nil
 }
 
-func (p *slowProcessor) ProcessWithSource(_ context.Context, job *cairn.Job, _ string) error {
-	return p.Process(context.Background(), job)
+func (p *slowProcessor) ProcessWithSource(ctx context.Context, job *cairn.Job, _ string) error {
+	return p.Process(ctx, job)
 }
 
 func TestDrainRefusesNewWorkOnceItStarts(t *testing.T) {

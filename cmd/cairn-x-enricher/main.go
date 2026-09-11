@@ -180,7 +180,14 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 		logger.Info("health server listening", "address", cfg.HTTPAddr)
 		serverErrors <- server.ListenAndServe()
 	}()
-	go runScheduler(ctx, worker, tracker, cfg, logger)
+	// Track the scheduler so shutdown can wait for an in-flight batch. Without
+	// this, main returns while a batch is still running and the process exits,
+	// stranding every lease that batch holds.
+	schedulerDone := make(chan struct{})
+	go func() {
+		defer close(schedulerDone)
+		runScheduler(ctx, worker, tracker, cfg, logger)
+	}()
 
 	select {
 	case <-ctx.Done():
@@ -195,15 +202,30 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	// in-flight job drain share a single budget, because Docker sends SIGKILL
 	// once stop_grace_period elapses and would otherwise cut the second phase
 	// short partway through.
+	//
+	// The context is deliberately rooted at Background rather than at ctx:
+	// reaching this point means ctx has already been cancelled, so inheriting
+	// from it would make Shutdown return immediately and abandon every open
+	// connection. The deadline below is what bounds this work.
 	deadline := time.Now().Add(cfg.ShutdownTimeout)
 	shutdownCtx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
+	//nolint:contextcheck // shutdown must outlive the already-cancelled signal context
 	serverErr := server.Shutdown(shutdownCtx)
 	// Drain in-flight jobs even when the HTTP server did not stop cleanly. A
 	// client streaming an image can outlive the HTTP deadline, and returning
 	// early here would abandon leased jobs - the opposite of the intent.
 	if remaining := time.Until(deadline); remaining > 0 {
 		management.Drain(remaining)
+	}
+	// Wait for the scheduler to finish its in-flight batch within the same
+	// budget. runScheduler caps its own wait, so this cannot block past the
+	// deadline; the extra bound here is defensive.
+	if remaining := time.Until(deadline); remaining > 0 {
+		if !waitForSignal(schedulerDone, remaining) {
+			logger.Warn("scheduler did not stop within the shutdown budget; " +
+				"its leased jobs keep their lease and will be retried")
+		}
 	}
 	if serverErr != nil {
 		return fmt.Errorf("shutdown health server: %w", serverErr)
@@ -351,6 +373,18 @@ func newProcessor(
 	}
 	tracker.MarkStarted()
 	return processor.New(queue, workflow, logger, cfg.MaxConcurrency), queue, nil
+}
+
+// waitForSignal reports whether done was closed within timeout.
+func waitForSignal(done <-chan struct{}, timeout time.Duration) bool {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return true
+	case <-timer.C:
+		return false
+	}
 }
 
 // batchTimeout is the slice of the shutdown budget a single scheduled batch may

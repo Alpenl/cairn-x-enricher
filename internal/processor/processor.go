@@ -77,6 +77,12 @@ func (p *Processor) ProcessWithSource(ctx context.Context, job *cairn.Job, sourc
 }
 
 // Run processes up to maxJobs and stops early on queue infrastructure errors.
+// Run processes up to maxJobs and stops early on queue infrastructure errors.
+//
+// Cancelling ctx stops the batch from claiming new work and bounds the run, but
+// an already-claimed job is allowed to finish while its own request deadline
+// holds. Cancelling the work itself would interrupt jobs mid-request and waste
+// their lease, which is exactly what graceful shutdown is trying to avoid.
 func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 	started := time.Now().UTC()
 	stats := Stats{StartedAt: started}
@@ -85,8 +91,11 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 		return stats, nil
 	}
 
-	runCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	// claimCtx gates claiming only. workCtx is what in-flight jobs observe, and
+	// it is detached from claimCtx so a cancelled batch finishes its work.
+	claimCtx, stopClaiming := context.WithCancel(ctx)
+	defer stopClaiming()
+	workCtx := context.WithoutCancel(ctx)
 
 	var claimed atomic.Int64
 	var completed atomic.Int64
@@ -99,7 +108,7 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 	recordFatal := func(err error) {
 		errOnce.Do(func() {
 			firstErr = err
-			cancel()
+			stopClaiming()
 		})
 	}
 
@@ -121,12 +130,17 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 					"panic", fmt.Sprint(recovered), "stack", string(debug.Stack()))
 				recordFatal(fmt.Errorf("scheduled batch worker panicked: %v", recovered))
 			}()
-			for runCtx.Err() == nil {
+			for claimCtx.Err() == nil {
 				if claimSlots.Add(1) > int64(maxJobs) {
 					return
 				}
-				job, err := p.queue.Claim(runCtx)
+				job, err := p.queue.Claim(claimCtx)
 				if err != nil {
+					// A cancelled claim context means the batch was told to stop,
+					// not that the queue failed.
+					if claimCtx.Err() != nil {
+						return
+					}
 					recordFatal(fmt.Errorf("claim enrichment job: %w", err))
 					return
 				}
@@ -134,7 +148,9 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 					return
 				}
 				claimed.Add(1)
-				if err := p.Process(runCtx, job); err != nil {
+				// Deliveries and failures are reported with the work context so
+				// they still succeed for a job that was already claimed.
+				if err := p.Process(workCtx, job); err != nil {
 					failed.Add(1)
 					return
 				}

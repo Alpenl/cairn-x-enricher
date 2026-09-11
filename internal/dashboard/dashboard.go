@@ -196,9 +196,7 @@ func (s *Server) Drain(timeout time.Duration) {
 
 	if pending := s.queued.Load(); pending > 0 && timeout > 0 {
 		s.logger.Info("draining manual jobs", "pending", pending, "timeout", timeout)
-		for s.queued.Load() > 0 && time.Now().Before(deadline) {
-			time.Sleep(20 * time.Millisecond)
-		}
+		s.waitForQueueToEmpty(deadline)
 		if pending := s.queued.Load(); pending > 0 {
 			s.logger.Warn("shutdown drain timed out; unfinished jobs keep their lease and will be retried",
 				"pending", pending)
@@ -224,6 +222,25 @@ func (s *Server) Drain(timeout time.Duration) {
 // shutdownWaitForWorkers bounds how long Drain waits for worker goroutines to
 // observe cancellation after being asked to stop. They normally exit at once.
 const shutdownWaitForWorkers = 2 * time.Second
+
+// drainPollInterval is how often the drain rechecks the pending counter. It is
+// a ticker rather than a bare sleep so the wait reacts promptly to the last job
+// finishing without spinning.
+const drainPollInterval = 20 * time.Millisecond
+
+// waitForQueueToEmpty polls the pending counter until it reaches zero or the
+// deadline passes. It is deliberately not cancellable: during shutdown there is
+// nothing left to cancel it with, and the deadline is the bound.
+func (s *Server) waitForQueueToEmpty(deadline time.Time) {
+	ticker := time.NewTicker(drainPollInterval)
+	defer ticker.Stop()
+	for s.queued.Load() > 0 {
+		if !time.Now().Before(deadline) {
+			return
+		}
+		<-ticker.C
+	}
+}
 
 // waitForWorkers reports whether all tracked goroutines finished in time.
 func waitForWorkers(group *sync.WaitGroup, timeout time.Duration) bool {

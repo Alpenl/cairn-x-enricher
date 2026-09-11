@@ -155,3 +155,103 @@ func TestPanickingJobSurfacesAsABatchError(t *testing.T) {
 		t.Fatalf("no stack logged: %s", output.String())
 	}
 }
+
+// TestRunLetsAClaimedJobFinishAfterCancellation is the property that keeps a
+// graceful shutdown from wasting leases: cancelling the batch must stop new
+// claims but let work already in flight complete.
+func TestRunLetsAClaimedJobFinishAfterCancellation(t *testing.T) {
+	queue := newFakeQueue(&cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, LeaseToken: "l"})
+	enricher := &recordingEnricher{hold: 200 * time.Millisecond}
+	worker := New(queue, enricher, discardLogger(), 1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := worker.Run(ctx, 1)
+		done <- err
+	}()
+
+	// Cancel while the job is in flight.
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return after the in-flight job finished")
+	}
+	if got := enricher.calls.Load(); got != 1 {
+		t.Fatalf("enricher calls = %d, want the claimed job to have run", got)
+	}
+	if enricher.interrupted.Load() {
+		t.Fatal("the claimed job was interrupted by the cancelled batch")
+	}
+	if queue.completions[1].AITitle == "" {
+		t.Error("the claimed job was not completed")
+	}
+}
+
+// TestRunStopsClaimingAfterCancellation checks the other half: no new work is
+// taken once the batch has been told to stop.
+func TestRunStopsClaimingAfterCancellation(t *testing.T) {
+	jobCount := 40
+	jobs := make([]*cairn.Job, 0, jobCount)
+	for i := range jobCount {
+		jobs = append(jobs, &cairn.Job{ID: int64(i + 1), URL: "https://x.com/a/status/1", Attempt: 1, LeaseToken: "l"})
+	}
+	queue := newFakeQueue(jobs...)
+	enricher := &recordingEnricher{hold: 30 * time.Millisecond}
+	worker := New(queue, enricher, discardLogger(), 1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = worker.Run(ctx, jobCount)
+	}()
+
+	time.Sleep(80 * time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return")
+	}
+
+	// Far fewer than the full batch must have been claimed.
+	if got := enricher.calls.Load(); got >= int64(jobCount) {
+		t.Fatalf("claimed %d jobs after cancellation, want the batch to stop claiming", got)
+	}
+}
+
+// recordingEnricher counts calls and optionally takes time, returning a result
+// complete enough for the processor's completion path.
+type recordingEnricher struct {
+	hold  time.Duration
+	calls atomic.Int64
+	// interrupted records whether the work context was cancelled while the
+	// enrichment was running, which is how a wasted lease shows up.
+	interrupted atomic.Bool
+}
+
+func (e *recordingEnricher) Enrich(ctx context.Context, _ enrich.Input) (enrich.Result, error) {
+	e.calls.Add(1)
+	if e.hold > 0 {
+		timer := time.NewTimer(e.hold)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			e.interrupted.Store(true)
+			return enrich.Result{}, ctx.Err()
+		}
+	}
+	if ctx.Err() != nil {
+		e.interrupted.Store(true)
+		return enrich.Result{}, ctx.Err()
+	}
+	return enrich.Result{
+		AITitle: "排空测试使用的中文标题", OriginalLanguage: "en", OriginalText: "s",
+		TranslatedText: "译", Summary: "摘", Model: "m",
+	}, nil
+}
