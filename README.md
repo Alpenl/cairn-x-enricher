@@ -63,6 +63,8 @@ HTTP 服务在这两项检查通过后才开始监听，因此配置错误表现
 
 ```bash
 go test ./...
+make test-frontend   # 零依赖的前端检查，只需 Node
+make verify          # vet + golangci-lint + 上述两项 + 构建
 go run ./cmd/cairn-x-enricher once --max-jobs 10
 go run ./cmd/cairn-x-enricher serve
 ```

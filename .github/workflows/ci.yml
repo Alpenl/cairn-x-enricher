@@ -35,6 +35,8 @@ jobs:
           version: v2.13.2
       - name: Test with race detector
         run: go test -race -coverprofile=coverage.out ./...
+      - name: Check frontend assets
+        run: node internal/dashboard/frontend-check.mjs internal/dashboard
       - name: Build
         run: go build -trimpath ./cmd/cairn-x-enricher
 

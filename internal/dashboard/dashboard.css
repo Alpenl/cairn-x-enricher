@@ -241,6 +241,11 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   padding: 11px 0;
   border-bottom: 1px solid var(--line);
   color: inherit;
+  /* Long lists render hundreds of cards. Skipping layout and paint for
+     offscreen rows keeps scrolling smooth; contain-intrinsic-size keeps the
+     scrollbar stable because the row height is known from its content. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 70px;
 }
 .item:hover { color: inherit; }
 .item:hover .item-title { color: var(--amber-lift); }
@@ -289,6 +294,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   padding: 22px 0;
   border-bottom: 1px solid var(--line);
   color: inherit;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 132px;
 }
 .entry:hover { color: inherit; }
 .entry:hover .entry-title { color: var(--amber-lift); }

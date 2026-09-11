@@ -9,7 +9,7 @@ LDFLAGS := -s -w \
 	-X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Commit=$(COMMIT) \
 	-X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Date=$(BUILD_DATE)
 
-.PHONY: build test lint lint-ci verify docker-build
+.PHONY: build test test-frontend lint lint-ci verify docker-build
 
 build:
 	mkdir -p bin
@@ -17,6 +17,12 @@ build:
 
 test:
 	go test -race -coverprofile=coverage.out ./...
+
+# Frontend assets use only the Node standard library, so no install step is
+# needed. These cover the cached formatters and export chunking that the
+# dashboard performance work depends on.
+test-frontend:
+	node internal/dashboard/frontend-check.mjs internal/dashboard
 
 # Fast local check. CI runs the full golangci-lint suite; use `make lint-ci` to
 # reproduce it exactly before pushing.
@@ -26,7 +32,7 @@ lint:
 lint-ci:
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run ./...
 
-verify: lint lint-ci test build
+verify: lint lint-ci test test-frontend build
 
 docker-build:
 	docker build \

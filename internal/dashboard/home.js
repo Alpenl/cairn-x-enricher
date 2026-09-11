@@ -48,6 +48,13 @@
       return fragment;
     }
     const lower = text.toLowerCase();
+    // Lowercasing can change length for a few characters, which would shift
+    // every subsequent slice. Fall back to an unmarked node when that happens
+    // rather than highlighting the wrong span.
+    if (lower.length !== text.length) {
+      fragment.append(document.createTextNode(text));
+      return fragment;
+    }
     let cursor = 0;
     while (cursor < text.length) {
       let at = -1;
@@ -61,9 +68,7 @@
       }
       if (at === -1) break;
       if (at > cursor) fragment.append(document.createTextNode(text.slice(cursor, at)));
-      const mark = document.createElement("mark");
-      mark.textContent = text.slice(at, at + width);
-      fragment.append(mark);
+      fragment.append(ui.element("mark", "", text.slice(at, at + width)));
       cursor = at + width;
     }
     if (cursor < text.length) fragment.append(document.createTextNode(text.slice(cursor)));
@@ -143,14 +148,19 @@
 
   function appendStream(items) {
     const stream = ui.byId("stream");
+    // Build the new rows in a detached fragment and attach them once. Appending
+    // each card to a live subtree forces the browser to revisit style and
+    // layout for every item during a scroll-triggered page load.
+    const fragment = document.createDocumentFragment();
     if (filtered()) {
       const terms = searchTerms();
       let list = stream.querySelector(".results");
       if (!list) {
         list = ui.element("div", "results");
-        stream.append(list);
+        fragment.append(list);
       }
       for (const item of items) list.append(resultEntry(item, terms));
+      stream.append(fragment);
       return;
     }
     for (const item of items) {
@@ -160,12 +170,13 @@
         const band = ui.element("div", "band");
         band.append(document.createTextNode(bucket));
         band.append(ui.element("i"));
-        stream.append(band);
+        fragment.append(band);
         state.column = ui.element("div", "cols");
-        stream.append(state.column);
+        fragment.append(state.column);
       }
       state.column.append(compactItem(item));
     }
+    stream.append(fragment);
   }
 
   function renderPage(page, append) {
@@ -296,7 +307,19 @@
     }
     changeFilters();
   });
-  ui.byId("export-markdown").addEventListener("click", () => ui.exportMarkdown(state.items, Boolean(state.nextBeforeID)));
+  ui.byId("export-markdown").addEventListener("click", async () => {
+    // Exporting now yields between chunks, so disable the control while it runs
+    // and surface a failure instead of letting an unhandled rejection vanish.
+    const button = ui.byId("export-markdown");
+    button.disabled = true;
+    try {
+      await ui.exportMarkdown(state.items, Boolean(state.nextBeforeID));
+    } catch (_) {
+      ui.showToast("导出失败，请重试", true);
+    } finally {
+      button.disabled = state.items.length === 0;
+    }
+  });
   ui.byId("retry-load").addEventListener("click", () => load({ append: state.items.length > 0 }));
 
   let searchTimer = 0;

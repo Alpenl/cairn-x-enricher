@@ -33,19 +33,70 @@
   const byId = (id) => document.getElementById(id);
   const curationLabels = Object.freeze({ inbox: "收件箱", kept: "精选", compiled: "已编入笔记", drop: "搁置" });
   const sourceLabels = Object.freeze({ x: "X", wechat: "公众号", other: "其他来源" });
+
+  // Intl.DateTimeFormat construction is roughly 30x the cost of reusing an
+  // existing formatter, and these are built once per rendered card. Cache one
+  // instance per option set instead of allocating in the render path.
+  const formatters = new Map();
+  function formatterFor(options) {
+    const key = JSON.stringify(options);
+    let formatter = formatters.get(key);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat("zh-CN", options);
+      formatters.set(key, formatter);
+    }
+    return formatter;
+  }
+
+  // Dates arrive as ISO strings and are displayed at day or minute granularity,
+  // so round-trip parsing and formatting results are memoised per raw value.
+  const dateCache = new Map();
+  const DATE_CACHE_LIMIT = 2000;
+  function parseDate(value) {
+    if (!value) return null;
+    let date = dateCache.get(value);
+    if (date === undefined) {
+      date = new Date(value);
+      if (Number.isNaN(date.getTime())) date = null;
+      if (dateCache.size >= DATE_CACHE_LIMIT) dateCache.clear();
+      dateCache.set(value, date);
+    }
+    return date;
+  }
+
+  const labelCache = new Map();
+  function memoLabel(key, compute) {
+    let value = labelCache.get(key);
+    if (value === undefined) {
+      if (labelCache.size >= DATE_CACHE_LIMIT) labelCache.clear();
+      value = compute();
+      labelCache.set(key, value);
+    }
+    return value;
+  }
   let catalog = null;
   let catalogPromise = null;
+  // termLabel runs once per topic/form/use on every rendered card, so resolve
+  // IDs through a lookup table instead of scanning the term array each time.
+  const termLabels = { topics: new Map(), forms: new Map(), uses: new Map() };
 
   async function loadTaxonomy() {
     if (!catalogPromise) {
-      catalogPromise = fetchJSON("/api/taxonomy").then((value) => { catalog = value; return value; })
-        .catch((error) => { catalogPromise = null; throw error; });
+      catalogPromise = fetchJSON("/api/taxonomy").then((value) => {
+        catalog = value;
+        for (const dimension of ["topics", "forms", "uses"]) {
+          const index = termLabels[dimension];
+          index.clear();
+          for (const term of value?.[dimension] || []) index.set(term.id, term.label);
+        }
+        return value;
+      }).catch((error) => { catalogPromise = null; throw error; });
     }
     return catalogPromise;
   }
 
   function termLabel(dimension, id) {
-    return catalog?.[dimension]?.find((term) => term.id === id)?.label || id;
+    return termLabels[dimension]?.get(id) || id;
   }
 
   function fillTerms(select, terms, emptyLabel, includeInactive = false) {
@@ -71,7 +122,16 @@
     return `/bookmarks/${id}${window.location.search}`;
   }
 
-  function exportMarkdown(items, hasMore = false) {
+  // Yields to the event loop so a large export does not freeze the page. The
+  // build is chunked because a full-text export can involve megabytes of
+  // string work, and this runs on the same thread as scrolling and input.
+  function yieldToBrowser() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  const EXPORT_CHUNK_SIZE = 40;
+
+  async function exportMarkdown(items, hasMore = false) {
     const escape = (value) => String(value || "").replace(/[\\`*_{}\[\]()<>#!|]/g, "\\$&");
     const line = (value) => escape(value).replace(/[\r\n]+/g, " ");
     const link = (value) => {
@@ -82,7 +142,8 @@
     };
     const lines = ["# Cairn 收藏摘录", "", `导出时间：${new Date().toISOString()}`, `条目数量：${items.length}`,
       `范围：当前已加载的收藏${hasMore ? "（还有未加载的结果）" : ""}`, `筛选地址：${link(window.location.href)}`, ""];
-    for (const item of items) {
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
       const classification = item.classification || {};
       lines.push(`## ${line(displayTitle(item).text)}`, "", `收藏 ID：${item.id}`, `来源：${link(item.url)}`,
         `收藏时间：${line(item.created_at)}`, `整理状态：${curationLabels[item.curation_status || "inbox"]}`,
@@ -95,6 +156,7 @@
       }
       if (classification.entities?.length) lines.push(`实体：${classification.entities.map(line).join(" / ")}`, "");
       if (item.related_links?.length) lines.push("### 相关链接", "", ...item.related_links.map((value) => `- ${link(value)}`), "");
+      if ((index + 1) % EXPORT_CHUNK_SIZE === 0) await yieldToBrowser();
     }
     const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -114,54 +176,65 @@
     return node;
   }
 
-  function parseDate(value) {
-    if (!value) return null;
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-
   function formatDate(value) {
     const date = parseDate(value);
     if (!date) return "-";
-    return new Intl.DateTimeFormat("zh-CN", {
+    const time = date.getTime();
+    return memoLabel(`d:${time}`, () => formatterFor({
       year: "numeric",
       month: "long",
       day: "numeric"
-    }).format(date);
+    }).format(date));
   }
 
   function formatDateTime(value) {
     const date = parseDate(value);
     if (!date) return "-";
-    return new Intl.DateTimeFormat("zh-CN", {
+    const time = date.getTime();
+    return memoLabel(`dt:${time}`, () => formatterFor({
       month: "long",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit"
-    }).format(date);
+    }).format(date));
   }
 
   function startOfDay(date) {
     return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   }
 
+  // The bucket only depends on the calendar day, so compute it once per day
+  // rather than once per card.
   function bucketLabel(value) {
     const date = parseDate(value);
     if (!date) return "更早";
-    const days = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86400000);
-    if (days <= 0) return "今天";
-    if (days < 7) return "近七天";
-    if (days < 30) return "近三十天";
-    return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long" }).format(date);
+    const day = startOfDay(date);
+    const today = startOfDay(new Date());
+    return memoLabel(`b:${day}:${today}`, () => {
+      const days = Math.round((today - day) / 86400000);
+      if (days <= 0) return "今天";
+      if (days < 7) return "近七天";
+      if (days < 30) return "近三十天";
+      return formatterFor({ year: "numeric", month: "long" }).format(date);
+    });
   }
 
+  // Hostnames repeat heavily across a bookmark list, so cache the parsed form
+  // instead of constructing a URL object per card.
+  const shortURLCache = new Map();
   function shortURL(value) {
-    try {
-      const parsed = new URL(value);
-      return parsed.hostname.replace(/^www\./, "") + parsed.pathname;
-    } catch (_) {
-      return value;
+    let cached = shortURLCache.get(value);
+    if (cached === undefined) {
+      try {
+        const parsed = new URL(value);
+        cached = parsed.hostname.replace(/^www\./, "") + parsed.pathname;
+      } catch (_) {
+        cached = value;
+      }
+      if (shortURLCache.size >= DATE_CACHE_LIMIT) shortURLCache.clear();
+      shortURLCache.set(value, cached);
     }
+    return cached;
   }
 
   function imagePath(key) {

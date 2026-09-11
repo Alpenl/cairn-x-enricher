@@ -266,7 +266,18 @@
   }
 
   ui.byId("read-process").addEventListener("click", processCurrent);
-  ui.byId("read-export").addEventListener("click", () => { if (current) ui.exportMarkdown([current]); });
+  ui.byId("read-export").addEventListener("click", async () => {
+    if (!current) return;
+    const button = ui.byId("read-export");
+    button.disabled = true;
+    try {
+      await ui.exportMarkdown([current]);
+    } catch (_) {
+      ui.showToast("导出失败，请重试", true);
+    } finally {
+      button.disabled = !current;
+    }
+  });
   ui.byId("curation-form").addEventListener("input", () => markDirty());
   ui.byId("curation-form").addEventListener("change", () => { markDirty(); updateTopicCount(); });
   ui.byId("curation-form").addEventListener("submit", (event) => { event.preventDefault(); saveCuration(); });
