@@ -201,22 +201,26 @@ func TestManualQueueCapacityUsesAtomicCounter(t *testing.T) {
 func TestDrainWaitsForQueuedWork(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	server := New(ctx, startedTracker(), &fakeBackend{}, &fakeProcessor{}, testLogger(), 1)
+	processing := make(chan int64, 1)
+	server := New(ctx, startedTracker(), &fakeBackend{}, &slowProcessor{started: processing, hold: 40 * time.Millisecond}, testLogger(), 1)
 
-	done := make(chan struct{})
-	server.queued.Store(1)
-	go func() {
-		defer close(done)
-		time.Sleep(30 * time.Millisecond)
-		server.queued.Add(-1)
-	}()
+	// Admit a real job so a real worker consumes it during the drain.
+	server.queued.Add(1)
+	server.jobs <- manualJob{job: &cairn.Job{ID: 1, Attempt: 1, LeaseToken: "t", LeaseUntil: "u", URL: "https://x.com/a/status/1"}}
+	select {
+	case <-processing:
+	case <-time.After(2 * time.Second):
+		t.Fatal("worker never started the job")
+	}
 
 	start := time.Now()
 	server.Drain(2 * time.Second)
 	if elapsed := time.Since(start); elapsed < 20*time.Millisecond {
-		t.Fatalf("Drain returned after %v, before queued work finished", elapsed)
+		t.Fatalf("Drain returned after %v, before the in-flight job finished", elapsed)
 	}
-	<-done
+	if got := server.queued.Load(); got != 0 {
+		t.Fatalf("queued = %d after Drain, want 0", got)
+	}
 }
 
 func TestDrainTimesOutRatherThanBlockingForever(t *testing.T) {
@@ -334,4 +338,122 @@ func TestImageProxyKeepsTheBackendCacheControl(t *testing.T) {
 	if got := response.Header().Get("Cache-Control"); got != "no-store" {
 		t.Fatalf("Cache-Control = %q, want the backend value preserved", got)
 	}
+}
+
+// slowProcessor blocks for a fixed period so a drain can observe in-flight work.
+type slowProcessor struct {
+	started chan int64
+	hold    time.Duration
+}
+
+func (p *slowProcessor) Process(_ context.Context, job *cairn.Job) error {
+	p.started <- job.ID
+	time.Sleep(p.hold)
+	return nil
+}
+
+func (p *slowProcessor) ProcessWithSource(_ context.Context, job *cairn.Job, _ string) error {
+	return p.Process(context.Background(), job)
+}
+
+func TestDrainRefusesNewWorkOnceItStarts(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	backend := &fakeBackend{
+		jobs:      map[int64]*cairn.Job{1: {ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, LeaseToken: "t", LeaseUntil: "u"}},
+		claimErrs: map[int64]error{},
+	}
+	server := New(ctx, startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+	server.Drain(0) // no queued work: only flips the draining flag
+
+	request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/bookmarks/process", strings.NewReader(`{"ids":[1]}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503 while draining", response.Code)
+	}
+	if !strings.Contains(response.Body.String(), "shutting_down") {
+		t.Fatalf("body = %s, want the shutting_down code", response.Body.String())
+	}
+}
+
+func TestDrainStopsWorkersSoNoGoroutineOutlivesIt(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	server := New(ctx, startedTracker(), &fakeBackend{}, &fakeProcessor{}, testLogger(), 2)
+	server.Drain(0)
+
+	// Workers must have exited: a send to the (unbuffered-consumer) channel
+	// would otherwise be picked up after Drain returned.
+	if !waitForWorkers(&server.workers, time.Second) {
+		t.Fatal("worker goroutines outlived Drain")
+	}
+}
+
+func TestDrainStopsWorkersEvenWithACancelledParent(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	server := New(ctx, startedTracker(), &fakeBackend{}, &fakeProcessor{}, testLogger(), 3)
+	server.Drain(0)
+	if !waitForWorkers(&server.workers, time.Second) {
+		t.Fatal("workers outlived Drain")
+	}
+}
+
+// TestDrainConsumesJobsAdmittedBeforeShutdown is the regression test for the
+// bug this change fixes.
+//
+// A worker blocked on an empty queue is the deterministic case: with `select`,
+// a cancelled context is chosen eventually, but with the old shared context the
+// worker exits before it ever takes the job that is admitted afterwards. The
+// processor here blocks until released, so the job can only complete if a live
+// worker picked it up during Drain.
+func TestDrainConsumesJobsAdmittedBeforeShutdown(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	release := make(chan struct{})
+	started := make(chan int64, 4)
+	server := New(ctx, startedTracker(), &fakeBackend{}, &gatedProcessor{started: started, release: release}, testLogger(), 1)
+
+	// Cancel the parent first, mirroring SIGTERM arriving before Drain runs.
+	cancel()
+	time.Sleep(50 * time.Millisecond)
+
+	server.queued.Add(1)
+	server.jobs <- manualJob{job: &cairn.Job{ID: 7, Attempt: 1, LeaseToken: "t", LeaseUntil: "u", URL: "https://x.com/a/status/7"}}
+
+	drained := make(chan struct{})
+	go func() { defer close(drained); server.Drain(5 * time.Second) }()
+
+	select {
+	case id := <-started:
+		if id != 7 {
+			t.Fatalf("started job %d, want 7", id)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the admitted job was never picked up during Drain")
+	}
+	close(release)
+	<-drained
+	if got := server.queued.Load(); got != 0 {
+		t.Fatalf("queued = %d after Drain, want 0", got)
+	}
+}
+
+// gatedProcessor blocks until released, so a job can only finish if a live
+// worker actually picked it up.
+type gatedProcessor struct {
+	started chan int64
+	release chan struct{}
+}
+
+func (p *gatedProcessor) Process(_ context.Context, job *cairn.Job) error {
+	p.started <- job.ID
+	<-p.release
+	return nil
+}
+
+func (p *gatedProcessor) ProcessWithSource(ctx context.Context, job *cairn.Job, _ string) error {
+	return p.Process(ctx, job)
 }

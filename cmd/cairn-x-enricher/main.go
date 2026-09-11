@@ -198,14 +198,15 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	deadline := time.Now().Add(cfg.ShutdownTimeout)
 	shutdownCtx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shutdown health server: %w", err)
-	}
-	// Finish manual jobs that already hold a lease, otherwise they would be
-	// abandoned and re-run only after the lease expires. The remaining budget
-	// is what is left after the HTTP server stopped accepting connections.
+	serverErr := server.Shutdown(shutdownCtx)
+	// Drain in-flight jobs even when the HTTP server did not stop cleanly. A
+	// client streaming an image can outlive the HTTP deadline, and returning
+	// early here would abandon leased jobs - the opposite of the intent.
 	if remaining := time.Until(deadline); remaining > 0 {
 		management.Drain(remaining)
+	}
+	if serverErr != nil {
+		return fmt.Errorf("shutdown health server: %w", serverErr)
 	}
 	return nil
 }
@@ -276,11 +277,35 @@ func runScheduler(
 			mu.Lock()
 			stopping.Store(true)
 			mu.Unlock()
-			batch.Wait()
+			waitForBatch(&batch, batchTimeout(cfg), logger)
 			return
 		case <-ticker.C:
 			run()
 		}
+	}
+}
+
+// waitForBatch blocks until the in-flight batch finishes, but never longer than
+// timeout.
+//
+// A batch is normally bounded by its own context, but that only holds while
+// every stage honours cancellation. If any stage ever blocks past its context,
+// an unbounded Wait here would keep the process alive forever and the container
+// would ignore SIGTERM until it was killed, so the wait is capped as well.
+func waitForBatch(batch *sync.WaitGroup, timeout time.Duration, logger *slog.Logger) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		batch.Wait()
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return
+	case <-timer.C:
+		logger.Warn("in-flight batch did not finish within the shutdown budget; "+
+			"its leased jobs keep their lease and will be retried", "timeout", timeout)
 	}
 }
 

@@ -90,15 +90,27 @@ type manualJob struct {
 
 // Server owns the management HTTP surface and bounded manual work queue.
 type Server struct {
-	ctx       context.Context
-	tracker   *health.Tracker
-	backend   Backend
-	processor JobProcessor
-	logger    *slog.Logger
-	jobs      chan manualJob
+	// requestCtx is cancelled as soon as shutdown starts. Handlers use it so
+	// they stop doing upstream work promptly.
+	requestCtx context.Context
+	// workerCtx is cancelled only once Drain has finished waiting for the
+	// workers. Sharing one context for both would make the workers exit the
+	// instant SIGTERM arrived, leaving admitted jobs unconsumed while Drain
+	// waited for a counter that could never reach zero.
+	workerCtx   context.Context
+	stopWorkers context.CancelFunc
+	tracker     *health.Tracker
+	backend     Backend
+	processor   JobProcessor
+	logger      *slog.Logger
+	jobs        chan manualJob
+	workers     sync.WaitGroup
 
 	// enqueueMu serialises admission so capacity cannot be oversold.
 	enqueueMu sync.Mutex
+	// draining is set under enqueueMu once shutdown starts, so admission is
+	// refused even if a request arrives during the drain.
+	draining bool
 	// queued counts jobs admitted but not yet finished. It is updated under
 	// enqueueMu at admission and atomically by workers, because workers
 	// receive from the channel without holding that lock.
@@ -128,6 +140,9 @@ type backstageSummary struct {
 }
 
 // New creates a dashboard and starts bounded manual processing workers.
+//
+// ctx governs request handling and scheduler-style work; the workers get their
+// own context so Drain can keep them running until the queue empties.
 func New(
 	ctx context.Context,
 	tracker *health.Tracker,
@@ -139,16 +154,22 @@ func New(
 	if workerCount < 1 {
 		workerCount = 1
 	}
+	// Detached from ctx on purpose: Drain cancels this once the queue is empty.
+	// The signal context is already cancelled by the time shutdown starts.
+	workerCtx, stopWorkers := context.WithCancel(context.WithoutCancel(ctx))
 	server := &Server{
-		ctx:       ctx,
-		tracker:   tracker,
-		backend:   backend,
-		processor: jobProcessor,
-		logger:    logger,
-		jobs:      make(chan manualJob, manualQueueDepth),
-		catalog:   newTaxonomyCache(backend),
+		requestCtx:  ctx,
+		workerCtx:   workerCtx,
+		stopWorkers: stopWorkers,
+		tracker:     tracker,
+		backend:     backend,
+		processor:   jobProcessor,
+		logger:      logger,
+		jobs:        make(chan manualJob, manualQueueDepth),
+		catalog:     newTaxonomyCache(backend),
 	}
 	for range workerCount {
+		server.workers.Add(1)
 		go server.runWorker()
 	}
 	return server
@@ -158,23 +179,66 @@ func New(
 // were already leased to finish. Without this, an in-flight manual job would
 // be abandoned on shutdown and waste its lease and attempt budget.
 //
+// Workers keep running during the wait and are stopped afterwards, so an
+// admitted job is always consumed rather than stranded in the channel.
+//
 // The wait is best-effort: a single model request is bounded by REQUEST_TIMEOUT
 // and may exceed the remaining shutdown budget. That is safe rather than
 // silent, because the lease is never acknowledged, so the Worker re-issues the
 // job once the lease expires.
 func (s *Server) Drain(timeout time.Duration) {
-	if timeout <= 0 || s.queued.Load() == 0 {
-		return
-	}
-	s.logger.Info("draining manual jobs", "pending", s.queued.Load(), "timeout", timeout)
 	deadline := time.Now().Add(timeout)
-	for s.queued.Load() > 0 {
-		if time.Now().After(deadline) {
-			s.logger.Warn("shutdown drain timed out; unfinished jobs keep their lease and will be retried",
-				"pending", s.queued.Load())
-			return
+
+	// Refuse new work first so the queue can only shrink from here.
+	s.enqueueMu.Lock()
+	s.draining = true
+	s.enqueueMu.Unlock()
+
+	if pending := s.queued.Load(); pending > 0 && timeout > 0 {
+		s.logger.Info("draining manual jobs", "pending", pending, "timeout", timeout)
+		for s.queued.Load() > 0 && time.Now().Before(deadline) {
+			time.Sleep(20 * time.Millisecond)
 		}
-		time.Sleep(20 * time.Millisecond)
+		if pending := s.queued.Load(); pending > 0 {
+			s.logger.Warn("shutdown drain timed out; unfinished jobs keep their lease and will be retried",
+				"pending", pending)
+		}
+	}
+
+	// Stop the workers and wait for them to observe it, so no goroutine is
+	// still touching the processor after Drain returns.
+	//
+	// Cancelling workerCtx also releases a worker blocked on an empty queue, so
+	// this normally completes immediately. The wait is capped both by a fixed
+	// floor and by whatever remains of the caller's budget, so a worker stuck
+	// in a stage that ignores cancellation cannot hold the process open past
+	// the shutdown budget.
+	s.stopWorkers()
+	workerWait := min(shutdownWaitForWorkers, max(time.Until(deadline), 0))
+	if !waitForWorkers(&s.workers, workerWait) {
+		s.logger.Warn("workers did not stop within the drain budget; " +
+			"they will be terminated with the process")
+	}
+}
+
+// shutdownWaitForWorkers bounds how long Drain waits for worker goroutines to
+// observe cancellation after being asked to stop. They normally exit at once.
+const shutdownWaitForWorkers = 2 * time.Second
+
+// waitForWorkers reports whether all tracked goroutines finished in time.
+func waitForWorkers(group *sync.WaitGroup, timeout time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		group.Wait()
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return true
+	case <-timer.C:
+		return false
 	}
 }
 
@@ -522,6 +586,10 @@ func (s *Server) processBookmarks(writer http.ResponseWriter, request *http.Requ
 
 	s.enqueueMu.Lock()
 	defer s.enqueueMu.Unlock()
+	if s.draining {
+		writeError(writer, http.StatusServiceUnavailable, "shutting_down")
+		return
+	}
 	if s.queued.Load()+int64(len(ids)) > int64(cap(s.jobs)) {
 		writeError(writer, http.StatusServiceUnavailable, "queue_full")
 		return
@@ -587,6 +655,10 @@ func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http
 
 	s.enqueueMu.Lock()
 	defer s.enqueueMu.Unlock()
+	if s.draining {
+		writeError(writer, http.StatusServiceUnavailable, "shutting_down")
+		return
+	}
 	if s.queued.Load()+1 > int64(cap(s.jobs)) {
 		writeError(writer, http.StatusServiceUnavailable, "queue_full")
 		return
@@ -612,9 +684,9 @@ func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http
 func (s *Server) runJobSafely(queued manualJob) (err error) {
 	defer processor.RecoverJob(s.logger, "manual enrichment", queued.job.ID, &err)
 	if queued.sourceText == "" {
-		return s.processor.Process(s.ctx, queued.job)
+		return s.processor.Process(s.workerCtx, queued.job)
 	}
-	return s.processor.ProcessWithSource(s.ctx, queued.job, queued.sourceText)
+	return s.processor.ProcessWithSource(s.workerCtx, queued.job, queued.sourceText)
 }
 
 // runWorker is the per-worker loop.
@@ -623,9 +695,10 @@ func (s *Server) runJobSafely(queued manualJob) (err error) {
 // Drain runs first, so queued jobs are completed rather than abandoned
 // mid-lease.
 func (s *Server) runWorker() {
+	defer s.workers.Done()
 	for {
 		select {
-		case <-s.ctx.Done():
+		case <-s.workerCtx.Done():
 			return
 		case queued := <-s.jobs:
 			s.runManualJob(queued)
@@ -648,10 +721,10 @@ func (s *Server) runManualJob(queued manualJob) {
 	stats.Duration = time.Since(started)
 	if err != nil {
 		stats.Failed = 1
-		s.logger.ErrorContext(s.ctx, "manual enrichment failed", "link_id", job.ID, "error", err)
+		s.logger.ErrorContext(s.workerCtx, "manual enrichment failed", "link_id", job.ID, "error", err)
 	} else {
 		stats.Completed = 1
-		s.logger.InfoContext(s.ctx, "manual enrichment completed", "link_id", job.ID)
+		s.logger.InfoContext(s.workerCtx, "manual enrichment completed", "link_id", job.ID)
 	}
 	s.tracker.Record(stats, err)
 }
