@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -28,11 +29,19 @@ type fakeBackend struct {
 	claimErrs map[int64]error
 	imageBody string
 	curation  cairn.CurationUpdate
+
+	// Counters let tests assert that handler-level caching actually removes
+	// upstream round trips.
+	listCalls     int
+	taxonomyCalls int
+	imageErr      error
+	imageLength   int
 }
 
 func (b *fakeBackend) ListBookmarks(_ context.Context, query cairn.BookmarkQuery) (cairn.BookmarkPage, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.listCalls++
 	b.query = query
 	if b.pages != nil {
 		if page, ok := b.pages[query.Status]; ok {
@@ -47,6 +56,9 @@ func (b *fakeBackend) GetBookmark(context.Context, int64) (cairn.BookmarkDetail,
 }
 
 func (b *fakeBackend) GetTaxonomy(context.Context) (taxonomy.Catalog, error) {
+	b.mu.Lock()
+	b.taxonomyCalls++
+	b.mu.Unlock()
 	return taxonomy.Catalog{
 		Version: "test-v1",
 		Topics:  []taxonomy.Term{{ID: "llm", Label: "LLM", Active: true}},
@@ -61,14 +73,24 @@ func (b *fakeBackend) UpdateCuration(_ context.Context, _ int64, update cairn.Cu
 }
 
 func (b *fakeBackend) GetImage(context.Context, string) (*http.Response, error) {
+	if b.imageErr != nil {
+		return nil, b.imageErr
+	}
+	header := http.Header{
+		"Content-Type":  []string{"image/jpeg"},
+		"Cache-Control": []string{"private, max-age=86400"},
+		"ETag":          []string{`"test-image"`},
+	}
+	body := b.imageBody
+	if b.imageLength > 0 {
+		// Simulate an upstream that under-delivers relative to its declared
+		// Content-Length, which must not be silently accepted.
+		header.Set("Content-Length", strconv.Itoa(b.imageLength))
+	}
 	return &http.Response{
 		StatusCode: http.StatusOK,
-		Header: http.Header{
-			"Content-Type":  []string{"image/jpeg"},
-			"Cache-Control": []string{"private, max-age=86400"},
-			"ETag":          []string{`"test-image"`},
-		},
-		Body: io.NopCloser(strings.NewReader(b.imageBody)),
+		Header:     header,
+		Body:       io.NopCloser(strings.NewReader(body)),
 	}, nil
 }
 
@@ -126,7 +148,7 @@ func TestHandlerServesChineseDashboardAndBookmarkData(t *testing.T) {
 		claimErrs: map[int64]error{},
 		imageBody: "jpeg-data",
 	}
-	server := New(ctx, health.NewTracker(), backend, &fakeProcessor{processed: make(chan int64, 1), sources: make(chan sourceProcess, 1)}, testLogger(), 1)
+	server := New(ctx, startedTracker(), backend, &fakeProcessor{processed: make(chan int64, 1), sources: make(chan sourceProcess, 1)}, testLogger(), 1)
 
 	root := httptest.NewRecorder()
 	server.Handler().ServeHTTP(root, httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil))
@@ -221,7 +243,7 @@ func TestHandlerQueuesSelectedBookmarksAndReportsRejections(t *testing.T) {
 		},
 	}
 	processed := make(chan int64, 1)
-	tracker := health.NewTracker()
+	tracker := startedTracker()
 	server := New(ctx, tracker, backend, &fakeProcessor{processed: processed, sources: make(chan sourceProcess, 1)}, testLogger(), 1)
 
 	request := httptest.NewRequestWithContext(
@@ -285,7 +307,7 @@ func TestBackstageSummaryMarksAttentionItemsAsActionable(t *testing.T) {
 		jobs:      map[int64]*cairn.Job{},
 		claimErrs: map[int64]error{},
 	}
-	tracker := health.NewTracker()
+	tracker := startedTracker()
 	tracker.Record(processor.Stats{}, nil)
 	server := New(ctx, tracker, backend, &fakeProcessor{processed: make(chan int64, 1), sources: make(chan sourceProcess, 1)}, testLogger(), 1)
 
@@ -330,7 +352,7 @@ func TestHandlerQueuesManualSourceText(t *testing.T) {
 		claimErrs: map[int64]error{},
 	}
 	sources := make(chan sourceProcess, 1)
-	server := New(ctx, health.NewTracker(), backend, &fakeProcessor{
+	server := New(ctx, startedTracker(), backend, &fakeProcessor{
 		processed: make(chan int64, 1),
 		sources:   sources,
 	}, testLogger(), 1)
@@ -362,7 +384,7 @@ func TestHandlerRejectsInvalidManagementRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	backend := &fakeBackend{jobs: map[int64]*cairn.Job{}, claimErrs: map[int64]error{}}
-	server := New(ctx, health.NewTracker(), backend, &fakeProcessor{processed: make(chan int64, 1), sources: make(chan sourceProcess, 1)}, testLogger(), 1)
+	server := New(ctx, startedTracker(), backend, &fakeProcessor{processed: make(chan int64, 1), sources: make(chan sourceProcess, 1)}, testLogger(), 1)
 
 	for _, test := range []struct {
 		method      string
@@ -392,6 +414,14 @@ func TestHandlerRejectsInvalidManagementRequests(t *testing.T) {
 	}
 }
 
+// startedTracker returns a tracker that has completed startup, which is the
+// state every dashboard handler is exercised in.
+func startedTracker() *health.Tracker {
+	tracker := health.NewTracker()
+	tracker.MarkStarted()
+	return tracker
+}
+
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewJSONHandler(io.Discard, nil))
 }
@@ -400,7 +430,7 @@ func TestCurationValidatesEditsAndForwardsFacets(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	backend := &fakeBackend{detail: cairn.BookmarkDetail{Bookmark: cairn.Bookmark{ID: 7}}}
-	server := New(ctx, health.NewTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+	server := New(ctx, startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
 	for _, test := range []struct {
 		body   string
 		status int

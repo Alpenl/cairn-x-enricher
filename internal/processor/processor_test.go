@@ -21,6 +21,7 @@ type fakeQueue struct {
 	failures    map[int64]string
 	imageURLs   map[int64][]string
 	imageErr    error
+	failErr     error
 }
 
 func (q *fakeQueue) Claim(context.Context) (*cairn.Job, error) {
@@ -66,6 +67,9 @@ func (q *fakeQueue) StoreImages(_ context.Context, id int64, _ string, imageURLs
 func (q *fakeQueue) Fail(_ context.Context, id int64, _ string, message string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if q.failErr != nil {
+		return q.failErr
+	}
 	q.failures[id] = message
 	return nil
 }

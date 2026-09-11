@@ -8,8 +8,18 @@
     queue_full: "本机处理队列已满",
     invalid_ids: "所选收藏无效",
     invalid_source: "原文不能为空或过长",
-    invalid_curation: "整理内容无效，请检查标签和收藏原因"
+    invalid_curation: "整理内容无效，请检查标签和收藏原因",
+    invalid_id: "收藏编号无效",
+    invalid_query: "筛选条件无效",
+    invalid_json: "请求内容格式不对，请重试",
+    invalid_content_type: "请求类型不受支持，请刷新页面重试"
   });
+
+  // Unknown codes are surfaced verbatim rather than hidden, so a new backend
+  // error is visible instead of being replaced by a generic message.
+  function errorLabel(code) {
+    return errorLabels[code] || code || "请求失败，请重试";
+  }
 
   const waitingText = Object.freeze({
     pending: "正在排队，稍后会生成中文标题与译文",
@@ -255,6 +265,7 @@
     displaySummary,
     displayTitle,
     element,
+    errorLabel,
     errorLabels,
     fetchJSON,
     fetchStatus,

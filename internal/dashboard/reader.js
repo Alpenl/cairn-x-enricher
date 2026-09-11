@@ -108,7 +108,7 @@
       }
       ui.showToast(reset ? "已恢复自动分类" : "已保存整理");
     } catch (error) {
-      ui.showToast(ui.errorLabels[error.message] || "保存整理失败", true);
+      ui.showToast(ui.errorLabel(error.message), true);
     } finally {
       saving = false;
       ui.byId("curation-fields").disabled = false;
@@ -256,7 +256,7 @@
         setTimeout(() => loadBookmark(true), 900);
       } else {
         const code = result.rejected[0]?.error;
-        ui.showToast(ui.errorLabels[code] || "处理请求未被接受", true);
+        ui.showToast(ui.errorLabel(code), true);
         button.disabled = false;
       }
     } catch (_) {

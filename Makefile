@@ -3,12 +3,13 @@ VERSION ?= dev
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || printf none)
 BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 GOPROXY ?= https://proxy.golang.org,direct
+GOLANGCI_LINT_VERSION ?= v2.13.2
 LDFLAGS := -s -w \
 	-X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Version=$(VERSION) \
 	-X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Commit=$(COMMIT) \
 	-X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Date=$(BUILD_DATE)
 
-.PHONY: build test lint verify docker-build
+.PHONY: build test lint lint-ci verify docker-build
 
 build:
 	mkdir -p bin
@@ -17,10 +18,15 @@ build:
 test:
 	go test -race -coverprofile=coverage.out ./...
 
+# Fast local check. CI runs the full golangci-lint suite; use `make lint-ci` to
+# reproduce it exactly before pushing.
 lint:
 	go vet ./...
 
-verify: lint test build
+lint-ci:
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run ./...
+
+verify: lint lint-ci test build
 
 docker-build:
 	docker build \

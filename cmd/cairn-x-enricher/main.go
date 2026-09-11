@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -38,9 +41,11 @@ func newRootCommand() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "cairn-x-enricher",
 		Short:         "Enrich saved X links with verified source text and summaries",
+		Version:       buildinfo.Current().Version,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
+	root.SetVersionTemplate("cairn-x-enricher {{.Version}}\n")
 
 	root.AddCommand(&cobra.Command{
 		Use:   "serve",
@@ -75,7 +80,7 @@ func newRootCommand() *cobra.Command {
 			logger := newLogger(cfg.LogLevel)
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
-			worker, _, err := newProcessor(ctx, cfg, logger)
+			worker, _, err := newProcessor(ctx, cfg, health.NewTracker(), logger)
 			if err != nil {
 				return err
 			}
@@ -97,9 +102,10 @@ func newRootCommand() *cobra.Command {
 
 	var healthURL string
 	var healthTimeout time.Duration
+	var healthReady bool
 	healthcheck := &cobra.Command{
 		Use:   "healthcheck",
-		Short: "Check a running service's liveness endpoint",
+		Short: "Check a running service's liveness or readiness endpoint",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), healthTimeout)
 			defer cancel()
@@ -113,6 +119,9 @@ func newRootCommand() *cobra.Command {
 			}
 			defer func() { _ = response.Body.Close() }()
 			if response.StatusCode != http.StatusOK {
+				if healthReady {
+					return fmt.Errorf("readiness endpoint returned HTTP %d: %s", response.StatusCode, readinessReason(response.Body))
+				}
 				return fmt.Errorf("health endpoint returned HTTP %d", response.StatusCode)
 			}
 			return nil
@@ -120,6 +129,13 @@ func newRootCommand() *cobra.Command {
 	}
 	healthcheck.Flags().StringVar(&healthURL, "url", "http://127.0.0.1:8080/healthz", "liveness endpoint URL")
 	healthcheck.Flags().DurationVar(&healthTimeout, "timeout", 3*time.Second, "request timeout")
+	healthcheck.Flags().BoolVar(&healthReady, "ready", false, "check readiness by defaulting the URL to /readyz")
+	healthcheck.PreRunE = func(_ *cobra.Command, _ []string) error {
+		if healthReady && !healthcheck.Flags().Changed("url") {
+			healthURL = "http://127.0.0.1:8080/readyz"
+		}
+		return nil
+	}
 	root.AddCommand(healthcheck)
 
 	var versionJSON bool
@@ -141,11 +157,11 @@ func newRootCommand() *cobra.Command {
 }
 
 func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	worker, queue, err := newProcessor(ctx, cfg, logger)
+	tracker := health.NewTracker()
+	worker, queue, err := newProcessor(ctx, cfg, tracker, logger)
 	if err != nil {
 		return err
 	}
-	tracker := health.NewTracker()
 	management := dashboard.New(ctx, tracker, queue, worker, logger, cfg.MaxConcurrency)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -177,6 +193,9 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown health server: %w", err)
 	}
+	// Finish manual jobs that already hold a lease, otherwise they would be
+	// abandoned and re-run only after the lease expires.
+	management.Drain(cfg.ShutdownTimeout)
 	return nil
 }
 
@@ -187,9 +206,36 @@ func runScheduler(
 	cfg config.Config,
 	logger *slog.Logger,
 ) {
+	// A batch can lease up to MAX_JOBS_PER_RUN jobs, so it must not inherit
+	// the shutdown context directly. Cancelling mid-batch would strand every
+	// already-leased job until its lease expires, wasting attempts.
+	var mu sync.Mutex
+	var batch sync.WaitGroup
+	var stopping atomic.Bool
+
 	run := func() {
-		stats, err := worker.Run(ctx, cfg.MaxJobsPerRun)
+		if stopping.Load() {
+			return
+		}
+		mu.Lock()
+		if stopping.Load() {
+			mu.Unlock()
+			return
+		}
+		batch.Add(1)
+		mu.Unlock()
+		defer batch.Done()
+
+		runCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.ShutdownTimeout)
+		defer cancel()
+		stats, err := worker.Run(runCtx, cfg.MaxJobsPerRun)
 		tracker.Record(stats, err)
+		if isContractFailure(err) {
+			// A provider contract break will fail every future batch the
+			// same way, so leave readiness false and stop pretending the
+			// service is usable until an operator intervenes.
+			tracker.MarkDegraded(err.Error())
+		}
 		attributes := []any{
 			"claimed", stats.Claimed,
 			"completed", stats.Completed,
@@ -209,6 +255,12 @@ func runScheduler(
 	for {
 		select {
 		case <-ctx.Done():
+			// Stop admitting new batches, then let the in-flight one finish
+			// within the shutdown budget.
+			mu.Lock()
+			stopping.Store(true)
+			mu.Unlock()
+			batch.Wait()
 			return
 		case <-ticker.C:
 			run()
@@ -219,6 +271,7 @@ func runScheduler(
 func newProcessor(
 	ctx context.Context,
 	cfg config.Config,
+	tracker *health.Tracker,
 	logger *slog.Logger,
 ) (*processor.Processor, *cairn.Client, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
@@ -246,11 +299,45 @@ func newProcessor(
 		httpClient,
 		catalog,
 	)
+	if err := model.Canary(ctx); err != nil {
+		// A contract break must fail loudly at startup instead of silently
+		// burning every job's retry budget.
+		return nil, nil, fmt.Errorf("model endpoint contract check failed (check GROK_MODELS_BASE_URL, GROK_MODEL, XAI_API_KEY and strict schema support): %w", err)
+	}
 	workflow, err := enrich.NewWorkflow(ctx, model, catalog)
 	if err != nil {
 		return nil, nil, err
 	}
+	tracker.MarkStarted()
 	return processor.New(queue, workflow, logger, cfg.MaxConcurrency), queue, nil
+}
+
+// readinessReason extracts the human-readable reason from a /readyz body so a
+// failing container healthcheck explains itself in `docker inspect`.
+func readinessReason(body io.Reader) string {
+	var payload struct {
+		Reason string `json:"ready_reason"`
+	}
+	if err := json.NewDecoder(io.LimitReader(body, 8<<10)).Decode(&payload); err != nil || payload.Reason == "" {
+		return "not ready"
+	}
+	return payload.Reason
+}
+
+// isContractFailure reports whether an error is a configuration or upstream
+// contract fault that retrying cannot repair.
+func isContractFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	var modelErr *enrich.ModelHTTPError
+	if errors.As(err, &modelErr) {
+		switch modelErr.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusBadRequest:
+			return true
+		}
+	}
+	return false
 }
 
 func newLogger(level string) *slog.Logger {

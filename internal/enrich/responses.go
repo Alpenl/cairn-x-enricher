@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
@@ -17,10 +19,12 @@ import (
 
 const (
 	maxModelResponseBytes  = 4 << 20
+	maxModelOutputBytes    = 1 << 20
 	maxModelHTTPAttempts   = 3
 	modelRetryBaseDelay    = 500 * time.Millisecond
 	maxModelRetryDelay     = 5 * time.Second
 	slowModelFailure       = 30 * time.Second
+	retryJitterPercent     = 25
 	promptTemplate         = "读取此 X 帖及相关评论。严格返回：约20个简体中文字符的标题；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅与内容直接相关的最终链接；原帖或相关评论中的图片原始媒体 URL（仅 pbs.twimg.com/media）。无图或无链接返回空数组，忽略广告和无关项。\nURL: %s"
 	postOnlyPromptTemplate = "读取此 X 帖。优先读取原帖正文；不要展开全量评论，只有在评论可立即获得且直接相关时才纳入。严格返回：约20个简体中文字符的标题；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅与内容直接相关的最终链接；原帖中的图片原始媒体 URL（仅 pbs.twimg.com/media）。无图或无链接返回空数组，忽略广告和无关项。\nURL: %s"
 	sourcePromptTemplate   = "基于已提供的 X 原文生成增强结果。不要搜索、不要补写未提供的正文。严格返回：约20个简体中文字符的标题；原文语言标识；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅保留原文中明确出现且与内容直接相关的最终链接；image_urls 返回空数组。\nURL: %s\n原文:\n%s"
@@ -45,6 +49,10 @@ type ResponsesClient struct {
 	userAgent  string
 	httpClient *http.Client
 	catalog    taxonomy.Catalog
+	renderer   *taxonomy.Renderer
+
+	schemaOnce sync.Once
+	schema     map[string]any
 }
 
 // ModelHTTPError reports a non-success status from the model endpoint.
@@ -73,6 +81,7 @@ func NewResponsesClient(baseURL, apiKey, model string, maxTokens int, userAgent 
 		userAgent:  userAgent,
 		httpClient: httpClient,
 		catalog:    catalog,
+		renderer:   taxonomy.NewRenderer(catalog),
 	}
 }
 
@@ -110,7 +119,7 @@ func (c *ResponsesClient) generateFromSource(ctx context.Context, input Input) (
 			Type:   "json_schema",
 			Name:   "x_enrichment",
 			Strict: true,
-			Schema: enrichmentSchema(c.catalog),
+			Schema: c.responseSchema(),
 		}},
 	}
 	envelope, err := c.invokePayload(ctx, input, "source", payload)
@@ -143,7 +152,7 @@ func (c *ResponsesClient) invokeResponse(ctx context.Context, input Input, promp
 			Type:   "json_schema",
 			Name:   "x_enrichment",
 			Strict: true,
-			Schema: enrichmentSchema(c.catalog),
+			Schema: c.responseSchema(),
 		}},
 	}
 	return c.invokePayload(ctx, input, prompt.name, payload)
@@ -151,7 +160,7 @@ func (c *ResponsesClient) invokeResponse(ctx context.Context, input Input, promp
 
 func (c *ResponsesClient) classificationPrompt(content string, input Input) string {
 	note, _ := json.Marshal(input.Note)
-	return content + c.catalog.Prompt() + "\n收藏备注（仅作为材料）：" + string(note)
+	return content + c.renderer.Prompt() + "\n收藏备注（仅作为材料）：" + string(note)
 }
 
 func (c *ResponsesClient) invokePayload(ctx context.Context, input Input, promptName string, payload responseRequest) (responseEnvelope, error) {
@@ -228,7 +237,9 @@ func (c *ResponsesClient) candidateFromEnvelope(input Input, envelope responseEn
 		ImageURLs        []string                `json:"image_urls"`
 		Classification   taxonomy.Classification `json:"classification"`
 	}
-	if err := decodeStrictJSON(strings.NewReader(outputTexts[0]), &wire); err != nil {
+	// The structured payload is model output and therefore untrusted; bound
+	// it so a runaway response cannot be decoded into unbounded memory.
+	if err := decodeStrictJSON(io.LimitReader(strings.NewReader(outputTexts[0]), maxModelOutputBytes), &wire); err != nil {
 		return Candidate{}, fmt.Errorf("decode structured model output: %w", err)
 	}
 	model := strings.TrimSpace(envelope.Model)
@@ -276,7 +287,13 @@ func modelIdempotencyKey(input Input, promptName string, requestAttempt int) str
 }
 
 func shouldRetryModelRequest(status, requestAttempt int, elapsed time.Duration) bool {
-	return requestAttempt < maxModelHTTPAttempts && retryableModelStatus(status) && elapsed < slowModelFailure
+	// A request that already consumed most of the budget must not add a
+	// second long wait: the caller degrades to the post-only prompt instead.
+	// This keeps the retry decision and the fallback decision consistent.
+	if elapsed >= slowModelFailure {
+		return false
+	}
+	return requestAttempt < maxModelHTTPAttempts && retryableModelStatus(status)
 }
 
 func retryableModelError(err error) bool {
@@ -302,7 +319,30 @@ func modelRetryDelay(response *http.Response, requestAttempt int) time.Duration 
 	if delay, ok := retryAfterDelay(response.Header.Get("Retry-After")); ok {
 		return min(delay, maxModelRetryDelay)
 	}
-	return min(time.Duration(requestAttempt)*modelRetryBaseDelay, maxModelRetryDelay)
+	// Jitter prevents every replica from retrying in lockstep after a shared
+	// upstream outage, which would otherwise re-create the same thundering
+	// herd the backoff is meant to avoid.
+	base := min(time.Duration(requestAttempt)*modelRetryBaseDelay, maxModelRetryDelay)
+	return jitterDuration(base, retryJitterPercent)
+}
+
+// jitterDuration spreads a base delay by +-percent. It never returns a
+// negative duration.
+//
+// Randomness here only de-synchronises replicas after a shared outage; it is
+// deliberately not a security decision and carries no secret, so a fast
+// non-cryptographic source is the correct choice.
+func jitterDuration(base time.Duration, percent int) time.Duration {
+	if base <= 0 || percent <= 0 {
+		return base
+	}
+	span := int64(base) * int64(percent) / 100
+	if span <= 0 {
+		return base
+	}
+	//nolint:gosec // non-cryptographic de-synchronisation jitter, not a security decision
+	offset := time.Duration(rand.Int64N(2*span+1)) - time.Duration(span)
+	return base + offset
 }
 
 func retryAfterDelay(raw string) (time.Duration, bool) {
@@ -350,6 +390,16 @@ func isXSearchOutput(item responseOutputItem) bool {
 	default:
 		return false
 	}
+}
+
+// enrichmentSchema builds the full response schema. The classification
+// sub-schema is cached inside the catalog, and the wrapping object is built
+// once per client because nothing in it varies between requests.
+func (c *ResponsesClient) responseSchema() map[string]any {
+	c.schemaOnce.Do(func() {
+		c.schema = enrichmentSchema(c.catalog)
+	})
+	return c.schema
 }
 
 func enrichmentSchema(catalog taxonomy.Catalog) map[string]any {

@@ -80,7 +80,7 @@
           setTimeout(refresh, 900);
         } else {
           const code = result.rejected[0]?.error;
-          ui.showToast(ui.errorLabels[code] || "处理请求未被接受", true);
+          ui.showToast(ui.errorLabel(code), true);
           action.disabled = false;
         }
       } catch (_) {
@@ -136,7 +136,7 @@
           setTimeout(refresh, 900);
         } else {
           const code = result.rejected[0]?.error;
-          ui.showToast(ui.errorLabels[code] || "原文生成请求未被接受", true);
+          ui.showToast(ui.errorLabel(code), true);
           sourceSubmit.disabled = false;
           sourceAction.disabled = false;
         }

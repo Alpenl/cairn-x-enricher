@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -92,8 +93,26 @@ type Server struct {
 	processor JobProcessor
 	logger    *slog.Logger
 	jobs      chan manualJob
+
+	// enqueueMu serialises admission so capacity cannot be oversold.
 	enqueueMu sync.Mutex
+	// queued counts jobs admitted but not yet finished. It is updated under
+	// enqueueMu at admission and atomically by workers, because workers
+	// receive from the channel without holding that lock.
+	queued  atomic.Int64
+	catalog *taxonomyCache
+
+	// summary caches the backstage aggregate, which costs several backend
+	// list calls and is polled by an idle browser tab.
+	summaryMu       sync.Mutex
+	summaryCache    *backstageSummary
+	summaryCachedAt time.Time
 }
+
+// backstageSummaryTTL bounds backstage aggregation freshness. The page polls
+// every few seconds, but the underlying queue changes far more slowly than
+// that, and each refresh costs multiple upstream list calls.
+const backstageSummaryTTL = 5 * time.Second
 
 type backstageSummary struct {
 	Title          string               `json:"title"`
@@ -124,11 +143,26 @@ func New(
 		processor: jobProcessor,
 		logger:    logger,
 		jobs:      make(chan manualJob, manualQueueDepth),
+		catalog:   newTaxonomyCache(backend),
 	}
 	for range workerCount {
 		go server.runWorker()
 	}
 	return server
+}
+
+// Drain stops admitting new manual work and waits up to timeout for jobs that
+// were already leased to finish. Without this, an in-flight manual job would
+// be abandoned on shutdown and waste its lease and attempt budget.
+func (s *Server) Drain(timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for s.queued.Load() > 0 {
+		if time.Now().After(deadline) {
+			s.logger.Warn("shutdown drain timed out", "pending", s.queued.Load())
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 // Handler returns the complete health and management HTTP surface.
@@ -231,7 +265,7 @@ func (s *Server) getBookmark(writer http.ResponseWriter, request *http.Request) 
 }
 
 func (s *Server) getTaxonomy(writer http.ResponseWriter, request *http.Request) {
-	catalog, err := s.backend.GetTaxonomy(request.Context())
+	catalog, err := s.catalog.Catalog(request.Context())
 	if err != nil {
 		s.writeBackendError(writer, "get taxonomy", 0, err)
 		return
@@ -276,7 +310,7 @@ func (s *Server) updateCuration(writer http.ResponseWriter, request *http.Reques
 			writeError(writer, http.StatusBadRequest, "invalid_curation")
 			return
 		}
-		catalog, err := s.backend.GetTaxonomy(request.Context())
+		catalog, err := s.catalog.Catalog(request.Context())
 		if err != nil {
 			s.writeBackendError(writer, "get taxonomy for curation", id, err)
 			return
@@ -315,6 +349,17 @@ func (s *Server) getImage(writer http.ResponseWriter, request *http.Request) {
 	}
 	writer.Header().Set("X-Content-Type-Options", "nosniff")
 	writer.WriteHeader(http.StatusOK)
+	// When the backend advertises a length, copy exactly that many bytes so a
+	// truncated upstream response surfaces as a logged error instead of a
+	// silently corrupt image collected by the browser cache.
+	if declared, err := strconv.ParseInt(response.Header.Get("Content-Length"), 10, 64); err == nil && declared > 0 {
+		written, copyErr := io.CopyN(writer, response.Body, declared)
+		if copyErr != nil || written != declared {
+			s.logger.WarnContext(request.Context(), "truncated image response",
+				"declared", declared, "written", written, "error", copyErr)
+		}
+		return
+	}
 	if _, err := io.Copy(writer, response.Body); err != nil {
 		s.logger.WarnContext(request.Context(), "stream image response", "error", err)
 	}
@@ -330,20 +375,27 @@ func (s *Server) getBackstage(writer http.ResponseWriter, request *http.Request)
 }
 
 func (s *Server) buildBackstageSummary(ctx context.Context) (backstageSummary, error) {
-	status := s.tracker.Snapshot()
-	page, err := s.backend.ListBookmarks(ctx, cairn.BookmarkQuery{Limit: 1})
-	if err != nil {
-		return backstageSummary{}, fmt.Errorf("list bookmark counts: %w", err)
+	s.summaryMu.Lock()
+	defer s.summaryMu.Unlock()
+	if s.summaryCache != nil && time.Since(s.summaryCachedAt) < backstageSummaryTTL {
+		return *s.summaryCache, nil
 	}
-	counts := page.Counts
 
+	status := s.tracker.Snapshot()
+	// A filtered list already carries queue-wide counts, so one request per
+	// attention status replaces the previous extra unfiltered counts call.
 	attention := []cairn.Bookmark{}
-	for _, name := range backstageAttentionStatuses {
+	var counts cairn.BookmarkCounts
+	for index, name := range backstageAttentionStatuses {
 		page, err := s.backend.ListBookmarks(ctx, cairn.BookmarkQuery{Limit: 20, Status: name})
 		if err != nil {
 			return backstageSummary{}, fmt.Errorf("list %s bookmarks: %w", name, err)
 		}
-		counts = mergeBookmarkCounts(counts, page.Counts)
+		if index == 0 {
+			counts = page.Counts
+		} else {
+			counts = mergeBookmarkCounts(counts, page.Counts)
+		}
 		attention = append(attention, page.Items...)
 	}
 
@@ -351,7 +403,7 @@ func (s *Server) buildBackstageSummary(ctx context.Context) (backstageSummary, e
 	if attentionTotal == 0 {
 		attentionTotal = len(attention)
 	}
-	return backstageSummary{
+	summary := backstageSummary{
 		Title:          backstageTitle(status, attentionTotal),
 		State:          backstageState(status, counts, attentionTotal),
 		LastError:      status.LastError,
@@ -359,7 +411,10 @@ func (s *Server) buildBackstageSummary(ctx context.Context) (backstageSummary, e
 		AttentionTotal: attentionTotal,
 		Counts:         counts,
 		Build:          status.Build,
-	}, nil
+	}
+	s.summaryCache = &summary
+	s.summaryCachedAt = time.Now()
+	return summary, nil
 }
 
 func mergeBookmarkCounts(left, right cairn.BookmarkCounts) cairn.BookmarkCounts {
@@ -447,7 +502,7 @@ func (s *Server) processBookmarks(writer http.ResponseWriter, request *http.Requ
 
 	s.enqueueMu.Lock()
 	defer s.enqueueMu.Unlock()
-	if len(s.jobs)+len(ids) > cap(s.jobs) {
+	if s.queued.Load()+int64(len(ids)) > int64(cap(s.jobs)) {
 		writeError(writer, http.StatusServiceUnavailable, "queue_full")
 		return
 	}
@@ -463,6 +518,7 @@ func (s *Server) processBookmarks(writer http.ResponseWriter, request *http.Requ
 			rejected = append(rejected, rejection{ID: id, Error: "not_found"})
 			continue
 		}
+		s.queued.Add(1)
 		s.jobs <- manualJob{job: job}
 		accepted = append(accepted, id)
 	}
@@ -511,7 +567,7 @@ func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http
 
 	s.enqueueMu.Lock()
 	defer s.enqueueMu.Unlock()
-	if len(s.jobs)+1 > cap(s.jobs) {
+	if s.queued.Load()+1 > int64(cap(s.jobs)) {
 		writeError(writer, http.StatusServiceUnavailable, "queue_full")
 		return
 	}
@@ -526,36 +582,45 @@ func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http
 		writeProcessingResult(writer, http.StatusConflict, nil, []rejection{{ID: id, Error: "not_found"}})
 		return
 	}
+	s.queued.Add(1)
 	s.jobs <- manualJob{job: job, sourceText: sourceText}
 	writeProcessingResult(writer, http.StatusAccepted, []int64{id}, nil)
 }
 
 func (s *Server) runWorker() {
+	// Workers exit only when the process context is cancelled. During
+	// shutdown Drain runs first, so queued jobs are completed rather than
+	// abandoned mid-lease.
 	for {
 		select {
 		case <-s.ctx.Done():
 			return
 		case queued := <-s.jobs:
-			job := queued.job
-			started := time.Now().UTC()
-			stats := processor.Stats{StartedAt: started, Claimed: 1}
-			var err error
-			if queued.sourceText == "" {
-				err = s.processor.Process(s.ctx, job)
-			} else {
-				err = s.processor.ProcessWithSource(s.ctx, job, queued.sourceText)
-			}
-			stats.Duration = time.Since(started)
-			if err != nil {
-				stats.Failed = 1
-				s.logger.ErrorContext(s.ctx, "manual enrichment failed", "link_id", job.ID, "error", err)
-			} else {
-				stats.Completed = 1
-				s.logger.InfoContext(s.ctx, "manual enrichment completed", "link_id", job.ID)
-			}
-			s.tracker.Record(stats, err)
+			s.runManualJob(queued)
 		}
 	}
+}
+
+func (s *Server) runManualJob(queued manualJob) {
+	defer s.queued.Add(-1)
+	job := queued.job
+	started := time.Now().UTC()
+	stats := processor.Stats{StartedAt: started, Claimed: 1}
+	var err error
+	if queued.sourceText == "" {
+		err = s.processor.Process(s.ctx, job)
+	} else {
+		err = s.processor.ProcessWithSource(s.ctx, job, queued.sourceText)
+	}
+	stats.Duration = time.Since(started)
+	if err != nil {
+		stats.Failed = 1
+		s.logger.ErrorContext(s.ctx, "manual enrichment failed", "link_id", job.ID, "error", err)
+	} else {
+		stats.Completed = 1
+		s.logger.InfoContext(s.ctx, "manual enrichment completed", "link_id", job.ID)
+	}
+	s.tracker.Record(stats, err)
 }
 
 type rejection struct {

@@ -44,7 +44,8 @@ Momax NAS 使用 `deploy/nas/compose.yaml` 中的固定镜像，访问端口为 
 
 ## 5. 观测
 
-- 容器健康：`GET /healthz`。
+- 容器健康：`GET /healthz`（进程存活，不依赖上游）。
+- 服务就绪：`GET /readyz`；启动自检或模型契约检查失败时为 `503`，`ready_reason` 说明原因。
 - 最近批次：`GET /status`。
 - 中文收藏列表：`GET /`；独立阅读页：`GET /bookmarks/{id}`；只允许通过可信局域网访问。
 - 收藏列表：`GET /api/bookmarks`；人工处理：`POST /api/bookmarks/process`。
