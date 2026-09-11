@@ -32,7 +32,10 @@ const (
 	maxSearchLength  = 200
 	maxActionBody    = 4 << 10
 	maxSourceBody    = 128 << 10
-	maxSourceLength  = 100_000
+	// maxSourceLength is intentionally measured in bytes, matching the enrich
+	// package's maxOriginalTextLength, which is also a byte limit. Both bound
+	// the stored text size, so they must use the same unit.
+	maxSourceLength = 100_000
 )
 
 var backstageAttentionStatuses = []string{"failed", "exhausted"}
@@ -154,11 +157,21 @@ func New(
 // Drain stops admitting new manual work and waits up to timeout for jobs that
 // were already leased to finish. Without this, an in-flight manual job would
 // be abandoned on shutdown and waste its lease and attempt budget.
+//
+// The wait is best-effort: a single model request is bounded by REQUEST_TIMEOUT
+// and may exceed the remaining shutdown budget. That is safe rather than
+// silent, because the lease is never acknowledged, so the Worker re-issues the
+// job once the lease expires.
 func (s *Server) Drain(timeout time.Duration) {
+	if timeout <= 0 || s.queued.Load() == 0 {
+		return
+	}
+	s.logger.Info("draining manual jobs", "pending", s.queued.Load(), "timeout", timeout)
 	deadline := time.Now().Add(timeout)
 	for s.queued.Load() > 0 {
 		if time.Now().After(deadline) {
-			s.logger.Warn("shutdown drain timed out", "pending", s.queued.Load())
+			s.logger.Warn("shutdown drain timed out; unfinished jobs keep their lease and will be retried",
+				"pending", s.queued.Load())
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -346,6 +359,13 @@ func (s *Server) getImage(writer http.ResponseWriter, request *http.Request) {
 		if value := response.Header.Get(header); value != "" {
 			writer.Header().Set(header, value)
 		}
+	}
+	// Image keys are content-addressed (enrichment/<id>/<sha256>.<ext>), so a
+	// given key can never change. Without a Cache-Control the browser falls back
+	// to heuristic caching, which revalidates on every scroll. Only apply this
+	// when the backend did not set its own directive.
+	if writer.Header().Get("Cache-Control") == "" {
+		writer.Header().Set("Cache-Control", "private, max-age=604800, immutable")
 	}
 	writer.Header().Set("X-Content-Type-Options", "nosniff")
 	writer.WriteHeader(http.StatusOK)
@@ -587,10 +607,22 @@ func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http
 	writeProcessingResult(writer, http.StatusAccepted, []int64{id}, nil)
 }
 
+// runJobSafely executes one manual job, converting a panic into an error so
+// the caller's normal failure reporting still runs.
+func (s *Server) runJobSafely(queued manualJob) (err error) {
+	defer processor.RecoverJob(s.logger, "manual enrichment", queued.job.ID, &err)
+	if queued.sourceText == "" {
+		return s.processor.Process(s.ctx, queued.job)
+	}
+	return s.processor.ProcessWithSource(s.ctx, queued.job, queued.sourceText)
+}
+
+// runWorker is the per-worker loop.
+//
+// Workers exit only when the process context is cancelled. During shutdown
+// Drain runs first, so queued jobs are completed rather than abandoned
+// mid-lease.
 func (s *Server) runWorker() {
-	// Workers exit only when the process context is cancelled. During
-	// shutdown Drain runs first, so queued jobs are completed rather than
-	// abandoned mid-lease.
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -606,12 +638,13 @@ func (s *Server) runManualJob(queued manualJob) {
 	job := queued.job
 	started := time.Now().UTC()
 	stats := processor.Stats{StartedAt: started, Claimed: 1}
-	var err error
-	if queued.sourceText == "" {
-		err = s.processor.Process(s.ctx, job)
-	} else {
-		err = s.processor.ProcessWithSource(s.ctx, job, queued.sourceText)
-	}
+
+	// A panic must not kill the dashboard, but recovering alone is not enough:
+	// the job still has to be reported and recorded. Run the work inside a
+	// closure that converts a panic into an ordinary error, so the normal
+	// failure path below runs for panics exactly as it does for errors.
+	err := s.runJobSafely(queued)
+
 	stats.Duration = time.Since(started)
 	if err != nil {
 		stats.Failed = 1

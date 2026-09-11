@@ -302,3 +302,36 @@ func (*plainError) Error() string { return "plain failure" }
 const testImageKey = "0000000000000000000000000000000000000000000000000000000000000000.jpg"
 
 func stringReader(value string) *strings.Reader { return strings.NewReader(value) }
+
+func TestImageProxySetsImmutableCacheControlWhenBackendOmitsIt(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	backend := &fakeBackend{imageBody: "jpeg-data"}
+	backend.omitImageCacheControl = true
+	server := New(ctx, startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+
+	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/images/enrichment/1/"+testImageKey, nil)
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+
+	if got := response.Header().Get("Cache-Control"); !strings.Contains(got, "immutable") {
+		t.Fatalf("Cache-Control = %q, want an immutable directive for content-addressed images", got)
+	}
+}
+
+func TestImageProxyKeepsTheBackendCacheControl(t *testing.T) {
+	// The backend's directive must win: this service cannot know better than
+	// the component that owns the object.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	backend := &fakeBackend{imageBody: "jpeg-data", imageCacheControl: "no-store"}
+	server := New(ctx, startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+
+	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/images/enrichment/1/"+testImageKey, nil)
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+
+	if got := response.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want the backend value preserved", got)
+	}
+}

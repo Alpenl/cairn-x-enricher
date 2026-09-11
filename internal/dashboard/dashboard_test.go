@@ -36,6 +36,9 @@ type fakeBackend struct {
 	taxonomyCalls int
 	imageErr      error
 	imageLength   int
+	// omitImageCacheControl simulates a backend that sends no Cache-Control.
+	omitImageCacheControl bool
+	imageCacheControl     string
 }
 
 func (b *fakeBackend) ListBookmarks(_ context.Context, query cairn.BookmarkQuery) (cairn.BookmarkPage, error) {
@@ -77,9 +80,14 @@ func (b *fakeBackend) GetImage(context.Context, string) (*http.Response, error) 
 		return nil, b.imageErr
 	}
 	header := http.Header{
-		"Content-Type":  []string{"image/jpeg"},
-		"Cache-Control": []string{"private, max-age=86400"},
-		"ETag":          []string{`"test-image"`},
+		"Content-Type": []string{"image/jpeg"},
+		"ETag":         []string{`"test-image"`},
+	}
+	switch {
+	case b.imageCacheControl != "":
+		header.Set("Cache-Control", b.imageCacheControl)
+	case !b.omitImageCacheControl:
+		header.Set("Cache-Control", "private, max-age=86400")
 	}
 	body := b.imageBody
 	if b.imageLength > 0 {

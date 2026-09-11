@@ -16,6 +16,14 @@ pending
 
 过期的 `processing` lease 可被重新领取。完成和失败写入均要求当前 lease token 匹配，因此旧实例不能覆盖新实例的结果。
 
+## 关停与 panic 隔离
+
+`SHUTDOWN_TIMEOUT` 是**整个**优雅关停的预算，不是每个阶段的预算：HTTP 停止接受连接与等待在途任务共用同一份 deadline，并且单次定时批处理最多只用其中一半，另一半留给 `runServe` 等这一批结束。两个 compose 文件把 `stop_grace_period` 设为 30s，必须大于 `SHUTDOWN_TIMEOUT`，否则 Docker 会在排空完成前 SIGKILL。
+
+排空是 best-effort：单次模型请求受 `REQUEST_TIMEOUT` 约束，可能超出剩余预算。这不是静默失败 —— lease 不会被确认，Worker 会在 lease 过期后重新派发。
+
+所有执行任务的 goroutine（定时批处理 worker、人工任务 worker、调度循环、HTTP 服务）都有 `recover` 保护。裸 goroutine 里的 panic 会终止整个进程并连带 HTTP 服务，在 `restart: unless-stopped` 下变成崩溃循环。恢复后 panic 仍会作为批次错误上报并带上堆栈，因此进程存活的同时失败依然可归因、可见。
+
 ## 健康模型
 
 存活与就绪严格分离。`/healthz` 只表示进程存在，永远返回 `200`，因此 Worker 或模型临时不可达时不会触发重启循环，进程有机会自行恢复。`/readyz` 反映实际可服务状态：启动前置检查未完成或被标记为降级时返回 `503`，`ready_reason` 和 `unhealthy_since` 说明未就绪的原因和起始时间。

@@ -308,8 +308,15 @@
     ui.byId("read-error").hidden = false;
   }
 
+  // Poll while a job is in flight, but stop after a bounded number of attempts.
+  // A job that never advances (worker down, lease stuck) would otherwise poll
+  // a LAN server every 8 seconds for as long as the tab stays open.
+  const MAX_POLLS = 30;
+  let polls = 0;
   setInterval(() => {
     if (document.hidden || dirty || saving) return;
-    if (current?.status === "processing" || current?.status === "pending") loadBookmark(true);
+    if (current?.status !== "processing" && current?.status !== "pending") { polls = 0; return; }
+    if (polls++ >= MAX_POLLS) return;
+    loadBookmark(true);
   }, POLL_INTERVAL);
 })();

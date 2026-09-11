@@ -258,6 +258,9 @@ for (const asset of ["common.js", "home.js", "backstage.js"]) {
   } catch (error) {
     check("reader.js parses", false, error.message);
   }
+  // Polling must be bounded, so a stuck job cannot poll the LAN server forever
+  // for as long as the tab stays open.
+  check("reader bounds its polling attempts", /MAX_POLLS/.test(read("reader.js")));
 }
 
 const ui = window.CairnUI;

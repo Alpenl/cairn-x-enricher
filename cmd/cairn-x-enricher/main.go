@@ -174,6 +174,9 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 
 	serverErrors := make(chan error, 1)
 	go func() {
+		// If this goroutine panicked, runServe would block forever waiting on
+		// serverErrors while the process kept running without an HTTP server.
+		defer processor.RecoverTask(logger, "health server")
 		logger.Info("health server listening", "address", cfg.HTTPAddr)
 		serverErrors <- server.ListenAndServe()
 	}()
@@ -188,14 +191,22 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 		}
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	// Shutdown must fit inside one deadline: the HTTP server drain and the
+	// in-flight job drain share a single budget, because Docker sends SIGKILL
+	// once stop_grace_period elapses and would otherwise cut the second phase
+	// short partway through.
+	deadline := time.Now().Add(cfg.ShutdownTimeout)
+	shutdownCtx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown health server: %w", err)
 	}
 	// Finish manual jobs that already hold a lease, otherwise they would be
-	// abandoned and re-run only after the lease expires.
-	management.Drain(cfg.ShutdownTimeout)
+	// abandoned and re-run only after the lease expires. The remaining budget
+	// is what is left after the HTTP server stopped accepting connections.
+	if remaining := time.Until(deadline); remaining > 0 {
+		management.Drain(remaining)
+	}
 	return nil
 }
 
@@ -209,6 +220,11 @@ func runScheduler(
 	// A batch can lease up to MAX_JOBS_PER_RUN jobs, so it must not inherit
 	// the shutdown context directly. Cancelling mid-batch would strand every
 	// already-leased job until its lease expires, wasting attempts.
+	//
+	// The batch budget is half the shutdown budget, leaving the other half for
+	// runServe to wait out the same batch. Giving both phases the full budget
+	// would exceed stop_grace_period, and Docker would SIGKILL the process
+	// before either could finish.
 	var mu sync.Mutex
 	var batch sync.WaitGroup
 	var stopping atomic.Bool
@@ -226,11 +242,11 @@ func runScheduler(
 		mu.Unlock()
 		defer batch.Done()
 
-		runCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.ShutdownTimeout)
-		defer cancel()
-		stats, err := worker.Run(runCtx, cfg.MaxJobsPerRun)
+		// Recover per batch, not per scheduler: a panic must fail one batch and
+		// drop readiness, but the loop has to keep running afterwards.
+		stats, err := runBatchSafely(ctx, worker, cfg, logger)
 		tracker.Record(stats, err)
-		if isContractFailure(err) {
+		if err != nil && isContractFailure(err) {
 			// A provider contract break will fail every future batch the
 			// same way, so leave readiness false and stop pretending the
 			// service is usable until an operator intervenes.
@@ -310,6 +326,31 @@ func newProcessor(
 	}
 	tracker.MarkStarted()
 	return processor.New(queue, workflow, logger, cfg.MaxConcurrency), queue, nil
+}
+
+// batchTimeout is the slice of the shutdown budget a single scheduled batch may
+// consume. The other half is reserved for runServe to wait out that same batch,
+// because both phases have to fit inside the container's stop_grace_period.
+func batchTimeout(cfg config.Config) time.Duration {
+	timeout := cfg.ShutdownTimeout / 2
+	if timeout <= 0 {
+		return cfg.ShutdownTimeout
+	}
+	return timeout
+}
+
+// runBatchSafely runs one scheduled batch, converting a panic into an error so
+// the scheduler records a failure and continues instead of the process dying.
+func runBatchSafely(
+	ctx context.Context,
+	worker *processor.Processor,
+	cfg config.Config,
+	logger *slog.Logger,
+) (stats processor.Stats, err error) {
+	defer processor.RecoverTask(logger, "scheduled batch")
+	runCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), batchTimeout(cfg))
+	defer cancel()
+	return worker.Run(runCtx, cfg.MaxJobsPerRun)
 }
 
 // readinessReason extracts the human-readable reason from a /readyz body so a

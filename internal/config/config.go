@@ -18,19 +18,25 @@ const (
 
 // Config contains all validated settings needed by the service.
 type Config struct {
-	CairnBaseURL    string
-	CairnToken      string
-	GrokBaseURL     string
-	GrokAPIKey      string
-	GrokModel       string
-	GrokMaxTokens   int
-	PollInterval    time.Duration
-	RequestTimeout  time.Duration
+	CairnBaseURL   string
+	CairnToken     string
+	GrokBaseURL    string
+	GrokAPIKey     string
+	GrokModel      string
+	GrokMaxTokens  int
+	PollInterval   time.Duration
+	RequestTimeout time.Duration
+
+	// ShutdownTimeout bounds the total graceful shutdown: the HTTP server
+	// drain and the in-flight work drain share this one budget, so it must
+	// stay below the container's stop_grace_period. Docker sends SIGKILL
+	// when that period elapses, which would cut the second phase short.
 	ShutdownTimeout time.Duration
-	MaxConcurrency  int
-	MaxJobsPerRun   int
-	HTTPAddr        string
-	LogLevel        string
+
+	MaxConcurrency int
+	MaxJobsPerRun  int
+	HTTPAddr       string
+	LogLevel       string
 }
 
 // Load reads, applies defaults to, and validates runtime environment settings.

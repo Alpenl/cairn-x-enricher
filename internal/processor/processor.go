@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -107,6 +108,19 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
+			// A panic in a batch worker would otherwise terminate the process
+			// rather than failing a single job. Recovering here is not enough
+			// on its own: the panic is also reported as a fatal batch error so
+			// the operator sees it instead of a silently successful batch.
+			defer func() {
+				recovered := recover()
+				if recovered == nil {
+					return
+				}
+				p.logger.Error("scheduled batch worker panicked",
+					"panic", fmt.Sprint(recovered), "stack", string(debug.Stack()))
+				recordFatal(fmt.Errorf("scheduled batch worker panicked: %v", recovered))
+			}()
 			for runCtx.Err() == nil {
 				if claimSlots.Add(1) > int64(maxJobs) {
 					return
