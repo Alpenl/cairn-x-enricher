@@ -35,7 +35,7 @@ pending
 | 包 | 责任 |
 | --- | --- |
 | `internal/cairn` | 调用 Worker 内部队列 API |
-| `internal/enrich` | xAI Responses 协议、Eino 工作流、严格输出校验 |
+| `internal/enrich` | xAI Responses 协议、顺序富化流程、严格输出校验 |
 | `internal/taxonomy` | 版本化词表、别名归一化、分类枚举和输出校验 |
 | `internal/processor` | 有界并发、批处理和失败上报 |
 | `internal/health` | liveness、readiness 和最近一批状态 |
@@ -48,7 +48,11 @@ pending
 
 请求只使用 `POST /responses`，搜索路径强制 `tool_choice=required` 和 `tools=[{"type":"x_search"}]`。strict JSON Schema 要求模型一次返回 `ai_title`、`original_language`、`original_text`、`translated_text`、`summary`、`related_links`、`image_urls` 和 `classification`；提示词明确原文保持原始语言、译文使用简体中文，标题约 20 个简体中文字符。
 
-词表由 Worker 的 `src/taxonomy.json` 统一管理，Go 在启动时读取并验证。所有请求都附词表和枚举，Eino 的校验节点将别名映射为稳定 ID，丢弃未知/停用标签并标记待确认。分类信息不足不会丢弃已经验证的原文和摘要。
+词表由 Worker 的 `src/taxonomy.json` 统一管理，Go 在启动时读取并验证。所有请求都附词表和枚举，富化流程在校验后将别名映射为稳定 ID，丢弃未知/停用标签并标记待确认。分类信息不足不会丢弃已经验证的原文和摘要。
+
+流程没有动态分支或运行时图构建，直接顺序调用生成器、校验器和词表归一化。保留生成器接口用于替换真实 HTTP 调用及复现实验；模型错误原样返回，调用方通过 `errors.As` 判断类型，原始上下文不会被统一解包丢失。
+
+普通网页列表使用 `view=summary`，详情和全文检索保留完整正文。Markdown 导出会补齐未加载的正文，失败时终止导出。阅读页只在展开时创建原文段落，未变化的轮询结果保留正文和图片节点。配套 Android 使用 Worker 的 `include=enrichment` 列表/详情协议、共享词表和人工整理接口。
 
 人工分类单独写入 `curation`，检索优先于模型 `classification`；人工收藏原因 `why` 和整理状态 `curation_status` 不随模型重跑覆盖。整理状态与 lease/重试状态互不混用。详细数据契约及升级顺序见 [收藏管理说明](bookmark-management.md)。
 

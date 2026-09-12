@@ -71,14 +71,14 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
-	if err := cfg.Validate(); err != nil {
+	if err := cfg.validate(); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil
 }
 
-// Validate checks that a Config is complete and internally consistent.
-func (c Config) Validate() error {
+// validate checks settings that are not validated by the numeric/duration parsers.
+func (c Config) validate() error {
 	for name, value := range map[string]string{
 		"CAIRN_ENRICHER_TOKEN": c.CairnToken,
 		"GROK_MODELS_BASE_URL": c.GrokBaseURL,
@@ -98,18 +98,6 @@ func (c Config) Validate() error {
 	}
 	if _, _, err := net.SplitHostPort(c.HTTPAddr); err != nil {
 		return fmt.Errorf("HTTP_ADDR must be host:port: %w", err)
-	}
-	if c.PollInterval <= 0 || c.RequestTimeout <= 0 || c.ShutdownTimeout <= 0 {
-		return fmt.Errorf("duration settings must be positive")
-	}
-	if c.MaxConcurrency < 1 || c.MaxConcurrency > 16 {
-		return fmt.Errorf("MAX_CONCURRENCY must be between 1 and 16")
-	}
-	if c.MaxJobsPerRun < 1 || c.MaxJobsPerRun > 1000 {
-		return fmt.Errorf("MAX_JOBS_PER_RUN must be between 1 and 1000")
-	}
-	if c.GrokMaxTokens < 256 || c.GrokMaxTokens > 32768 {
-		return fmt.Errorf("GROK_MAX_OUTPUT_TOKENS must be between 256 and 32768")
 	}
 	switch c.LogLevel {
 	case "debug", "info", "warn", "error":

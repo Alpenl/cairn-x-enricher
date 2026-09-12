@@ -367,7 +367,7 @@ func newProcessor(
 		// burning every job's retry budget.
 		return nil, nil, fmt.Errorf("model endpoint contract check failed (check GROK_MODELS_BASE_URL, GROK_MODEL, XAI_API_KEY and strict schema support): %w", err)
 	}
-	workflow, err := enrich.NewWorkflow(ctx, model, catalog)
+	workflow, err := enrich.NewWorkflow(model, catalog)
 	if err != nil {
 		return nil, nil, err
 	}

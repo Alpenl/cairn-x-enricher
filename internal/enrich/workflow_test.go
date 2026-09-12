@@ -3,6 +3,7 @@ package enrich
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
@@ -43,7 +44,7 @@ func TestWorkflowValidatesAndNormalizesModelResult(t *testing.T) {
 		}, nil
 	})
 
-	workflow, err := NewWorkflow(context.Background(), generator, testTaxonomy())
+	workflow, err := NewWorkflow(generator, testTaxonomy())
 	if err != nil {
 		t.Fatalf("NewWorkflow() error = %v", err)
 	}
@@ -75,7 +76,7 @@ func TestWorkflowRejectsUnverifiedSearch(t *testing.T) {
 			},
 		}, nil
 	})
-	workflow, err := NewWorkflow(context.Background(), generator, testTaxonomy())
+	workflow, err := NewWorkflow(generator, testTaxonomy())
 	if err != nil {
 		t.Fatalf("NewWorkflow() error = %v", err)
 	}
@@ -98,7 +99,7 @@ func TestWorkflowRejectsUnsafeImageURLAndNonChineseTitle(t *testing.T) {
 		generator := generatorFunc(func(_ context.Context, input Input) (Candidate, error) {
 			return Candidate{Input: input, Result: result, SearchVerified: true}, nil
 		})
-		workflow, err := NewWorkflow(context.Background(), generator, testTaxonomy())
+		workflow, err := NewWorkflow(generator, testTaxonomy())
 		if err != nil {
 			t.Fatalf("NewWorkflow() error = %v", err)
 		}
@@ -113,7 +114,7 @@ func TestWorkflowPropagatesGeneratorFailure(t *testing.T) {
 	generator := generatorFunc(func(context.Context, Input) (Candidate, error) {
 		return Candidate{}, want
 	})
-	workflow, err := NewWorkflow(context.Background(), generator, testTaxonomy())
+	workflow, err := NewWorkflow(generator, testTaxonomy())
 	if err != nil {
 		t.Fatalf("NewWorkflow() error = %v", err)
 	}
@@ -128,5 +129,43 @@ func testTaxonomy() taxonomy.Catalog {
 		Topics:  []taxonomy.Term{{ID: "llm", Label: "LLM", Aliases: []string{"AI", "大模型"}, Active: true}},
 		Forms:   []taxonomy.Term{{ID: "tool", Label: "工具", Active: true}},
 		Uses:    []taxonomy.Term{{ID: "try", Label: "待试", Active: true}},
+	}
+}
+
+func TestWorkflowPreservesProviderErrorContext(t *testing.T) {
+	cause := &ModelHTTPError{StatusCode: 502}
+	want := fmt.Errorf("read search response: %w", cause)
+	w, err := NewWorkflow(generatorFunc(func(context.Context, Input) (Candidate, error) {
+		return Candidate{}, want
+	}), testTaxonomy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, got := w.Enrich(context.Background(), Input{})
+	if !errors.Is(got, want) || got.Error() != want.Error() || !errors.Is(got, cause) {
+		t.Fatalf("provider context lost: %v", got)
+	}
+}
+
+func TestWorkflowStopsAtCancellationBoundaries(t *testing.T) {
+	for _, duringGeneration := range []bool{false, true} {
+		ctx, cancel := context.WithCancel(context.Background())
+		called := false
+		w, err := NewWorkflow(generatorFunc(func(context.Context, Input) (Candidate, error) {
+			called = true
+			cancel()
+			return Candidate{}, nil
+		}), testTaxonomy())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !duringGeneration {
+			cancel()
+		}
+		_, got := w.Enrich(ctx, Input{})
+		cancel()
+		if !errors.Is(got, context.Canceled) || called != duringGeneration {
+			t.Fatalf("cancellation boundary: called=%v err=%v", called, got)
+		}
 	}
 }
