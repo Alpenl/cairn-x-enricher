@@ -1,0 +1,192 @@
+{
+  "baseline": {
+    "case": "baseline",
+    "status": "SURVIVED",
+    "passed_tests": 186,
+    "failed_tests": [],
+    "seconds": 2.816,
+    "returncode": 0
+  },
+  "results": [
+    {
+      "case": "search-evidence",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestWorkflowRejectsUnverifiedSearch"
+      ],
+      "seconds": 2.592,
+      "returncode": 1,
+      "file": "internal/enrich/validate.go"
+    },
+    {
+      "case": "title-bounds",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestWorkflowRejectsUnsafeImageURLAndNonChineseTitle"
+      ],
+      "seconds": 2.53,
+      "returncode": 1,
+      "file": "internal/enrich/validate.go"
+    },
+    {
+      "case": "strict-schema",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestResponsesClientForcesXSearchAndParsesStructuredOutput"
+      ],
+      "seconds": 2.536,
+      "returncode": 1,
+      "file": "internal/enrich/responses.go"
+    },
+    {
+      "case": "classification-normalization",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestWorkflowValidatesAndNormalizesModelResult"
+      ],
+      "seconds": 2.472,
+      "returncode": 1,
+      "file": "internal/enrich/workflow.go"
+    },
+    {
+      "case": "provider-error-context",
+      "status": "KILLED_TEST",
+      "passed_tests": 182,
+      "failed_tests": [
+        "TestFailureMessageSurvivesTruncation",
+        "TestModelHTTPErrorKeepsTypeAndStatus",
+        "TestWorkflowPropagatesGeneratorFailure",
+        "TestWorkflowPreservesProviderErrorContext"
+      ],
+      "seconds": 2.541,
+      "returncode": 1,
+      "file": "internal/enrich/workflow.go"
+    },
+    {
+      "case": "http-retries",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestResponsesClientRetriesTransientHTTPFailures"
+      ],
+      "seconds": 2.55,
+      "returncode": 1,
+      "file": "internal/enrich/responses.go"
+    },
+    {
+      "case": "recovered-source",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestProcessRecoversPartialBookmarkFromExistingSourceText"
+      ],
+      "seconds": 2.542,
+      "returncode": 1,
+      "file": "internal/processor/processor.go"
+    },
+    {
+      "case": "source-image-retention",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestProcessRecoversPartialBookmarkFromExistingSourceText"
+      ],
+      "seconds": 2.504,
+      "returncode": 1,
+      "file": "internal/processor/processor.go"
+    },
+    {
+      "case": "scheduled-drain",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestRunLetsAClaimedJobFinishAfterCancellation"
+      ],
+      "seconds": 2.52,
+      "returncode": 1,
+      "file": "internal/processor/processor.go"
+    },
+    {
+      "case": "manual-drain",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestDrainConsumesJobsAdmittedBeforeShutdown"
+      ],
+      "seconds": 2.724,
+      "returncode": 1,
+      "file": "internal/dashboard/dashboard.go"
+    },
+    {
+      "case": "queue-capacity",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestManualQueueCapacityUsesAtomicCounter"
+      ],
+      "seconds": 2.482,
+      "returncode": 1,
+      "file": "internal/dashboard/dashboard.go"
+    },
+    {
+      "case": "worker-auth",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestClientClaimCompleteAndFail"
+      ],
+      "seconds": 2.568,
+      "returncode": 1,
+      "file": "internal/cairn/client.go"
+    },
+    {
+      "case": "readiness",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestTrackerStaysUnreadyWhileDegraded"
+      ],
+      "seconds": 2.512,
+      "returncode": 1,
+      "file": "internal/health/health.go"
+    },
+    {
+      "case": "concurrency-bound",
+      "status": "KILLED_TEST",
+      "passed_tests": 184,
+      "failed_tests": [
+        "TestLoadRejectsInvalidValues/concurrency",
+        "TestLoadRejectsInvalidValues"
+      ],
+      "seconds": 2.399,
+      "returncode": 1,
+      "file": "internal/config/config.go"
+    },
+    {
+      "case": "lazy-original",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestFrontendAssetsPassTheirChecks"
+      ],
+      "seconds": 2.457,
+      "returncode": 1,
+      "file": "internal/dashboard/reader.js"
+    },
+    {
+      "case": "full-export",
+      "status": "KILLED_TEST",
+      "passed_tests": 185,
+      "failed_tests": [
+        "TestFrontendAssetsPassTheirChecks"
+      ],
+      "seconds": 2.477,
+      "returncode": 1,
+      "file": "internal/dashboard/common.js"
+    }
+  ]
+}

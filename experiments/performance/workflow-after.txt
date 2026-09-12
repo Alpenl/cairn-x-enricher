@@ -1,0 +1,11 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Alpenl/cairn-x-enricher/internal/enrich
+cpu: AMD Ryzen 9 7900X 12-Core Processor            
+BenchmarkWorkflow-24    	  900571	      1161 ns/op	     659 B/op	      11 allocs/op
+BenchmarkWorkflow-24    	 1000000	      1038 ns/op	     659 B/op	      11 allocs/op
+BenchmarkWorkflow-24    	 1000000	      1047 ns/op	     659 B/op	      11 allocs/op
+BenchmarkWorkflow-24    	 1000000	      1012 ns/op	     659 B/op	      11 allocs/op
+BenchmarkWorkflow-24    	 1000000	      1045 ns/op	     659 B/op	      11 allocs/op
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/internal/enrich	5.195s

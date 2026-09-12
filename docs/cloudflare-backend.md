@@ -5,10 +5,17 @@
 - `worker/migrations/0005_add_x_enrichment.sql`
 - `worker/migrations/0006_add_rich_x_enrichment.sql`
 - `worker/migrations/0007_add_bookmark_curation.sql`
+- `worker/migrations/0008_invalidate_enriched_link_cache.sql`
 - `worker/src/curation.ts`、`worker/src/taxonomy.json`
 - `worker/src/index.ts`
 - `worker/test/index.test.ts`
+- `worker/test/app-enrichment.test.ts`
 - `worker/wrangler.jsonc`
+
+当前开发版还向 App 提供 `include=enrichment` 列表/详情、`/api/taxonomy`、
+`/api/images/:key` 和 `PATCH /api/links/:id/curation`，使用独立 App Token。
+内部列表支持 `view=summary`；详情保持完整。迁移 0008 让富化/整理更新事务同时递增
+公共缓存版本，避免新版 App 读取过期内容。默认公共六字段响应继续兼容。
 
 ## 新增字段
 

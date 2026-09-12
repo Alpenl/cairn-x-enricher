@@ -1,0 +1,24 @@
+{
+  "purpose": "Control experiment: does the SAME prompt twice produce the same title? If not, title differences between prompt variants are sampling noise, not comment content.",
+  "model": "grok-4.6",
+  "url": "https://x.com/realchendahuang/status/2098076218704937060",
+  "prompt": "production thread prompt, identical across runs",
+  "runs": [
+    {
+      "run": 1,
+      "original_text_len": 97,
+      "title": "福滤娃插件仓库突破700星作者致谢"
+    },
+    {
+      "run": 2,
+      "original_text_len": 97,
+      "title": "福滤娃插件仓库获700+星标作者致谢"
+    },
+    {
+      "run": 3,
+      "original_text_len": 97,
+      "title": "福滤娃插件仓库获超700星标作者致谢"
+    }
+  ],
+  "conclusion": "Identical inputs produced identical original_text but three different titles. Title variation is sampling non-determinism, so a title difference between the thread and post-only variants carries no evidence that comments changed the result."
+}

@@ -1,0 +1,31 @@
+{
+  "model": "grok-4.6",
+  "method": "Resolve each sample URL via x_search and compare the returned author handle and permalink against the claimed author in the URL path.",
+  "conclusion": "All verified sample URLs resolve to the claimed author. The earlier apparent mismatch was a mislabelled corpus URL, not a pipeline or tool defect.",
+  "results": [
+    {
+      "case": "karpathy_animals_vs_ghosts",
+      "url": "https://x.com/karpathy/status/1991910395720925418",
+      "claimed_author": "karpathy",
+      "resolved_author": "karpathy",
+      "resolved_link": "https://x.com/karpathy/status/1991910395720925418",
+      "status": "OK"
+    },
+    {
+      "case": "karpathy_tokenizer",
+      "url": "https://x.com/karpathy/status/1881276282861322459",
+      "claimed_author": "karpathy",
+      "resolved_author": "karpathy",
+      "resolved_link": "https://x.com/karpathy/status/1881276282861322459",
+      "status": "OK"
+    },
+    {
+      "case": "openai_announcement",
+      "url": "https://x.com/OpenAI/status/1879628650310991997",
+      "claimed_author": "OpenAI",
+      "resolved_author": "OpenAI",
+      "resolved_link": "https://x.com/OpenAI/status/1879628650310991997",
+      "status": "OK"
+    }
+  ]
+}

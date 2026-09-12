@@ -8,3 +8,12 @@ coverage.out
 .idea/
 .vscode/
 .DS_Store
+
+# Ablation experiment scratch: raw journals and run logs are large and
+# regenerable. The derived JSON reports and testdata fixtures are committed
+# because the offline regression tests replay them.
+experiments/results/*.jsonl
+experiments/results/*.log
+experiments/results/archive/
+experiments/results/ablation-run1-confounded.json
+experiments/results/**/*.log

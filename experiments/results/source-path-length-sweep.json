@@ -1,0 +1,39 @@
+{
+  "purpose": "测量 source 路径在不同原文长度下的输出 token 消耗与回吐完整度",
+  "model": "grok-4.6",
+  "requested_max_output_tokens": 8192,
+  "finding": "max_output_tokens 不是硬上限：3922 字符的请求实际用了 12557 tokens 仍完整返回；所有长度回吐率均为 100%",
+  "runs": [
+    {
+      "id": 34,
+      "chars": 97,
+      "output_tokens": 3510,
+      "original_returned_ratio": 1.0
+    },
+    {
+      "id": 28,
+      "chars": 267,
+      "output_tokens": 3472,
+      "original_returned_ratio": 1.0
+    },
+    {
+      "id": 33,
+      "chars": 566,
+      "output_tokens": 6329,
+      "original_returned_ratio": 1.0
+    },
+    {
+      "id": 35,
+      "chars": 3644,
+      "output_tokens": 8363,
+      "original_returned_ratio": 1.0
+    },
+    {
+      "id": 16,
+      "chars": 3922,
+      "output_tokens": 12557,
+      "original_returned_ratio": 1.0
+    }
+  ],
+  "corrected_claim": "原先基于线性外推的\"预算不足会静默截断\"假设被此数据否定，据此添加的启动期硬性校验已撤销"
+}

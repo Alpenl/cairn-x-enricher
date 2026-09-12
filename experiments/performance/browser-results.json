@@ -1,0 +1,47 @@
+{
+  "before": {
+    "home": {
+      "cards": 40,
+      "domNodes": 552,
+      "firstCardPreserved": false,
+      "listDurationMs": 407.800000011921,
+      "listResponseBytes": 4708973,
+      "pollChildMutations": 2
+    },
+    "reader": {
+      "domNodes": 574,
+      "imageNodePreserved": false,
+      "originalParagraphs": 240,
+      "textNodePreserved": false,
+      "translatedParagraphs": 240,
+      "expandedOriginalParagraphs": 240,
+      "mobileHorizontalOverflow": false
+    }
+  },
+  "after": {
+    "home": {
+      "cards": 40,
+      "domNodes": 552,
+      "firstCardPreserved": true,
+      "listDurationMs": 5.5,
+      "listResponseBytes": 33053,
+      "pollChildMutations": 0
+    },
+    "reader": {
+      "domNodes": 334,
+      "imageNodePreserved": true,
+      "originalParagraphs": 0,
+      "textNodePreserved": true,
+      "translatedParagraphs": 240,
+      "expandedOriginalParagraphs": 240,
+      "mobileHorizontalOverflow": false
+    }
+  },
+  "measured_at": "2026-09-12T06:22:37.808114+00:00",
+  "fixture": {
+    "bookmarks": 80,
+    "page_size": 40,
+    "paragraphs_per_language": 240,
+    "production_data": false
+  }
+}

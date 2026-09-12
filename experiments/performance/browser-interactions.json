@@ -1,0 +1,12 @@
+{
+  "fixture": "preview.py, synthetic bookmarks only",
+  "draft_survives_processing_poll": true,
+  "saved_why_visible_in_reader": true,
+  "dirty_flag_clears_after_save": true,
+  "expanded_original_paragraphs": 240,
+  "mobile_viewport": [
+    390,
+    844
+  ],
+  "horizontal_overflow": false
+}

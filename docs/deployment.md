@@ -1,5 +1,11 @@
 # Deployment
 
+当前开发版在下述 `v0.5.0` 升级基础上，还需要配套 Worker 的迁移
+`0008_invalidate_enriched_link_cache.sql` 和增强 App API。先应用全部迁移并部署 Worker，
+再升级 Enricher 与 Android APK；0008 只增加缓存失效触发器，保留已有内容和人工整理。
+检查 App 的双语正文、图片、整理保存，以及保存后网页读取到同一结果。详情见
+[简化与同步报告](simplification-and-sync.md)。以下版本号用于已发布版本的历史部署说明。
+
 ## 1. 部署 Cloudflare 前置改造
 
 首次部署时创建并绑定 `cairn-x-enrichment-images` R2 bucket，把一个新生成的随机值同时配置为 Worker secret `CAIRN_ENRICHER_TOKEN` 与服务端环境变量，不要复用 App 的 `CAIRN_API_TOKEN`。升级时沿用现有 bucket 和 secret。

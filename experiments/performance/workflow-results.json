@@ -1,0 +1,32 @@
+{
+  "before": {
+    "module_count": 83,
+    "binary_bytes": 20181257,
+    "build_seconds": 4.979,
+    "workflow_ns_op_median": 9079.0,
+    "workflow_ns_op_samples": [
+      9079.0,
+      9352.0,
+      8920.0,
+      9236.0,
+      8979.0
+    ],
+    "workflow_bytes_op": 12699,
+    "workflow_allocs_op": 135
+  },
+  "after": {
+    "module_count": 8,
+    "binary_bytes": 9851145,
+    "build_seconds": 1.343,
+    "workflow_ns_op_median": 1045.0,
+    "workflow_ns_op_samples": [
+      1161.0,
+      1038.0,
+      1047.0,
+      1012.0,
+      1045.0
+    ],
+    "workflow_bytes_op": 659,
+    "workflow_allocs_op": 11
+  }
+}
