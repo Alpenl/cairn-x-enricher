@@ -2,7 +2,7 @@
 
 一个独立于 Cairn Share App 的 Go 后台服务。它定时从 Cairn Share 的 Cloudflare Worker 领取尚未处理的 X 收藏，用 Grok Responses API 和服务端 `x_search` 读取原帖及评论，再把 AI 中文标题、原始语言全文、完整简体中文译文、摘要和内容相关链接写回 D1；相关图片复制到 Cloudflare R2。
 
-现有 App 不需要更新：原有 `/api/links` 请求、响应和鉴权均保持不变。新增队列字段和 `/api/enrichment/*` 内部接口只服务于本项目。
+配套 Cairn Share App 可读取 AI 标题、双语正文、归档图片和人工整理结果。旧客户端默认的六字段响应仍兼容；新版 App 通过 `include=enrichment` 显式读取增强信息，继续使用独立的 App Token。
 
 收藏管理支持固定词表分类、人工收藏原因、收件箱/精选/笔记/搁置状态、组合筛选及 Markdown 导出。实现依据的 [Grok 完整讨论与原始手册](docs/bookmark-management.md#讨论归档) 已保存到仓库，具体行为、词表维护和配套升级见 [收藏管理说明](docs/bookmark-management.md)。
 
@@ -12,7 +12,7 @@
 Cairn Share App -> 原有 Worker API -> D1 links
                                       |
                                       v
-定时器 -> 内部 claim API -> Eino 工作流 -> Grok /responses + x_search
+定时器 -> 内部 claim API -> Go 顺序流程 -> Grok /responses + x_search
   ^                                              |
   +--- complete/fail API <- 校验后的 JSON + R2 图片归档
 
@@ -31,9 +31,9 @@ Cairn Share App -> 原有 Worker API -> D1 links
 - 日志不会输出 API key、完整提示词或模型响应。
 - 标签只从 Worker 提供的版本化词表中选择，未知标签被丢弃并标记待确认；人工整理结果不会被重新处理覆盖。
 
-## 为什么使用 Eino
+## 流程设计
 
-项目使用 [CloudWeGo Eino](https://github.com/cloudwego/eino) 的类型化工作流组织“模型调用 -> 结果校验”。xAI 的 `x_search` 是 Responses API 的服务端工具，现成 OpenAI Go 适配器尚不能完整解析 `x_search_call`，因此 wire protocol 由一个窄适配层负责；调度、lease、重试和数据库事务仍是普通 Go 代码。详细选型证据见 [docs/research/go-agent-frameworks.md](docs/research/go-agent-frameworks.md)。
+富化只有“模型调用 → 结果校验 → 分类归一化”三个顺序步骤，直接用 Go 函数执行。架构消融确认这条固定路径无需图编排框架，因此移除了 Eino 和框架错误解包层。Responses 编解码、搜索证据校验、取消、重试和任务租约仍各自保留明确责任。前后对照数据、可复现实验和 App 同步协议见 [简化与同步报告](docs/simplification-and-sync.md)。原 [框架选型调研](docs/research/go-agent-frameworks.md) 作为历史依据保留。
 
 ## 配置
 
@@ -64,6 +64,7 @@ HTTP 服务在这两项检查通过后才开始监听，因此配置错误表现
 ```bash
 go test ./...
 make test-frontend   # 零依赖的前端检查，只需 Node
+make ablation-architecture # 离线逐项移除行为，在临时副本运行回归
 make verify          # vet + golangci-lint + 上述两项 + 构建
 go run ./cmd/cairn-x-enricher once --max-jobs 10
 go run ./cmd/cairn-x-enricher serve
@@ -88,6 +89,23 @@ go run ./cmd/cairn-x-enricher serve
 
 `once` 是适合 cron 和诊断的有界批处理命令，输出稳定 JSON；根命令不会隐式调用付费 API 或修改数据库。
 
+## 消融实验
+
+[消融实验](docs/ablation.md) 逐个移除流水线中的设计（strict JSON Schema、`x_search`、
+线程读取、译文字段、分类词表、标题校验器、搜索证据门禁），用同一批已验证的真实帖子
+对真实模型端点测量质量与成本变化。
+
+结论摘要：
+
+- strict JSON Schema 与 `x_search` 是**硬性前提**，移除后质量归零（前者输出不可解析，
+  后者模型改写记忆而非读取原帖）。
+- 在**真实收藏**上复测，线程评论读取对 14/17 条书签产生**逐字节相同**的原文，
+  却多花约 25% token；价值在于它是少数帖子上的可靠性保险，而不是质量来源。
+- 已有原文时 `source_only` 恢复路径质量 0.900 且比全流程便宜 30%。
+- 结论由 `make test-ablation` 离线回归测试固定，不依赖付费调用。
+
+实验代码与复现步骤见 [experiments/](experiments/README.md)。
+
 ## Docker
 
 ```bash
@@ -103,7 +121,7 @@ ghcr.io/alpenl/cairn-x-enricher:<version>
 ```
 
 完整部署顺序和 Cloudflare 前置改造见 [docs/deployment.md](docs/deployment.md) 与 [docs/cloudflare-backend.md](docs/cloudflare-backend.md)。
-分类功能需要配套 Worker 的 `0007_add_bookmark_curation.sql` 及新接口。请配套升级两端；Enricher 启动时会读取并验证词表，旧 Worker 会导致启动失败。不会自动回填历史收藏。
+当前版本需要配套 Worker 的全部迁移（截至 `0008_invalidate_enriched_link_cache.sql`）和新接口。先升级 Worker，再升级 Enricher 和 App；迁移 0008 使富化/人工整理更新在同一事务内失效 App 缓存。Enricher 启动时会读取并验证词表，旧 Worker 会导致启动失败。不会自动回填历史收藏。
 Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网阅读库映射到 `8088`；页面展示 Cloudflare 中全部收藏，只有 X 链接可以触发模型处理。旧版已完成记录会继续显示原内容，只有手动重新处理后才会生成新版标题、译文和图片。该清单只拉取 GitHub Actions 发布的镜像，不在 NAS 本地构建。
 
 ## 发布
