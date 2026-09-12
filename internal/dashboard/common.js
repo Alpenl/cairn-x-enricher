@@ -205,6 +205,21 @@
     }).format(date));
   }
 
+  // Relative time reads faster than a clock time for "when does this retry"
+  // or "how old is this failure". Fall back to the absolute form for anything
+  // beyond a day, where a date is more useful than a long countdown.
+  function formatRelative(value, now = Date.now()) {
+    const date = parseDate(value);
+    if (!date) return "-";
+    const delta = date.getTime() - now;
+    const minutes = Math.round(delta / 60000);
+    const abs = Math.abs(minutes);
+    const rtf = new Intl.RelativeTimeFormat("zh-CN", { numeric: "auto" });
+    if (abs < 60) return rtf.format(minutes, "minute");
+    if (abs < 60 * 24) return rtf.format(Math.round(minutes / 60), "hour");
+    return formatDateTime(value);
+  }
+
   function startOfDay(date) {
     return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   }
@@ -351,6 +366,7 @@
     firstImage,
     formatDate,
     formatDateTime,
+    formatRelative,
     imagePath,
     needsAttention,
     shortURL,

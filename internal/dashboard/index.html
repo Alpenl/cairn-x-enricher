@@ -46,10 +46,21 @@
     <div id="feature" class="feature"></div>
     <div id="stream"></div>
     <p id="loading" class="line-note">正在读取收藏</p>
-    <p id="empty" class="line-note" hidden>没有找到符合的收藏</p>
+    <p id="empty" class="line-note empty-state" hidden>
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M6 3.5h12A1.5 1.5 0 0 1 19.5 5v14.5a.6.6 0 0 1-.94.5L12 15.6 5.44 20a.6.6 0 0 1-.94-.5V5A1.5 1.5 0 0 1 6 3.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path>
+      </svg>
+      <span>没有找到符合的收藏</span>
+    </p>
     <p id="tail" class="line-note" hidden>已经到最早的一条了</p>
     <div id="sentinel"></div>
   </main>
+
+  <button id="to-top" class="to-top" type="button" title="回到顶部" aria-label="回到顶部" hidden>
+    <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M10 16V4M5 8.5 10 3.5l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+  </button>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </body>

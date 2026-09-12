@@ -51,7 +51,7 @@
       return `已经试过 ${item.attempts} 次仍然失败${item.error ? "：" + item.error : ""}`;
     }
     if (item.next_retry_at) {
-      return `上次读取失败，${ui.formatDateTime(item.next_retry_at)} 会自动重试`;
+      return `上次读取失败，${ui.formatRelative(item.next_retry_at)}会自动重试`;
     }
     return item.error || "上次读取失败，稍后会自动重试";
   }

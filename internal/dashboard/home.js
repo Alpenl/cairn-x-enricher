@@ -35,6 +35,9 @@
     image.alt = "";
     image.loading = "lazy";
     image.decoding = "async";
+    // Fade in once decoded so a slow image does not pop into view.
+    if (image.complete) image.classList.add("ready");
+    image.addEventListener("load", () => image.classList.add("ready"));
     image.addEventListener("error", () => {
       box.replaceWith(ui.element("div", blankClass));
     });
@@ -355,6 +358,20 @@
     new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) load({ append: true });
     }, { rootMargin: "600px" }).observe(sentinel);
+  }
+
+  // Back-to-top: reveal only after the user has scrolled past the featured
+  // strip, and hide again near the top so it never floats over empty space.
+  const toTop = ui.byId("to-top");
+  if (toTop) {
+    const prefersReduced = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const onScroll = () => toTop.classList.toggle("visible", window.scrollY > 560);
+    onScroll();
+    toTop.hidden = false;
+    window.addEventListener("scroll", onScroll, { passive: true });
+    toTop.addEventListener("click", () => {
+      if (typeof window.scrollTo === "function") window.scrollTo({ top: 0, behavior: prefersReduced ? "auto" : "smooth" });
+    });
   }
 
   if (state.search) ui.byId("find").value = state.search;

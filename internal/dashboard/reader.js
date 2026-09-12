@@ -139,6 +139,8 @@
       image.alt = "";
       image.loading = index === 0 ? "eager" : "lazy";
       image.decoding = "async";
+      if (image.complete) image.classList.add("ready");
+      image.addEventListener("load", () => image.classList.add("ready"));
       image.addEventListener("error", () => figure.remove());
       figure.append(image);
       holder.append(figure);

@@ -28,10 +28,27 @@ body {
   font-size: 14px;
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
+  /* Reserve the scrollbar gutter so the layout does not shift horizontally
+     when a long list introduces a scrollbar after the initial paint. */
+  scrollbar-gutter: stable;
+}
+
+/* Honour reduced-motion preferences globally; transitions below opt back in. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 a { color: var(--amber); text-decoration: none; }
 a:hover { color: var(--amber-lift); }
+
+@media (hover: hover) {
+  a, button, summary { transition: color .15s ease, border-color .15s ease, background-color .15s ease; }
+}
 
 button { font: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .5; }
@@ -51,6 +68,13 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   height: 58px;
   padding: 0 40px;
   border-bottom: 1px solid var(--line);
+  /* Keep search and navigation within reach while scrolling a long list. */
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
 
 .mark {
@@ -106,6 +130,9 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   color: var(--ink-3);
 }
 .icon-btn:hover { background: var(--sunk); color: var(--ink-2); }
+@media (hover: hover) {
+  .icon-btn { transition: background-color .15s ease, color .15s ease; }
+}
 .icon-btn img { display: block; filter: invert(.7); }
 .icon-btn.attention::after {
   content: "";
@@ -194,8 +221,21 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   border-radius: 7px;
   overflow: hidden;
   background: var(--sunk);
+  /* Separate the image from the page so it reads as a card, not a void. */
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, .04) inset, 0 8px 24px rgba(0, 0, 0, .28);
 }
 .fshot img { display: block; width: 100%; height: 100%; object-fit: cover; }
+@media (hover: hover) {
+  .fshot img { transition: transform .4s cubic-bezier(.2, .6, .2, 1), opacity .3s ease; }
+  .fcard:hover .fshot img { transform: scale(1.03); }
+}
+
+/* Fade images in once decoded; blank placeholders stay fully visible. */
+.item-shot img, .entry-shot img, .read-figure img, .fshot img { opacity: 0; }
+.item-shot img.ready, .entry-shot img.ready, .read-figure img.ready, .fshot img.ready { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .item-shot img, .entry-shot img, .read-figure img { transition: opacity .3s ease; }
+}
 .fshot-blank { background: repeating-linear-gradient(135deg, #202324 0 5px, #1b1e1f 5px 10px); }
 .fcard-title {
   margin: 13px 0 0;
@@ -249,6 +289,11 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 .item:hover { color: inherit; }
 .item:hover .item-title { color: var(--amber-lift); }
+@media (hover: hover) {
+  .item-title, .entry-title, .fcard-title { transition: color .15s ease; }
+  .item-shot img, .entry-shot img { transition: transform .35s cubic-bezier(.2, .6, .2, 1), opacity .3s ease; }
+  .item:hover .item-shot img, .entry:hover .entry-shot img { transform: scale(1.06); }
+}
 .item-shot { width: 46px; height: 46px; border-radius: 5px; overflow: hidden; background: var(--sunk); }
 .item-shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .item-blank {
@@ -280,6 +325,18 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .item-sum.wait { color: var(--ink-3); font-style: italic; }
 
 .line-note { margin: 40px 0 0; text-align: center; color: var(--ink-3); font-size: 12.5px; }
+
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.empty-state svg { color: var(--ink-3); opacity: .7; }
+
+/* Breathing hint while content loads, so the wait reads as progress. */
+@media (prefers-reduced-motion: no-preference) {
+  #loading { animation: note-breathe 1.6s ease-in-out infinite; }
+}
+@keyframes note-breathe {
+  0%, 100% { opacity: .45; }
+  50% { opacity: 1; }
+}
 
 /* ---------- 搜索结果 ---------- */
 
@@ -323,7 +380,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .entry-shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .entry-blank { background: repeating-linear-gradient(135deg, #202324 0 4px, #1b1e1f 4px 8px); }
 
-mark { background: rgba(211, 160, 74, .22); color: var(--ink); border-radius: 2px; padding: 0 1px; }
+mark { background: rgba(211, 160, 74, .22); color: var(--ink); border-radius: 2px; padding: 0 1px; box-shadow: 0 0 0 1px rgba(211, 160, 74, .18); }
 
 /* ---------- 阅读页 ---------- */
 
@@ -390,6 +447,8 @@ mark { background: rgba(211, 160, 74, .22); color: var(--ink); border-radius: 2p
 .read-next .lbl { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; color: var(--ink-3); text-transform: uppercase; }
 .read-next .ttl { margin-top: 6px; font-family: var(--serif); font-size: 16px; color: var(--ink-2); line-height: 1.45; }
 .read-next:hover .ttl { color: var(--amber-lift); }
+.read-next .ttl::after { content: " →"; color: var(--ink-3); }
+@media (hover: hover) { .read-next .ttl { transition: color .15s ease; } }
 
 /* ---------- 后台 ---------- */
 
@@ -439,6 +498,31 @@ mark { background: rgba(211, 160, 74, .22); color: var(--ink); border-radius: 2p
 .source-input:focus { border-color: #4a4f52; }
 .source-input::placeholder { color: var(--ink-3); }
 .source-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---------- 回到顶部 ---------- */
+
+.to-top {
+  position: fixed;
+  right: 22px;
+  bottom: 26px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--sunk) 88%, transparent);
+  color: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .4);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: opacity .2s ease, transform .2s ease, color .15s ease;
+  z-index: 30;
+}
+.to-top.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.to-top:hover { color: var(--ink); }
 
 /* ---------- 提示条 ---------- */
 
