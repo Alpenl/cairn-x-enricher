@@ -145,8 +145,10 @@ func TestRunReportsModelFailureAndStopsThatWorker(t *testing.T) {
 	if stats.Claimed != 1 || stats.Completed != 0 || stats.Failed != 1 {
 		t.Fatalf("Run() stats = %+v", stats)
 	}
-	if queue.failures[1] != "run Eino enrichment workflow: model failure" && queue.failures[1] != "model failure" {
-		t.Fatalf("failure = %q", queue.failures[1])
+	// The stored message names the path so a retrieval failure is
+	// distinguishable from a failure to reformat already-stored text.
+	if queue.failures[1] != "[search] model failure" {
+		t.Fatalf("failure = %q, want the path-labelled cause", queue.failures[1])
 	}
 	if len(queue.jobs) != 1 {
 		t.Fatalf("remaining jobs = %d", len(queue.jobs))
@@ -174,8 +176,8 @@ func TestProcessReportsImagePersistenceFailure(t *testing.T) {
 	if err := processor.Process(context.Background(), job); err == nil {
 		t.Fatal("Process() error = nil, want image persistence error")
 	}
-	if queue.failures[9] != "store enrichment images: R2 unavailable" {
-		t.Fatalf("failure = %q", queue.failures[9])
+	if queue.failures[9] != "[search] store enrichment images: R2 unavailable" {
+		t.Fatalf("failure = %q, want the path-labelled cause", queue.failures[9])
 	}
 	if _, exists := queue.completions[9]; exists {
 		t.Fatal("completion was stored after image persistence failed")

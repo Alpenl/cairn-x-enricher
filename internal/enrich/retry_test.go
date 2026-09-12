@@ -133,7 +133,9 @@ func TestRetryableModelStatusCoversTransientFailuresOnly(t *testing.T) {
 	}
 }
 
-func TestReadModelHTTPErrorTruncatesLongMessages(t *testing.T) {
+// TestReadModelHTTPErrorWithEmptyBody covers a gateway returning 5xx without a
+// JSON body, where the status is the only diagnostic available.
+func TestReadModelHTTPErrorWithEmptyBody(t *testing.T) {
 	server := &http.Response{
 		StatusCode: http.StatusBadGateway,
 		Body:       http.NoBody,
@@ -143,7 +145,8 @@ func TestReadModelHTTPErrorTruncatesLongMessages(t *testing.T) {
 	if !errors.As(err, &modelErr) || modelErr.StatusCode != http.StatusBadGateway {
 		t.Fatalf("readModelHTTPError() = %T %v", err, err)
 	}
-	if got := modelErr.Error(); got != "model API returned HTTP 502" {
-		t.Fatalf("Error() = %q", got)
+	// The status leads the message so it survives downstream truncation.
+	if got := modelErr.Error(); got != "HTTP 502" {
+		t.Fatalf("Error() = %q, want %q", got, "HTTP 502")
 	}
 }

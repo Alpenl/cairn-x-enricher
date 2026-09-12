@@ -185,6 +185,18 @@ func (p *Processor) processJob(ctx context.Context, job *cairn.Job, sourceText s
 		}
 	}
 
+	// The path decides what the result can be trusted for, so it is recorded on
+	// every outcome. A search result establishes the post text from the source,
+	// while the recovery path only reformats text that was already stored: it can
+	// add a missing translation or summary, but it cannot detect that the stored
+	// text was truncated or was never the requested post. Without this label an
+	// operator cannot tell a fresh retrieval from a re-derivation of old data.
+	path := failurePathSearch
+	if useExisting {
+		path = failurePathRecovered
+	}
+	logger = logger.With("path", string(path))
+
 	result, err := p.enricher.Enrich(ctx, enrich.Input{
 		ID:           job.ID,
 		URL:          job.URL,
@@ -194,7 +206,7 @@ func (p *Processor) processJob(ctx context.Context, job *cairn.Job, sourceText s
 		RelatedLinks: existing.RelatedURLs,
 	})
 	if err != nil {
-		return p.reportFailure(ctx, logger, job, err)
+		return p.reportFailure(ctx, logger, job, path, err)
 	}
 
 	images := []cairn.ImageRef{}
@@ -204,7 +216,7 @@ func (p *Processor) processJob(ctx context.Context, job *cairn.Job, sourceText s
 	if len(result.ImageURLs) > 0 {
 		images, err = p.queue.StoreImages(ctx, job.ID, job.LeaseToken, result.ImageURLs)
 		if err != nil {
-			return p.reportFailure(ctx, logger, job, fmt.Errorf("store enrichment images: %w", err))
+			return p.reportFailure(ctx, logger, job, path, fmt.Errorf("store enrichment images: %w", err))
 		}
 	}
 
@@ -224,7 +236,9 @@ func (p *Processor) processJob(ctx context.Context, job *cairn.Job, sourceText s
 		logger.ErrorContext(ctx, "failed to store enrichment", "error", err)
 		return fmt.Errorf("store enrichment: %w", err)
 	}
-	logger.InfoContext(ctx, "enrichment completed", "related_links", len(result.RelatedLinks), "images", len(images))
+	logger.InfoContext(ctx, "enrichment completed",
+		"related_links", len(result.RelatedLinks), "images", len(images),
+		"original_text_bytes", len(result.OriginalText))
 	if discarded := len(result.Classification.DiscardedTags); discarded > 0 {
 		logger.WarnContext(ctx, "classification requires review", "discarded_tags", discarded)
 	}
@@ -242,18 +256,40 @@ func relatedLinks(resultLinks, existingLinks []string) []string {
 	return existingLinks
 }
 
-func (p *Processor) reportFailure(ctx context.Context, logger *slog.Logger, job *cairn.Job, err error) error {
+func (p *Processor) reportFailure(ctx context.Context, logger *slog.Logger, job *cairn.Job, path failurePathLabel, err error) error {
 	if ctx.Err() != nil {
 		logger.WarnContext(ctx, "enrichment interrupted", "error", ctx.Err())
 		return ctx.Err()
 	}
-	message := boundedError(err)
+	// The stored message names the path, so a failure that came from reformatting
+	// already-stored text is distinguishable from a genuine retrieval failure.
+	// The two need different responses: only the latter means the bookmark's
+	// content is still missing. It is prefixed rather than suffixed because the
+	// Worker truncates the stored message.
+	message := prefixFailurePath(path, boundedError(err))
 	if reportErr := p.queue.Fail(ctx, job.ID, job.LeaseToken, message); reportErr != nil {
 		logger.ErrorContext(ctx, "failed to report enrichment failure", "error", reportErr)
 		return fmt.Errorf("report enrichment failure: %w", reportErr)
 	}
 	logger.WarnContext(ctx, "enrichment failed", "error", message)
 	return err
+}
+
+// failurePathLabel describes where a failed enrichment got its input text.
+// It is recorded because only a search failure means the bookmark's content is
+// still missing; a recovery failure means the stored text could not be
+// reformatted, which is a different problem with a different fix.
+type failurePathLabel string
+
+const (
+	failurePathSearch    failurePathLabel = "search"
+	failurePathRecovered failurePathLabel = "recovered_source"
+)
+
+// prefixFailurePath puts the path ahead of the cause so it survives the
+// Worker's truncation of the stored failure message.
+func prefixFailurePath(path failurePathLabel, cause string) string {
+	return "[" + string(path) + "] " + cause
 }
 
 func boundedError(err error) string {

@@ -32,6 +32,9 @@ func TestResponsesClientForcesXSearchAndParsesStructuredOutput(t *testing.T) {
 		}
 		messages := body["input"].([]any)
 		format := body["text"].(map[string]any)["format"].(map[string]any)
+		if format["type"] != "json_schema" || format["strict"] != true {
+			t.Errorf("provider request must enforce strict structured output: %#v", format)
+		}
 		schema := format["schema"].(map[string]any)["properties"].(map[string]any)["classification"].(map[string]any)
 		topics := schema["properties"].(map[string]any)["topics"].(map[string]any)
 		ids := topics["items"].(map[string]any)["enum"].([]any)

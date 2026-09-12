@@ -56,16 +56,30 @@ type ResponsesClient struct {
 }
 
 // ModelHTTPError reports a non-success status from the model endpoint.
+//
+// The Type field carries the provider's error class (for example
+// "upstream_error"), which is the most actionable part of the response: it
+// separates a transient upstream outage from a quota, auth, or schema problem,
+// and those need different operator responses. Error() puts the status and type
+// first because the stored failure message is truncated downstream, and a
+// truncated message must still identify what went wrong.
 type ModelHTTPError struct {
 	StatusCode int
+	Type       string
 	Message    string
 }
 
 func (e *ModelHTTPError) Error() string {
-	if e.Message == "" {
-		return fmt.Sprintf("model API returned HTTP %d", e.StatusCode)
+	var head string
+	if e.Type != "" {
+		head = fmt.Sprintf("HTTP %d %s", e.StatusCode, e.Type)
+	} else {
+		head = fmt.Sprintf("HTTP %d", e.StatusCode)
 	}
-	return fmt.Sprintf("model API returned HTTP %d: %s", e.StatusCode, e.Message)
+	if e.Message == "" {
+		return head
+	}
+	return head + ": " + e.Message
 }
 
 // NewResponsesClient creates a narrow xAI Responses API adapter.
@@ -86,6 +100,22 @@ func NewResponsesClient(baseURL, apiKey, model string, maxTokens int, userAgent 
 }
 
 // Generate uses trusted source text when present, otherwise x_search and strict structured output.
+//
+// The prompt variants form a degradation chain, and degrading happens for two
+// different reasons:
+//
+//   - the request failed in a retryable way, which means the previous prompt
+//     could not be served at all; and
+//   - the request succeeded but came back without a completed X search, which
+//     means the model answered without retrieving. That second case matters:
+//     measurements on the real collection showed a variant returning HTTP 200
+//     with no search evidence for a short post, and returning that candidate
+//     unexamined would abandon the bookmark even though the other prompt can
+//     serve it.
+//
+// A non-retryable request error (auth, quota, malformed request) still aborts
+// immediately, because retrying it with different wording cannot help and would
+// only multiply a configuration fault across every bookmark.
 func (c *ResponsesClient) Generate(ctx context.Context, input Input) (Candidate, error) {
 	if strings.TrimSpace(input.SourceText) != "" {
 		return c.generateFromSource(ctx, input)
@@ -101,7 +131,20 @@ func (c *ResponsesClient) Generate(ctx context.Context, input Input) (Candidate,
 			}
 			continue
 		}
-		return c.candidateFromEnvelope(input, envelope, false)
+		candidate, err := c.candidateFromEnvelope(input, envelope, false)
+		if err != nil {
+			// The response was not usable as a candidate. Degrade to the next
+			// prompt rather than surfacing this immediately.
+			lastErr = err
+			continue
+		}
+		if !candidate.SearchVerified {
+			// The model answered without retrieving. Another prompt may still
+			// retrieve, so try it before giving up on the bookmark.
+			lastErr = errors.New("model did not provide evidence of a completed X search")
+			continue
+		}
+		return candidate, nil
 	}
 	return Candidate{}, lastErr
 }
@@ -445,6 +488,7 @@ func readModelHTTPError(response *http.Response) error {
 	var payload struct {
 		Error struct {
 			Message string `json:"message"`
+			Type    string `json:"type"`
 		} `json:"error"`
 	}
 	_ = json.NewDecoder(io.LimitReader(response.Body, 32<<10)).Decode(&payload)
@@ -452,7 +496,21 @@ func readModelHTTPError(response *http.Response) error {
 	if len(message) > 500 {
 		message = message[:500]
 	}
-	return &ModelHTTPError{StatusCode: response.StatusCode, Message: message}
+	return &ModelHTTPError{
+		StatusCode: response.StatusCode,
+		Type:       boundedField(payload.Error.Type, 60),
+		Message:    message,
+	}
+}
+
+// boundedField trims a provider-supplied field so an oversized or hostile value
+// cannot dominate the stored failure message.
+func boundedField(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	if len(value) <= limit {
+		return value
+	}
+	return value[:limit]
 }
 
 type responseRequest struct {
