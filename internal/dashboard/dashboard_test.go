@@ -464,10 +464,10 @@ func TestCurationValidatesEditsAndForwardsFacets(t *testing.T) {
 	if string(backend.curation.Classification) != "null" {
 		t.Fatalf("reset classification was not preserved: %s", backend.curation.Classification)
 	}
-	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/bookmarks?curation_status=kept&topic=llm&form=tool&use=try&source=x&uncertain=true&since=2026-09-01T00:00:00Z", nil)
+	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/bookmarks?view=summary&curation_status=kept&topic=llm&form=tool&use=try&source=x&uncertain=true&since=2026-09-01T00:00:00Z", nil)
 	writer := httptest.NewRecorder()
 	server.Handler().ServeHTTP(writer, request)
-	if writer.Code != 200 || backend.query.CurationStatus != "kept" || backend.query.Topic != "llm" || backend.query.Form != "tool" || backend.query.Use != "try" || backend.query.Source != "x" || !backend.query.Uncertain || backend.query.Since != "2026-09-01T00:00:00Z" {
+	if writer.Code != 200 || !backend.query.SummaryOnly || backend.query.CurationStatus != "kept" || backend.query.Topic != "llm" || backend.query.Form != "tool" || backend.query.Use != "try" || backend.query.Source != "x" || !backend.query.Uncertain || backend.query.Since != "2026-09-01T00:00:00Z" {
 		t.Fatalf("facets were lost: %+v (HTTP %d)", backend.query, writer.Code)
 	}
 }

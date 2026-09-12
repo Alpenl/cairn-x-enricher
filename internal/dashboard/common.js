@@ -132,6 +132,9 @@
   const EXPORT_CHUNK_SIZE = 40;
 
   async function exportMarkdown(items, hasMore = false) {
+    // Summary pages hydrate only when the user exports. Capture this list so
+    // changing filters during an export cannot mix two different selections.
+    items = items.slice();
     const escape = (value) => String(value || "").replace(/[\\`*_{}\[\]()<>#!|]/g, "\\$&");
     const line = (value) => escape(value).replace(/[\r\n]+/g, " ");
     const link = (value) => {
@@ -143,7 +146,10 @@
     const lines = ["# Cairn 收藏摘录", "", `导出时间：${new Date().toISOString()}`, `条目数量：${items.length}`,
       `范围：当前已加载的收藏${hasMore ? "（还有未加载的结果）" : ""}`, `筛选地址：${link(window.location.href)}`, ""];
     for (let index = 0; index < items.length; index++) {
-      const item = items[index];
+      const summary = items[index];
+      const item = summary.content_loaded === false
+        ? await fetchJSON(`/api/bookmarks/${summary.id}`)
+        : summary;
       const classification = item.classification || {};
       lines.push(`## ${line(displayTitle(item).text)}`, "", `收藏 ID：${item.id}`, `来源：${link(item.url)}`,
         `收藏时间：${line(item.created_at)}`, `整理状态：${curationLabels[item.curation_status || "inbox"]}`,

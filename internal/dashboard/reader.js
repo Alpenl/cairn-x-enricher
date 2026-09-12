@@ -10,6 +10,7 @@
   let catalog = null;
   let dirty = false;
   let saving = false;
+  const renderedText = new WeakMap();
   ui.byId("read-back").href = `/${window.location.search}`;
 
   function markDirty(value = true) {
@@ -116,11 +117,15 @@
   }
 
   function paragraphs(container, text) {
+    if (renderedText.get(container) === text) return;
+    renderedText.set(container, text);
     container.replaceChildren();
+    const fragment = document.createDocumentFragment();
     for (const block of String(text).split(/\n+/)) {
       const line = block.trim();
-      if (line) container.append(ui.element("p", "", line));
+      if (line) fragment.append(ui.element("p", "", line));
     }
+    container.append(fragment);
   }
 
   function renderFigures(item) {
@@ -153,6 +158,7 @@
   }
 
   function render(item) {
+    const previous = current;
     current = item;
     ui.byId("read-loading").hidden = true;
     ui.byId("read-error").hidden = true;
@@ -177,22 +183,17 @@
     lede.textContent = summary.text;
     lede.style.fontStyle = summary.wait ? "italic" : "normal";
 
-    renderFigures(item);
+    if (JSON.stringify(previous?.images) !== JSON.stringify(item.images)) renderFigures(item);
 
     const body = ui.byId("read-body");
-    if (item.translated_text) {
-      paragraphs(body, item.translated_text);
-    } else if (item.error) {
-      paragraphs(body, item.error);
-    } else {
-      body.replaceChildren();
-    }
+    paragraphs(body, item.translated_text || item.error || "");
 
     const originalBlock = ui.byId("read-original-block");
     originalBlock.hidden = !item.original_text;
-    if (item.original_text) paragraphs(ui.byId("read-original"), item.original_text);
+    const original = ui.byId("read-original");
+    if (!original.hidden) paragraphs(original, item.original_text || "");
 
-    renderLinks(item);
+    if (JSON.stringify(previous?.related_links) !== JSON.stringify(item.related_links)) renderLinks(item);
 
     const source = ui.byId("read-source");
     source.href = item.url;
@@ -209,6 +210,7 @@
     try {
       const params = new URLSearchParams(window.location.search);
       params.set("limit", "1");
+      params.set("view", "summary");
       params.set("before_id", String(bookmarkID));
       const page = await ui.fetchJSON(`/api/bookmarks?${params}`);
       const next = Array.isArray(page.items) ? page.items[0] : null;
@@ -251,8 +253,7 @@
       const result = await ui.submitProcessing([current.id]);
       if (result.accepted.length > 0) {
         ui.showToast("已提交处理请求");
-        current.status = "processing";
-        render(current);
+        render({ ...current, status: "processing" });
         setTimeout(() => loadBookmark(true), 900);
       } else {
         const code = result.rejected[0]?.error;
@@ -293,6 +294,7 @@
   ui.byId("read-toggle").addEventListener("click", (event) => {
     const panel = ui.byId("read-original");
     const open = panel.hidden;
+    if (open) paragraphs(panel, current?.original_text || "");
     panel.hidden = !open;
     event.currentTarget.classList.toggle("open", open);
     event.currentTarget.setAttribute("aria-expanded", String(open));

@@ -20,6 +20,7 @@
   state.filters = Object.fromEntries(filterKeys.map((key) => [key, initialParams.get(key) || ""]));
   let activeRequest = null;
   let requestVersion = 0;
+  let firstPageSnapshot = "";
 
   function filtered() {
     return Boolean(state.search) || Object.values(state.filters).some(Boolean);
@@ -159,7 +160,9 @@
         list = ui.element("div", "results");
         fragment.append(list);
       }
-      for (const item of items) list.append(resultEntry(item, terms));
+      const rows = document.createDocumentFragment();
+      for (const item of items) rows.append(resultEntry(item, terms));
+      list.append(rows);
       stream.append(fragment);
       return;
     }
@@ -238,11 +241,17 @@
     ui.byId("tail").hidden = true;
     try {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
+      if (!state.search) params.set("view", "summary");
       if (state.search) params.set("q", state.search);
       for (const [key, value] of Object.entries(state.filters)) if (value) params.set(key, value);
       if (append && state.nextBeforeID) params.set("before_id", String(state.nextBeforeID));
       const page = await ui.fetchJSON(`/api/bookmarks?${params}`, { signal: activeRequest.signal });
       if (version !== requestVersion) return;
+      if (!append) {
+        const snapshot = JSON.stringify(page);
+        if (silent && snapshot === firstPageSnapshot) return;
+        firstPageSnapshot = snapshot;
+      }
       state.nextBeforeID = page.next_before_id ?? null;
       renderPage(page, append);
       ui.byId("tail").hidden = Boolean(state.nextBeforeID) || state.items.length === 0;
@@ -268,6 +277,7 @@
   function changeFilters() {
     state.nextBeforeID = null;
     state.items = [];
+    firstPageSnapshot = "";
     ui.byId("stream").replaceChildren();
     ui.byId("feature").replaceChildren();
     ui.byId("feature-band").hidden = true;
@@ -356,16 +366,18 @@
       control.value = state.filters[key];
       control.disabled = false;
     }
+    const byPath = new Map(state.items.map((item) => [`/bookmarks/${item.id}`, item]));
     for (const holder of document.querySelectorAll(".bookmark-meta")) {
       // Labels become available after the independent vocabulary request.
       const anchor = holder.closest("a");
-      const item = state.items.find((entry) => new URL(anchor.href).pathname === `/bookmarks/${entry.id}`);
+      const item = byPath.get(new URL(anchor.href).pathname);
       if (item) holder.replaceWith(ui.metadata(item));
     }
   }).catch(() => ui.showToast("读取标签词表失败", true));
   load();
   setInterval(() => {
     if (document.hidden || filtered() || state.loading) return;
+    if (state.items.length > PAGE_SIZE) return;
     if (window.scrollY > 240) return;
     const waiting = state.items
       .slice(0, PAGE_SIZE)

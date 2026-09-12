@@ -795,6 +795,10 @@ func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 		Limit: limit, BeforeID: beforeID, Status: status, Search: search,
 		CurationStatus: values.Get("curation_status"), Topic: values.Get("topic"),
 		Form: values.Get("form"), Use: values.Get("use"), Source: values.Get("source"), Since: values.Get("since"),
+		SummaryOnly: values.Get("view") == "summary",
+	}
+	if view := values.Get("view"); view != "" && view != "summary" {
+		return cairn.BookmarkQuery{}, errors.New("invalid view")
 	}
 	if query.CurationStatus != "" && query.CurationStatus != "all" && !taxonomy.ValidCurationStatus(query.CurationStatus) {
 		return cairn.BookmarkQuery{}, errors.New("invalid curation status")

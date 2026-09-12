@@ -134,7 +134,7 @@ class Node {
     return out;
   }
   closest() { return null; }
-  click() { for (const handler of this.listeners.click || []) handler({ preventDefault() {} }); }
+  click() { for (const handler of this.listeners.click || []) handler({ preventDefault() {}, currentTarget: this }); }
   focus() {}
   getBoundingClientRect() { return { top: 0, left: 0, width: 0, height: 0 }; }
 }
@@ -206,6 +206,9 @@ function buildWindow() {
     URL,
     Blob: class { constructor(parts) { this.parts = parts; } },
     URLSearchParams,
+    Option: class extends Node {
+      constructor(text, value) { super("option"); this.textContent = text; this.value = value; }
+    },
     AbortController,
     IntersectionObserver: class { observe() {} disconnect() {} },
     fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }),
@@ -417,6 +420,58 @@ const renderItem = (id) => ({
 }
 
 // The error map must cover every code the backend can return.
+{
+  const { window: w, byId } = buildWindow();
+  w.location.pathname = "/bookmarks/12";
+  byId("read-original").hidden = true;
+  let item = { ...renderItem(12), status: "processing", images: [{ key: "image.png" }] };
+  let poll;
+  w.setInterval = (callback) => { poll = callback; };
+  w.fetch = async (url) => ({ ok: true, json: async () => String(url) === "/api/bookmarks/12" ? { ...item }
+    : String(url) === "/api/taxonomy" ? { topics: [], forms: [], uses: [] }
+      : { items: [] } });
+  loadScript(w, read("common.js"));
+  loadScript(w, read("reader.js"));
+  const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+  await settle();
+  equal("reader defers collapsed original paragraphs", byId("read-original").children.length, 0);
+  const body = byId("read-body").firstChild;
+  const figure = byId("read-figures").firstChild;
+  poll();
+  await settle();
+  check("reader preserves unchanged body nodes during polling", byId("read-body").firstChild === body);
+  check("reader preserves unchanged images during polling", byId("read-figures").firstChild === figure);
+  byId("read-toggle").click();
+  equal("reader expands original text on demand", byId("read-original").textContent, item.original_text);
+  item = { ...item, original_text: "new original", translated_text: "新译文" };
+  poll();
+  await settle();
+  equal("reader refreshes changed visible translation", byId("read-body").textContent, "新译文");
+  equal("reader refreshes changed expanded original", byId("read-original").textContent, "new original");
+}
+
+{
+  const { window: w } = buildWindow();
+  const requests = [];
+  let downloaded = "";
+  let fail = false;
+  w.Blob = class { constructor(parts) { downloaded = parts.join(""); } };
+  w.fetch = async (url) => {
+    requests.push(url);
+    if (fail) return { ok: false, status: 503, json: async () => ({ error: "backend_error" }) };
+    return { ok: true, json: async () => ({ ...renderItem(9), original_text: "exported full source", translated_text: "导出的完整译文" }) };
+  };
+  loadScript(w, read("common.js"));
+  await w.CairnUI.exportMarkdown([{ id: 9, content_loaded: false }]);
+  equal("summary export hydrates the selected detail", requests[0], "/api/bookmarks/9");
+  check("summary export includes both full languages", downloaded.includes("exported full source") && downloaded.includes("导出的完整译文"));
+  fail = true;
+  downloaded = "";
+  let rejected = false;
+  try { await w.CairnUI.exportMarkdown([{ id: 9, content_loaded: false }]); } catch { rejected = true; }
+  check("failed hydration cannot produce a partial export", rejected && downloaded === "");
+}
+
 for (const code of ["job_busy", "not_found", "backend_error", "queue_full", "invalid_ids", "invalid_source", "invalid_curation", "invalid_id", "invalid_query", "invalid_json", "invalid_content_type"]) {
   check(`errorLabel(${code})`, ui.errorLabel(code) !== code, ui.errorLabel(code));
 }

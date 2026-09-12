@@ -77,6 +77,7 @@ type Bookmark struct {
 	CurationStatus         string                   `json:"curation_status"`
 	Classification         *taxonomy.Classification `json:"classification,omitempty"`
 	ClassificationReviewed bool                     `json:"classification_reviewed"`
+	ContentLoaded          *bool                    `json:"content_loaded,omitempty"`
 }
 
 // BookmarkDetail preserves the detail endpoint's named response type.
@@ -115,6 +116,7 @@ type BookmarkQuery struct {
 	Source         string
 	Uncertain      bool
 	Since          string
+	SummaryOnly    bool
 }
 
 // CurationUpdate applies explicit human edits; a null classification restores AI suggestions.
@@ -224,6 +226,9 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 	}
 	if query.Uncertain {
 		values.Set("uncertain", "true")
+	}
+	if query.SummaryOnly {
+		values.Set("view", "summary")
 	}
 	path := "/api/enrichment/jobs"
 	if encoded := values.Encode(); encoded != "" {
