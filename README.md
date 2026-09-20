@@ -1,6 +1,6 @@
 # Cairn X Enricher
 
-一个独立于 Cairn Share App 的 Go 后台服务。它定时从 Cairn Share 的 Cloudflare Worker 领取尚未处理的 X 收藏，用 Grok Responses API 和服务端 `x_search` 读取原帖及评论，再把 AI 中文标题、原始语言全文、完整简体中文译文、摘要和内容相关链接写回 D1；相关图片复制到 Cloudflare R2。
+一个独立于 Cairn Share App 的 Go 后台服务。Grok Responses API 和服务端 `x_search` 负责获取原帖，原文先保存到 D1；标题、译文和摘要由独立的阅读增强请求生成，相关图片复制到 R2。TypeSafe Jev 基于已存档原文，通过独立队列生成主题、形态和用途建议。
 
 配套 Cairn Share App 可读取 AI 标题、双语正文、归档图片和人工整理结果。旧客户端默认的六字段响应仍兼容；新版 App 通过 `include=enrichment` 显式读取增强信息，继续使用独立的 App Token。
 
@@ -12,9 +12,10 @@
 Cairn Share App -> 原有 Worker API -> D1 links
                                       |
                                       v
-定时器 -> 内部 claim API -> Go 顺序流程 -> Grok /responses + x_search
-  ^                                              |
-  +--- complete/fail API <- 校验后的 JSON + R2 图片归档
+定时器 -> 原文任务 -> Grok x_search -> 保存原文快照
+                                  |          |
+                                  |          +-> 独立 Jev 队列 -> 自动分类建议
+                                  +-> 阅读增强请求 -> 标题、译文、摘要、R2 图片
 
 浏览器 -> NAS 收藏首页 -> 阅读页/搜索/后台重试 -> 同一处理流程
 ```
@@ -26,14 +27,15 @@ Cairn Share App -> 原有 Worker API -> D1 links
 - 图片只接受 `https://pbs.twimg.com/media/...`，由 Worker 校验响应类型与大小后写入 R2，浏览器不接触 Cloudflare token。
 - 失败由 Worker 按 `1m / 5m / 30m / 2h` 退避，最多尝试 5 次。
 - 模型端点的临时 `408/429/5xx` 会在单次队列 attempt 内短重试；如果完整线程读取慢失败，会降级为只读原帖的结构化请求，避免上游抖动直接耗尽业务重试次数。
-- 失败或耗尽记录如果已经保留 `original_text`，会直接用现有原文补齐标题、语言、译文和摘要；后台也支持粘贴原文后生成。
+- 原文在阅读增强前保存。失败重试和普通重新处理复用快照；后台也支持粘贴原文后生成。
+- 分类失败独立退避，不改变原文/阅读增强状态；旧分类租约不能覆盖更新后的输入。
 - URL 或备注被 App 修改时，已有增强结果自动失效并重新入队。
 - 日志不会输出 API key、完整提示词或模型响应。
 - 标签只从 Worker 提供的版本化词表中选择，未知标签被丢弃并标记待确认；人工整理结果不会被重新处理覆盖。
 
 ## 流程设计
 
-富化只有“模型调用 → 结果校验 → 分类归一化”三个顺序步骤，直接用 Go 函数执行。架构消融确认这条固定路径无需图编排框架，因此移除了 Eino 和框架错误解包层。Responses 编解码、搜索证据校验、取消、重试和任务租约仍各自保留明确责任。前后对照数据、可复现实验和 App 同步协议见 [简化与同步报告](docs/simplification-and-sync.md)。原 [框架选型调研](docs/research/go-agent-frameworks.md) 作为历史依据保留。
+生产流程将获取、阅读增强与分类分开，直接使用 Go 接口，不引入图编排框架。Jev 对每个主题独立提出 Noul 问题，形态和用途使用 Choice；程序按版本化策略生成最终标签，并保存原始概率。初始阈值仍需真实收藏校准。详细接口、状态、使用方式与限制见 [Jev 重构说明](docs/jev-classification.md)。旧单次生成器仅用于既有实验和基线回归；[简化与同步报告](docs/simplification-and-sync.md) 保留为历史记录。
 
 ## 配置
 
@@ -49,13 +51,14 @@ chmod 600 .env
 | `CAIRN_ENRICHER_TOKEN` | Worker 内部接口专用 Bearer token，不能复用 App token |
 | `GROK_MODELS_BASE_URL` | Responses-compatible API 根地址，包含 `/v1` |
 | `XAI_API_KEY` | 模型端点密钥 |
+| `TYPESAFE_API_KEY` | Jev 分类密钥，仅服务端使用 |
 
 其余变量及默认值均列在 `.env.example`。进程启动时会验证必填值、URL、数值范围和 duration 格式。
 
 启动时还会做两项前置检查，任何一项失败都会让进程以非零码退出并在日志中给出原因：
 
 1. 从 Worker 读取并校验版本化词表（需要配套的 curation 迁移和内部接口）。
-2. 用一次极短的 `source` 请求做模型契约自检（canary），确认目标端点仍然遵守 strict JSON Schema。端点、模型名或密钥配错时，服务会立即失败，而不是静默耗尽每一条收藏的重试次数。
+2. 用一次极短的阅读增强请求做 Grok 契约自检，确认目标端点遵守 strict JSON Schema。Jev 密钥格式存在性在启动时检查，真实鉴权及 API 错误通过独立分类任务上报；不会在普通启动时发送 Jev 测试样本。
 
 HTTP 服务在这两项检查通过后才开始监听，因此配置错误表现为“容器启动即退出 + 日志中的明确原因”，而不是一个长期返回 `503` 的半死进程。相反，运行期发生故障时 HTTP 服务仍会保持监听：`/healthz` 返回 `200`，`/readyz` 返回 `503` 并带上原因。
 
@@ -67,6 +70,7 @@ make test-frontend   # 零依赖的前端检查，只需 Node
 make ablation-architecture # 离线逐项移除行为，在临时副本运行回归
 make verify          # vet + golangci-lint + 上述两项 + 构建
 go run ./cmd/cairn-x-enricher once --max-jobs 10
+go run ./cmd/cairn-x-enricher classify --max-jobs 10
 go run ./cmd/cairn-x-enricher serve
 ```
 
@@ -88,6 +92,8 @@ go run ./cmd/cairn-x-enricher serve
 - `/status`：最近一批的匿名统计、错误状态、就绪原因和构建信息。
 
 `once` 是适合 cron 和诊断的有界批处理命令，输出稳定 JSON；根命令不会隐式调用付费 API 或修改数据库。
+
+`classify` 仅消费 Jev 队列，不调用 X Search 或生成阅读增强。`classify --id 123` 会先将指定的已有原文入队，再消费队列（可能包含其他待处理条目）。新抓取的原文自动入队；历史收藏不会全库回填。
 
 ## 消融实验
 
@@ -121,7 +127,7 @@ ghcr.io/alpenl/cairn-x-enricher:<version>
 ```
 
 完整部署顺序和 Cloudflare 前置改造见 [docs/deployment.md](docs/deployment.md) 与 [docs/cloudflare-backend.md](docs/cloudflare-backend.md)。
-当前版本需要配套 Worker 的全部迁移（截至 `0008_invalidate_enriched_link_cache.sql`）和新接口。先升级 Worker，再升级 Enricher 和 App；迁移 0008 使富化/人工整理更新在同一事务内失效 App 缓存。Enricher 启动时会读取并验证词表，旧 Worker 会导致启动失败。不会自动回填历史收藏。
+当前开发版需要配套 Worker 的全部迁移（截至 `0009_independent_classification.sql`）和新接口。迁移 0009 增加原文快照和分类任务表。先升级 Worker，再运行新版 Enricher；已有 App 协议保持兼容。不会自动回填历史收藏。修改代码不会自动升级 NAS 的固定版本镜像。
 Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网阅读库映射到 `8088`；页面展示 Cloudflare 中全部收藏，只有 X 链接可以触发模型处理。旧版已完成记录会继续显示原内容，只有手动重新处理后才会生成新版标题、译文和图片。该清单只拉取 GitHub Actions 发布的镜像，不在 NAS 本地构建。
 
 ## 发布

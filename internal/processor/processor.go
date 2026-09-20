@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"runtime/debug"
@@ -28,20 +29,23 @@ type Queue interface {
 
 // Stats summarizes one bounded processing batch.
 type Stats struct {
-	StartedAt time.Time     `json:"started_at"`
-	Duration  time.Duration `json:"duration"`
-	Claimed   int64         `json:"claimed"`
-	Completed int64         `json:"completed"`
-	Failed    int64         `json:"failed"`
+	Classified           int64         `json:"classified"`
+	ClassificationFailed int64         `json:"classification_failed"`
+	StartedAt            time.Time     `json:"started_at"`
+	Duration             time.Duration `json:"duration"`
+	Claimed              int64         `json:"claimed"`
+	Completed            int64         `json:"completed"`
+	Failed               int64         `json:"failed"`
 }
 
 // HasWork reports whether the batch actually claimed or handled any job.
 func (s Stats) HasWork() bool {
-	return s.Claimed > 0 || s.Completed > 0 || s.Failed > 0
+	return s.Claimed > 0 || s.Completed > 0 || s.Failed > 0 || s.Classified > 0 || s.ClassificationFailed > 0
 }
 
 // Processor leases and enriches jobs with bounded concurrency.
 type Processor struct {
+	stages      *stages
 	queue       Queue
 	enricher    enrich.Enricher
 	logger      *slog.Logger
@@ -104,6 +108,13 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 	var firstErr error
 	var errOnce sync.Once
 	var workers sync.WaitGroup
+	var classificationErr error
+	classificationDone := make(chan struct{})
+	go func() {
+		defer close(classificationDone)
+		defer RecoverJob(p.logger, "classification batch", 0, &classificationErr)
+		stats.Classified, stats.ClassificationFailed, classificationErr = p.RunClassifications(ctx, maxJobs)
+	}()
 
 	recordFatal := func(err error) {
 		errOnce.Do(func() {
@@ -159,15 +170,29 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 		}()
 	}
 	workers.Wait()
+	<-classificationDone
+	if classificationErr == nil && ctx.Err() == nil && p.stages != nil {
+		remaining := maxJobs - int(stats.Classified+stats.ClassificationFailed)
+		if remaining > 0 {
+			done, failed, err := p.RunClassifications(ctx, remaining)
+			stats.Classified += done
+			stats.ClassificationFailed += failed
+			classificationErr = err
+		}
+	}
 
 	stats.Claimed = claimed.Load()
 	stats.Completed = completed.Load()
 	stats.Failed = failed.Load()
+	firstErr = errors.Join(firstErr, classificationErr)
 	stats.Duration = time.Since(started)
 	return stats, firstErr
 }
 
 func (p *Processor) processJob(ctx context.Context, job *cairn.Job, sourceText string) error {
+	if p.stages != nil {
+		return p.processStages(ctx, job, strings.TrimSpace(sourceText))
+	}
 	logger := p.logger.With("link_id", job.ID, "attempt", job.Attempt)
 	logger.InfoContext(ctx, "enrichment started")
 	var existing cairn.BookmarkDetail

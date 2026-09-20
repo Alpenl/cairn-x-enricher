@@ -79,4 +79,7 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("CAIRN_ENRICHER_TOKEN", "test-enricher-token")
 	t.Setenv("GROK_MODELS_BASE_URL", "https://models.example/v1")
 	t.Setenv("XAI_API_KEY", "test-model-key")
+	t.Setenv("TYPESAFE_API_KEY", "test-typesafe-key")
+	t.Setenv("TYPESAFE_BASE_URL", "")
+	t.Setenv("TYPESAFE_MODEL", "")
 }

@@ -18,14 +18,17 @@ const (
 
 // Config contains all validated settings needed by the service.
 type Config struct {
-	CairnBaseURL   string
-	CairnToken     string
-	GrokBaseURL    string
-	GrokAPIKey     string
-	GrokModel      string
-	GrokMaxTokens  int
-	PollInterval   time.Duration
-	RequestTimeout time.Duration
+	TypesafeBaseURL string
+	TypesafeAPIKey  string
+	TypesafeModel   string
+	CairnBaseURL    string
+	CairnToken      string
+	GrokBaseURL     string
+	GrokAPIKey      string
+	GrokModel       string
+	GrokMaxTokens   int
+	PollInterval    time.Duration
+	RequestTimeout  time.Duration
 
 	// ShutdownTimeout bounds the total graceful shutdown: the HTTP server
 	// drain and the in-flight work drain share this one budget, so it must
@@ -42,13 +45,16 @@ type Config struct {
 // Load reads, applies defaults to, and validates runtime environment settings.
 func Load() (Config, error) {
 	cfg := Config{
-		CairnBaseURL: valueOrDefault("CAIRN_API_BASE_URL", defaultCairnBaseURL),
-		CairnToken:   strings.TrimSpace(os.Getenv("CAIRN_ENRICHER_TOKEN")),
-		GrokBaseURL:  strings.TrimSpace(os.Getenv("GROK_MODELS_BASE_URL")),
-		GrokAPIKey:   strings.TrimSpace(os.Getenv("XAI_API_KEY")),
-		GrokModel:    valueOrDefault("GROK_MODEL", defaultGrokModel),
-		HTTPAddr:     valueOrDefault("HTTP_ADDR", defaultHTTPAddr),
-		LogLevel:     strings.ToLower(valueOrDefault("LOG_LEVEL", "info")),
+		TypesafeBaseURL: valueOrDefault("TYPESAFE_BASE_URL", "https://api.typesafe.ai"),
+		TypesafeAPIKey:  strings.TrimSpace(os.Getenv("TYPESAFE_API_KEY")),
+		TypesafeModel:   valueOrDefault("TYPESAFE_MODEL", "jev-latest"),
+		CairnBaseURL:    valueOrDefault("CAIRN_API_BASE_URL", defaultCairnBaseURL),
+		CairnToken:      strings.TrimSpace(os.Getenv("CAIRN_ENRICHER_TOKEN")),
+		GrokBaseURL:     strings.TrimSpace(os.Getenv("GROK_MODELS_BASE_URL")),
+		GrokAPIKey:      strings.TrimSpace(os.Getenv("XAI_API_KEY")),
+		GrokModel:       valueOrDefault("GROK_MODEL", defaultGrokModel),
+		HTTPAddr:        valueOrDefault("HTTP_ADDR", defaultHTTPAddr),
+		LogLevel:        strings.ToLower(valueOrDefault("LOG_LEVEL", "info")),
 	}
 
 	var err error
@@ -84,6 +90,8 @@ func (c Config) validate() error {
 		"GROK_MODELS_BASE_URL": c.GrokBaseURL,
 		"XAI_API_KEY":          c.GrokAPIKey,
 		"GROK_MODEL":           c.GrokModel,
+		"TYPESAFE_API_KEY":     c.TypesafeAPIKey,
+		"TYPESAFE_MODEL":       c.TypesafeModel,
 	} {
 		if strings.TrimSpace(value) == "" {
 			return fmt.Errorf("%s is required", name)
@@ -94,6 +102,9 @@ func (c Config) validate() error {
 		return err
 	}
 	if err := validateBaseURL("GROK_MODELS_BASE_URL", c.GrokBaseURL); err != nil {
+		return err
+	}
+	if err := validateBaseURL("TYPESAFE_BASE_URL", c.TypesafeBaseURL); err != nil {
 		return err
 	}
 	if _, _, err := net.SplitHostPort(c.HTTPAddr); err != nil {

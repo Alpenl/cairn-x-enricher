@@ -6,6 +6,8 @@
 - `worker/migrations/0006_add_rich_x_enrichment.sql`
 - `worker/migrations/0007_add_bookmark_curation.sql`
 - `worker/migrations/0008_invalidate_enriched_link_cache.sql`
+- `worker/migrations/0009_independent_classification.sql`
+- `worker/src/classification.ts`
 - `worker/src/curation.ts`、`worker/src/taxonomy.json`
 - `worker/src/index.ts`
 - `worker/test/index.test.ts`
@@ -42,6 +44,13 @@ Worker 绑定名为 `ENRICHMENT_IMAGES` 的 R2 bucket，生产 bucket 名为 `ca
 | `PATCH /api/enrichment/jobs/{id}/curation` | `200` detail | 保存人工原因、整理状态和分类，或恢复自动分类 |
 | `POST /api/enrichment/jobs/claim` | `200` job 或 `204` | 原子领取最早的 X 链接 |
 | `GET /api/enrichment/jobs/{id}` | `200` detail | 读取单条收藏及完整原文 |
+| `GET /api/enrichment/jobs/{id}/source` | `200` snapshot 或 `204` | 获取仍匹配当前原文的来源快照 |
+| `POST /api/enrichment/jobs/{id}/source` | `200` | 有效获取 lease 下存档原文并将分类入队 |
+| `POST /api/enrichment/classifications/claim` | `200` job 或 `204` | 独立领取分类任务，提交词表/策略/请求模型版本 |
+| `POST /api/enrichment/classifications/{id}/complete` | `200` | 按有效 lease、revision 和版本提交分类与审计信息 |
+| `POST /api/enrichment/classifications/{id}/fail` | `200` | 只对分类任务退避，不改变正文状态 |
+| `POST /api/enrichment/classifications/{id}/retry` | `200` | 对已有原文显式入队；活跃 lease 返回 `409` |
+| `GET /api/enrichment/classifications/{id}` | `200` state | 返回独立状态、错误和已保存概率，不返回 lease token |
 | `POST /api/enrichment/jobs/{id}/claim` | `200` job | 原子领取指定收藏用于人工处理或重新处理 |
 | `POST /api/enrichment/jobs/{id}/images` | `200` refs | 在匹配 lease 下抓取允许的 X 图片并写入 R2 |
 | `POST /api/enrichment/jobs/{id}/complete` | `200` | 以匹配 lease 写入结果 |
@@ -49,6 +58,11 @@ Worker 绑定名为 `ENRICHMENT_IMAGES` 的 R2 bucket，生产 bucket 名为 `ca
 | `GET /api/enrichment/images/{key...}` | `200` image | 读取一个受控 R2 对象供 NAS 代理 |
 
 指定领取会为新的人工处理周期重置尝试次数，但保留旧结果直到新结果成功写入；有效的 `processing` lease 返回 `409 job_busy`，避免重复模型调用。列表不返回 lease token，但会返回阅读所需的已保存内容、`processable` 标志和 `unsupported` 计数。非 X 收藏可见但不能领取处理。
+
+新版生产处理在阅读增强前写入原文快照。显式替换原文会清除不再对应的阅读增强；同一原文的旧图片引用保留。
+迁移 0009 的 `enrichment_sources` 与 `classification_jobs` 不改变公开 App 响应字段。
+现有 `complete` 接口仍兼容旧生成器，但新阅读增强请求不携带 `classification`。
+所有新增接口仍要求内部 token。新版本必须先升级 Worker；详见 [Jev 分类说明](jev-classification.md)。
 
 图片抓取只接受 HTTPS `pbs.twimg.com/media`，不跟随重定向，最多 8 张、单张最多 15 MiB，并限制为 JPEG、PNG、WebP、GIF 或 AVIF。R2 读取接口仍要求内部 token；浏览器只访问 NAS 的同源代理。
 

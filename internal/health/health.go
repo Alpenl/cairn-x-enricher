@@ -100,9 +100,11 @@ func (t *Tracker) Record(stats processor.Stats, err error) {
 		t.snapshot.LastWorkAt = &now
 		t.snapshot.LastWorkStats = &stats
 	}
-	if err != nil || stats.Failed > 0 {
+	if err != nil || stats.Failed > 0 || stats.ClassificationFailed > 0 {
 		if err != nil {
 			t.snapshot.LastError = err.Error()
+		} else if stats.ClassificationFailed > 0 {
+			t.snapshot.LastError = "one or more classification jobs failed"
 		} else {
 			t.snapshot.LastError = "one or more enrichment jobs failed"
 		}

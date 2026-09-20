@@ -17,10 +17,11 @@ var idPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 
 // Term is one stable identifier, display label, and explicitly accepted aliases.
 type Term struct {
-	ID      string   `json:"id"`
-	Label   string   `json:"label"`
-	Aliases []string `json:"aliases"`
-	Active  bool     `json:"active"`
+	Description string   `json:"description,omitempty"`
+	ID          string   `json:"id"`
+	Label       string   `json:"label"`
+	Aliases     []string `json:"aliases"`
+	Active      bool     `json:"active"`
 }
 
 // Catalog is supplied by the Worker so generation, storage, and the UI agree.
@@ -79,7 +80,7 @@ func (c Catalog) Validate() error {
 		ids, aliases := map[string]bool{}, map[string]string{}
 		active := 0
 		for _, term := range terms {
-			if !idPattern.MatchString(term.ID) || ids[term.ID] || strings.TrimSpace(term.Label) == "" || utf8.RuneCountInString(term.Label) > 80 || len(term.Aliases) > 20 {
+			if !idPattern.MatchString(term.ID) || ids[term.ID] || strings.TrimSpace(term.Label) == "" || utf8.RuneCountInString(term.Label) > 80 || len(term.Aliases) > 20 || utf8.RuneCountInString(term.Description) > 1000 {
 				return fmt.Errorf("taxonomy %s contains an invalid or duplicate term", name)
 			}
 			ids[term.ID] = true

@@ -1,6 +1,14 @@
 # Deployment
 
-当前开发版在下述 `v0.5.0` 升级基础上，还需要配套 Worker 的迁移
+## 当前 Jev 开发版
+
+当前源码还需要 `0009_independent_classification.sql`、新 Worker 分类接口和
+`2026-09-20.1` 词表。先部署配套 Worker，再构建/发布并运行新版 Enricher。
+在已有 `.env` 中增加 `TYPESAFE_API_KEY`，不要覆盖原配置。此改动没有发布新镜像；
+NAS 清单里的固定旧版本不会自动获得这些能力。
+分类队列状态、验证方式和回滚边界见 [Jev 分类说明](jev-classification.md)。
+
+此前开发版在下述 `v0.5.0` 升级基础上，还需要配套 Worker 的迁移
 `0008_invalidate_enriched_link_cache.sql` 和增强 App API。先应用全部迁移并部署 Worker，
 再升级 Enricher 与 Android APK；0008 只增加缓存失效触发器，保留已有内容和人工整理。
 检查 App 的双语正文、图片、整理保存，以及保存后网页读取到同一结果。详情见

@@ -21,6 +21,7 @@ import (
 
 	"github.com/Alpenl/cairn-x-enricher/internal/buildinfo"
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
+	"github.com/Alpenl/cairn-x-enricher/internal/classify"
 	"github.com/Alpenl/cairn-x-enricher/internal/config"
 	"github.com/Alpenl/cairn-x-enricher/internal/dashboard"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
@@ -91,14 +92,15 @@ func newRootCommand() *cobra.Command {
 			if runErr != nil {
 				return runErr
 			}
-			if stats.Failed > 0 {
-				return fmt.Errorf("%d enrichment job(s) failed", stats.Failed)
+			if stats.Failed > 0 || stats.ClassificationFailed > 0 {
+				return fmt.Errorf("%d enrichment and %d classification job(s) failed", stats.Failed, stats.ClassificationFailed)
 			}
 			return nil
 		},
 	}
 	once.Flags().IntVar(&maxJobs, "max-jobs", 0, "maximum jobs to claim (default MAX_JOBS_PER_RUN)")
 	root.AddCommand(once)
+	root.AddCommand(newClassifyCommand())
 
 	var healthURL string
 	var healthTimeout time.Duration
@@ -279,6 +281,8 @@ func runScheduler(
 			"claimed", stats.Claimed,
 			"completed", stats.Completed,
 			"failed", stats.Failed,
+			"classified", stats.Classified,
+			"classification_failed", stats.ClassificationFailed,
 			"duration_ms", stats.Duration.Milliseconds(),
 		}
 		if err != nil {
@@ -362,17 +366,17 @@ func newProcessor(
 		httpClient,
 		catalog,
 	)
-	if err := model.Canary(ctx); err != nil {
+	if _, err := model.Transform(ctx, enrich.Input{URL: "https://x.com/canary/status/0", Attempt: 1, SourceText: "Canary check: validate structured reading aids."}); err != nil {
 		// A contract break must fail loudly at startup instead of silently
 		// burning every job's retry budget.
 		return nil, nil, fmt.Errorf("model endpoint contract check failed (check GROK_MODELS_BASE_URL, GROK_MODEL, XAI_API_KEY and strict schema support): %w", err)
 	}
-	workflow, err := enrich.NewWorkflow(model, catalog)
+	classifier, err := classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel, httpClient, catalog)
 	if err != nil {
 		return nil, nil, err
 	}
 	tracker.MarkStarted()
-	return processor.New(queue, workflow, logger, cfg.MaxConcurrency), queue, nil
+	return processor.NewStaged(queue, model, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency), queue, nil
 }
 
 // waitForSignal reports whether done was closed within timeout.
