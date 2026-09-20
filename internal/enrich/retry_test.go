@@ -150,3 +150,23 @@ func TestReadModelHTTPErrorWithEmptyBody(t *testing.T) {
 		t.Fatalf("Error() = %q, want %q", got, "HTTP 502")
 	}
 }
+
+// TestReadingIdempotencyKeySurvivesJobRetry pins B02-T08/R25: a reading call
+// must key the provider request on the persisted source fingerprint, not the
+// job attempt, so a retry after a lost completion response reuses the same
+// server-side result instead of paying for the same reading twice.
+func TestReadingIdempotencyKeySurvivesJobRetry(t *testing.T) {
+	first := modelIdempotencyKey(Input{ID: 7, Attempt: 1}, "reading-abc123", 1)
+	retried := modelIdempotencyKey(Input{ID: 7, Attempt: 2}, "reading-abc123", 1)
+	if first != retried {
+		t.Fatalf("reading idempotency key changed across a job retry: %q vs %q", first, retried)
+	}
+	httpRetry := modelIdempotencyKey(Input{ID: 7, Attempt: 1}, "reading-abc123", 2)
+	if httpRetry == first {
+		t.Fatal("an in-place HTTP retry must still send a distinct key")
+	}
+	// Ordinary enrichment stays per-attempt: its input may legitimately change.
+	if modelIdempotencyKey(Input{ID: 7, Attempt: 1}, "post", 1) == modelIdempotencyKey(Input{ID: 7, Attempt: 2}, "post", 1) {
+		t.Fatal("enrichment keys must remain attempt-scoped")
+	}
+}

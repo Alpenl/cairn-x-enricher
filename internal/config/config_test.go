@@ -83,3 +83,42 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("TYPESAFE_BASE_URL", "")
 	t.Setenv("TYPESAFE_MODEL", "")
 }
+
+// TestClassifyRoleDoesNotRequireGrok pins B02-T09: the classify command only
+// talks to the Worker and Jev, so a deployment with a valid Jev key but no Grok
+// credentials must still be able to run classification. Conversely, an enrich
+// role must not silently start without the reading credentials it needs.
+func TestClassifyRoleDoesNotRequireGrok(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("XAI_API_KEY", "")
+	t.Setenv("GROK_MODELS_BASE_URL", "")
+
+	if _, err := LoadFor(RoleClassify); err != nil {
+		t.Fatalf("LoadFor(RoleClassify) error = %v, want success without Grok config", err)
+	}
+	if _, err := LoadFor(RoleEnrich); err == nil {
+		t.Fatal("LoadFor(RoleEnrich) error = nil, want missing Grok config error")
+	}
+}
+
+func TestEnrichRoleDoesNotRequireTypesafe(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("TYPESAFE_API_KEY", "")
+
+	if _, err := LoadFor(RoleEnrich); err != nil {
+		t.Fatalf("LoadFor(RoleEnrich) error = %v, want success without Typesafe config", err)
+	}
+	if _, err := LoadFor(RoleClassify); err == nil {
+		t.Fatal("LoadFor(RoleClassify) error = nil, want missing Typesafe config error")
+	}
+}
+
+func TestEveryRoleRequiresTheWorkerToken(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("CAIRN_ENRICHER_TOKEN", "")
+	for _, role := range []Role{RoleServe, RoleEnrich, RoleClassify} {
+		if _, err := LoadFor(role); err == nil {
+			t.Errorf("LoadFor(%s) error = nil, want missing Worker token error", role)
+		}
+	}
+}

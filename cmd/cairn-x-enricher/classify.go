@@ -22,7 +22,7 @@ func newClassifyCommand() *cobra.Command {
 		if maxJobs < 1 || maxJobs > 1000 || id < 0 {
 			return fmt.Errorf("--max-jobs must be 1..1000 and --id must be nonnegative")
 		}
-		cfg, err := config.Load()
+		cfg, err := config.LoadFor(config.RoleClassify)
 		if err != nil {
 			return err
 		}

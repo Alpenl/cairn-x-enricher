@@ -322,6 +322,14 @@ func (c *ResponsesClient) newGenerateRequest(ctx context.Context, body []byte, i
 }
 
 func modelIdempotencyKey(input Input, promptName string, requestAttempt int) string {
+	// Reading is a pure function of the persisted source, which is already
+	// fingerprinted into promptName. Keying the provider request on that
+	// fingerprint rather than the job attempt makes a retry after a lost
+	// completion response reuse the same server-side result instead of paying
+	// for the same reading twice.
+	if strings.HasPrefix(promptName, "reading-") {
+		return "cairn-reading-" + strings.TrimPrefix(promptName, "reading-") + fmt.Sprintf("-%d", requestAttempt)
+	}
 	base := fmt.Sprintf("cairn-link-%d-attempt-%d", input.ID, input.Attempt)
 	if promptName == "thread" && requestAttempt == 1 {
 		return base
@@ -340,8 +348,10 @@ func shouldRetryModelRequest(status, requestAttempt int, elapsed time.Duration) 
 }
 
 func retryableModelError(err error) bool {
-	var modelErr *ModelHTTPError
-	return errors.As(err, &modelErr) && retryableModelStatus(modelErr.StatusCode)
+	// Only transient faults are retried in place. Configuration and contract
+	// faults are deterministic and would otherwise consume the attempt budget of
+	// every queued job; stale/conflict responses are superseded, not retried.
+	return IsRetryable(ClassifyModelError(err))
 }
 
 func retryableModelStatus(status int) bool {
