@@ -445,6 +445,36 @@ func (c *ResponsesClient) responseSchema() map[string]any {
 	return c.schema
 }
 
+// readingSchema is the independent ReadingResult contract. It deliberately
+// contains no source echo and no classification: the reading pass may only
+// generate the reading aids, while the original text, links and images are
+// injected from the persisted source snapshot by the caller. It is defined on
+// its own rather than derived by deleting fields from the enrichment schema so
+// the two contracts can evolve separately.
+func readingSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"ai_title":          map[string]any{"type": "string"},
+			"original_language": map[string]any{"type": "string"},
+			"translated_text":   map[string]any{"type": "string"},
+			"summary":           map[string]any{"type": "string"},
+		},
+		"required":             []string{"ai_title", "original_language", "translated_text", "summary"},
+		"additionalProperties": false,
+	}
+}
+
+// ReadingResult is the validated output of the reading pass. Source fields are
+// never model-generated here; they are attached from the persisted snapshot.
+type ReadingResult struct {
+	AITitle          string
+	OriginalLanguage string
+	TranslatedText   string
+	Summary          string
+	Model            string
+}
+
 func enrichmentSchema(catalog taxonomy.Catalog) map[string]any {
 	return map[string]any{
 		"type": "object",

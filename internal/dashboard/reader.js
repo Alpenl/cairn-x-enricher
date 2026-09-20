@@ -9,13 +9,24 @@
   let loading = false;
   let catalog = null;
   let dirty = false;
+  // Reasons/status and AI tags are independent: editing one must never be an
+  // implicit confirmation of the other. `tagsDirty` is set only when the human
+  // actually touches a tag control, and `confirmed` records an explicit
+  // "these labels are correct" action.
+  let tagsDirty = false;
   let saving = false;
   const renderedText = new WeakMap();
   ui.byId("read-back").href = `/${window.location.search}`;
 
   function markDirty(value = true) {
     dirty = value;
+    if (!value) tagsDirty = false;
     ui.byId("curation-dirty").hidden = !dirty;
+  }
+
+  function markTagsDirty() {
+    tagsDirty = true;
+    markDirty();
   }
 
   function selection() {
@@ -49,6 +60,10 @@
     ui.byId("why-suggestion").textContent = classification.why_suggestion || "";
     ui.byId("why-suggestion-block").hidden = !classification.why_suggestion;
     ui.byId("reset-classification").hidden = !item.classification_reviewed;
+    // Confirmation is an explicit action only offered while the AI suggestions
+    // have not been reviewed; it never runs as a side effect of saving a reason.
+    const hasSuggestions = Boolean(classification.topics?.length || classification.form || classification.use);
+    ui.byId("confirm-classification").hidden = item.classification_reviewed || !hasSuggestions;
     const topics = ui.byId("curation-topics");
     topics.replaceChildren();
     for (const term of catalog.topics) {
@@ -85,14 +100,13 @@
     const whyDraft = ui.byId("curation-why").value;
     const statusDraft = ui.byId("curation-status").value;
     const update = reset ? { classification: null } : { why: whyDraft, curation_status: statusDraft };
-    if (!reset) {
-      const before = current.classification || { topics: [], form: "", use: "" };
-      const chosen = selection();
-      const sameTopics = JSON.stringify([...chosen.topics].sort()) === JSON.stringify([...(before.topics || [])].sort());
-      if (!current.classification_reviewed || !sameTopics || chosen.form !== before.form || chosen.use !== before.use) {
-        update.classification = chosen;
-      }
+    // Only an explicit tag edit or an explicit confirmation may send tags.
+    // Reasons, status and other fields are saved on their own without claiming
+    // the AI suggestions were reviewed.
+    if (!reset && tagsDirty) {
+      update.classification = selection();
     }
+    const sentTags = tagsDirty;
     saving = true;
     ui.byId("curation-fields").disabled = true;
     try {
@@ -107,7 +121,7 @@
         ui.byId("curation-status").value = statusDraft;
         markDirty();
       }
-      ui.showToast(reset ? "已恢复自动分类" : "已保存整理");
+      ui.showToast(reset ? "已恢复自动分类" : sentTags ? "已保存标签" : "已保存整理");
     } catch (error) {
       ui.showToast(ui.errorLabel(error.message), true);
     } finally {
@@ -281,8 +295,17 @@
       button.disabled = !current;
     }
   });
-  ui.byId("curation-form").addEventListener("input", () => markDirty());
-  ui.byId("curation-form").addEventListener("change", () => { markDirty(); updateTopicCount(); });
+  ui.byId("curation-why").addEventListener("input", () => markDirty());
+  ui.byId("curation-status").addEventListener("change", () => markDirty());
+  ui.byId("curation-topics").addEventListener("change", () => { markTagsDirty(); updateTopicCount(); });
+  ui.byId("curation-form-value").addEventListener("change", () => markTagsDirty());
+  ui.byId("curation-use").addEventListener("change", () => markTagsDirty());
+  ui.byId("confirm-classification").addEventListener("click", () => {
+    if (current && !current.classification_reviewed) {
+      markTagsDirty();
+      saveCuration();
+    }
+  });
   ui.byId("curation-form").addEventListener("submit", (event) => { event.preventDefault(); saveCuration(); });
   ui.byId("reset-classification").addEventListener("click", () => saveCuration(true));
   ui.byId("retry-taxonomy").addEventListener("click", loadTaxonomy);

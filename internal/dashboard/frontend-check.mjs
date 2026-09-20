@@ -162,7 +162,7 @@ function buildWindow() {
     "read-source", "read-figures", "read-why", "read-entities", "read-meta", "read-title", "read-body",
     "curation-fields", "curation-why", "curation-status", "curation-topics", "curation-form-value",
     "curation-use", "curation-dirty", "topic-count", "why-suggestion", "why-suggestion-block",
-    "reset-classification", "curation-error", "back-title", "back-state", "back-attention", "back-counts",
+    "reset-classification", "confirm-classification", "curation-error", "back-title", "back-state", "back-attention", "back-counts",
     "back-error", "back-refresh", "back-source-dialog", "back-source-form", "back-source-text",
     "back-source-title", "back-source-id", "back-source-error", "back-build",
   ]) register(id, new Node("div"));
@@ -470,6 +470,103 @@ const renderItem = (id) => ({
   let rejected = false;
   try { await w.CairnUI.exportMarkdown([{ id: 9, content_loaded: false }]); } catch { rejected = true; }
   check("failed hydration cannot produce a partial export", rejected && downloaded === "");
+}
+
+// Saving a reason or a curation status is not a review of the AI tags. Only an
+// explicit tag edit or an explicit confirmation may send `classification`.
+for (const [label, act] of [
+  ["why", (byId) => { byId("curation-why").value = "只是因为有趣"; byId("curation-form").listeners.submit[0]({ preventDefault() {} }); }],
+  ["status", (byId) => { byId("curation-status").value = "kept"; byId("curation-status").listeners.change[0]({}); byId("curation-form").listeners.submit[0]({ preventDefault() {} }); }],
+  ["why+status", (byId) => { byId("curation-why").value = "x"; byId("curation-status").value = "drop"; byId("curation-form").listeners.submit[0]({ preventDefault() {} }); }],
+]) {
+  const { window: w, byId } = buildWindow();
+  w.location.pathname = "/bookmarks/12";
+  byId("read-original").hidden = true;
+  const item = { ...renderItem(12), status: "completed", classification_reviewed: false };
+  const patches = [];
+  w.fetch = async (url, options) => {
+    if (String(url) === "/api/bookmarks/12") return { ok: true, json: async () => ({ ...item }) };
+    if (String(url) === "/api/taxonomy") {
+      return { ok: true, json: async () => ({ topics: [{ id: "llm", label: "LLM", active: true }], forms: [{ id: "tool", label: "工具", active: true }], uses: [{ id: "try", label: "待试", active: true }] }) };
+    }
+    if (String(url).includes("/curation")) {
+      patches.push(JSON.parse(options.body));
+      return { ok: true, json: async () => ({ ...item, curation_status: JSON.parse(options.body).curation_status || item.curation_status }) };
+    }
+    return { ok: true, json: async () => ({ items: [] }) };
+  };
+  loadScript(w, read("common.js"));
+  loadScript(w, read("reader.js"));
+  const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
+  await settle();
+  act(byId);
+  await settle();
+  equal(`reader sends one patch for a ${label}-only save`, patches.length, 1);
+  check(`${label}-only save omits classification`, !("classification" in patches[0]), JSON.stringify(patches[0]));
+}
+
+// Explicitly touching a tag is a human choice and must be submitted.
+{
+  const { window: w, byId } = buildWindow();
+  w.location.pathname = "/bookmarks/12";
+  byId("read-original").hidden = true;
+  const item = { ...renderItem(12), status: "completed", classification_reviewed: false };
+  const patches = [];
+  w.fetch = async (url, options) => {
+    if (String(url) === "/api/bookmarks/12") return { ok: true, json: async () => ({ ...item }) };
+    if (String(url) === "/api/taxonomy") {
+      return { ok: true, json: async () => ({ topics: [{ id: "llm", label: "LLM", active: true }], forms: [{ id: "tool", label: "工具", active: true }], uses: [{ id: "try", label: "待试", active: true }] }) };
+    }
+    if (String(url).includes("/curation")) {
+      patches.push(JSON.parse(options.body));
+      return { ok: true, json: async () => ({ ...item, classification_reviewed: true }) };
+    }
+    return { ok: true, json: async () => ({ items: [] }) };
+  };
+  loadScript(w, read("common.js"));
+  loadScript(w, read("reader.js"));
+  const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
+  await settle();
+  // The rendered topic checkbox for llm is checked because the AI suggested it;
+  // unchecking it is an explicit rejection.
+  const checkbox = byId("curation-topics").children[0].children[0];
+  checkbox.checked = false;
+  byId("curation-topics").listeners.change[0]({});
+  byId("curation-form").listeners.submit[0]({ preventDefault() {} });
+  await settle();
+  equal("explicit tag edit sends one patch", patches.length, 1);
+  check("explicit tag edit sends classification", "classification" in patches[0], JSON.stringify(patches[0]));
+  equal("explicit tag edit keeps the reason field", patches[0].why, "");
+}
+
+// An explicit "confirm these tags" click sends the labels unchanged.
+{
+  const { window: w, byId } = buildWindow();
+  w.location.pathname = "/bookmarks/12";
+  byId("read-original").hidden = true;
+  const item = { ...renderItem(12), status: "completed", classification_reviewed: false };
+  const patches = [];
+  w.fetch = async (url, options) => {
+    if (String(url) === "/api/bookmarks/12") return { ok: true, json: async () => ({ ...item }) };
+    if (String(url) === "/api/taxonomy") {
+      return { ok: true, json: async () => ({ topics: [{ id: "llm", label: "LLM", active: true }], forms: [{ id: "tool", label: "工具", active: true }], uses: [{ id: "try", label: "待试", active: true }] }) };
+    }
+    if (String(url).includes("/curation")) {
+      patches.push(JSON.parse(options.body));
+      return { ok: true, json: async () => ({ ...item, classification_reviewed: true }) };
+    }
+    return { ok: true, json: async () => ({ items: [] }) };
+  };
+  loadScript(w, read("common.js"));
+  loadScript(w, read("reader.js"));
+  const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
+  await settle();
+  check("confirm button is offered before review", byId("confirm-classification").hidden === false);
+  byId("confirm-classification").click();
+  await settle();
+  equal("explicit confirmation sends one patch", patches.length, 1);
+  check("explicit confirmation sends classification", "classification" in patches[0], JSON.stringify(patches[0]));
+  equal("explicit confirmation keeps the AI topics", patches[0].classification.topics, ["llm"]);
 }
 
 for (const code of ["job_busy", "not_found", "backend_error", "queue_full", "invalid_ids", "invalid_source", "invalid_curation", "invalid_id", "invalid_query", "invalid_json", "invalid_content_type"]) {
