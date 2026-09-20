@@ -34,14 +34,16 @@ pending
 
 | 包 | 责任 |
 | --- | --- |
-| `internal/cairn` | 调用 Worker 内部队列 API |
-| `internal/enrich` | xAI Responses 协议、顺序富化流程、严格输出校验 |
-| `internal/classify` | Jev typed judgments、分类策略与原始概率审计 |
-| `internal/taxonomy` | 版本化词表、别名归一化、分类枚举和输出校验 |
-| `internal/processor` | 有界并发、批处理和失败上报 |
+| `internal/cairn` | 调用 Worker 内部队列 API、v2 域 API 与权威目标握手 |
+| `internal/enrich` | xAI Responses 协议、独立 `ReadingResult`、typed 错误分类与有界退避 |
+| `internal/classify` | typed 判断原语（Noul/Choice/Score）、问题编译器、证据准备、纯 `Decide`/`Resolve`/`Replay` |
+| `internal/taxonomy` | 版本化词表、别名归一化、分类枚举和输出校验（v1 投影） |
+| `internal/processor` | 有界并发、独立分类 worker、组件暂停与 stale 处理 |
 | `internal/health` | liveness、readiness 和最近一批状态 |
-| `internal/dashboard` | 中文收藏列表、独立阅读页、同源查询/图片代理和有界人工处理队列 |
-| `internal/config` | 环境变量解析及启动时校验 |
+| `internal/dashboard` | 中文收藏列表、阅读页、多维字段级整理、v2 代理与有界人工队列 |
+| `internal/extension` | 有界语义扩展：实体候选/受限判断、受控外链抓取、重排、词表提案（默认关闭） |
+| `internal/config` | 按命令角色解析与校验环境变量 |
+| `experiments/classification` | 离线评估、校准、消融与晋升门禁（不进生产包） |
 
 人工任务先按 ID 在 Worker 原子领取，再进入本机有界队列。定时与人工获取/阅读增强共享 `MAX_CONCURRENCY` 信号量。Jev 使用额外的一个串行分类 worker，与获取队列并行，拥有独立 lease、重试和输入版本。
 

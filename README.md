@@ -35,7 +35,9 @@ Cairn Share App -> 原有 Worker API -> D1 links
 
 ## 流程设计
 
-生产流程将获取、阅读增强与分类分开，直接使用 Go 接口，不引入图编排框架。Jev 对每个主题独立提出 Noul 问题，形态和用途使用 Choice；程序按版本化策略生成最终标签，并保存原始概率。初始阈值仍需真实收藏校准。详细接口、状态、使用方式与限制见 [Jev 重构说明](docs/jev-classification.md)。旧单次生成器仅用于既有实验和基线回归；[简化与同步报告](docs/simplification-and-sync.md) 保留为历史记录。
+生产流程把获取、阅读增强与分类分开，并进一步把判断分为三个阶段：`Evaluate`（可联网，产生带完整分布的 typed raw judgments）、`Decide`（纯函数策略）、`Resolve`（纯函数人工覆盖解析）。Jev 对每个主题独立提出 Noul 问题，形态/用途使用 Choice，可选 Score 仅在有产品用途时启用；程序按版本化策略生成最终标签并保存原始分布，因此改变阈值可**零模型调用**重放。阅读使用独立的 `ReadingResult` schema，原文/链接/图片由程序从已存快照注入，模型从不回传原文。详细接口、状态、使用方式与限制见 [Jev 重构说明](docs/jev-classification.md)。旧单次生成器仅用于既有实验和基线回归；[简化与同步报告](docs/simplification-and-sync.md) 保留为历史记录。
+
+分类目标由 Worker 侧的**权威目标**（不可变 spec + requested model + policy + 单调 generation）决定；消费者只声明能力，不能以自己的 policy 改写目标。扩展能力（实体、补证据、重排、词表提案）各自独立 flag 且**默认关闭**，可在 `GET /api/extensions` 查看。
 
 ## 配置
 
@@ -66,13 +68,20 @@ HTTP 服务在这两项检查通过后才开始监听，因此配置错误表现
 
 ```bash
 go test ./...
-make test-frontend   # 零依赖的前端检查，只需 Node
+make test-frontend   # 零依赖的前端逻辑检查，只需 Node
+make test-browser    # 真实 Chrome 驱动的多维整理验收（21 项，无付费调用）
 make ablation-architecture # 离线逐项移除行为，在临时副本运行回归
-make verify          # vet + golangci-lint + 上述两项 + 构建
+make verify          # vet + golangci-lint + 上述检查 + 构建
+make test-ablation   # 离线重放已记录的消融结论，零模型调用
 go run ./cmd/cairn-x-enricher once --max-jobs 10
 go run ./cmd/cairn-x-enricher classify --max-jobs 10
+go run ./cmd/cairn-x-enricher replay --id 12 --topic-accept 0.6  # 零调用重放旧判断
+go run ./cmd/cairn-x-enricher refresh-source --id 12            # 显式重取原文
 go run ./cmd/cairn-x-enricher serve
+go run ./experiments/classification/main -dataset experiments/classification/testdata/synthetic-dataset.json
 ```
+
+`classify` 只校验 Worker 与 Jev 配置，不要求未使用的 Grok 凭据；`serve` 按已启用组件校验。普通 `--help`、root 命令与所有 `make` 目标都不会产生付费调用。
 
 `serve` 启动后立即执行一批任务，之后按 `POLL_INTERVAL` 运行，并在 `127.0.0.1:8080` 暴露：
 
