@@ -7,6 +7,7 @@
   <title>阅读 · Cairn 收藏</title>
   <link rel="stylesheet" href="/assets/dashboard.css">
   <script src="/assets/common.js" defer></script>
+  <script src="/assets/curation-v2.js" defer></script>
   <script src="/assets/reader.js" defer></script>
 </head>
 <body>
@@ -57,6 +58,16 @@
         </form>
       </details>
       <p id="read-entities" class="read-entities" hidden></p>
+      <details id="v2-curation" class="curation" hidden>
+        <summary>多维整理（v2）</summary>
+        <p id="v2-status" class="line-note" role="status" aria-live="polite" hidden></p>
+        <div id="v2-topics" class="v2-dimension"></div>
+        <div id="v2-content_functions" class="v2-dimension"></div>
+        <div id="v2-carriers" class="v2-dimension"></div>
+        <div id="v2-affordances" class="v2-dimension"></div>
+        <p id="v2-folded-note" class="line-note" hidden></p>
+        <span id="v2-dirty" hidden>未保存</span>
+      </details>
       <p id="read-lede" class="read-lede"></p>
       <div id="read-figures"></div>
       <div id="read-body" class="read-body"></div>

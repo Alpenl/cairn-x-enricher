@@ -64,6 +64,9 @@ var backstageJS []byte
 //go:embed reader.js
 var readerJS []byte
 
+//go:embed curation-v2.js
+var curationV2JS []byte
+
 //go:embed download.svg
 var downloadSVG []byte
 
@@ -75,6 +78,16 @@ type Backend interface {
 	ClaimByID(context.Context, int64) (*cairn.Job, error)
 	GetTaxonomy(context.Context) (taxonomy.Catalog, error)
 	UpdateCuration(context.Context, int64, cairn.CurationUpdate) (cairn.BookmarkDetail, error)
+}
+
+// V2Backend is the optional multidimensional API. A backend that does not
+// implement it degrades to read-only v1 rather than showing empty data.
+type V2Backend interface {
+	GetV2Selection(context.Context, int64) (cairn.V2SelectionView, error)
+	UpdateV2Selection(context.Context, int64, cairn.V2Selection) (cairn.V2SelectionView, error)
+	GetV2Taxonomy(context.Context) (cairn.V2Taxonomy, error)
+	ApplyV2Override(context.Context, int64, cairn.V2Override) (json.RawMessage, error)
+	GetV2Effective(context.Context, int64) (json.RawMessage, error)
 }
 
 // JobProcessor handles a job after the Worker has granted its lease.
@@ -284,6 +297,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /assets/reader.js", func(writer http.ResponseWriter, _ *http.Request) {
 		serveAsset(writer, "text/javascript; charset=utf-8", readerJS)
 	})
+	mux.HandleFunc("GET /assets/curation-v2.js", func(writer http.ResponseWriter, _ *http.Request) {
+		serveAsset(writer, "text/javascript; charset=utf-8", curationV2JS)
+	})
 	mux.HandleFunc("GET /assets/download.svg", func(writer http.ResponseWriter, _ *http.Request) {
 		serveAsset(writer, "image/svg+xml", downloadSVG)
 	})
@@ -296,6 +312,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/bookmarks", s.listBookmarks)
 	mux.HandleFunc("GET /api/taxonomy", s.getTaxonomy)
 	mux.HandleFunc("PATCH /api/bookmarks/{id}/curation", s.updateCuration)
+	mux.HandleFunc("GET /api/bookmarks/{id}/v2-selection", s.getV2Selection)
+	mux.HandleFunc("PATCH /api/bookmarks/{id}/v2-selection", s.updateV2Selection)
+	mux.HandleFunc("GET /api/v2-taxonomy", s.getV2Taxonomy)
+	mux.HandleFunc("POST /api/bookmarks/{id}/v2-override", s.applyV2Override)
+	mux.HandleFunc("GET /api/bookmarks/{id}/v2-effective", s.getV2Effective)
 	mux.HandleFunc("GET /api/bookmarks/{id}", s.getBookmark)
 	mux.HandleFunc("GET /api/images/{key...}", s.getImage)
 	mux.HandleFunc("GET /api/backstage", s.getBackstage)
@@ -420,6 +441,162 @@ func (s *Server) updateCuration(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 	writeJSON(writer, http.StatusOK, detail)
+}
+
+// v2Backend returns the optional multidimensional API, or writes a safe
+// read-only signal when the configured backend does not implement it.
+func (s *Server) v2Backend(writer http.ResponseWriter) (V2Backend, bool) {
+	v2, ok := s.backend.(V2Backend)
+	if !ok {
+		writeJSON(writer, http.StatusOK, map[string]any{"available": false, "reason": "v2_unsupported"})
+		return nil, false
+	}
+	return v2, true
+}
+
+func (s *Server) getV2Selection(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	v2, ok := s.v2Backend(writer)
+	if !ok {
+		return
+	}
+	view, err := v2.GetV2Selection(request.Context(), id)
+	if errors.Is(err, cairn.ErrV2Unsupported) {
+		writeJSON(writer, http.StatusOK, map[string]any{"available": false, "reason": "v2_unsupported"})
+		return
+	}
+	if err != nil {
+		s.writeBackendError(writer, "get v2 selection", id, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"available": true, "selection": view.Selection, "v1_projection": view.V1Projection, "taxonomy_version": view.TaxonomyVersion, "v1_only": view.V1Only, "revision": view.Revision})
+}
+
+func (s *Server) updateV2Selection(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		writeError(writer, http.StatusBadRequest, "invalid_content_type")
+		return
+	}
+	request.Body = http.MaxBytesReader(writer, request.Body, maxActionBody)
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	var selection cairn.V2Selection
+	if err := decoder.Decode(&selection); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		writeError(writer, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	v2, ok := s.v2Backend(writer)
+	if !ok {
+		return
+	}
+	view, err := v2.UpdateV2Selection(request.Context(), id, selection)
+	if errors.Is(err, cairn.ErrV2Unsupported) {
+		writeError(writer, http.StatusConflict, "v2_unsupported")
+		return
+	}
+	if err != nil {
+		s.writeBackendError(writer, "update v2 selection", id, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, view)
+}
+
+func (s *Server) getV2Taxonomy(writer http.ResponseWriter, request *http.Request) {
+	v2, ok := s.v2Backend(writer)
+	if !ok {
+		return
+	}
+	vocabulary, err := v2.GetV2Taxonomy(request.Context())
+	if errors.Is(err, cairn.ErrV2Unsupported) {
+		writeJSON(writer, http.StatusOK, map[string]any{"available": false, "reason": "v2_unsupported"})
+		return
+	}
+	if err != nil {
+		s.writeBackendError(writer, "get v2 taxonomy", 0, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, vocabulary)
+}
+
+func (s *Server) applyV2Override(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		writeError(writer, http.StatusBadRequest, "invalid_content_type")
+		return
+	}
+	request.Body = http.MaxBytesReader(writer, request.Body, maxActionBody)
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	var override cairn.V2Override
+	if err := decoder.Decode(&override); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		writeError(writer, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	// A why/status edit must never produce an override event: only a real
+	// field-level action is accepted here.
+	if override.Field == "why" || override.Field == "status" || override.OperationKey == "" {
+		writeError(writer, http.StatusBadRequest, "invalid_override")
+		return
+	}
+	v2, ok := s.v2Backend(writer)
+	if !ok {
+		return
+	}
+	result, err := v2.ApplyV2Override(request.Context(), id, override)
+	if errors.Is(err, cairn.ErrV2Unsupported) {
+		writeError(writer, http.StatusConflict, "v2_unsupported")
+		return
+	}
+	if err != nil {
+		s.writeBackendError(writer, "apply v2 override", id, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, result)
+}
+
+func (s *Server) getV2Effective(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	v2, ok := s.v2Backend(writer)
+	if !ok {
+		return
+	}
+	result, err := v2.GetV2Effective(request.Context(), id)
+	if errors.Is(err, cairn.ErrV2Unsupported) {
+		writeJSON(writer, http.StatusOK, map[string]any{"available": false, "reason": "v2_unsupported"})
+		return
+	}
+	if err != nil {
+		s.writeBackendError(writer, "get v2 effective", id, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, result)
 }
 
 func (s *Server) getImage(writer http.ResponseWriter, request *http.Request) {

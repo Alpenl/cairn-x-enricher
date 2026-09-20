@@ -9,7 +9,7 @@ LDFLAGS := -s -w \
 	-X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Commit=$(COMMIT) \
 	-X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Date=$(BUILD_DATE)
 
-.PHONY: build test test-frontend lint lint-ci verify docker-build test-ablation ablation ablation-architecture
+.PHONY: build test test-frontend test-browser lint lint-ci verify docker-build test-ablation ablation ablation-architecture
 
 build:
 	mkdir -p bin
@@ -21,6 +21,12 @@ test:
 # Frontend assets use only the Node standard library, so no install step is
 # needed. These cover the cached formatters and export chunking that the
 # dashboard performance work depends on.
+# Real-browser acceptance for the multidimensional curation UI. It uses the
+# system Chrome and a bundled mock Worker, so it makes no paid or network call.
+# Enable with CHROME_PATH when Chrome is not on the default path.
+test-browser:
+	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/run.mjs
+
 test-frontend:
 	node internal/dashboard/frontend-check.mjs internal/dashboard
 
