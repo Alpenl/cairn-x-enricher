@@ -19,6 +19,7 @@ import (
 
 	"github.com/Alpenl/cairn-x-enricher/internal/buildinfo"
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
+	"github.com/Alpenl/cairn-x-enricher/internal/extension"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
@@ -129,6 +130,10 @@ type Server struct {
 	// receive from the channel without holding that lock.
 	queued  atomic.Int64
 	catalog *taxonomyCache
+
+	// extensionFlags reports which bounded extensions are enabled. They are
+	// independent of each other and default to off.
+	extensionFlags extension.Flags
 
 	// summary caches the backstage aggregate, which costs several backend
 	// list calls and is polled by an idle browser tab.
@@ -315,6 +320,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/bookmarks/{id}/v2-selection", s.getV2Selection)
 	mux.HandleFunc("PATCH /api/bookmarks/{id}/v2-selection", s.updateV2Selection)
 	mux.HandleFunc("GET /api/v2-taxonomy", s.getV2Taxonomy)
+	mux.HandleFunc("GET /api/extensions", s.getExtensions)
 	mux.HandleFunc("POST /api/bookmarks/{id}/v2-override", s.applyV2Override)
 	mux.HandleFunc("GET /api/bookmarks/{id}/v2-effective", s.getV2Effective)
 	mux.HandleFunc("GET /api/bookmarks/{id}", s.getBookmark)
@@ -452,6 +458,18 @@ func (s *Server) v2Backend(writer http.ResponseWriter) (V2Backend, bool) {
 		return nil, false
 	}
 	return v2, true
+}
+
+// getExtensions reports which bounded semantic extensions are enabled. Every
+// flag defaults to off, so a disabled extension is visible rather than a
+// button that silently succeeds.
+func (s *Server) getExtensions(writer http.ResponseWriter, _ *http.Request) {
+	flags := s.extensionFlags
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"entities": flags.Entities, "evidence": flags.Evidence,
+		"rerank": flags.Rerank, "proposal": flags.Proposal,
+		"quality_verified": false,
+	})
 }
 
 func (s *Server) getV2Selection(writer http.ResponseWriter, request *http.Request) {

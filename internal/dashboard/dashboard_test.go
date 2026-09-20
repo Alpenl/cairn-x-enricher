@@ -471,3 +471,28 @@ func TestCurationValidatesEditsAndForwardsFacets(t *testing.T) {
 		t.Fatalf("facets were lost: %+v (HTTP %d)", backend.query, writer.Code)
 	}
 }
+
+// The extensions endpoint must report every capability as off by default: a
+// disabled extension is visible rather than a button that silently succeeds.
+func TestExtensionsReportDisabledByDefault(t *testing.T) {
+	fake := &fakeBackend{}
+	server := New(context.Background(), health.NewTracker(), fake, nil, testLogger(), 1)
+	defer server.Drain(time.Second)
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/extensions", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d", recorder.Code)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, flag := range []string{"entities", "evidence", "rerank", "proposal"} {
+		if payload[flag] != false {
+			t.Errorf("%s = %v, want false", flag, payload[flag])
+		}
+	}
+	if payload["quality_verified"] != false {
+		t.Error("quality must not be claimed verified without gold")
+	}
+}
