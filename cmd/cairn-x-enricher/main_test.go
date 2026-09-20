@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 )
 
@@ -43,6 +44,21 @@ func TestIsContractFailureSeesWrappedErrors(t *testing.T) {
 	wrapped := errors.Join(errors.New("batch failed"), &enrich.ModelHTTPError{StatusCode: http.StatusUnauthorized})
 	if !isContractFailure(wrapped) {
 		t.Error("isContractFailure(wrapped) = false, want true")
+	}
+}
+
+// A stale/conflict response and a rejected internal token must be distinguished:
+// the conflict is a superseded job (do not drop readiness), the rejected token
+// is a configuration fault (drop readiness).
+func TestIsContractFailureDistinguishesStaleFromMisconfiguration(t *testing.T) {
+	if isContractFailure(&enrich.ModelHTTPError{StatusCode: http.StatusConflict}) {
+		t.Error("a model conflict must not be treated as a contract failure")
+	}
+	if isContractFailure(&cairn.APIError{StatusCode: http.StatusConflict, Code: "lease_conflict"}) {
+		t.Error("a lease conflict must not be treated as a contract failure")
+	}
+	if !isContractFailure(&cairn.APIError{StatusCode: http.StatusUnauthorized, Code: "unauthorized"}) {
+		t.Error("a rejected Worker token must be treated as a contract failure")
 	}
 }
 

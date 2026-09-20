@@ -430,14 +430,33 @@ func readinessReason(body io.Reader) string {
 
 // isContractFailure reports whether an error is a configuration or upstream
 // contract fault that retrying cannot repair.
+// isContractFailure reports whether a batch failure means the service cannot
+// make progress until an operator changes configuration or the provider fixes
+// its contract. Transient network/rate-limit faults and stale/conflict
+// responses are excluded: those are handled by bounded retry and must not drop
+// readiness for every future batch.
 func isContractFailure(err error) bool {
 	if err == nil {
 		return false
+	}
+	// The typed classification is authoritative when present.
+	class := enrich.ClassOf(enrich.ClassifyModelError(err))
+	if class == enrich.ErrorClassConfiguration || class == enrich.ErrorClassContract {
+		return true
 	}
 	var modelErr *enrich.ModelHTTPError
 	if errors.As(err, &modelErr) {
 		switch modelErr.StatusCode {
 		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusBadRequest:
+			return true
+		}
+	}
+	var apiErr *cairn.APIError
+	if errors.As(err, &apiErr) {
+		// A rejected token or malformed internal request is a configuration or
+		// contract fault; a conflict is a stale job, not a component failure.
+		switch apiErr.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden, http.StatusBadRequest:
 			return true
 		}
 	}
