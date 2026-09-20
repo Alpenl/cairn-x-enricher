@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
@@ -124,5 +125,51 @@ func TestHTTPFailureDoesNotEchoResponseSecrets(t *testing.T) {
 	_, err := c.Classify(context.Background(), Input{OriginalText: "source"})
 	if err == nil || strings.Contains(err.Error(), "secret") || !strings.Contains(err.Error(), "429") {
 		t.Fatalf("unsafe or missing error: %v", err)
+	}
+}
+
+func TestClassifyClassifiesProviderFailuresByStatus(t *testing.T) {
+	cases := []struct {
+		status int
+		want   enrich.ErrorClass
+	}{
+		{http.StatusUnauthorized, enrich.ErrorClassConfiguration},
+		{http.StatusUnprocessableEntity, enrich.ErrorClassContract},
+		{http.StatusTooManyRequests, enrich.ErrorClassTransient},
+		{http.StatusServiceUnavailable, enrich.ErrorClassTransient},
+		{http.StatusConflict, enrich.ErrorClassStale},
+	}
+	for _, testCase := range cases {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(testCase.status)
+		}))
+		client, err := NewClient(server.URL, "secret", "jev-latest", server.Client(), testCatalog())
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = client.Classify(context.Background(), Input{OriginalText: "text"})
+		server.Close()
+		if err == nil {
+			t.Fatalf("status %d: expected error", testCase.status)
+		}
+		if got := enrich.ClassOf(err); got != testCase.want {
+			t.Errorf("status %d: class = %s, want %s", testCase.status, got, testCase.want)
+		}
+	}
+}
+
+func TestClassifyRejectsTrailingProviderDataAsContractError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model":"jev","answers":{}} trailing`))
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "secret", "jev-latest", server.Client(), testCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.Classify(context.Background(), Input{OriginalText: "text"})
+	if err == nil || enrich.ClassOf(err) != enrich.ErrorClassContract {
+		t.Fatalf("trailing data class = %s, want contract", enrich.ClassOf(err))
 	}
 }

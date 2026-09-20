@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
@@ -133,20 +134,23 @@ func (c *Client) Classify(ctx context.Context, input Input) (Result, error) {
 	req.Header.Set("Content-Type", "application/json")
 	response, err := c.http.Do(req)
 	if err != nil {
-		return Result{}, fmt.Errorf("call TypeSafe: %w", err)
+		return Result{}, enrich.ClassifyModelError(fmt.Errorf("call TypeSafe: %w", err))
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return Result{}, fmt.Errorf("TypeSafe returned HTTP %d", response.StatusCode)
+		// The provider status decides whether this is a component problem, a
+		// contract problem or a bounded transient retry. Collapsing them into one
+		// "HTTP %d" error would make a bad key burn every queued job.
+		return Result{}, enrich.ClassifyModelError(&enrich.ModelHTTPError{StatusCode: response.StatusCode})
 	}
 	var result Result
 	decoder := json.NewDecoder(io.LimitReader(response.Body, 1<<20))
 	if err := decoder.Decode(&result); err != nil {
-		return Result{}, errors.New("invalid TypeSafe response JSON")
+		return Result{}, enrich.Classified(errors.New("invalid TypeSafe response JSON"), enrich.ErrorClassContract)
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
-		return Result{}, errors.New("unexpected trailing TypeSafe response data")
+		return Result{}, enrich.Classified(errors.New("unexpected trailing TypeSafe response data"), enrich.ErrorClassContract)
 	}
 	if result.Model == "" || len(result.Model) > 200 {
 		return Result{}, errors.New("TypeSafe response missing model")

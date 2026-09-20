@@ -472,6 +472,42 @@ const renderItem = (id) => ({
   check("failed hydration cannot produce a partial export", rejected && downloaded === "");
 }
 
+// A dirty draft must survive a poll: the server refresh cannot silently replace
+// what the user is typing, and the poll must not run at all while dirty.
+{
+  const { window: w, byId } = buildWindow();
+  w.location.pathname = "/bookmarks/12";
+  byId("read-original").hidden = true;
+  let item = { ...renderItem(12), status: "processing", why: "server reason" };
+  let poll;
+  w.setInterval = (callback) => { poll = callback; };
+  let detailFetches = 0;
+  w.fetch = async (url) => {
+    if (String(url) === "/api/bookmarks/12") { detailFetches++; return { ok: true, json: async () => ({ ...item }) }; }
+    if (String(url) === "/api/taxonomy") {
+      return { ok: true, json: async () => ({ topics: [{ id: "llm", label: "LLM", active: true }], forms: [{ id: "tool", label: "工具", active: true }], uses: [{ id: "try", label: "待试", active: true }] }) };
+    }
+    return { ok: true, json: async () => ({ items: [] }) };
+  };
+  loadScript(w, read("common.js"));
+  loadScript(w, read("reader.js"));
+  const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
+  await settle();
+  const before = detailFetches;
+  // User starts editing the reason.
+  byId("curation-why").value = "draft in progress";
+  byId("curation-why").listeners.input[0]({});
+  byId("curation-status").value = "drop";
+  byId("curation-status").listeners.change[0]({});
+  check("editing a reason marks the form dirty", byId("curation-dirty").hidden === false);
+  item = { ...item, why: "server reason changed", curation_status: "kept" };
+  poll();
+  await settle();
+  equal("polling does not refetch detail while the form is dirty", detailFetches, before);
+  equal("a dirty reason draft is not overwritten by a poll", byId("curation-why").value, "draft in progress");
+  equal("a dirty status draft is not overwritten by a poll", byId("curation-status").value, "drop");
+}
+
 // Saving a reason or a curation status is not a review of the AI tags. Only an
 // explicit tag edit or an explicit confirmation may send `classification`.
 for (const [label, act] of [

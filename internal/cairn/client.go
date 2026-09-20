@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
@@ -137,6 +138,38 @@ func (e *APIError) Error() string {
 		return fmt.Sprintf("cairn API returned HTTP %d", e.StatusCode)
 	}
 	return fmt.Sprintf("cairn API returned HTTP %d (%s)", e.StatusCode, e.Code)
+}
+
+// Class maps a Worker error to the shared runtime class. The Worker returns a
+// typed code rather than a bare status precisely so the consumer does not have
+// to guess: a 409 may be a lost lease, a changed target, changed input or a
+// duplicate completion, and each needs different recovery.
+func (e *APIError) Class() enrich.ErrorClass {
+	switch e.Code {
+	case "capability_mismatch", "configuration_error":
+		return enrich.ErrorClassConfiguration
+	case "invalid_classification", "invalid_classification_config", "invalid_source", "invalid_operation_key", "invalid_json":
+		return enrich.ErrorClassContract
+	case "target_changed", "input_changed", "lease_expired":
+		return enrich.ErrorClassStale
+	case "already_completed":
+		return enrich.ErrorClassCompleted
+	case "operation_conflict":
+		return enrich.ErrorClassContract
+	}
+	switch e.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusPaymentRequired:
+		return enrich.ErrorClassConfiguration
+	case http.StatusBadRequest, http.StatusUnprocessableEntity, http.StatusUnsupportedMediaType:
+		return enrich.ErrorClassContract
+	case http.StatusConflict:
+		return enrich.ErrorClassStale
+	case http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusInternalServerError,
+		http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return enrich.ErrorClassTransient
+	default:
+		return enrich.ErrorClassUnknown
+	}
 }
 
 // Client calls the Cairn Share Worker's internal enrichment endpoints.

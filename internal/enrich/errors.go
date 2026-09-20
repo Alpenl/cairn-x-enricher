@@ -63,6 +63,10 @@ func classify(class ErrorClass, cause error) error {
 	return &ClassifiedError{Class: class, Cause: cause}
 }
 
+// Classified exposes classify to other packages that need to attach a runtime
+// class to an error they produced.
+func Classified(cause error, class ErrorClass) error { return classify(class, cause) }
+
 // ClassOf reports the error class, defaulting to unknown. Context cancellation
 // is reported as stale: a cancelled job was not a semantic model failure.
 func ClassOf(err error) ErrorClass {
@@ -72,6 +76,12 @@ func ClassOf(err error) ErrorClass {
 	var classified *ClassifiedError
 	if errors.As(err, &classified) {
 		return classified.Class
+	}
+	// Errors from other packages can classify themselves without this package
+	// importing them (the Cairn API client returns typed Worker codes).
+	var self interface{ Class() ErrorClass }
+	if errors.As(err, &self) {
+		return self.Class()
 	}
 	return ErrorClassUnknown
 }
