@@ -1,189 +1,177 @@
-# Jev 分类决策与人工整理 v2：完整审查记录
+# Jev v2：审查发现与实施映射
 
-状态：设计审查与实施输入，**不是已实现功能或测试通过报告**。日期：2026-09-20。
+本文件是Issue流程下的审查入口，不是功能实现或质量报告。**原始完整分析已经逐字节保存在[历史审查](archive/REVIEW-20260920.md)**，blob `28597ba8e4335747fd3b207c08a4b3798b05bc57`；原始论证、源码依据与取舍均保留。本文件保留R01–R39稳定编号，去除旧计划PR执行指令，映射至当前Issues。
 
-审查基线：Enricher `cb13d0e543e54f18baf6e151630d728b3175e792`；配套 cairn-share `5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b`。两仓库在创建计划前重新核对，仍为上述版本。实现时必须记录实际基线并检查漂移。
+基线E `cb13d0e543e54f18baf6e151630d728b3175e792`、S `5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b`。这是当时源码审查，执行时先核实实际版本。前次聊天中的SQLite复现未附可审查产物，仍需真实Worker回归；一条live合成样本只证明接口，不证明真实分类质量。
 
-本文件完整收录前次讨论的分析要点、原因、设计取舍与后续扩展，按 R01–R39 编号，供各批次逐项追踪。不把建议伪装成生产事实；不把一次合成样本的 API 成功当作准确率证明。前次讨论称曾做 SQLite 最小复现，但该次运行产物未随仓库保存，因此本计划仍要求执行者重新生成可审查的回归证据，不以聊天中的声明作为验收依据。
+## 现有基础
 
-## 一、总体判断与应该保留的设计
+### R01 保留source-first和队列边界
 
-### R01 保留原文、阅读增强、分类的边界
+原文先存、阅读增强与分类分离、独立lease/revision及人工优先已经存在，不推倒重来。B01/B03/B04/B10持续回归。[stages.go](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/processor/stages.go)。
 
-现有代码已经先保存原文，再做阅读增强；分类独立领取任务、失败独立退避，完成结果受租约与 revision 保护，且不覆盖人工整理。这不是仅替换了一个模型接口。下一轮应建立在这些基础上，而不是推倒重来。重点参考 [processor/stages.go](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/processor/stages.go)、[Worker classification.ts](https://github.com/Alpenl/cairn-share/blob/5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b/worker/src/classification.ts)。
+### R02 不要把已有能力当新成果
 
-### R02 重构的主要欠缺在语义与产品模型
+多问题同请求、typed answers/model/usage保存已实现。短板是语义结果压回三个topic/单form/单use/global uncertainty；下一步是判断、决策与人工整理分层，而不是再包API。B04。[jev.go](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/classify/jev.go)。
 
-当前已经一次提交多个独立问题、保存完整 answers/model/usage。不要把“并行问问题”“保存概率”当作尚未实现的成果。真正的问题是丰富判断最终被压回“最多三个主题＋一种形态＋一种用途＋一个 uncertainty”。[分类器基线](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/classify/jev.go)。
+## 标签与不确定性
 
-目标：Jev 回答边界清楚的语义问题，程序执行可重放的选择策略，人决定收藏意图和最终整理。标签是这些结果的展示，不是唯一底层事实。
+### R03 内容主题、功能和载体分离
 
-## 二、词表和标签结构
+method/tool/data可并存，thread/longform是组织载体，不应单选竞争。primary_form只能是展示投影。B05/B04/B06/B07。[原词表](https://github.com/Alpenl/cairn-share/blob/5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b/worker/src/taxonomy.json)。
 
-### R03 分离内容主题、内容功能与内容载体
+### R04 潜在用途不是个人动机
 
-词表把 method/tool/data 与 thread/longform 放进同一 form。工具介绍可以同时包含方法、案例和数据，也可以以串推发布。强迫它们单选会提前丢失信息。建议 topics 多选、content_functions 多选、carrier 由真实来源结构优先确定。可保留 primary_form 作为卡片摘要，但不能作为唯一事实。[词表基线](https://github.com/Alpenl/cairn-share/blob/5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b/worker/src/taxonomy.json)。
+quote/try/background/material可并存，contra是明确人工针对主张的关系。actionable不等于用户已决定to_try；收藏/引用/作者观点不代表用户立场。B05/B06/B07，个人维度独立。
 
-### R04 潜在用途不等于用户意图或用户立场
+### R05 同义、层级和相关关系不能混同
 
-quote/try/background/material 是可能并存的用途；contra 是用户对某个主张的明确反对关系，不应与它们争夺单值 use。actionable 表示内容提供可执行材料；to_try 表示用户决定以后尝试，必须分开。允许用户不填写意图；不能从作者立场、引用关系或用户收藏动作推断用户赞成/反对。敏感观点不做自动偏好画像。
+llm/AI/agent、eng/前后端等宽窄关系不应都当等价alias，eval可作为跨领域方法。稳定ID保历史含义，显式mapping，不骤增数百标签。B05/B09。
 
-### R05 同义词、上下位概念与相关概念分开
+### R06 三主题上限是展示策略
 
-现有 llm aliases 含 AI/AIGC/agent，eng aliases 含前端/后端/基础设施。真正同义词用于精确归一化；上下位关系用于层级浏览；相关概念用于检索提示，不能无条件视为等价。eval 更像跨领域的方法维度。保留已使用稳定 ID；任何迁移必须显式映射、保留历史含义，不能偷偷改变旧 ID 的语义。不要一下扩成几百个主题，先由实际找回任务证明细分价值。
+限制散布Go归一化/人工校验、Worker、Web；只改分类器无效。底层完整、有效策略上限独立、卡片显示三项可展开，第四项不自动不确定。B04/B05/B06/B07。[Go taxonomy](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/taxonomy/taxonomy.go)。
 
-### R06 三主题上限应是展示规则，不是分散的事实约束
+### R07 概率不是重要性
 
-限制分布于 Go selectAnswers、Normalize、ValidateSelection、Worker validateSelection 及阅读页。只改分类器没有用。底层保存完整有效判断，策略保留实质相关主题，卡片默认显示三个并可展开。仍保留防异常膨胀的可配置安全上限；第四个高质量主题本身不应导致不确定。[Go taxonomy](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/taxonomy/taxonomy.go)、[Worker curation](https://github.com/Alpenl/cairn-share/blob/5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b/worker/src/curation.ts)、[reader.js](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/dashboard/reader.js)。
+不同Noul命题的成立概率不天然可比较主题主次。需要程度时用具体等级，否则显式稳定排序。B04/B09。[Noul](https://docs.typesafe.ai/primitives/noul)。
 
-### R07 概率不是重要性排名
+### R08 全局uncertainty放大审核负担
 
-独立 Noul 的概率表示不同命题成立的把握，不天然适合跨主题比较重要性。宽主题可能更容易成立，不代表更值得展示。需要核心程度时采用有清晰等级的判断或明确展示规则，不能简单按概率把宽主题挤到前面。[Noul](https://docs.typesafe.ai/primitives/noul)。
+任一主题0.2<p<0.8就令整条待确认会浪费人工。逐字段接受/拒绝/弃权，让明确值生效；优先复核会改变有效整理/检索的分歧。B04/B06。
 
-## 三、不确定性与决策
+### R09 合法空值与服务失败分开
 
-### R08 全局 uncertainty 放大人工负担
+not_applicable、out_of_taxonomy、insufficient_evidence、ambiguous_boundary不等于HTTP失败。原因有观察或专门判断依据，unknown允许，不能从p=0.5臆断缺材料。B03/B04/B05/B06。
 
-基线任一主题处于 0.2<p<0.8 就令整条不确定；强匹配超过三个、none、空值也同样处理。应改为字段级 accepted/rejected/abstained，让已明确主题正常生效，边缘候选可选择确认。人工队列优先处理会改变有效检索或整理结果的分歧，而不是机械审查所有中间概率。
+### R10 当前margin条件冗余
 
-### R09 合法空值、词表外、证据不足与服务失败必须区分
+归一化pmax>=0.65时次高<=0.35，差至少0.30，因此margin0.15不再筛选；微小和误差不改变结论。先边界测试，再离线校准有效规则，不堆阈值。B04/B08。
 
-建议原因代码：not_applicable、out_of_taxonomy、insufficient_evidence、ambiguous_boundary。任务 completed/failed/waiting_source 与字段判断是两条轴。没有匹配不必重试 API；材料不足才考虑补证据；问题定义重叠应改问题；HTTP 失败走工程重试。未知原因不能由概率凭空编造，优先使用可观察的完整性元数据。
+### R11 confidence不是独立正确率
 
-### R10 当前 Choice margin 条件冗余
+它概括已有分布，不能默认乘概率，也不证明整体工作流正确。是否有决策增益须评估，稀有标签采用共享/分组策略防过拟合。B04/B08。[Confidence](https://docs.typesafe.ai/confidence)。
 
-最高概率>=0.65 时，归一化分布中的次高<=0.35，差距至少0.30，因此 margin>=0.15 不增加约束。允许的小幅概率和误差也不足以使它生效。用表驱动测试说明此性质，再通过离线验证保留真正有效的规则组合。不要靠继续叠阈值假装更严谨。
+## Jev问题与证据
 
-### R11 confidence 不是独立证据
+### R12 按语义选Noul、Choice、Score
 
-现代码校验保存 Choice confidence 而未用于选择。可以评估它的用途，但官方说明其来源是已有概率分布，不是独立正确率。禁止默认 probability×confidence；不得以更高 confidence 等同更高准确率。稀有标签采用共享/分组策略，不用极少样本为每个标签拟合精确阈值。[Confidence](https://docs.typesafe.ai/confidence)。
+是否成立用Noul，真正互斥才Choice，程度用具体有序Score。可执行程度从无动作、缺步骤、具体步骤到可运行且可检验；同均值不同分布保留，不给每标签机械加两种问题。B04/B08/B09。[Score](https://docs.typesafe.ai/primitives/score)。
 
-## 四、充分而克制地使用 Jev
+### R13 词条成为可执行定义
 
-### R12 按问题含义选择原语
+补definition/includes/excludes/正反例/边界与概念关系；优先工程vs工具推荐、产品vs设计、评估vs泛体验。结构化instructions/criteria不硬拼长字符串，请求类型支持对象和有序数组。B04/B05。[高级问题](https://docs.typesafe.ai/primitives/advanced)。
 
-Noul：是否实质讨论主题、是否有步骤/实验结果、是否依赖未取得材料。Choice：真的需要单选的主要功能、有限实体候选对齐、明确的原因选项。Score：可执行程度、背景完整程度、主题讨论深度。Score 使用自洽且具体的有序描述，保留分布，不能只保留均值；相同均值可来自完全不同的分布。不要对所有标签机械地同时使用 Noul 与 Score。[Score](https://docs.typesafe.ai/primitives/score)。
+### R14 ID不提供语义，问题不共享答案
 
-可执行程度示例：没有动作；仅方向且缺关键步骤；具体步骤和必要条件；可运行示例与结果检查方式。这是设计示例，不是生产校准等级。
+完整问题含义在instructions/criteria，不能依赖另一个未返回答案。同state独立问题仍批量；真需新材料/候选才第二次调用。B04/B09。[API](https://docs.typesafe.ai/api)、[fan-out](https://docs.typesafe.ai/patterns/fan-out)。
 
-### R13 词条成为可执行语义定义
+### R15 来源角色与provenance保留
 
-重要或易混淆词条补 definition/includes/excludes/positive_examples/boundary_examples/related_terms/broader_terms。优先工程vs工具推荐、产品vs设计、评估vs泛泛体验。instructions 与 criteria 可直接结构化，不再硬拼长字符串；Go 请求类型需要支持对象/数组及 Score 的有序数组，并保留类型与大小验证。[结构化问题](https://docs.typesafe.ai/primitives/advanced)。
+原帖、作者续帖、引用、外链、第三方评论不压成一个context字符串；block ID/URL/关系依据/抓取方式/完整性可追溯，legacy未知不编造。B03/B04/B09。[source.go](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/enrich/source.go)。
 
-### R14 问题 ID 不提供语义，问题之间不共享答案
+### R16 客观与个人输入物理隔离
 
-topic_eval 之类 ID 只用于代码关联，完整问题含义必须在 instructions/criteria。一个请求中的问题看到同一 state、独立作答，不能引用另一问题尚未产生的答案。同证据独立问题继续批量；只有获取新证据或构造新候选确实依赖前一步结果时才多调用。[HTTP API](https://docs.typesafe.ai/api)、[fan-out](https://docs.typesafe.ai/patterns/fan-out)。
+提示“忽略note”不是隔离；客观HTTP body不含note/why/status，个人建议另行opt-in。同一请求问题共享state。B03/B04。[State](https://docs.typesafe.ai/concepts/state)。
 
-### R15 区分来源角色并保留 provenance
+### R17 长度与语言质量实测
 
-现有 original_text/context_text/note 分离值得保留，但 context_text 合并引用与评论。建议 evidence blocks：primary_post、author_continuation、quoted_post、external_article、third_party_comment。记录 block ID、URL、作者关系的依据、抓取方式、时间、完整性及截断。引用不等于认同；第三方评论不能代替原帖。旧快照无法确认角色时标 legacy_unknown，不能编造作者/链接。[source.go](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/enrich/source.go)。
+实施时核实上下文/问题/候选限额，字节、rune、token估算分清，不静默截断。中文/英文/混合分层评估，中英文问题规格比较；翻译仅辅助有来源，不能替代原文。B04/B08/B09。
 
-### R16 客观判断与个人备注物理隔离
+## 架构与正确性
 
-结构化字段只是提示区分，不是信息隔离。若要求修改备注不影响主题，则客观分类的请求体中根本不放 note/why/个人状态；个人维度单独请求或纯人工。所有问题共享同一 state，不能只写“忽略备注”而声称获得严格隔离。[State](https://docs.typesafe.ai/concepts/state)。
+### R18 Evaluate/Decide/Resolve分层
 
-### R17 控制材料长度并验证语言表现
+HTTP与typed校验、问题编译、policy、人工resolve拆开；后两者纯函数，保留单进程与Go接口。B03/B04/B10。
 
-按实施时官方文档核实模型上下文预算、问题数、选项数；不能用字符数冒充准确 token 数，也不能静默截断。当前文档说明文本输入及语言能力边界，中文/英文/混合应分别评估。比较中英文问题规格，但原文仍是证据，翻译只能作为有 provenance 的辅助，不得取代原文。
+### R19 失效键分开
 
-## 五、模型判断与程序决策分层
+evidence、问题语义、actual model、policy各自版本化。label只重显、阈值重放、定义重评依赖、note只个人；同ID不等于可复用。B03/B04/B08。
 
-### R18 分成证据、问题、原始判断、决策、有效视图
+### R20 当前job.result不足长期审计
 
-推荐 Evaluate(ctx,evidence,spec)->RawJudgments；Decide(raw,policy)->Proposals；Resolve(proposals,overrides)->EffectiveClassification。后两者是无网络纯函数。把 HTTP、响应校验、问题编译、选择、模板建议从 Client.Classify 拆开；保留现有 Go 接口和单进程。
+该字段会失效/覆盖，需要追加runs和可恢复输入/spec；只有hash不能复现。业务不可变不能阻止用户删除或保留期清理。B03/B10。[迁移0009](https://github.com/Alpenl/cairn-share/blob/5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b/worker/migrations/0009_independent_classification.sql)。
 
-### R19 分离失效键
+### R21 固定模型和漂移管理
 
-evidence_hash、question_spec_hash、resolved_model_id、decision_policy_version 分开。显示名变化只改展示；阈值/排序变化重放决策；定义变化重评相关问题；原文变化重评内容；备注变化只影响个人维度。问题级重用必须证明实际发送 state、候选、问题字节和模型一致；不能只因 ID 相同就复用。
+jev-latest移动而请求字符串不变，校准绑定实际model/spec；记录requested/resolved，漂移先评估，不自动晋升。B01/B04/B08。[Models](https://docs.typesafe.ai/models)。
 
-### R20 审计历史需要可重放快照
+### R22 P0：消费者交替重跑
 
-classification_jobs.result 会失效清空或被覆盖，不是长期实验记录。建议 append-only classification_runs 与可恢复的 evidence/spec 引用；links 保留当前投影。只有 hash 没有快照不可复现。审计不可变指业务写入不可篡改，不得妨碍用户删除其内容及明确的保留期清理。[迁移0009](https://github.com/Alpenl/cairn-share/blob/5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b/worker/migrations/0009_independent_classification.sql)。
+同词表A-v2完成、B-v1因不等重领，A再重领且attempt重置是代码允许路径，不代表已发生生产事故。Worker权威target，job绑定spec/generation，旧consumer只声明能力；必须重新生成Worker回归。B01。[classification.ts](https://github.com/Alpenl/cairn-share/blob/5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b/worker/src/classification.ts)。
 
-### R21 固定模型并管理漂移
+### R23 P0：保存原因隐式确认标签
 
-jev-latest 可移动，而请求字符串不变。校准绑定实际模型和问题规格；上线使用经验证的固定模型或明确禁止未确认漂移自动晋升。旧结果记录 requested/resolved 两者。不得凭计划指定一个未来仍必然可用的版本。[Models](https://docs.typesafe.ai/models)。
+reader.js未reviewed时发送整组classification，Worker人工覆盖并消除uncertainty，既锁错标签又污染反馈。why/status独立、接受明确、历史reviewed不自动当gold。B02/B03/B06/B07/B08。[reader.js](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/dashboard/reader.js)、[curation.ts](https://github.com/Alpenl/cairn-share/blob/5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b/worker/src/curation.ts)。
 
-## 六、必须优先修复的具体问题
+### R24 阅读增强不该重抄原文
 
-### R22 P0：客户端版本驱动领取会交替重跑
+Transform从旧schema删classification仍要求source再丢弃。独立ReadingResult只生成阅读字段，source由程序注入，保留严格验证。B02/B04/B10。
 
-同一词表下，A 请求policy-v2完成后，B 请求policy-v1会因版本不等再次领取；A又可反向领取，attempt在变版本时重置。这是代码允许的路径，不代表生产已出现事故。必须以实际 Worker 测试重现并锁住回归。Worker 统一目标规格，job绑定 target spec；客户端只声明支持能力，不改全库目标。灰度按任务显式分配目标，不按消费者最后一次请求决定。
+### R25 错误类型与提交幂等
 
-### R23 P0：首次保存 why/status 可隐式确认全部标签
+配置/鉴权/契约、临时限流/网络、stale/superseded分开，有界退避/组件状态/安全日志。已知complete成功但响应丢失不重发模型；未知提供方执行不能虚称全流程exactly-once。B01/B02/B03/B04/B10。
 
-reader.js 的 !classification_reviewed 条件会发送当前 classification，即使用户只改原因；Worker 以整份 curation 覆盖且有效 uncertainty=false。保存原因/状态只写这些字段，接受建议必须明确操作。否则既锁错标签，又污染未来“人工确认”评估数据。原有历史确认不能被自动视为可靠训练标签。
+## 产品与扩展
 
-### R24 阅读增强仍重复输出已存档原文
+### R26 默认少打扰，依据是真实原文
 
-Transform 从旧 enrichmentSchema 删除 classification，仍要求完整原文/链接/图片，再用存档字段覆盖。建立独立 ReadingResult/schema，仅生成标题、译文、摘要及确有需要的语言信息，程序注入源引用。既避免输出浪费，也切断旧整包生成模型的耦合；保留严格校验和source-first安全。
+展示可用值、边缘候选按需接受，分布默认折叠。解释引用真实block/span，有限候选可选none；概率或生成解释不是证据。B06/B07/B09。
 
-### R25 工程错误不能混入语义弃权
+### R27 三状态与三种重做分离
 
-区分鉴权/契约错误、限流/过载/网络临时错误、旧租约冲突。配置类错误应触发组件级降级并停止烧完每条任务额度；临时错误按有上限退避处理；重复提交要幂等；409 stale/superseded属于正常并发结果。保存成功响应丢失后应查找已存run，而不是重新付费评估。任何异常不得回显密钥、完整源文或提供方响应。
+来源阅读、AI分类、人工整理分开；只分类retry、纯policy replay、刷新来源分开，不由模型改inbox/kept/compiled/drop。B05/B06/B07。
 
-## 七、整理交互与反馈
+### R28 字段/tag级人工覆盖
 
-### R26 按字段少打扰地解释
+unset、明确空、accept/reject、reset语义独立；重放不复活拒绝，来源变保历史并标适用变化；CAS和幂等保护并发。B03/B05/B06/B07。
 
-默认显示可用标签，边缘候选可接受/忽略；详情才展示分布、版本、原因。证据必须指向真实 block/span，必要时从受控候选ID选择并允许none；概率不是证据，生成的解释不是原文证明。
+### R29 纠正是反馈，不是偏好画像
 
-### R27 三种状态和三种重做动作
+curation event关联revision/run/spec和明确动作。只存why/浏览不是接受标签，拒绝一条工程不等于不喜欢工程；先用于回归/边界/校准。B03/B06/B08。
 
-分开源文/阅读处理、AI分类、人工inbox/kept/compiled/drop。提供只重试分类、只重放策略、明确刷新来源等动作；分类失败不重新抓文。Web后台尚无独立分类面板的事实见[现有说明](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/docs/jev-classification.md)。不要由模型自动改整理状态。
+### R30 实体独立生命周期
 
-### R28 字段/标签级人工覆盖
+新版entities=[]不应将未运行提取当无实体。候选提取→Jev有限验证/对齐→有来源结果，surface/canonical分开；not_run/failed/empty/stale分开，人工优先，旧结果不假新鲜。B03/B05/B06/B07/B09。
 
-独立接受、拒绝、设为空、恢复自动。unset表示不覆盖，明确空集合表示用户希望无该维度，拒绝某标签要防其在同一有效证据上重放后悄悄回来。原文变化保留人工行为但标注适用来源变化，不能未经用户同意重释。优先级和冲突解决有确定性及测试。
+### R31 明确缺口才补证据
 
-### R29 反馈事件不是偏好画像
+图文缺失、外链未取得、截断不同于标签边界。按预算/去重/安全URL补材料、有provenance、不覆盖原文；无授权/能力明确blocked，低置信不一律升级大模型。B09。
 
-curation_events关联当时输入revision、run/spec、明确动作、前后变化。只用明确接受/拒绝/修改作反馈，不用单纯查看或保存why当标签确认。首先服务回归集、词条边界、阈值校准；拒绝某条“工程”不代表用户不喜欢工程。历史事件删除和隐私遵从同源数据策略。
+### R32 先召回后重排
 
-## 八、扩展任务也必须进入计划
+已过滤有界候选上同rubric比较，稳定分页、预算/cache/原序降级；不增加向量库前提，不声称重排找回漏掉候选。B05/B08/B09。
 
-### R30 独立实体生命周期
+### R33 受控词表治理
 
-现Jev分类entities=[]会替换旧AI实体建议。恢复实体候选提取→有限候选验证/对齐→有来源的存储，不能让Jev自由生成名字。候选可由解析器或获授权的生成模型提供；未知可保留surface form但不自动建全局身份。not_run/failed/completed_empty/completed_nonempty分开。旧结果不无故清空，也不得跨来源版本伪装新鲜。
+词表外/混淆/明确人工反馈形成提案，人工审批；未知词或一次输出不自动建label。停用/合并有历史mapping，显示与语义变更分别重显/重评。B05/B09。
 
-### R31 按需补证据，而不是所有低置信都升级大模型
+## 评估与交付
 
-区分缺图文、外链未抓取、截断与词条边界歧义。仅明确缺口触发受预算、去重、安全URL约束的补材料流程；补充块有provenance，不能反写原帖。无授权/不支持来源时给可操作状态，不可编造成功。
+### R34 代表性人工评估集
 
-### R32 先召回、后重排
+建议200–300起步不保证稀有标签覆盖；中英混合、短长文/外链/图依赖、多主题/引用反驳/领域外分层，thread近重复分组隔离；无人工gold只报工程。B08。
 
-可在已有关键词与分面候选上进行有预算的小范围Jev相关性重排；需同规格、同相关性等级，不把跨问题概率当排序分。失败降级原排序，保持筛选、分页与授权。不引入向量库作为先决条件，也不声称重排能找回未入候选的收藏。
+### R35 指标包括找回与审核负担
 
-### R33 受控词表演进
+每维precision/recall、accepted错误、coverage、审核字段数、补材料成本/延迟及真实找回指标，样本数/区间透明。不能以更自信或无限弃权称变好。B08/B09。
 
-汇总词表外及混淆边界；候选提案由人批准，不能由discarded_tags或单次模型输出自动增标签。停用/合并需历史别名与迁移记录；display变更不调用模型，语义变更按影响范围受控重评。
+### R36 逐项消融
 
-## 九、评估、迁移与完成标准
+冻结v1，分别改变局部弃权、定义、单多选、Score、语言/证据规格。阈值重用raw、问题变化新推断；先冻结门槛再看holdout，任务不同明确mapping。B08。
 
-### R34 真实评估集与证据边界
+### R37 跨仓兼容与清理
 
-当前测试主要是接口和选择契约，一条合成live样本不证明准确率。初始约200–300条真实授权样本是建议规模，不保证覆盖稀有标签。覆盖中英混合、多主题、短/长/纯链接/依赖图片、引用反驳、词表外；线程和近重复分组隔离训练/调参/测试，禁止泄漏。没有人工gold时只能报告工程通过、质量未验证。
+v2显式opt-in，旧type不偷改，Go严格解码、Worker/Android/cache/export联动；新增迁移不改0009，先兼容后启用，回滚不销毁人工/来源。生产与legacy实验边界清晰。B02/B03/B04/B05/B06/B07/B10。
 
-### R35 评估指标必须包括找回与人工负担
+### R38 安全、预算与隐私
 
-每维度precision/recall、接受错误率、自动覆盖率、每条需确认字段数、补证据比例、成本/延迟，以及真实检索任务Recall@K/nDCG等。报告样本数和不确定范围。不能通过无限弃权换取漂亮precision，也不能以更高confidence宣称质量提升。
+保留分离token/受控R2/服务端密钥与日志边界；输入输出/超时/重试/幂等/组件健康有上限。外链防SSRF/redirect/凭据泄漏；评估不公开私人内容，真实质量未过不开flag。所有批次。
 
-### R36 逐项消融而不是一起改
+### R39 分阶段实证与独立复审
 
-保留v1基线；分别比较局部弃权、词条边界、维度单多选、必要Score、中英文规格。变更问题后需要新推断，改阈值使用同一answers重放。冻结验收策略再看测试集；模拟响应只证明工程行为。
+P0先行、合同/纯策略、多维与前端、评估扩展、集成。39发现→126任务→代码PR/commit→30场景证据，迁移/回滚/旧新实例/浏览器/设备不遗漏。工程、真实质量、审查、合并、部署分开，不以叙述“全部完成”代替。B10总验收，任务进度在Issues。
 
-### R37 跨仓库兼容、代码清理及部署顺序
+## 当前执行入口
 
-v2通过显式版本/opt-in，不把use字符串直接改数组。旧App六字段及旧include=enrichment投影保持；Go严格JSON解析要通过协商避免新字段致崩溃。协调Worker、Go、Web、Android缓存和导出。只新增迁移，不改已发布0009；先兼容后端再客户端，再启用开关，回滚不销毁历史。分类器拆transport/questions/policy，taxonomy保留概念约束，旧Generate/Workflow移到明确legacy适配边界并保留实验。
-
-### R38 运行安全、预算与审计
-
-保留独立token、服务端密钥、受控R2图源、原文不回显日志等保证。原文和note不得为评估擅自发布到公开GitHub。增加输入/输出边界、超时、退避预算、幂等、组件健康和分类队列指标。新的外链抓取必须防SSRF、跨域携带凭据和重定向绕过；只有通过安全与质量门槛才能打开。
-
-### R39 分阶段验证与人工最终审查
-
-优先P0，再持久化契约/纯策略，再标签v2与前端，再评估和可控扩展。Go/Worker/Android单元及契约、真实浏览器、迁移/回滚、双版本实例、超长state、用户覆盖保护均纳入。每PR提供任务→提交→测试→结果证据链。单元通过不等于生产部署，部署未获授权不得执行。整个程序不需Redis、RAG或微服务；扩展功能先完成实现和离线验证，真实效果不通过则保持关闭并明确未达发布门槛。
-
-## 执行导航
-
-批次、顺序、跨仓库依赖与DeepSeek执行协议见同目录 `README.md`；逐批任务见各草稿PR中的 `docs/jev-v2/NN-*.md`。总清单不会把未做工作勾为完成。任何与本审查不同的实现决定，必须说明新证据、影响和回归测试，不允许静默缩减范围。
+[ISSUE-INDEX](ISSUE-INDEX.md)与[EXECUTION](EXECUTION.md)是唯一现行工作流。完整原文[历史审查](archive/REVIEW-20260920.md)仅用于核对分析，不执行其旧PR导航。模型API/限额/语言等参考不是永久事实，实施时再核实官方文档，无法核实时明确限制。

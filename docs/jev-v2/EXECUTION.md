@@ -1,143 +1,120 @@
-# DeepSeek 执行协议、契约约束与验收证据
+# DeepSeek 执行协议：Issue 驱动的实现与复审
 
-状态：待执行规范。与 REVIEW.md、README.md 及各批次文档共同使用。以下新文件/接口/测试名称均是要求实现的目标；不能把未实现命令写成已运行。
+工作流版本`issues-v1`。本协议取代旧的“提前创建十个计划PR、向固定head分支逐级追加实现”流程。任务状态在[总控Issue #10](https://github.com/Alpenl/cairn-x-enricher/issues/10)及其关联Issues；稳定映射见[ISSUE-INDEX](ISSUE-INDEX.md)。本文件保留契约和SC01–SC30，不是一份实施成绩单。
 
-## 1. 执行者收到任务后
+## 1. 工作入口与执行生命周期
 
-1. 读取当前仓库 AGENTS.md、目录内指引、TypeSafe 项目技能、总计划及本批规格。保留无关改动，不覆盖依赖更新 PR，不修改密钥或权限配置。
-2. 将 cairn-share 与 cairn-x-enricher 放到相邻目录。核对两仓 main、当前 head/base、工作区和 PR diff；记录 SHA。不得假设创建计划时基线仍未变。
-3. 保存未改动基线测试结果；v1 推断样本只有已获授权且已存在时才归档到私有目录。准备去重分组、数据授权和人工标注说明，不将用户收藏贴进公开PR。
-4. 按 PR-INDEX 的 head branch 工作。本组是堆栈 PR：下游先 merge 对应上游最新 branch 获取实现，并记录同步提交；不 force-push、不改已有个人提交、不自动合并PR。跨仓库依赖固定到完整SHA，记录到版本受控的测试锁文件（不得包含部署密钥）。
-5. 每项按“检索现状→失败测试→实现→局部测试→完整测试→证据”推进。行为变更之前先看到对应回归测试失败；重构纯函数则先冻结v1 fixture证明兼容。无法先失败的情况明确原因。
-6. 任务不够小可在本PR内分多个提交；若必须拆额外PR，在总矩阵登记继承关系、未完成项和依赖，不能丢范围。不能把TODO、返回空数组、mock成功或被跳过的测试当实现完成。
-7. 每项有提交和测试证据才能勾选。独立可完成工作继续做；缺密钥、gold、设备或授权时明确 `BLOCKED_EXTERNAL`，不伪造验证，不为了避免阻塞擅自消耗或部署。
+读取当前仓库AGENTS.md、TypeSafe项目技能、总控/当前Issue、本目录REVIEW/README/对应规格。设计PR #3未合并时按明确分支SHA读取文档，不把文档分支当生产代码依赖。两仓放相邻目录，检查main、当前分支、工作区和他人改动，记录实际SHA；先保存baseline测试和B08-T01数据授权/已有raw引用，私人内容不公开。
 
-本轮 DeepSeek 负责代码执行，不要求改变生产模型供应商。所有收费模型测试必须显式 opt-in、样本上限、调用/令牌预算和失败停止规则；普通测试和CI禁止访问收费端点。
+选择无阻塞任务或当前Issue可独立部分，在Issue正文/评论登记范围与阻塞。默认由最新main建立真实实现分支，首个可审查代码或回归提交后再建Draft代码PR。一个Issue可多个PR，批次编号不是PR边界；原计划分支仅历史，禁止向其追加实现或再建纯待办占位PR。
 
-## 2. 一致性规格（所有批次共用）
+仅依赖尚未合并真实代码时可短堆叠，记录上游PR/精确SHA、base选择原因和跨仓companion SHA；未经授权不为推进后继自行合并main。可用隔离工作树联调已验证实现SHA，不能假称依赖已合并。上游修复回到对应真实PR，更新后继锁定版本；保留无关改动，不force-push/删分支。
 
-### 2.1 权威目标与任务身份
+每项执行“核查现状→失败回归→实现→局部测试→完整门禁→证据”。重构先冻结fixture；确实不能先失败则写原因。拆更多Issue/PR必须保留原Bxx-Txx及继承关系，不能以拆分静默减范围。TODO、空数组、mock成功、跳过测试不是实现。
 
-Worker 保存 desired target，至少包含不可变 spec ID/hash、requested pinned model、policy ID 和单调 generation。job领取时绑定 source/content revision、personal revision（若该任务需要）、目标 generation、lease token/expiry。消费者只声明支持的协议/spec/model，不得提交自身policy让Worker重写全库目标。
+状态统一为not_started、in_progress、blocked_external、ready_for_review、accepted；blocked_external可只针对若干任务，其余继续。每个任务勾选需实际代码和相应测试证据，勾选不等于独立审查通过。Issue正文是实时进度唯一来源；仓库规格不维护第二套勾选，证据报告只记录带日期/SHA的验证快照。
 
-配置错误是组件状态，不是每条收藏的五次失败。旧消费者在新协议启用后应被明确拒绝或安全空闲，不能领取v2任务。灰度将限定任务显式绑定目标spec；回滚也是新generation指向旧spec，不减少generation。
+## 2. PR、Issue关闭及审批
 
-完成事务必须同时满足 lease、未过期、输入revision、目标generation/spec和任务状态。重复的同一完成请求返回同一结果；相同idempotency key却不同payload返回冲突。过期结果可按策略留审计，但不得改当前投影。response丢失时查询run/operation确认是否已提交，不能直接重复付费推断。
+真实代码PR标题描述实际改动，正文至少列Issue、覆盖任务ID、未覆盖项、设计依据、base/head/companion SHA、测试结果、迁移回滚及风险。模板见[CODE-PR](templates/CODE-PR.md)。部分PR只用普通引用，例如`Refs Alpenl/cairn-share#28`，不要用自动关闭关键词，也不要将批次Issue设置为会被部分PR合并自动关闭的Development关联。
 
-### 2.2 版本、hash 与重用
+GitHub会在默认分支相关合并场景解释关闭关键词；手工Development关联也可能随合并关闭Issue。不能以“不是Closes”就假定任何链接都无关闭作用。参见[GitHub官方关联说明](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)。本工作流用普通正文引用和Issue实现清单避免提前关闭。
 
-`evidence_hash`：规范化后的实际客观证据，不含note/why/display。`question_spec_hash`：完整语义问题、criteria、候选及构建器版本。`resolved_model_id`：实际服务返回的模型。`decision_policy_version`：选择和展示投影规则。仅display标签变动不改变客观语义hash。
+Issue关闭必须由所有者/独立审查者确认全部任务、跨仓验收和必要合并已完成，或明确批准例外并建立剩余工作的后继记录；不得由执行者为了清空待办自行关闭。完整单一修复Issue只有全部闭合条件满足且获批时才使用自动关闭。设计PR #3只合并文档，不关闭总控或实施Issue。
 
-实现必须写明 canonical JSON 编码、Unicode/换行处理、array顺序和null/空值规则并以Go/TS共享golden vectors验证，不能分别随意JSON stringify。hash一致只能在实际发送state、全部相关候选和问题、模型解析一致时复用。问题级缓存至少保守包含完整batch/state hash；未证明批次变化不影响含义时不能按question ID跨batch拼答案。
+单列engineering_done、quality_verified、review_accepted、merged、deployment_authorized。代码mock通过不等于模型效果；设备编译不等于运行；未获发布授权不阻止交付代码，也不允许伪称已上线。无gold/收费授权/设备等明确局部阻塞，不编造结果。
 
-优先落实整批 raw-run 可重放；只改一条定义的部分重评作为B04子任务，必须先定义依赖闭包和partial覆盖状态，缺失/跨model/跨evidence结果不可伪装完整run。服务暂不可用时不静默换模型并沿用旧校准。
+## 3. 不可省略的合同
 
-### 2.3 数据层最小实体
+### 3.1 权威目标、租约、幂等
 
-建议以新增表/受约束JSON实现，不强制过度拆表：
+Worker管理desired target：不可变spec/hash、requested model、policy及单调generation。job绑定content revision、必要时personal revision、generation/spec、lease/有效期。consumer声明能力不改全库目标；旧consumer不得领取v2任务。灰度限定job显式目标；回滚新generation指向旧spec。
 
-- source snapshot / evidence snapshot：可恢复正文块、角色、URL、抓取信息、完整性、内容revision；旧payload无法判断的字段标unknown。
-- question spec：不可变内容、hash、模型及协议兼容信息、语义/显示版本。
-- classification run：输入/问题引用、原始typed answers、requested/resolved模型、usage、时间、错误类型、覆盖范围与幂等ID。
-- classification decision：run引用、policy版本、字段决定、原因码、人工覆写前建议；policy-only重放追加记录。
-- field overrides / curation events：明确操作、字段/tag、来源revision、run/decision、前后差异、事件ID和并发revision。
-- current projection：供列表读取的materialized有效视图；与run/decision提交在同一原子边界内，缓存失效同步。
+complete/fail检查lease/input/spec/generation/状态。相同operation key和payload返回既有结果，不同payload冲突。run/decision/job/projection及缓存失效处于正确原子边界；旧结果可审计但不改当前视图。完成响应丢失先幂等重试/查询，不能重新付费推断。提供方在响应未知/进程崩溃时若不支持幂等，不能宣称端到端exactly-once计费；记录剩余不确定性和预算，至少确保已知提交成功场景不重复调用。
 
-不要求把所有结果规范化成大量行。D1行/请求/语句上限实施时核实；大型原始快照采用已存在且授权的存储方案，不盲目复制每次prompt原文。审计不可变不阻止用户删除、保留期清理或备份清理。可检索的来源正文不得泄漏到公开fixture、日志、error body、截图或CI artifact。
+配置/鉴权/契约错误、临时网络/限流/过载、stale/superseded分开，逐案确定暂停组件还是输入问题；不要只凭一个HTTP码吞错误。单层有界退避，组件健康与liveness分开，每job deadline及shutdown上限，不继续领取新job。
 
-### 2.4 v2 语义约定
+### 3.2 版本与重用
 
-客观维度：topics、多选content_functions、carrier、可选actionability/depth等有序判断。affordances是潜在用途，用户intent/status/stance独立；stance仅人工明确记录，引用内容不代表用户赞同或反对。
+evidence_hash覆盖实际客观证据，不含note/why/display；question_spec_hash覆盖完整语义问题/criteria/candidates及构建版本；resolved_model_id记录实际响应；policy版本只负责决定/展示规则。requested/resolved都留存，alias变化不自动沿用校准。
 
-每维度状态区分未运行/成功/失败/过期，每项决定为accepted/rejected/abstained；原因码必须有可观察或专门判断支持。`none/not_applicable`可正常完成，不自动变全局uncertainty。所有完整分布可审计；默认UI不展示大串概率。高Noul不等于主题更重要；没有比较深度信息时使用稳定显式展示规则。
+canonical JSON、Unicode/换行、array顺序、null/空规则以Go/TS共享golden vectors验证。复用须实际state/问题/候选/model一致，不能只看ID；保守整批cache优先。部分重评需依赖闭包和coverage，跨evidence/model或缺答案不能伪装完整run。只改label重显、阈值重放；问题或有效来源变化受控新推断。
 
-选择上限分三个：provider/request安全上限、有效结果策略上限、默认卡片展示数。语义结果不因卡片只显示3个而被删除。所有上限集中定义，Go/TS/UI/Android以同一合同验证。
+### 3.3 数据与隐私
 
-### 2.5 人工覆写的操作语义
+最小实体：可恢复evidence snapshots；不可变question specs；追加runs；policy decisions；人工overrides/events；用于查询的current projection。table/受约束JSON均可，不强迫大量拆表。run保存typed分布、usage、来源/问题/模型引用、时间、幂等和coverage，job不作唯一历史。只有hash不能复现。
 
-`unset`继承自动结果；`set []`明确无标签；逐标签`accept/reject`覆盖该标签；`reset field/tag`只移除对应覆写。人工决定优先于AI；保存why/status不写分类，普通浏览不生成接受事件。
+blocks角色包括primary、author_continuation、quoted、external_article、third_party、legacy_unknown；URL/作者关系有依据，缺失不编造。客观请求物理排除note/why/status/stance。source-first，模型不覆盖原文，reading不覆盖分类。
 
-事件带唯一operation ID与expected curation revision，支持CAS冲突提示及幂等重试。正文改变后保留人工历史，当前视图说明其来源已变化，不自动篡改或删除用户选择。更新policy不得撤销人工拒绝；清空拒绝必须显式操作。历史整组curation转成legacy override，来源unknown/review provenance unknown；不得标记为可靠新gold。
+D1与提供方预算实施时核实，大快照必要时引用现有受控存储；限字节/rune/估算token区别明确，不静默截断。审计不可变不阻止用户删除及保留期清理；删除覆盖snapshot/run/event/entity/cache，仍被当前decision引用的输入不可清掉后假称可复现。公开Issue/PR/日志/fixture/截图不含私人原文、备注、标注或密钥。
 
-### 2.6 v1兼容与双写
+### 3.4 语义及人工覆盖
 
-旧六字段、旧include=enrichment和NAS旧接口保持原key/type。v2必须协商/opt-in，Go strict decoder不会收到意外字段。新旧cache key包含representation版本；不同投影不能共用错误缓存。
+topics、多选content_functions、carrier、affordances、必要有序程度各自独立；用户intent/status/stance人工或明确独立建议，不能从作者/收藏/引用推断立场。Noul概率不是程度/重要性，Choice只互斥，Score等级具体且保留分布。confidence来自分布而非独立正确率，不默认乘p。
 
-v1投影只表达旧topics/form/use，不表示v2信息不存在。旧客户端PATCH操作仅影响它能表达的维度：不得抹掉隐藏的第四个topic、v2多选功能、未展示的拒绝或实体状态。无法无歧义映射的旧写入应保持原语义并返回可操作兼容冲突，不能悄悄清空。`classification:null`的v1既有含义要文档化，不扩展成删除所有v2个人数据。
+字段决定accepted/rejected/abstained；任务未运行/失败/stale与not_applicable/out_of_taxonomy/insufficient_evidence原因分开，原因有观察或专门判断支持，unknown允许；合法none/empty可completed。请求安全上限、有效标签上限、卡片显示数不同，第四topic不因展示三项被删。
 
-## 3. 强制验收场景（SC编号，批次需引用）
+unset继承自动；set []明确为空；accept/reject覆盖某标签；reset只移除明确范围的覆盖。operation ID+expected curation revision保证CAS/重试幂等，why/status不生成accept事件。source变化保留人工历史并说明适用范围变化；policy replay不撤销reject。legacy整组curation标来源/确认行为未知，不自动作gold。
 
-| ID | 场景与必须验证的结果 |
+### 3.5 v1兼容
+
+旧六字段/旧include=enrichment/NAS原key/type稳定；v2 opt-in协商，strict解码收到相应shape，cache区分representation。v1投影不表示隐藏数据不存在。
+
+旧PATCH仅能影响可表达部分，不能抹第四topic、隐藏多选、reject、实体或无关人工字段。没有revision的旧协议不能凭空提供CAS语义；可无歧义范围适配，否则保护数据并返回可操作冲突，不猜用户意图。v1 classification:null保持旧恢复自动范围，不扩大成删全部v2个人记录。
+
+### 3.6 有界扩展
+
+实体候选提取有真实span/URL，Jev只有限验证与对齐；not_run/failed/empty/stale分离，人工优先。只有明确材料缺口才补证据，来源块追加不覆盖原帖；真实外链适配器有allowlist、实际连接IP/DNS重绑定/私网/metadata、逐跳redirect、MIME/大小/超时防护，不带凭据跨域。
+
+检索先召回过滤再同rubric重排，预算/cache/失败回原序，分页固定候选或明确当前范围，不能声称补回未召回内容。词表提案需人工审批、语义diff/mapping/版本与影响dry-run，不自动造标签。每能力单独flag默认off，质量门槛不满足不晋升，工程实现不能只留接口。
+
+## 4. 强制验收场景
+
+| ID | 必须验证的结果 |
 |---|---|
-| SC01 | A/B旧新policy交替请求20轮：已完成任务不来回领取，不无限重置attempt |
-| SC02 | 源revision/目标generation在推断途中变化：旧结果不覆盖当前投影 |
-| SC03 | 保存why/status且未触摸标签：无分类写入，无accept事件 |
-| SC04 | 阅读请求schema不包含original_text/links/images输出；已存源文仍完整保留 |
-| SC05 | 改note不发X Search、不改客观state/hash；更改URL明确使来源过期 |
-| SC06 | 两个topic明确、第三个模糊：前两者可生效，仅第三个局部弃权 |
-| SC07 | none、词表外、未运行、失败、证据不足在API与UI中互不混淆 |
-| SC08 | threshold/display-only重放在网络被禁情况下完成，模型调用计数严格为0 |
-| SC09 | 同均值不同Score分布保留差异；confidence不被当独立证据相乘 |
-| SC10 | 客观请求序列化完全不含note/why/stance；恶意内容不改变命令/词表 |
-| SC11 | commit成功但响应丢失：重复提交不会生成双事件、双run或重发模型 |
-| SC12 | 401/契约错误组件级停止，429/过载有界退避；stale 409不记模型失败 |
-| SC13 | 四个有效topic：底层保留，卡片折叠，v1投影仍合法 |
-| SC14 | reject/set-empty/reset-unset语义区分；policy replay不复活人工拒绝 |
-| SC15 | 并发Web/Android编辑发生CAS冲突，不静默丢更新；离线重试幂等 |
-| SC16 | v1客户端读取/写入不破坏隐藏v2维度，strict decoder与缓存协商正确 |
-| SC17 | 引用/续帖/第三方评论分离；legacy unknown不被编造成有身份的证据 |
-| SC18 | 超长或截断材料有明确状态；文本预算和字节/rune边界正确 |
-| SC19 | 实体not_run/failed不清空同revision已有成功结果；来源变更标stale |
-| SC20 | 补证据防SSRF/重定向/凭据泄漏、去重且预算到达立即停止 |
-| SC21 | 重排失败降级原排序，不越过筛选/权限、不声称提高候选召回率 |
-| SC22 | train/dev/test线程和近重复隔离；mock结果不冒充人工gold |
-| SC23 | 新迁移从空库/0009历史库通过；回滚应用不会删除人工和来源数据 |
-| SC24 | 删除收藏/保留期清理同步清理快照/runs/events/缓存，无悬挂私人内容 |
-| SC25 | 普通make verify/CI不调用付费端点；日志、公开fixture和artifact无密钥/私人正文 |
-| SC26 | 增量重评只复用同证据/同模型/同规格合法结果；不足覆盖不得假装complete |
-| SC27 | legacy Generate/实验仍可回归，但不进入生产Jev路径；已有安全契约不降低 |
-| SC28 | 真实浏览器检查键盘/手机/刷新竞争/dirty表单/局部确认/分类单独重试 |
-| SC29 | 模型alias解析变化不沿用旧校准自动晋升；固定spec/spec generation可回滚 |
-| SC30 | 后台重分类/补证据/重排有全局与单条预算、取消/耗尽状态、无暗中全库任务 |
+| SC01 | A/B旧新policy交替至少20轮：完成任务不循环领取、不无限重置attempt |
+| SC02 | 推断途中源revision/目标generation变化：旧结果不覆盖当前投影 |
+| SC03 | 仅保存why/status且未触摸标签：无分类写入、无accept事件 |
+| SC04 | 阅读输出schema不含原文/links/images，已存来源完整保留 |
+| SC05 | note-only不X Search、不改客观state/hash；URL变化明确来源过期 |
+| SC06 | 两topic明确一模糊：前两者生效，仅第三项弃权 |
+| SC07 | none、词表外、未运行、失败、证据不足在API/UI分开 |
+| SC08 | threshold/display-only禁网重放完成，模型调用计数严格0 |
+| SC09 | 同均值不同Score分布保留差异，confidence不当独立证据乘分 |
+| SC10 | 客观body不含note/why/stance，恶意内容不改变操作/词表 |
+| SC11 | complete已成功但响应丢失：不双run/event，不重发模型 |
+| SC12 | 配置/契约问题按类型处理，429/过载有界，stale409非模型失败 |
+| SC13 | 四个有效topic底层完整、卡片折叠、v1合法 |
+| SC14 | reject/set-empty/reset-unset区别，重放不复活人工拒绝 |
+| SC15 | Web/Android并发CAS不丢更新，离线重试幂等 |
+| SC16 | v1读写不破坏隐藏v2，strict解码与表示缓存正确 |
+| SC17 | 引用/续帖/第三方分离，legacy unknown不编身份 |
+| SC18 | 超长/截断有明确状态，字节/rune/预算边界正确 |
+| SC19 | 实体not_run/failed不清同revision成功值，source变化stale |
+| SC20 | 补证据防SSRF/redirect/凭据泄漏、去重且预算到界停 |
+| SC21 | 重排失败原序、不越筛选权限、不冒称提高候选召回 |
+| SC22 | train/dev/test线程近重复隔离，mock不冒充人工gold |
+| SC23 | 空库/0009迁移通过，应用回滚不删人工和来源 |
+| SC24 | 删除/保留期覆盖snapshots/runs/events/entity/cache，无私人悬挂 |
+| SC25 | 普通CI/make verify不收费，公开日志/fixture/artifact无密钥私文 |
+| SC26 | 部分重评仅复用同证据/模型/语义合法结果，缺coverage不假complete |
+| SC27 | legacy实验可回归而不入生产Jev路径，安全合同不降低 |
+| SC28 | 真实浏览器键盘/手机/刷新竞争/dirty/局部确认/只分类重试 |
+| SC29 | alias模型变化不沿用校准自动晋升，spec/generation可回滚 |
+| SC30 | 后台分类/补证据/重排单条及全局预算、取消/耗尽，无隐式全库 |
 
-## 4. 测试命令与环境
+## 5. 测试与证据格式
 
-基线已存在的Enricher命令：`make verify`（vet/lint/race tests/frontend/build）、`make test-ablation`，按改动运行 `make ablation-architecture`。仓库要求shell命令通过 `shnote --what "..." --why "..." run <command>`；工具不可用时记录环境差异，不伪造已遵循。
+核对当前仓库后运行实际命令：E `make verify`、`make test-ablation`，按影响运行`make ablation-architecture`；Worker `npm ci`、`npm test`、`npm run typecheck`、`npm run deploy:dry-run`；Android仓库当前CI等价JDK/SDK与`./gradlew --no-daemon --dependency-verification strict testDebugUnitTest lintDebug assembleDebug compileDebugAndroidTestKotlin`。新增target先实现再引用；遵循AGENTS的shnote包装，环境无工具准确说明。
 
-Worker基线：在worker目录 `npm ci`、`npm test`、`npm run typecheck`、`npm run deploy:dry-run`（仅构建，不是远端部署）。Android基线CI：JDK17及仓库指定SDK，`./gradlew --no-daemon --dependency-verification strict testDebugUnitTest lintDebug assembleDebug compileDebugAndroidTestKotlin`。不要为本轮顺手升级所有依赖。
+普通模型mock与静态前端测试只证明相应工程行为。SQLite不能代替Worker/D1事务测试，截图不能代替浏览器操作，编译androidTest不能代替设备执行。live显式授权、样本数/调用/token预算、timeout/失败停止与私有输出，环境有key不是授权。
 
-各批次需要新增contract/eval/browser等可重复命令时，先实现target和fixture再在说明中引用。Python SQLite最小证明只能补充，不能代替Worker/D1事务集成测试。静态前端脚本不能代替真实浏览器操作。设备测试没设备就标未运行，不能用编译通过代替。
+每批在实际实现仓库提交`docs/jev-v2/evidence/Bxx.md`，模板见[EVIDENCE](templates/EVIDENCE.md)，包含Issue/任务/PR、head/base/companion SHA、变更、失败→通过命令与退出码、SC编号、unit/integration/browser/device/live覆盖、调用计数、迁移回滚、脱敏/私有数据策略、未验证项及工程/质量/审查/合并/授权状态。总索引只保存稳定链接，不复制动态状态。
 
-CI运行成功必须关联实际两仓SHA和运行URL/日志；本组计划PR创建时可能触发原有CI，但绿色的“只改文档”CI不证明任何未来功能。
+## 6. 质量门槛与最终交接
 
-## 5. 每批交付证据
+B08先冻结风险/coverage/人工负担/成本门槛，再看holdout；precision/recall、accepted错误、coverage、review字段数、candidate recall/rerank、token/调用/latency都报告条件/样本/区间。缺数据inconclusive，不能用无限弃权或高confidence称质量进步，不能拿改变任务后的指标直接比较。
 
-在本PR新增 `docs/jev-v2/evidence/BNN.md`（初始不存在，由执行者生成），至少包含：
+P0/人工保护/协议/迁移不变量必须通过；统计质量不能抵消工程失败。真实gold、设备或live授权不足记录局部阻塞，不自批完成。B10 Issue #16交FINAL-REVIEW.md，包含实际两仓SHA、全部Issue/真实代码PR、R/任务/SC证据矩阵、偏离/风险、flags、rollback、未做生产操作，并回链总控。
 
-```text
-Batch:
-Head SHA / Base SHA / Companion SHA:
-Task IDs:
-Changed files + rationale:
-Regression before fix: command / exit / safe output:
-After fix: command / exit / safe output:
-Scenario IDs covered:
-Unit / integration / browser / device / live coverage:
-Network and model-call counts:
-Migration and rollback evidence:
-Public-safe fixtures / private-data location policy:
-Known limitations / BLOCKED_EXTERNAL:
-engineering_done:
-quality_verified:
-deployment_authorized: false
-```
-
-为关键不变量提供真实断言，例如模型mock调用计数0、SQL状态revision不变、事件数量、旧返回值shape。不能只填“已完成”“人工检查通过”。真实gold与模型使用日志保存在授权的私有位置，公开证据只放聚合数、脱敏fixture和可重复方法。
-
-## 6. 质量与发布门槛
-
-B08先冻结评估协议再调参。最少报告基线与候选的每维precision/recall、自动coverage、accepted-error rate、review fields/bookmark、找回Recall@K/nDCG、p50/p95延迟和token/调用成本，并给样本数及区间。若某指标样本不足，标inconclusive，不捏造阈值。质量门槛由初始基线和风险设定，写入版本化配置后才看holdout；不能在holdout上选最好结果再称独立测试。
-
-P0/人工数据保护/兼容/迁移不变量不允许统计性失败；必须全通过。真实效果缺数据或未达门槛时扩展默认off、不得自行晋升。完成代码与离线工具并记录阻塞，不强行声称全部质量目标达成。
-
-B10交付总验收矩阵与复审说明，保留Draft/未合并。只有所有者后续明确批准才能merge、tag、远端迁移、部署或收费回填。最终复审应能从PR链接直达commit、tests、diff和未完成项，而不是只依赖执行者叙述。
+未经所有者后续批准，不擅自merge、转Ready、关闭实施Issues、删除分支、force-push、打tag、远端迁移、发布Worker/NAS/App或收费回填。DeepSeek是实现者，不是生产供应商替换要求。当前10个计划PR的迁移关闭仅由本轮用户授权执行，不构成以后任意关闭实现Issue的授权。
