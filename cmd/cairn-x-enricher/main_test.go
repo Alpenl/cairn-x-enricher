@@ -85,3 +85,41 @@ func TestNewLoggerAcceptsEveryConfiguredLevel(t *testing.T) {
 		}
 	}
 }
+
+// The root/help path and command discovery must never make a paid call. The
+// commands are constructed but not executed, so no client is created.
+func TestRootHelpAndCommandDiscoveryMakeNoCalls(t *testing.T) {
+	root := newRootCommand()
+	root.SetArgs([]string{"--help"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("root --help: %v", err)
+	}
+	root = newRootCommand()
+	root.SetArgs([]string{"help"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("help: %v", err)
+	}
+	wanted := map[string]bool{"serve": false, "once": false, "classify": false, "replay": false, "refresh-source": false, "version": false}
+	for _, command := range newRootCommand().Commands() {
+		if _, ok := wanted[command.Name()]; ok {
+			wanted[command.Name()] = true
+		}
+	}
+	for name, found := range wanted {
+		if !found {
+			t.Errorf("command %q is not registered", name)
+		}
+	}
+}
+
+// Replay is an inspection by default and must not silently commit.
+func TestReplayCommandRequiresAnIDAndDefaultsToNoCommit(t *testing.T) {
+	command := newReplayCommand()
+	if flag := command.Flags().Lookup("commit"); flag == nil || flag.DefValue != "false" {
+		t.Fatal("replay must default to no commit")
+	}
+	command.SetArgs([]string{"--id", "0"})
+	if err := command.Execute(); err == nil {
+		t.Fatal("replay without a positive id must fail before any network call")
+	}
+}

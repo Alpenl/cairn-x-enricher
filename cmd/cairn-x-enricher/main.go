@@ -101,6 +101,8 @@ func newRootCommand() *cobra.Command {
 	once.Flags().IntVar(&maxJobs, "max-jobs", 0, "maximum jobs to claim (default MAX_JOBS_PER_RUN)")
 	root.AddCommand(once)
 	root.AddCommand(newClassifyCommand())
+	root.AddCommand(newReplayCommand())
+	root.AddCommand(newRefreshSourceCommand())
 
 	var healthURL string
 	var healthTimeout time.Duration
@@ -453,11 +455,15 @@ func isContractFailure(err error) bool {
 	}
 	var apiErr *cairn.APIError
 	if errors.As(err, &apiErr) {
-		// A rejected token or malformed internal request is a configuration or
-		// contract fault; a conflict is a stale job, not a component failure.
-		switch apiErr.StatusCode {
-		case http.StatusUnauthorized, http.StatusForbidden, http.StatusBadRequest:
+		// The Worker's typed code is authoritative: capability_mismatch and
+		// configuration_error are component faults, while target_changed,
+		// input_changed and lease_expired are stale jobs that must not drop
+		// readiness.
+		switch apiErr.Class() {
+		case enrich.ErrorClassConfiguration, enrich.ErrorClassContract:
 			return true
+		default:
+			return false
 		}
 	}
 	return false

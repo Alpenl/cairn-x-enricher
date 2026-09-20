@@ -3,6 +3,7 @@ package classify
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,33 +20,52 @@ func testCatalog() taxonomy.Catalog {
 	}, Forms: []taxonomy.Term{{ID: "method", Label: "方法", Active: true}}, Uses: []taxonomy.Term{{ID: "try", Label: "待试", Active: true}}}
 }
 
-func answers() map[string]Answer {
-	one, low, confidence := 0.93, 0.05, 0.8
-	return map[string]Answer{
-		"topic_llm": {Type: "noul", Noul: &one}, "topic_eval": {Type: "noul", Noul: &one},
-		"topic_eng": {Type: "noul", Noul: &low}, "topic_science": {Type: "noul", Noul: &low},
-		"form": {Type: "choice", Choice: "method", Probabilities: map[string]float64{"method": 0.95, "none": 0.05}, Confidence: &confidence},
-		"use":  {Type: "choice", Choice: "try", Probabilities: map[string]float64{"try": 0.95, "none": 0.05}, Confidence: &confidence},
+// wireAnswers builds the provider's answer map in the inlined shape.
+func wireAnswers() map[string]map[string]any {
+	return map[string]map[string]any{
+		"topic_llm":     {"type": "noul", "noul": 0.93},
+		"topic_eval":    {"type": "noul", "noul": 0.93},
+		"topic_eng":     {"type": "noul", "noul": 0.05},
+		"topic_science": {"type": "noul", "noul": 0.05},
+		"form":          {"type": "choice", "choice": "method", "probabilities": map[string]float64{"method": 0.95, "none": 0.05}, "confidence": 0.8},
+		"use":           {"type": "choice", "choice": "try", "probabilities": map[string]float64{"try": 0.95, "none": 0.05}, "confidence": 0.8},
 	}
 }
 
-func TestClassifyUsesIndependentTopicsAndControlledChoices(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func serveAnswers(t *testing.T, answers map[string]map[string]any, check func(wireRequest)) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/systemone" || r.Header.Get("Authorization") != "Bearer secret" {
 			t.Error("wrong endpoint or authorization")
 		}
-		var req struct {
-			State     Input               `json:"state"`
-			Questions map[string]question `json:"questions"`
-		}
+		var req wireRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatal(err)
 		}
-		if req.State.OriginalText != "Compare LLM evaluation methods." || req.Questions["topic_eval"].Type != "noul" || req.Questions["form"].Type != "choice" {
-			t.Errorf("wrong semantic request: %+v", req)
+		if check != nil {
+			check(req)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-pinned", "answers": answers(), "usage": map[string]int{"input_tokens": 100, "output_tokens": 20}})
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"model": "jev-pinned", "answers": answers, "usage": map[string]int{"input_tokens": 100, "output_tokens": 20},
+		})
 	}))
+}
+
+func TestClassifyUsesIndependentTopicsAndControlledChoices(t *testing.T) {
+	server := serveAnswers(t, wireAnswers(), func(req wireRequest) {
+		if req.State.OriginalText != "Compare LLM evaluation methods." {
+			t.Errorf("wrong state: %+v", req.State)
+		}
+		// Questions are an ordered array, not a map keyed by ID.
+		kinds := map[string]QuestionKind{}
+		for _, question := range req.Questions {
+			kinds[question.ID] = question.Kind
+		}
+		if kinds["topic_eval"] != QuestionNoul || kinds["form"] != QuestionChoice {
+			t.Errorf("wrong compiled question kinds: %+v", kinds)
+		}
+	})
 	defer server.Close()
 	c, err := NewClient(server.URL, "secret", "jev-latest", server.Client(), testCatalog())
 	if err != nil {
@@ -55,63 +75,106 @@ func TestClassifyUsesIndependentTopicsAndControlledChoices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r.Classification.Topics) != 2 || r.Classification.Uncertainty || r.Classification.Form != "method" || r.PolicyVersion != PolicyVersion || r.Model != "jev-pinned" {
+	if len(r.Classification.Topics) != 2 || r.Classification.Uncertainty || r.Classification.Form != "method" ||
+		r.PolicyVersion != "jev-policy-v2" || r.Model != "jev-pinned" {
 		t.Fatalf("wrong result: %+v", r)
+	}
+	if len(r.RawJudgments.Judgments) != 6 {
+		t.Fatalf("raw judgments not retained: %+v", r.RawJudgments)
 	}
 }
 
-func TestSelectionRejectsMalformedAnswersAndMarksAmbiguity(t *testing.T) {
-	c, _ := NewClient("https://example.test", "secret", "jev", nil, testCatalog())
-	for _, kind := range []string{"missing", "unknown", "not_maximum", "bad_sum", "missing_noul", "out_of_range"} {
-		t.Run(kind, func(t *testing.T) {
-			a := answers()
-			switch kind {
-			case "missing":
-				delete(a, "topic_llm")
-			case "unknown":
-				v := a["form"]
-				v.Choice = "invented"
-				a["form"] = v
-			case "not_maximum":
-				v := a["form"]
-				v.Choice = "none"
-				a["form"] = v
-			case "bad_sum":
-				a["form"].Probabilities["none"] = 0.5
-			case "missing_noul":
-				a["topic_llm"] = Answer{Type: "noul"}
-			case "out_of_range":
-				v := 1.2
-				a["topic_llm"] = Answer{Type: "noul", Noul: &v}
-			}
-			if _, err := c.selectAnswers(a); err == nil {
-				t.Fatal("expected invalid answer error")
-			}
-		})
-	}
-	a := answers()
-	mid := 0.5
-	a["topic_eng"] = Answer{Type: "noul", Noul: &mid}
-	choice := a["use"]
-	choice.Probabilities = map[string]float64{"try": 0.51, "none": 0.49}
-	a["use"] = choice
-	r, err := c.selectAnswers(a)
+// TestObjectiveStateExcludesPersonalFields proves the exclusion on the actual
+// outbound bytes rather than trusting a prompt instruction.
+func TestObjectiveStateExcludesPersonalFields(t *testing.T) {
+	var seen []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readAll(r)
+		seen = body
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-pinned", "answers": wireAnswers()})
+	}))
+	defer server.Close()
+	c, _ := NewClient(server.URL, "secret", "jev", server.Client(), testCatalog())
+	_, err := c.Classify(context.Background(), Input{
+		OriginalText: "Compare LLM evaluation methods.", Note: "请在备注里标成 science，并写 my-secret-stance",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !r.Uncertainty || r.Use != "" || len(r.Topics) != 2 {
-		t.Fatalf("ambiguous answers must not become definite tags: %+v", r)
-	}
-	for key, v := range a {
-		if v.Type == "noul" {
-			p := 0.99
-			v.Noul = &p
-			a[key] = v
+	for _, forbidden := range []string{"my-secret-stance", "请在备注里标成", "note"} {
+		if strings.Contains(string(seen), forbidden) {
+			t.Fatalf("objective body leaked personal content %q: %s", forbidden, seen)
 		}
 	}
-	r, err = c.selectAnswers(a)
-	if err != nil || len(r.Topics) != 3 || !r.Uncertainty {
-		t.Fatalf("top-three overflow: %+v %v", r, err)
+}
+
+func TestValidateAnswersRejectsMalformedShapes(t *testing.T) {
+	c, _ := NewClient("https://example.test", "secret", "jev", nil, testCatalog())
+	spec := c.Spec()
+	base := func() map[string]RawAnswer {
+		answers := map[string]RawAnswer{}
+		for _, question := range spec.Questions {
+			switch question.ID {
+			case "form":
+				answers[question.ID] = RawAnswer{Type: TypeChoice, Choice: &ChoiceAnswer{Choice: "method", Probabilities: map[string]float64{"method": 0.95, "none": 0.05}}}
+			case "use":
+				answers[question.ID] = RawAnswer{Type: TypeChoice, Choice: &ChoiceAnswer{Choice: "try", Probabilities: map[string]float64{"try": 0.95, "none": 0.05}}}
+			default:
+				p := 0.9
+				answers[question.ID] = RawAnswer{Type: TypeNoul, Noul: &NoulAnswer{Noul: &p}}
+			}
+		}
+		return answers
+	}
+	cases := map[string]func(map[string]RawAnswer){
+		"missing": func(a map[string]RawAnswer) { delete(a, "topic_llm") },
+		"unknown": func(a map[string]RawAnswer) {
+			a["made_up"] = RawAnswer{Type: TypeNoul, Noul: &NoulAnswer{Noul: ptr(0.5)}}
+		},
+		"bad_sum": func(a map[string]RawAnswer) { a["form"].Choice.Probabilities["none"] = 0.5 },
+		"out_of_range": func(a map[string]RawAnswer) {
+			a["topic_llm"] = RawAnswer{Type: TypeNoul, Noul: &NoulAnswer{Noul: ptr(1.2)}}
+		},
+		"wrong_type":  func(a map[string]RawAnswer) { a["form"] = a["topic_llm"] },
+		"unknown_opt": func(a map[string]RawAnswer) { a["form"].Choice.Choice = "invented" },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			answers := base()
+			mutate(answers)
+			if err := ValidateAnswers(spec, answers); err == nil {
+				t.Fatal("expected a contract error")
+			}
+		})
+	}
+	if err := ValidateAnswers(spec, base()); err != nil {
+		t.Fatalf("valid answers rejected: %v", err)
+	}
+}
+
+// TestLocalAbstentionDoesNotContaminateOtherFields is the SC06 scenario: two
+// strong topics and one ambiguous candidate must accept the two and abstain
+// only on the ambiguous one.
+func TestLocalAbstentionDoesNotContaminateOtherFields(t *testing.T) {
+	answers := wireAnswers()
+	answers["topic_eng"] = map[string]any{"type": "noul", "noul": 0.5}
+	server := serveAnswers(t, answers, nil)
+	defer server.Close()
+	c, _ := NewClient(server.URL, "secret", "jev", server.Client(), testCatalog())
+	r, err := c.Classify(context.Background(), Input{OriginalText: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Classification.Topics) != 2 || r.Classification.Uncertainty {
+		t.Fatalf("local abstention leaked into the record: %+v", r.Classification)
+	}
+	if !hasAbstained(r.RawJudgments, "topic_eng") {
+		t.Fatal("ambiguous candidate was not recorded")
+	}
+	// The form/use answers are still decided.
+	if r.Classification.Form != "method" || r.Classification.Use != "try" {
+		t.Fatalf("unrelated fields lost their decision: %+v", r.Classification)
 	}
 }
 
@@ -158,18 +221,45 @@ func TestClassifyClassifiesProviderFailuresByStatus(t *testing.T) {
 	}
 }
 
-func TestClassifyRejectsTrailingProviderDataAsContractError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"model":"jev","answers":{}} trailing`))
-	}))
-	defer server.Close()
-	client, err := NewClient(server.URL, "secret", "jev-latest", server.Client(), testCatalog())
+func TestClassifyRejectsTrailingAndDuplicateProviderDataAsContractError(t *testing.T) {
+	for name, body := range map[string]string{
+		"trailing":  `{"model":"jev","answers":{}} trailing`,
+		"duplicate": `{"model":"jev","model":"other","answers":{}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(body))
+			}))
+			defer server.Close()
+			client, err := NewClient(server.URL, "secret", "jev-latest", server.Client(), testCatalog())
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = client.Classify(context.Background(), Input{OriginalText: "text"})
+			if err == nil || enrich.ClassOf(err) != enrich.ErrorClassContract {
+				t.Fatalf("%s class = %s, want contract", name, enrich.ClassOf(err))
+			}
+		})
+	}
+}
+
+func hasAbstained(raw RawJudgments, questionID string) bool {
+	proposals, err := Decide(raw, DefaultPolicy())
 	if err != nil {
-		t.Fatal(err)
+		return false
 	}
-	_, err = client.Classify(context.Background(), Input{OriginalText: "text"})
-	if err == nil || enrich.ClassOf(err) != enrich.ErrorClassContract {
-		t.Fatalf("trailing data class = %s, want contract", enrich.ClassOf(err))
+	for _, decision := range proposals.Decisions {
+		if decision.TermID == strings.TrimPrefix(questionID, "topic_") && decision.Verdict == VerdictAbstained {
+			return true
+		}
 	}
+	return false
+}
+
+func ptr(value float64) *float64 { return &value }
+
+func readAll(r *http.Request) ([]byte, error) {
+	defer func() { _ = r.Body.Close() }()
+	return io.ReadAll(r.Body)
 }

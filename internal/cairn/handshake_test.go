@@ -33,7 +33,7 @@ func TestHandshakeDeclaresCapabilitiesAndReportsSupport(t *testing.T) {
 	if !result.Supported || result.Target.Generation != 3 || result.Target.SpecID != "classify-v1" {
 		t.Fatalf("Handshake() = %+v", result)
 	}
-	for _, want := range []string{"protocol=v2", "spec_ids=classify-v1", "policy_versions=jev-tags-v1", "models=jev-latest", "taxonomy_versions=2026-09-20.1"} {
+	for _, want := range []string{"protocol=v2", "spec_ids=classify-v1", "policy_versions=jev-policy-v2", "models=jev-latest", "taxonomy_versions=2026-09-20.1"} {
 		if !contains(gotQuery, want) {
 			t.Fatalf("handshake query %q missing %q", gotQuery, want)
 		}

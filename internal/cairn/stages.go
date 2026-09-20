@@ -2,6 +2,7 @@ package cairn
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -179,8 +180,9 @@ const SpecID = "classify-v1"
 func (c *Client) CompleteClassification(ctx context.Context, job *ClassificationJob, result classify.Result) error {
 	return c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/classifications/%d/complete", job.ID), map[string]any{
 		"lease_token": job.LeaseToken, "revision": job.Revision, "input_revision": job.InputRevision,
-		"target_generation": job.TargetGeneration, "operation_key": ClassificationOperationKey(job),
-		"result": result})
+		"target_generation": job.TargetGeneration, "spec_id": job.SpecID,
+		"operation_key": ClassificationOperationKey(job),
+		"result":        result})
 }
 
 // ClassificationOperationKey is deterministic for one input revision and target
@@ -201,6 +203,61 @@ func (c *Client) FailClassification(ctx context.Context, job *ClassificationJob,
 // RetryClassification enrolls a historical source or retries an inactive job.
 func (c *Client) RetryClassification(ctx context.Context, id int64) error {
 	return c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/classifications/%d/retry", id), map[string]any{})
+}
+
+// StoredRun is one append-only classification run returned by the v2 API. It
+// carries the raw judgments needed to re-decide without another model call.
+// The answers field is decoded lazily by the caller so this package does not
+// depend on the classify package's internal shapes.
+type StoredRun struct {
+	ID               int64           `json:"id"`
+	ContentRevision  int64           `json:"content_revision"`
+	SpecID           string          `json:"spec_id"`
+	SpecHash         string          `json:"spec_hash"`
+	TargetGeneration int64           `json:"target_generation"`
+	RequestedModel   string          `json:"requested_model"`
+	ResolvedModel    string          `json:"resolved_model"`
+	PolicyVersion    string          `json:"policy_version"`
+	Answers          json.RawMessage `json:"answers"`
+	Usage            json.RawMessage `json:"usage"`
+	Attempt          int             `json:"attempt"`
+	OperationKey     string          `json:"operation_key"`
+	Coverage         string          `json:"coverage"`
+	Status           string          `json:"status"`
+	CreatedAt        string          `json:"created_at"`
+}
+
+// GetRuns returns the stored runs for a link, oldest first.
+func (c *Client) GetRuns(ctx context.Context, id int64) ([]StoredRun, error) {
+	if id < 1 {
+		return nil, errors.New("bookmark ID must be positive")
+	}
+	response, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v2/links/%d/runs", id), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return nil, apiError(response)
+	}
+	var payload struct {
+		Runs []StoredRun `json:"runs"`
+	}
+	if err := decodeJSON(response.Body, &payload); err != nil {
+		return nil, fmt.Errorf("decode runs: %w", err)
+	}
+	return payload.Runs, nil
+}
+
+// SubmitRun appends a run through the v2 API. It is idempotent by operation key.
+func (c *Client) SubmitRun(ctx context.Context, id int64, body map[string]any) error {
+	return c.stageWrite(ctx, fmt.Sprintf("/api/v2/links/%d/runs", id), body)
+}
+
+// PutQuestionSpec registers an immutable question spec. Re-registering the same
+// id with a different definition is rejected by the Worker.
+func (c *Client) PutQuestionSpec(ctx context.Context, body map[string]any) error {
+	return c.stageWrite(ctx, "/api/v2/question-specs", body)
 }
 
 func (c *Client) stageWrite(ctx context.Context, path string, body any) error {
