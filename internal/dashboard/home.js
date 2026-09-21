@@ -321,14 +321,26 @@
     changeFilters();
   });
   ui.byId("export-markdown").addEventListener("click", async () => {
-    // Exporting now yields between chunks, so disable the control while it runs
-    // and surface a failure instead of letting an unhandled rejection vanish.
+    // The server-side export carries the full effective v2 dimensions, the
+    // human origin and partial counts under the current filters. The local
+    // builder stays as a fallback for a backend without the endpoint.
     const button = ui.byId("export-markdown");
     button.disabled = true;
     try {
-      await ui.exportMarkdown(state.items, Boolean(state.nextBeforeID));
-    } catch (_) {
-      ui.showToast("导出失败，请重试", true);
+      const params = new URLSearchParams({ limit: String(Math.max(state.items.length, PAGE_SIZE)) });
+      if (state.search) params.set("q", state.search);
+      for (const [key, value] of Object.entries(state.filters)) if (value) params.set(key, value);
+      await ui.exportServerMarkdown(params);
+    } catch (error) {
+      if (error?.message === "export_unsupported") {
+        try {
+          await ui.exportMarkdown(state.items, Boolean(state.nextBeforeID));
+        } catch (_) {
+          ui.showToast("导出失败，请重试", true);
+        }
+      } else {
+        ui.showToast("导出失败，请重试", true);
+      }
     } finally {
       button.disabled = state.items.length === 0;
     }

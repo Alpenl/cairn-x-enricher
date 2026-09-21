@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
@@ -234,6 +235,117 @@ func (c *Client) ApplyV2Override(ctx context.Context, id int64, override V2Overr
 		return nil, fmt.Errorf("decode override result: %w", err)
 	}
 	return payload, nil
+}
+
+// GetEvidence reads the latest immutable evidence snapshot for a link. The
+// caller renders only the stored blocks, so a missing reference is visibly
+// unavailable rather than replaced by a generated explanation.
+func (c *Client) GetEvidence(ctx context.Context, id int64) (json.RawMessage, error) {
+	if id < 1 {
+		return nil, errors.New("bookmark ID must be positive")
+	}
+	response, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v2/links/%d/evidence", id), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed {
+		return nil, ErrV2Unsupported
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, apiError(response)
+	}
+	var payload json.RawMessage
+	if err := decodeJSON(response.Body, &payload); err != nil {
+		return nil, fmt.Errorf("decode evidence snapshot: %w", err)
+	}
+	return payload, nil
+}
+
+// GetClassificationStatus reads the queue state of a link's classification job
+// so the UI can distinguish pending/processing/failed/exhausted from an empty
+// result instead of showing a red failure for a legitimate empty.
+func (c *Client) GetClassificationStatus(ctx context.Context, id int64) (json.RawMessage, error) {
+	if id < 1 {
+		return nil, errors.New("bookmark ID must be positive")
+	}
+	response, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/enrichment/classifications/%d", id), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed {
+		return nil, ErrV2Unsupported
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, apiError(response)
+	}
+	var payload json.RawMessage
+	if err := decodeJSON(response.Body, &payload); err != nil {
+		return nil, fmt.Errorf("decode classification status: %w", err)
+	}
+	return payload, nil
+}
+
+// GetEntities reads the independent entity state for a link. A state of
+// not_run/failed/stale is different from completed_empty and must stay
+// distinguishable in the UI.
+func (c *Client) GetEntities(ctx context.Context, id int64) (json.RawMessage, error) {
+	if id < 1 {
+		return nil, errors.New("bookmark ID must be positive")
+	}
+	response, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v2/links/%d/entities", id), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed {
+		return nil, ErrV2Unsupported
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, apiError(response)
+	}
+	var payload json.RawMessage
+	if err := decodeJSON(response.Body, &payload); err != nil {
+		return nil, fmt.Errorf("decode entity state: %w", err)
+	}
+	return payload, nil
+}
+
+// CorrectEntity records a human correction for one entity candidate. The
+// correction is durable and takes precedence over the automatic value.
+func (c *Client) CorrectEntity(ctx context.Context, id int64, body map[string]any) error {
+	return c.stageWrite(ctx, fmt.Sprintf("/api/v2/links/%d/entities", id), body)
+}
+
+// SubmitEntityState records one bounded entity lifecycle result.
+func (c *Client) SubmitEntityState(ctx context.Context, id int64, body map[string]any) error {
+	return c.stageWrite(ctx, fmt.Sprintf("/api/v2/links/%d/entity-state", id), body)
+}
+
+// CreateEvidenceRequest records a bounded, de-duplicated evidence escalation
+// and returns its id. It never fetches anything itself.
+func (c *Client) CreateEvidenceRequest(ctx context.Context, id int64, body map[string]any) (string, error) {
+	response, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v2/links/%d/evidence-requests", id), body)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return "", apiError(response)
+	}
+	var payload struct {
+		ID string `json:"id"`
+	}
+	if err := decodeJSON(response.Body, &payload); err != nil {
+		return "", fmt.Errorf("decode evidence request: %w", err)
+	}
+	return payload.ID, nil
+}
+
+// DecideEvidenceRequest reports the bounded outcome of an escalation.
+func (c *Client) DecideEvidenceRequest(ctx context.Context, requestID string, body map[string]any) error {
+	return c.stageWrite(ctx, "/api/v2/evidence-requests/"+url.PathEscape(requestID), body)
 }
 
 // GetV2Effective reads the resolved effective view for a link.

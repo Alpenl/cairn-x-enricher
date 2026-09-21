@@ -311,6 +311,91 @@ func legendOrdered(legend map[string]string) []string {
 	return levels
 }
 
+// ProviderQuestion is an ad-hoc question for an opt-in extension judgment. It
+// uses the same official DTO shape as the compiled spec, so an extension can
+// never invent a private request format.
+type ProviderQuestion struct {
+	Type         string `json:"type"`
+	Instructions any    `json:"instructions"`
+	Criteria     any    `json:"criteria,omitempty"`
+}
+
+// Judge runs a bounded set of ad-hoc questions against one state and returns the
+// typed answers. It is used only by the opt-in extensions (entity validation,
+// reranking); the production classification spec is unaffected, and the caller
+// owns the budget, the validation of the answer set and the fallback.
+func (c *Client) Judge(ctx context.Context, state any, questions map[string]ProviderQuestion) (map[string]RawAnswer, error) {
+	if len(questions) == 0 || len(questions) > 64 {
+		return nil, errors.New("extension judgment needs 1 to 64 questions")
+	}
+	wire := make(map[string]providerQuestion, len(questions))
+	for id, question := range questions {
+		switch question.Type {
+		case TypeNoul, TypeChoice, TypeScore:
+		default:
+			return nil, fmt.Errorf("extension question %s has unknown type %q", id, question.Type)
+		}
+		instructions, err := json.Marshal(question.Instructions)
+		if err != nil {
+			return nil, fmt.Errorf("extension question %s instructions: %w", id, err)
+		}
+		entry := providerQuestion{Type: question.Type, Instructions: instructions}
+		if question.Criteria != nil {
+			criteria, err := json.Marshal(question.Criteria)
+			if err != nil {
+				return nil, fmt.Errorf("extension question %s criteria: %w", id, err)
+			}
+			entry.Criteria = criteria
+		}
+		wire[id] = entry
+	}
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		return nil, fmt.Errorf("extension state: %w", err)
+	}
+	body, err := json.Marshal(providerRequest{Model: c.model, State: stateJSON, Questions: wire})
+	if err != nil {
+		return nil, err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, errors.New("invalid TypeSafe endpoint")
+	}
+	request.Header.Set("Authorization", "Bearer "+c.key)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := c.http.Do(request)
+	if err != nil {
+		return nil, enrich.ClassifyModelError(fmt.Errorf("call TypeSafe: %w", err))
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return nil, enrich.ClassifyModelError(&enrich.ModelHTTPError{StatusCode: response.StatusCode})
+	}
+	raw, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
+	if err != nil {
+		return nil, enrich.Classified(fmt.Errorf("read TypeSafe response: %w", err), enrich.ErrorClassTransient)
+	}
+	if err := rejectDuplicateKeys(raw); err != nil {
+		return nil, enrich.Classified(err, enrich.ErrorClassContract)
+	}
+	var decoded providerResponse
+	if err := strictDecode(raw, &decoded); err != nil {
+		return nil, enrich.Classified(fmt.Errorf("invalid TypeSafe response JSON: %w", err), enrich.ErrorClassContract)
+	}
+	if decoded.Model == "" || len(decoded.Model) > 200 {
+		return nil, enrich.Classified(errors.New("TypeSafe response missing model"), enrich.ErrorClassContract)
+	}
+	if len(decoded.Answers) != len(wire) {
+		return nil, enrich.Classified(fmt.Errorf("extension answer set has %d entries, want %d", len(decoded.Answers), len(wire)), enrich.ErrorClassContract)
+	}
+	for id := range wire {
+		if _, ok := decoded.Answers[id]; !ok {
+			return nil, enrich.Classified(fmt.Errorf("extension answer for %s is missing", id), enrich.ErrorClassContract)
+		}
+	}
+	return decoded.Answers, nil
+}
+
 // Classify evaluates, decides and projects in one step. The processor uses it
 // for the production path; Decide and Resolve remain independently callable
 // for replay.

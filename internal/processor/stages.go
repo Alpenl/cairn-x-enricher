@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
+	"github.com/Alpenl/cairn-x-enricher/internal/extension"
 )
 
 // StageQueue persists source checkpoints and independent classification leases.
@@ -25,6 +27,15 @@ type StageQueue interface {
 	// SubmitEvidence persists the immutable evidence snapshot a run references.
 	// A backend without the v2 API reports cairn.IsUnsupported.
 	SubmitEvidence(context.Context, int64, any) error
+	// SubmitEntityState records the bounded entity lifecycle result.
+	SubmitEntityState(context.Context, int64, map[string]any) error
+	// CreateEvidenceRequest records a bounded escalation; the consumer performs
+	// the fetch under its own network policy.
+	CreateEvidenceRequest(context.Context, int64, map[string]any) (string, error)
+	// DecideEvidenceRequest reports the bounded outcome of an escalation.
+	DecideEvidenceRequest(context.Context, string, map[string]any) error
+	// RetryClassification re-arms the classification queue after new evidence.
+	RetryClassification(context.Context, int64) error
 }
 
 // SourceReader separates retrieval from generation of reading aids.
@@ -48,6 +59,11 @@ type stages struct {
 	version, model         string
 	classificationDeadline time.Duration
 	pause                  *componentPause
+	// extensions is optional. When absent every extension stays off and the
+	// pipeline is identical to the default.
+	extensions  *extension.Service
+	fetcher     *http.Client
+	fetchPolicy extension.FetchPolicy
 }
 
 // ErrComponentPaused reports that the classification component is in a
@@ -145,6 +161,26 @@ func NewStaged(queue StageQueue, reader SourceReader, classifier Classifier, ver
 	p.stages = &stages{queue: queue, reader: reader, classifier: classifier, version: version, model: model,
 		classificationDeadline: DefaultClassificationDeadline, pause: newComponentPause()}
 	return p
+}
+
+// Extensions exposes the attached extension service for the management UI so a
+// rerank action uses the same flags, budget and judge as the pipeline.
+func (p *Processor) Extensions() *extension.Service {
+	if p.stages == nil {
+		return nil
+	}
+	return p.stages.extensions
+}
+
+// SetExtensions attaches the bounded semantic extensions. Without one the
+// processor behaves exactly as before, so the default stays off.
+func (p *Processor) SetExtensions(service *extension.Service, fetcher *http.Client, policy extension.FetchPolicy) {
+	if p.stages == nil {
+		return
+	}
+	p.stages.extensions = service
+	p.stages.fetcher = fetcher
+	p.stages.fetchPolicy = policy
 }
 
 func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual string) error {
@@ -342,6 +378,7 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 			// another paid inference.
 			if enrich.ClassOf(err) == enrich.ErrorClassCompleted {
 				completed++
+				p.runExtensions(ctx, job)
 				continue
 			}
 			failed++
@@ -349,6 +386,111 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		}
 		cancel()
 		completed++
+		p.runExtensions(ctx, job)
 	}
 	return completed, failed, nil
+}
+
+// runExtensions runs the opt-in bounded extensions after a successful
+// classification. Every failure is logged and swallowed: an extension can never
+// fail the bookmark or lose the classification that was already committed.
+func (p *Processor) runExtensions(ctx context.Context, job *cairn.ClassificationJob) {
+	s := p.stages
+	if s.extensions == nil {
+		return
+	}
+	blocks := []extension.Block{}
+	if strings.TrimSpace(job.OriginalText) != "" {
+		blocks = append(blocks, extension.Block{ID: "primary-1", Text: job.OriginalText})
+	}
+	if strings.TrimSpace(job.ContextText) != "" {
+		blocks = append(blocks, extension.Block{ID: "context-1", Text: job.ContextText})
+	}
+	// Entities are additive and independently budgeted. A stale or failed run
+	// is recorded explicitly and never clears a newer success.
+	entity := s.extensions.Entities(ctx, blocks, job.RelatedLinks)
+	if entity.State != extension.EntityNotRun {
+		body := map[string]any{
+			"operation_key":    fmt.Sprintf("entity-%d-rev-%d", job.ID, job.Revision),
+			"state":            string(entity.State),
+			"entities":         entity.Entities,
+			"content_revision": job.InputRevision,
+			"reason":           entity.Reason,
+			"calls":            entity.Calls,
+			"tokens":           entity.Tokens,
+		}
+		if err := s.queue.SubmitEntityState(context.WithoutCancel(ctx), job.ID, body); err != nil {
+			p.logger.WarnContext(ctx, "entity state was not stored", "link_id", job.ID, "error", err)
+		}
+	}
+	// Evidence escalation only when there is an observable gap and a real
+	// allowlisted link to fetch. The old readable content is kept on failure.
+	gap := extension.DetectGap(blocks, job.RelatedLinks, false)
+	if gap != extension.GapExternalLink || s.fetcher == nil {
+		return
+	}
+	requestID, err := s.queue.CreateEvidenceRequest(context.WithoutCancel(ctx), job.ID, map[string]any{
+		"scope":      "external_link",
+		"dedupe_key": fmt.Sprintf("evidence-%d-rev-%d", job.ID, job.InputRevision),
+		"budget":     map[string]any{"max_bytes": s.fetchPolicy.MaxBytes},
+	})
+	if err != nil || requestID == "" {
+		return
+	}
+	outcome := s.extensions.RequestEvidence(ctx, s.fetcher, s.fetchPolicy, firstAllowlisted(job.RelatedLinks, s.fetchPolicy))
+	report := func(status string, extra map[string]any) {
+		payload := map[string]any{"status": status}
+		if extra != nil {
+			payload["result"] = extra
+		}
+		if err := s.queue.DecideEvidenceRequest(context.WithoutCancel(ctx), requestID, payload); err != nil {
+			p.logger.WarnContext(ctx, "evidence request outcome was not stored", "link_id", job.ID, "error", err)
+		}
+	}
+	switch outcome.State {
+	case "completed":
+		snapshot := escalatedSnapshot(job, outcome)
+		if err := s.queue.SubmitEvidence(context.WithoutCancel(ctx), job.ID, snapshot); err != nil {
+			report("failed", map[string]any{"reason": "snapshot not stored"})
+			return
+		}
+		report("completed", map[string]any{"url": outcome.URL, "truncated": outcome.Truncated})
+		// A new evidence revision is a controlled re-evaluation: re-arm the
+		// classification queue so the next poll re-classifies with the new
+		// material. The old decision is already stale by content revision.
+		if err := s.queue.RetryClassification(context.WithoutCancel(ctx), job.ID); err != nil {
+			p.logger.WarnContext(ctx, "evidence escalation could not re-arm classification", "link_id", job.ID, "error", err)
+		}
+	case "blocked":
+		report("blocked", map[string]any{"reason": outcome.Reason})
+	default:
+		report("failed", map[string]any{"reason": outcome.Reason})
+	}
+}
+
+// escalatedSnapshot rebuilds the objective snapshot with the fetched external
+// block appended. It never modifies the primary or context blocks.
+func escalatedSnapshot(job *cairn.ClassificationJob, outcome extension.FetchOutcome) map[string]any {
+	snapshot := EvidenceSnapshot(enrich.Source{
+		OriginalText: job.OriginalText, ContextText: job.ContextText,
+	}, time.Now())
+	blocks := snapshot["blocks"].([]map[string]any)
+	blocks = append(blocks, map[string]any{
+		"id": "external-1", "role": "external_article", "text": outcome.Text,
+		"url": outcome.URL, "acquired": "controlled_fetch",
+	})
+	snapshot["blocks"] = blocks
+	snapshot["retrieval"] = "x_search+external_fetch"
+	return snapshot
+}
+
+// firstAllowlisted picks the first stored link the fetch policy accepts, so the
+// extension never tries an arbitrary URL from the material.
+func firstAllowlisted(links []string, policy extension.FetchPolicy) string {
+	for _, link := range links {
+		if _, err := extension.ValidateURL(policy, link); err == nil {
+			return link
+		}
+	}
+	return ""
 }

@@ -74,7 +74,10 @@ function createMock() {
     // Test controls: delay the next override response so a rapid second action
     // is genuinely in flight, and force the next CAS check to conflict.
     delayNextMs: 0,
-    forceConflict: false
+    forceConflict: false,
+    entities: ["acme"],
+    entityState: "completed_nonempty",
+    actions: []
   };
   return state;
 }
@@ -95,7 +98,9 @@ async function serveAsset(res, file, type) {
 async function waitFor(predicate, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (predicate()) return true;
+    // Predicates may be async (they often read the DOM), so the result must be
+    // awaited; treating a Promise as truthy would return immediately.
+    if (await predicate()) return true;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   return false;
@@ -170,6 +175,45 @@ function startServer(state) {
     }
     if (url.pathname === "/api/bookmarks/12/v2-effective") {
       return send(200, { id: 12, effective: { topics: state.selection.topics, form: state.selection.form, use: state.selection.use } });
+    }
+    if (url.pathname === "/api/bookmarks/12/evidence") {
+      return send(200, {
+        available: true, current: true, truncated: false,
+        snapshot: { blocks: [
+          { id: "b1", role: "primary", text: "primary body" },
+          { id: "b2", role: "quoted", text: "a quoted disagreement" }
+        ], fetched_at: "2026-09-21T00:00:00Z", retrieval: "x_search", truncation: { truncated: false } }
+      });
+    }
+    if (url.pathname === "/api/bookmarks/12/classification-status") {
+      return send(200, { status: "completed", attempts: 1, error: null });
+    }
+    if (url.pathname === "/api/bookmarks/12/entities") {
+      if (req.method === "GET") {
+        return send(200, {
+          available: true, state: state.entityState, stale: false,
+          entities: state.entities, human: state.entities, revision: state.revision
+        });
+      }
+      state.actions.push({ action: "entity", body });
+      if (body.action === "accept" && !state.entities.includes(body.term)) state.entities.push(body.term);
+      if (body.action === "reject") state.entities = state.entities.filter((entity) => entity !== body.term);
+      return send(200, { available: true, state: state.entityState, stale: false, entities: state.entities, human: state.entities, revision: state.revision });
+    }
+    if (url.pathname === "/api/bookmarks/12/retry-classification") {
+      state.actions.push({ action: "retry_classification" });
+      return send(200, { id: 12, action: "retry_classification", model_calls: 0, detail: "只重新入分类队列；不抓取来源，不立即调用模型。" });
+    }
+    if (url.pathname === "/api/bookmarks/12/refresh-source") {
+      state.actions.push({ action: "refresh_source" });
+      return send(200, { id: 12, action: "refresh_source", fetch: true, detail: "重新抓取原文；旧内容与人工整理在新内容到达前保持不变。" });
+    }
+    if (url.pathname === "/api/bookmarks/12/replay-policy") {
+      state.actions.push({ action: body.commit ? "replay_commit" : "replay_dry_run" });
+      if (body.commit) {
+        return send(200, { id: 12, model_calls: 0, changed: ["topics"], committed: false, committed_reason: "写回未授权：需要服务端显式设置 CAIRN_ALLOW_DECISION_WRITE=1" });
+      }
+      return send(200, { id: 12, run_id: 1, model_calls: 0, changed: ["topics"], before: {}, after: {}, committed: false });
     }
     if (url.pathname === "/api/bookmarks/12/curation") {
       state.requests.push({ path: url.pathname, body });
@@ -304,6 +348,45 @@ async function main() {
   // 11. No model or X Search call happened for any of the above.
   check("no model calls occurred", state.modelCalls === 0);
   check("no X Search calls occurred", state.xSearchCalls === 0);
+
+  // 12. B06/B09 panels: evidence provenance, status, entities and the three
+  // explicit redo actions, each with its own stated cost.
+  await page.waitForSelector("#v2-evidence:not([hidden])");
+  const evidenceRoles = await page.$$eval("#v2-evidence-blocks .v2-evidence-role", (nodes) => nodes.map((node) => node.textContent));
+  equal("evidence blocks render their real roles", evidenceRoles, ["原帖", "引用"]);
+  const status = await page.textContent("#v2-classification-status");
+  check("classification status is shown independently", /分类完成/.test(status || ""), status || "");
+
+  await page.waitForSelector("#v2-entities:not([hidden])");
+  const entityText = await page.textContent("#v2-entity-list");
+  check("the entity list renders the stored entities", /acme/.test(entityText || ""), entityText || "");
+  await page.click("#v2-entities > summary");
+  await page.waitForSelector("#v2-entity-input", { state: "visible" });
+  await page.fill("#v2-entity-input", "widget");
+  await page.click("#v2-entity-add");
+  await waitFor(() => state.actions.some((entry) => entry.action === "entity" && entry.body.term === "widget"));
+  await waitFor(async () => /widget/.test((await page.textContent("#v2-entity-list")) || ""), 5000).catch(() => {});
+  const entityTextAfter = await page.textContent("#v2-entity-list");
+  check("a human entity correction is submitted and shown", /widget/.test(entityTextAfter || ""), entityTextAfter || "");
+
+  await page.click("#v2-retry-classification");
+  await waitFor(() => state.actions.some((entry) => entry.action === "retry_classification"));
+  check("classification retry is a separate action", true);
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.click("#v2-refresh-source");
+  await waitFor(() => state.actions.some((entry) => entry.action === "refresh_source"));
+  check("refresh-source is a separate, confirmed action", true);
+  await page.click("#v2-replay-policy");
+  await waitFor(() => state.actions.some((entry) => entry.action === "replay_dry_run"));
+  await page.waitForSelector("#v2-replay-result button");
+  const replayText = await page.textContent("#v2-replay-result");
+  check("policy replay reports zero model calls", /模型调用 0 次/.test(replayText || ""), replayText || "");
+  await page.click("#v2-replay-result button");
+  await waitFor(() => state.actions.some((entry) => entry.action === "replay_commit"));
+  await waitFor(async () => /未授权/.test((await page.textContent("#v2-replay-result")) || ""), 5000).catch(() => {});
+  const commitText = await page.textContent("#v2-replay-result");
+  check("an unauthorized write-back explains itself instead of silently failing", /未授权/.test(commitText || ""), commitText || "");
+  check("no model call was made by any of the three actions", state.modelCalls === 0);
 
   // 9. Keyboard reachability of the v2 controls.
   const focusable = await page.evaluate(() => {

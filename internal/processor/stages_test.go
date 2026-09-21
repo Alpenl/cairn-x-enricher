@@ -3,12 +3,16 @@ package processor
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
+	"github.com/Alpenl/cairn-x-enricher/internal/extension"
 )
 
 type stageQueue struct {
@@ -22,6 +26,11 @@ type stageQueue struct {
 	completeErr            error
 	evidence               int
 	evidenceErr            error
+	entityState            map[string]any
+	entitySubmissions      int
+	evidenceRequests       int
+	evidenceDecisions      []map[string]any
+	retries                int
 }
 
 func (q *stageQueue) GetSource(context.Context, int64) (*enrich.Source, error) { return q.source, nil }
@@ -53,6 +62,23 @@ func (q *stageQueue) FailClassification(context.Context, *cairn.ClassificationJo
 func (q *stageQueue) SubmitEvidence(context.Context, int64, any) error {
 	q.evidence++
 	return q.evidenceErr
+}
+func (q *stageQueue) SubmitEntityState(_ context.Context, _ int64, body map[string]any) error {
+	q.entityState = body
+	q.entitySubmissions++
+	return nil
+}
+func (q *stageQueue) CreateEvidenceRequest(context.Context, int64, map[string]any) (string, error) {
+	q.evidenceRequests++
+	return "req-1", nil
+}
+func (q *stageQueue) DecideEvidenceRequest(_ context.Context, _ string, body map[string]any) error {
+	q.evidenceDecisions = append(q.evidenceDecisions, body)
+	return nil
+}
+func (q *stageQueue) RetryClassification(context.Context, int64) error {
+	q.retries++
+	return nil
 }
 
 type stageReader struct {
@@ -227,5 +253,93 @@ func TestClaimLevel401PausesWithoutConsumingJobs(t *testing.T) {
 	// The lease/attempt budget is untouched because no job was handed out.
 	if q.classificationFailures != 0 {
 		t.Fatalf("paused claim reported a job failure: %d", q.classificationFailures)
+	}
+}
+
+// --- B09 extension wiring ---------------------------------------------------
+
+type fakeJudge struct{ value float64 }
+
+func (f fakeJudge) Judge(_ context.Context, _ any, questions map[string]classify.ProviderQuestion) (map[string]classify.RawAnswer, error) {
+	answers := make(map[string]classify.RawAnswer, len(questions))
+	for id := range questions {
+		value := f.value
+		answers[id] = classify.RawAnswer{Type: classify.TypeNoul, Noul: &classify.NoulAnswer{Noul: &value}}
+	}
+	return answers, nil
+}
+
+type staticTransport struct{ body string }
+
+func (s staticTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/html"}},
+		Body:       io.NopCloser(strings.NewReader(s.body)),
+	}, nil
+}
+
+// TestExtensionsRunAfterClassificationWithoutFailingIt proves the opt-in
+// extensions record their own state and close a real evidence gap, while a
+// disabled service changes nothing.
+func TestExtensionsRunAfterClassificationWithoutFailingIt(t *testing.T) {
+	job := &cairn.ClassificationJob{
+		ID: 1, Revision: 1, InputRevision: 2, SpecID: "classify-v1",
+		RelatedLinks: []string{"https://allowed.example/article"},
+		Input:        classify.Input{URL: "https://x.com/a/status/1", OriginalText: "Acme builds Widgets."},
+	}
+	q := &stageQueue{fakeQueue: newFakeQueue(), job: job}
+	p := NewStaged(q, nil, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+
+	// Disabled: no entity state, no evidence request.
+	done, failed, err := p.RunClassifications(context.Background(), 1)
+	if err != nil || done != 1 || failed != 0 {
+		t.Fatalf("baseline classification failed: %d %d %v", done, failed, err)
+	}
+	if q.entitySubmissions != 0 || q.evidenceRequests != 0 {
+		t.Fatalf("disabled extensions ran: entities=%d requests=%d", q.entitySubmissions, q.evidenceRequests)
+	}
+
+	flags := extension.DefaultFlags()
+	flags.Entities = true
+	flags.Evidence = true
+	policy := extension.DefaultFetchPolicy([]string{"allowed.example"})
+	p.SetExtensions(extension.NewService(flags, extension.DefaultBudget(), fakeJudge{value: 0.95}),
+		&http.Client{Transport: staticTransport{body: "<html><body>Fetched external article body.</body></html>"}}, policy)
+
+	q.job = job
+	done, failed, err = p.RunClassifications(context.Background(), 1)
+	if err != nil || done != 1 || failed != 0 {
+		t.Fatalf("classification with extensions failed: %d %d %v", done, failed, err)
+	}
+	if q.entitySubmissions != 1 {
+		t.Fatalf("entity state was not submitted: %d", q.entitySubmissions)
+	}
+	if q.entityState["state"] != string(extension.EntityCompletedNonempty) {
+		t.Fatalf("entity state = %v", q.entityState["state"])
+	}
+	if q.evidenceRequests != 1 || q.evidence != 1 {
+		t.Fatalf("evidence escalation did not run: requests=%d snapshots=%d", q.evidenceRequests, q.evidence)
+	}
+	if len(q.evidenceDecisions) != 1 || q.evidenceDecisions[0]["status"] != "completed" {
+		t.Fatalf("evidence outcome = %+v", q.evidenceDecisions)
+	}
+	if q.retries != 1 {
+		t.Fatalf("new evidence must re-arm classification: retries=%d", q.retries)
+	}
+	// A blocked fetch keeps the old content and reports blocked.
+	q.evidenceDecisions = nil
+	q.evidenceRequests, q.evidence, q.retries = 0, 0, 0
+	q.job = job
+	blockedPolicy := extension.DefaultFetchPolicy([]string{"other.example"})
+	p.SetExtensions(extension.NewService(flags, extension.DefaultBudget(), fakeJudge{value: 0.95}), &http.Client{Transport: staticTransport{body: "x"}}, blockedPolicy)
+	if _, _, err := p.RunClassifications(context.Background(), 1); err != nil {
+		t.Fatal(err)
+	}
+	if len(q.evidenceDecisions) != 1 || q.evidenceDecisions[0]["status"] != "blocked" {
+		t.Fatalf("a blocked fetch must be reported, not silently skipped: %+v", q.evidenceDecisions)
+	}
+	if q.evidence != 0 || q.retries != 0 {
+		t.Fatalf("a blocked fetch must not change the stored snapshot or re-run: snapshots=%d retries=%d", q.evidence, q.retries)
 	}
 }

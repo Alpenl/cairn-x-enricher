@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -247,6 +248,165 @@ func TestLocalWorkerFullLifecycle(t *testing.T) {
 			t.Fatalf("human rejection was revived by the replay: %+v", afterReplay.Selection)
 		}
 	}
+}
+
+// TestLocalWorkerVersionCompetition is the real SC01/SC02 regression: after a
+// job is completed, alternating legacy and v2 consumers must never re-claim it,
+// and an in-flight completion must lose to a target switch.
+func TestLocalWorkerVersionCompetition(t *testing.T) {
+	base := workerURL(t)
+	appToken := envOr("CAIRN_APP_TOKEN", "app")
+	enricherToken := envOr("CAIRN_ENRICHER_TOKEN", "internal")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	queue := cairn.NewClient(base, enricherToken, &http.Client{Timeout: 30 * time.Second})
+
+	// The lifecycle test may have left a v2 target active; point a new
+	// generation back at the legacy protocol so the old consumer contract is
+	// exercised on its real endpoint.
+	legacyTarget := map[string]any{
+		"spec_id": "legacy", "spec_hash": "legacy", "taxonomy_version": "2026-09-20.1",
+		"policy_version": "legacy-policy", "requested_model": "legacy-model", "protocol": "legacy",
+	}
+	body, _ := json.Marshal(legacyTarget)
+	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/enrichment/classifications/target", bytes.NewReader(body))
+	request.Header.Set("Authorization", "Bearer "+enricherToken)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("activate legacy target: %v", err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("activate legacy target status = %d", response.StatusCode)
+	}
+	id := createLink(t, base, appToken)
+	lease := claimEnrichmentJob(t, base, enricherToken, id)
+	source := enrich.Source{OriginalText: "Version competition source.", OriginalLanguage: "en",
+		ContextText: "", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "local"}
+	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
+		t.Fatalf("save source: %v", err)
+	}
+	// Complete one job under the legacy protocol, which is what an old client
+	// uses.
+	legacyClaim := legacyClaim(t, base, enricherToken, id)
+	if legacyClaim == nil {
+		t.Fatal("legacy claim returned no job")
+	}
+	legacyComplete(t, base, enricherToken, id, legacyClaim)
+	// 20 rounds of A/B alternation must never hand the completed job out again.
+	for round := 0; round < 20; round++ {
+		body, _ := json.Marshal(map[string]any{
+			"protocol": "legacy", "taxonomy_version": "2026-09-20.1",
+			"policy_version": fmt.Sprintf("policy-%d", round%2), "model": "legacy-model",
+		})
+		request, _ := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/enrichment/classifications/claim", bytes.NewReader(body))
+		request.Header.Set("Authorization", "Bearer "+enricherToken)
+		request.Header.Set("Content-Type", "application/json")
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatalf("round %d claim: %v", round, err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusNoContent {
+			t.Fatalf("round %d re-claimed a completed job: HTTP %d", round, response.StatusCode)
+		}
+	}
+	// An in-flight completion loses to a target switch: the old result must not
+	// overwrite the new projection.
+	switchTarget(t, base, enricherToken, mustClassifier(t))
+	rejected := queue.CompleteClassification(ctx, legacyClaim, classify.Result{
+		Classification: taxonomy.Classification{Selection: taxonomy.Selection{Topics: []string{"eval"}, Form: "case", Use: "try"},
+			Entities: []string{}, TaxonomyVersion: "2026-09-20.1", DiscardedTags: []string{}},
+		Model: "legacy-model", PolicyVersion: "legacy-policy", Answers: map[string]classify.RawAnswer{},
+	})
+	if rejected == nil {
+		t.Fatal("a completion after a target switch must be rejected")
+	}
+	view, err := queue.GetV2Selection(ctx, id)
+	if err != nil {
+		t.Fatalf("get selection: %v", err)
+	}
+	for _, topic := range view.Selection.Topics {
+		if topic == "eval" {
+			t.Fatal("the stale completion overwrote the current projection")
+		}
+	}
+}
+
+func mustClassifier(t *testing.T) *classify.Client {
+	t.Helper()
+	catalog := taxonomy.Catalog{
+		Version: "2026-09-20.1",
+		Topics:  []taxonomy.Term{{ID: "llm", Label: "LLM", Description: "大语言模型", Active: true}},
+		Forms:   []taxonomy.Term{{ID: "method", Label: "方法", Description: "方法", Active: true}},
+		Uses:    []taxonomy.Term{{ID: "try", Label: "待试", Description: "待试", Active: true}},
+	}
+	classifier, err := classify.NewClient("http://127.0.0.1:1", "key", "jev-latest", nil, catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return classifier
+}
+
+// legacyComplete posts the pre-v2 completion payload an old consumer sends, on
+// the original endpoint. It is deliberately raw so the test exercises the exact
+// legacy contract rather than the new client's helper.
+func legacyComplete(t *testing.T, base, token string, id int64, job *cairn.ClassificationJob) {
+	t.Helper()
+	body, _ := json.Marshal(map[string]any{
+		"lease_token": job.LeaseToken, "revision": job.Revision,
+		"result": map[string]any{
+			"model": "legacy-model", "policy_version": "legacy-policy",
+			"answers": map[string]any{},
+			"usage":   map[string]any{"input_tokens": 1, "output_tokens": 1},
+			"classification": map[string]any{
+				"topics": []string{"llm"}, "form": "method", "use": "try", "uncertainty": false,
+				"taxonomy_version": "2026-09-20.1", "why_suggestion": "", "entities": []string{}, "discarded_tags": []string{},
+			},
+		},
+	})
+	request, _ := http.NewRequestWithContext(context.Background(), http.MethodPost,
+		fmt.Sprintf("%s/api/enrichment/classifications/%d/complete", base, id), bytes.NewReader(body))
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("legacy complete: %v", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		t.Fatalf("legacy complete status = %d: %s", response.StatusCode, payload)
+	}
+}
+
+// legacyClaim posts the pre-v2 claim payload an old consumer sends.
+func legacyClaim(t *testing.T, base, token string, id int64) *cairn.ClassificationJob {
+	t.Helper()
+	body, _ := json.Marshal(map[string]any{
+		"protocol": "legacy", "taxonomy_version": "2026-09-20.1",
+		"policy_version": "legacy-policy", "model": "legacy-model",
+	})
+	request, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, base+"/api/enrichment/classifications/claim", bytes.NewReader(body))
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("legacy claim: %v", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode == http.StatusNoContent {
+		return nil
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("legacy claim status = %d", response.StatusCode)
+	}
+	var job cairn.ClassificationJob
+	if err := json.NewDecoder(response.Body).Decode(&job); err != nil {
+		t.Fatal(err)
+	}
+	return &job
 }
 
 func envOr(key, fallback string) string {

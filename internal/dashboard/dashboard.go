@@ -68,6 +68,9 @@ var readerJS []byte
 //go:embed curation-v2.js
 var curationV2JS []byte
 
+//go:embed reader-v2-panels.js
+var readerV2PanelsJS []byte
+
 //go:embed download.svg
 var downloadSVG []byte
 
@@ -89,6 +92,17 @@ type V2Backend interface {
 	GetV2Taxonomy(context.Context) (cairn.V2Taxonomy, error)
 	ApplyV2Override(context.Context, int64, cairn.V2Override) (json.RawMessage, error)
 	GetV2Effective(context.Context, int64) (json.RawMessage, error)
+	// B05/B06/B09 surfaces: stored evidence, queue status, entity lifecycle,
+	// the replayable run history and the three explicit redo actions.
+	GetEvidence(context.Context, int64) (json.RawMessage, error)
+	GetClassificationStatus(context.Context, int64) (json.RawMessage, error)
+	GetEntities(context.Context, int64) (json.RawMessage, error)
+	CorrectEntity(context.Context, int64, map[string]any) error
+	GetRuns(context.Context, int64) ([]cairn.StoredRun, error)
+	GetQuestionSpec(context.Context, string) (cairn.StoredQuestionSpec, error)
+	SubmitDecision(context.Context, int64, map[string]any) error
+	RetryClassification(context.Context, int64) error
+	RefreshSource(context.Context, int64) (json.RawMessage, error)
 }
 
 // JobProcessor handles a job after the Worker has granted its lease.
@@ -134,6 +148,9 @@ type Server struct {
 	// extensionFlags reports which bounded extensions are enabled. They are
 	// independent of each other and default to off.
 	extensionFlags extension.Flags
+	// extensions is the same service the pipeline uses, so a rerank action
+	// shares its flags and budget.
+	extensions *extension.Service
 
 	// summary caches the backstage aggregate, which costs several backend
 	// list calls and is polled by an idle browser tab.
@@ -305,6 +322,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /assets/curation-v2.js", func(writer http.ResponseWriter, _ *http.Request) {
 		serveAsset(writer, "text/javascript; charset=utf-8", curationV2JS)
 	})
+	mux.HandleFunc("GET /assets/reader-v2-panels.js", func(writer http.ResponseWriter, _ *http.Request) {
+		serveAsset(writer, "text/javascript; charset=utf-8", readerV2PanelsJS)
+	})
 	mux.HandleFunc("GET /assets/download.svg", func(writer http.ResponseWriter, _ *http.Request) {
 		serveAsset(writer, "image/svg+xml", downloadSVG)
 	})
@@ -323,6 +343,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/extensions", s.getExtensions)
 	mux.HandleFunc("POST /api/bookmarks/{id}/v2-override", s.applyV2Override)
 	mux.HandleFunc("GET /api/bookmarks/{id}/v2-effective", s.getV2Effective)
+	mux.HandleFunc("GET /api/bookmarks/{id}/evidence", s.getEvidence)
+	mux.HandleFunc("GET /api/bookmarks/{id}/classification-status", s.getClassificationStatus)
+	mux.HandleFunc("GET /api/bookmarks/{id}/entities", s.getEntities)
+	mux.HandleFunc("POST /api/bookmarks/{id}/entities", s.correctEntity)
+	mux.HandleFunc("POST /api/bookmarks/{id}/retry-classification", s.retryClassification)
+	mux.HandleFunc("POST /api/bookmarks/{id}/refresh-source", s.refreshSource)
+	mux.HandleFunc("POST /api/bookmarks/{id}/replay-policy", s.replayPolicy)
+	mux.HandleFunc("GET /api/export", s.exportMarkdown)
+	mux.HandleFunc("POST /api/rerank", s.rerank)
 	mux.HandleFunc("GET /api/bookmarks/{id}", s.getBookmark)
 	mux.HandleFunc("GET /api/images/{key...}", s.getImage)
 	mux.HandleFunc("GET /api/backstage", s.getBackstage)
@@ -458,6 +487,14 @@ func (s *Server) v2Backend(writer http.ResponseWriter) (V2Backend, bool) {
 		return nil, false
 	}
 	return v2, true
+}
+
+// SetExtensions attaches the bounded extension service.
+func (s *Server) SetExtensions(service *extension.Service) {
+	s.extensions = service
+	if service != nil {
+		s.extensionFlags = service.Flags
+	}
 }
 
 // getExtensions reports which bounded semantic extensions are enabled. Every

@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/assets/dashboard.css">
   <script src="/assets/common.js" defer></script>
   <script src="/assets/curation-v2.js" defer></script>
+  <script src="/assets/reader-v2-panels.js" defer></script>
   <script src="/assets/reader.js" defer></script>
 </head>
 <body>
@@ -68,6 +69,27 @@
         <div id="v2-affordances" class="v2-dimension"></div>
         <p id="v2-folded-note" class="line-note" hidden></p>
         <span id="v2-dirty" hidden>未保存</span>
+      </details>
+      <p id="v2-classification-status" class="line-note" hidden></p>
+      <div id="v2-actions" class="curation-actions" hidden>
+        <button id="v2-retry-classification" class="text-btn" type="button">只重试分类（0 次模型调用）</button>
+        <button id="v2-replay-policy" class="text-btn" type="button">按当前策略重算（0 次模型调用）</button>
+        <button id="v2-refresh-source" class="text-btn" type="button">重新抓取原文（会重新读取来源）</button>
+      </div>
+      <div id="v2-replay-result" class="line-note" hidden></div>
+      <details id="v2-evidence" class="curation" hidden>
+        <summary>依据（真实来源块）</summary>
+        <p id="v2-evidence-status" class="line-note" hidden></p>
+        <div id="v2-evidence-blocks"></div>
+      </details>
+      <details id="v2-entities" class="curation" hidden>
+        <summary>实体</summary>
+        <p id="v2-entity-state" class="line-note"></p>
+        <div id="v2-entity-list" class="v2-entity-list"></div>
+        <div class="curation-actions">
+          <input id="v2-entity-input" type="text" maxlength="80" placeholder="人工添加实体" aria-label="人工添加实体">
+          <button id="v2-entity-add" class="text-btn" type="button">添加</button>
+        </div>
       </details>
       <p id="read-lede" class="read-lede"></p>
       <div id="read-figures"></div>

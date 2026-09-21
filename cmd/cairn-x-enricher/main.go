@@ -25,6 +25,7 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/config"
 	"github.com/Alpenl/cairn-x-enricher/internal/dashboard"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
+	"github.com/Alpenl/cairn-x-enricher/internal/extension"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 )
@@ -167,6 +168,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 		return err
 	}
 	management := dashboard.New(ctx, tracker, queue, worker, logger, cfg.MaxConcurrency)
+	management.SetExtensions(worker.Extensions())
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           management.Handler(),
@@ -398,7 +400,36 @@ func newProcessor(
 		logger.Warn("backend has no v2 question-spec endpoint; stored runs will not be replayable")
 	}
 	tracker.MarkStarted()
-	return processor.NewStaged(queue, model, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency), queue, nil
+	worker := processor.NewStaged(queue, model, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
+	fetcher, policy := evidenceFetcher(cfg)
+	worker.SetExtensions(extensionService(cfg, classifier), fetcher, policy)
+	return worker, queue, nil
+}
+
+// extensionService builds the bounded extension service from configuration.
+// Every flag defaults off; the evidence fetcher is only constructed when the
+// allowlist is non-empty, so an unconfigured process cannot fetch anything.
+func extensionService(cfg config.Config, judge extension.Judge) *extension.Service {
+	flags := extension.Flags{
+		Entities: cfg.ExtensionEntities, Evidence: cfg.ExtensionEvidence,
+		Rerank: cfg.ExtensionRerank, Proposal: cfg.ExtensionProposal,
+	}
+	service := extension.NewService(flags, extension.DefaultBudget(), judge)
+	return service
+}
+
+// evidenceFetcher returns a controlled HTTP client for the evidence extension,
+// or nil when no host is allowlisted.
+func evidenceFetcher(cfg config.Config) (*http.Client, extension.FetchPolicy) {
+	policy := extension.DefaultFetchPolicy(cfg.ExtensionAllowlist)
+	if len(policy.AllowedHosts) == 0 {
+		return nil, policy
+	}
+	client, err := extension.ControlledFetcher(policy, nil)
+	if err != nil {
+		return nil, policy
+	}
+	return client, policy
 }
 
 // waitForSignal reports whether done was closed within timeout.

@@ -305,6 +305,26 @@
     return response.json();
   }
 
+  // exportServerMarkdown downloads the server-rendered export so the file
+  // carries every effective v2 dimension, the human origin and partial counts.
+  async function exportServerMarkdown(params) {
+    const response = await fetch(`/api/export?${params}`, { cache: "no-store" });
+    if (response.status === 404 || response.status === 405) {
+      const error = new Error("export_unsupported");
+      throw error;
+    }
+    if (!response.ok) throw new Error("export_failed");
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `cairn-${new Date().toISOString().slice(0, 10)}.md`;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   async function fetchStatus() {
     return fetchJSON("/status");
   }
@@ -355,6 +375,7 @@
     bookmarkPath,
     curationLabels,
     exportMarkdown,
+    exportServerMarkdown,
     fillTerms,
     loadTaxonomy,
     metadata,

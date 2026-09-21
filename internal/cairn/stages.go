@@ -88,6 +88,9 @@ type ClassificationJob struct {
 	Attempt          int    `json:"attempt"`
 	LeaseToken       string `json:"lease_token"`
 	LeaseUntil       string `json:"lease_until"`
+	// RelatedLinks are the stored source links, used only by the opt-in
+	// evidence escalation to find a real material gap.
+	RelatedLinks []string `json:"related_links,omitempty"`
 	classify.Input
 }
 

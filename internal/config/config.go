@@ -40,6 +40,15 @@ type Config struct {
 	MaxJobsPerRun  int
 	HTTPAddr       string
 	LogLevel       string
+
+	// The bounded semantic extensions are independently opt-in and default
+	// off. A disabled extension is reported as unavailable rather than
+	// silently succeeding, and it never blocks the ordinary pipeline.
+	ExtensionEntities  bool
+	ExtensionEvidence  bool
+	ExtensionRerank    bool
+	ExtensionProposal  bool
+	ExtensionAllowlist []string
 }
 
 // Role identifies which components a command actually uses. Configuration is
@@ -89,7 +98,35 @@ func baseConfig() Config {
 		GrokModel:       valueOrDefault("GROK_MODEL", defaultGrokModel),
 		HTTPAddr:        valueOrDefault("HTTP_ADDR", defaultHTTPAddr),
 		LogLevel:        strings.ToLower(valueOrDefault("LOG_LEVEL", "info")),
+
+		ExtensionEntities:  boolValue("CAIRN_EXTENSION_ENTITIES"),
+		ExtensionEvidence:  boolValue("CAIRN_EXTENSION_EVIDENCE"),
+		ExtensionRerank:    boolValue("CAIRN_EXTENSION_RERANK"),
+		ExtensionProposal:  boolValue("CAIRN_EXTENSION_PROPOSAL"),
+		ExtensionAllowlist: splitCSV(valueOrDefault("CAIRN_EVIDENCE_ALLOWED_HOSTS", "x.com,mp.weixin.qq.com")),
 	}
+}
+
+// boolValue treats only an explicit truthy value as enabled; anything else,
+// including a typo, leaves the extension off.
+func boolValue(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 func (c *Config) readNumbers() error {
