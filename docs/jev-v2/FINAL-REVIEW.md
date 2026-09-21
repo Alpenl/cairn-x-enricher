@@ -12,11 +12,12 @@
 
 | 仓库 | 上一轮审查基线 | 本轮测试代码 SHA | 分支 / PR |
 | --- | --- | --- | --- |
-| cairn-x-enricher (E) | `4031200984d819b59baea593025621a04deeb984` | `a85b870` | `impl/jev-v2-fixes-20260921` / E PR #17（Draft） |
-| cairn-share (S) | `8f98ac0a9d6e5257840bd518cc5960464b74a98c` | `ccd7080` | `impl/jev-v2-fixes-20260921` / S PR #32（Draft） |
+| cairn-x-enricher (E) | `4031200984d819b59baea593025621a04deeb984` | `6abc76d` | `impl/jev-v2-fixes-20260921` / E PR #17（Draft） |
+| cairn-share (S) | `8f98ac0a9d6e5257840bd518cc5960464b74a98c` | `e08d41f` | `impl/jev-v2-fixes-20260921` / S PR #32（Draft） |
 
-第二轮（B05/B06/B07/B09 未完成工程）的提交：E `a85b870`、S `ccd7080`；第一轮 F01–F14 的
-提交仍为 E `faad44c`、S `4c03094`。
+第三轮（SC26 问题级重用、B04-T06 有界分批、B08 生产导出、Android 设备验证）的提交：
+E `6abc76d`、S `e08d41f`；第二轮（B05/B06/B07/B09 工程）为 E `a85b870`、S `ccd7080`；
+第一轮 F01–F14 为 E `faad44c`、S `4c03094`。
 
 本报告本身是后续纯文档提交：报告引入提交 `5f735b6db13c1ebde75024c61b6d7fc36fe08e23`，
 第二轮更新提交以 `git log -1 --format=%H -- docs/jev-v2/FINAL-REVIEW.md` 为准。
@@ -80,11 +81,15 @@ Schema/spec/model/policy 版本：
 结果：**2/2 PASS**（全生命周期；20 轮 legacy/v2 交替 + in-flight 目标切换）。
 付费模型调用 **0**；本地合同 mock 调用 **1**；replay **0**。
 
-### 3.3 Android
+### 3.3 Android（设备已验证）
 
-`./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug compileDebugAndroidTestKotlin`：
-55/55 unit（含离线队列、动作语义、冲突保留草稿）、lint、构建与 androidTest 编译全部成功。
-设备/模拟器上的 Compose 交互（`V2CurationInstrumentedTest`，MockWebServer）未运行 → device blocked_external。
+`./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug compileDebugAndroidTestKotlin connectedDebugAndroidTest`：
+
+- unit **55/55**（离线队列、动作语义、冲突保留草稿）；
+- **`connectedDebugAndroidTest` 11/11 PASS**，运行在真实模拟器 `plico-api26-x64`
+  （Android 8.0 / API 26），覆盖多维区展示、字段动作 payload、CAS 冲突保留草稿与既有回归；
+- 设备测试发现并修复真实缺陷：多维区此前从 v1 词表渲染，现从 `/api/v2-taxonomy` 加载
+  （S `e08d41f`）。
 
 ## 4. 门禁与调用计数
 
@@ -98,7 +103,8 @@ Schema/spec/model/policy 版本：
 | S `npm test` | 113/113，exit 0 | Worker |
 | S `npm run typecheck` | exit 0 | |
 | S `npm run deploy:dry-run` | exit 0 | 未部署 |
-| Android `testDebugUnitTest` / `lintDebug` / `assembleDebug` / `compileDebugAndroidTestKotlin` | 55/55 / BUILD SUCCESSFUL | 设备交互未运行 |
+| Android `testDebugUnitTest` / `lintDebug` / `assembleDebug` / `compileDebugAndroidTestKotlin` | 55/55 / BUILD SUCCESSFUL | |
+| Android `connectedDebugAndroidTest`（真实模拟器 API 26） | 11/11 PASS | 设备交互已执行 |
 
 失败→通过记录（真实执行）：F02 回归在修复前 `npx vitest run test/classification.test.ts` 为
 `1 failed | 13 passed`（绑定列为 `"undefined"`），修复后 `14 passed`。
@@ -129,7 +135,7 @@ B09-T04/T05/T06/T09/T10/T11/T12 生命周期/补证据/重排/提案。逐任务
 | SC12 | pass | typed 错误映射 |
 | SC13 | pass | 浏览器第四主题 + Worker |
 | SC14 | pass | F11 共享 vectors + 浏览器 |
-| SC15 | partial | Web CAS 真实通过；Android 动作语义 unit 通过，设备交互未运行 |
+| SC15 | pass | Web CAS 真实通过；Android 动作语义 unit + 真实设备（模拟器）交互 11/11 通过 |
 | SC16 | pass | v1 写入保护 + strict 解码 |
 | SC17 | pass | 依据面板按真实 block/角色渲染（原帖/续帖/引用/外链/第三方/unknown） |
 | SC18 | pass | 预算/截断进入实际请求（F14） |
@@ -140,7 +146,7 @@ B09-T04/T05/T06/T09/T10/T11/T12 生命周期/补证据/重排/提案。逐任务
 | SC23 | pass | 真实空库应用 0001–0014 |
 | SC24 | pass | 级联删除 |
 | SC25 | pass | 全部目标 0 付费；公开产物无密钥 |
-| SC26 | partial | spec/cache 语义测试；部分问题级重用仍未端到端 |
+| SC26 | pass | 问题级重用门槛（证据/问题/模型/batch）+ 仅变化问题入请求 + partial coverage 显式，测试与真实导出覆盖 |
 | SC27 | pass | `make test-ablation` |
 | SC28 | pass（browser）/ 设备未运行 | 29/29 |
 | SC29 | pass | 漂移门槛进入 Decide |
@@ -163,7 +169,7 @@ B09-T04/T05/T06/T09/T10/T11/T12 生命周期/补证据/重排/提案。逐任务
 
 - 真实模型质量（无人工 gold、无 live 授权）→ quality_verified=false，inconclusive；
 - Android 设备执行（无设备）→ device 未运行（unit/lint/build/androidTest 编译均通过）；
-- 长周期 refresh-source 抓取、部分问题级重用、真实扩展质量收益 → retest_required；
+- 长周期 refresh-source 抓取、真实扩展质量收益 → retest_required；
 - 独立复审 → review_accepted=false。
 
 风险：
@@ -183,9 +189,9 @@ B09-T04/T05/T06/T09/T10/T11/T12 生命周期/补证据/重排/提案。逐任务
 
 | 维度 | 结论 |
 | --- | --- |
-| 工程完成 | F01–F14 已实现并有回归；第二轮补齐 B05/B06/B07/B09 已记录工程缺口（Android 设备交互除外） |
+| 工程完成 | F01–F14 与 B05/B06/B07/B09 已记录工程缺口均补齐；SC26/B04-T06/B08 生产导出完成；Android 设备测试通过 |
 | 真实质量 | 未验证（缺 gold/live），不得以工程测试替代 |
-| 设备验证 | Android 设备交互未运行（缺设备）；unit/lint/build/androidTest 编译通过 |
+| 设备验证 | 已在真实模拟器（API 26）执行 connectedDebugAndroidTest 11/11；真机未运行 |
 | 独立审查 | 未通过；等待独立复审，本报告不构成自批 |
 
 ## 9. 未执行的生产操作
