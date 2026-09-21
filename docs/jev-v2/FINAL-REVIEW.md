@@ -15,8 +15,8 @@
 | cairn-x-enricher (E) | `4031200984d819b59baea593025621a04deeb984` | `faad44c` | `impl/jev-v2-fixes-20260921` / E PR #17（Draft） |
 | cairn-share (S) | `8f98ac0a9d6e5257840bd518cc5960464b74a98c` | `4c03094` | `impl/jev-v2-fixes-20260921` / S PR #32（Draft） |
 
-本报告本身是后续纯文档提交：报告提交 SHA 见 E 分支上 `docs(jev-v2): final review for the
-F01–F14 fix round` 的 commit（`git log -1 --format=%H -- docs/jev-v2/FINAL-REVIEW.md`）。
+本报告本身是后续纯文档提交：报告引入提交 `5f735b6db13c1ebde75024c61b6d7fc36fe08e23`
+（其后若有一处元数据微调，以 `git log -1 --format=%H -- docs/jev-v2/FINAL-REVIEW.md` 为准）。
 测试代码 SHA 与报告 SHA 分开列出，不把早期 head 当最新成绩。
 
 Schema/spec/model/policy 版本：
