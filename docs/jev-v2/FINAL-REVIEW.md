@@ -12,11 +12,14 @@
 
 | 仓库 | 上一轮审查基线 | 本轮测试代码 SHA | 分支 / PR |
 | --- | --- | --- | --- |
-| cairn-x-enricher (E) | `4031200984d819b59baea593025621a04deeb984` | `faad44c` | `impl/jev-v2-fixes-20260921` / E PR #17（Draft） |
-| cairn-share (S) | `8f98ac0a9d6e5257840bd518cc5960464b74a98c` | `4c03094` | `impl/jev-v2-fixes-20260921` / S PR #32（Draft） |
+| cairn-x-enricher (E) | `4031200984d819b59baea593025621a04deeb984` | `a85b870` | `impl/jev-v2-fixes-20260921` / E PR #17（Draft） |
+| cairn-share (S) | `8f98ac0a9d6e5257840bd518cc5960464b74a98c` | `ccd7080` | `impl/jev-v2-fixes-20260921` / S PR #32（Draft） |
 
-本报告本身是后续纯文档提交：报告引入提交 `5f735b6db13c1ebde75024c61b6d7fc36fe08e23`
-（其后若有一处元数据微调，以 `git log -1 --format=%H -- docs/jev-v2/FINAL-REVIEW.md` 为准）。
+第二轮（B05/B06/B07/B09 未完成工程）的提交：E `a85b870`、S `ccd7080`；第一轮 F01–F14 的
+提交仍为 E `faad44c`、S `4c03094`。
+
+本报告本身是后续纯文档提交：报告引入提交 `5f735b6db13c1ebde75024c61b6d7fc36fe08e23`，
+第二轮更新提交以 `git log -1 --format=%H -- docs/jev-v2/FINAL-REVIEW.md` 为准。
 测试代码 SHA 与报告 SHA 分开列出，不把早期 head 当最新成绩。
 
 Schema/spec/model/policy 版本：
@@ -48,6 +51,22 @@ Schema/spec/model/policy 版本：
 
 ## 3. 真实组合证据（非 mockWorker）
 
+### 3.1 真实浏览器 ↔ 真实 Go 服务 ↔ 真实 Worker
+
+`tests/local-integration/browser-e2e.sh`（E 仓库，第二轮新增）：
+
+- 真实 `wrangler dev`（真实 migrations、本地 D1/R2）+ 真实 `cairn-x-enricher serve`
+  （真实 scheduler/processor/HTTP 服务）+ 真实 Chrome；
+- 仅两个付费模型端点由 `tests/local-integration/mock-model.mjs` 替换（校验官方
+  responses/systemone 请求形状）；
+- 流程：真实服务注册 spec → 激活 v2 target → 新收藏经真实 scheduler 抓取/阅读/分类 →
+  浏览器加载真实 Go 代理 → 断言与 Worker 一致的有效主题与第四主题折叠 → 人工 reject 落库、
+  刷新后保持；付费模型调用 0。
+
+结果：**16/16 PASS**。
+
+### 3.2 真实 Go 客户端 ↔ 真实 Worker/D1
+
 `tests/local-integration/run.sh`（E 仓库）：
 
 - 启动真实 `wrangler dev`（真实 migrations 0001–0014，本地 D1/R2），随机端口；
@@ -58,7 +77,14 @@ Schema/spec/model/policy 版本：
   ApplyV2Override→SubmitDecision→GetV2Selection/effective；
 - 断言：v2 绑定列正确、原文保留、usage 原值、replay 保留人工 reject、effective 由 decision 派生。
 
-结果：**PASS**。付费模型调用 **0**；本地合同 mock 调用 **1**；replay **0**。
+结果：**2/2 PASS**（全生命周期；20 轮 legacy/v2 交替 + in-flight 目标切换）。
+付费模型调用 **0**；本地合同 mock 调用 **1**；replay **0**。
+
+### 3.3 Android
+
+`./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug compileDebugAndroidTestKotlin`：
+55/55 unit（含离线队列、动作语义、冲突保留草稿）、lint、构建与 androidTest 编译全部成功。
+设备/模拟器上的 Compose 交互（`V2CurationInstrumentedTest`，MockWebServer）未运行 → device blocked_external。
 
 ## 4. 门禁与调用计数
 
@@ -66,34 +92,36 @@ Schema/spec/model/policy 版本：
 | --- | --- | --- |
 | E `make verify` | exit 0 | lint-ci + `go test -race` + 73/73 frontend checks + build |
 | E `make test-ablation` | exit 0 | 零付费 |
-| E `make test-browser` | 29/29，exit 0 | 真实 Chrome，系统 `google-chrome` |
-| E `tests/local-integration/run.sh` | PASS | 真实 Worker/D1/R2 + Go |
-| S `npm test` | 107/107，exit 0 | Worker |
+| E `make test-browser` | 38/38，exit 0 | 真实 Chrome，系统 `google-chrome` |
+| E `tests/local-integration/browser-e2e.sh` | 16/16 PASS | 真实 Go + Worker + Chrome |
+| E `tests/local-integration/run.sh` | 2/2 PASS | 真实 Worker/D1/R2 + Go |
+| S `npm test` | 113/113，exit 0 | Worker |
 | S `npm run typecheck` | exit 0 | |
 | S `npm run deploy:dry-run` | exit 0 | 未部署 |
-| Android `testDebugUnitTest`/`lintDebug`/`assembleDebug`/`compileDebugAndroidTestKotlin` | **未运行（本轮）** | 编译/设备不等同运行；上轮 BUILD SUCCESSFUL 记录保留 |
+| Android `testDebugUnitTest` / `lintDebug` / `assembleDebug` / `compileDebugAndroidTestKotlin` | 55/55 / BUILD SUCCESSFUL | 设备交互未运行 |
 
 失败→通过记录（真实执行）：F02 回归在修复前 `npx vitest run test/classification.test.ts` 为
 `1 failed | 13 passed`（绑定列为 `"undefined"`），修复后 `14 passed`。
 
 ## 5. 原 126 任务与 SC01–SC30 的真实状态
 
-**126 任务**：本轮只完成 F01–F14 及其联动；不替任何原 B 任务勾选完成。逐任务状态仍以
-Issues 为准（E #11–#15、S #28–#31）。工程缺口仍包括：B05-T01 映射梳理、B06 block 级依据/
-独立状态/三动作 UI 细节、B07 Compose 页面与离线队列接入/设备验证、B09-T04/T05/T07/T08
-生命周期与触发。缺 gold/设备只阻塞相应验证，不解释这些工程项。
+**126 任务**：第二轮补齐了此前记录的工程缺口——B05-T01 映射（机器可读 + 测试 + 端点）、
+B05-T10 实体生命周期与人工纠正、B05-T11/T13 提案应用与导出、B06-T05/T06/T07/T09 依据/
+状态/三动作/导出、B07 Compose 页面/仓库/缓存/离线队列接入（设备验证仍 blocked）、
+B09-T04/T05/T06/T09/T10/T11/T12 生命周期/补证据/重排/提案。逐任务勾选仍由 Issue 维护；
+无 gold 的真实质量与无设备的交互验证仍为 blocked_external。
 
 **SC01–SC30**（本轮重新核定）：
 
 | 场景 | 状态 | 依据 |
 | --- | --- | --- |
-| SC01 | partial / retest_required | Worker 20 轮 + 真实 v2 claim/complete；真实 20 轮 Go 交替未跑 |
-| SC02 | partial | target 切换与 run_stale 已测；in-flight 切换的真实并发未跑 |
+| SC01 | pass | 真实 Worker 上 20 轮 legacy/v2 交替全部 204，完成任务不再领取（`TestLocalWorkerVersionCompetition`） |
+| SC02 | pass | 真实 in-flight 完成后切 target → 409，旧结果未覆盖投影（同一测试） |
 | SC03 | pass | 浏览器 why-only 无 classification/override |
 | SC04 | pass | readingSchema + source_test |
 | SC05 | pass | note-only/URL 回归 |
 | SC06 | pass | policy 表驱动 |
-| SC07 | partial | API 状态分离；UI 状态细节仍 partial |
+| SC07 | pass | API + UI 分开展示 pending/processing/failed/exhausted/waiting_source 与合法空 |
 | SC08 | pass | replay 0 调用 + F06 真实往返 |
 | SC09 | pass | 分布保留测试 |
 | SC10 | pass | 实际 body 无个人字段 |
@@ -101,27 +129,27 @@ Issues 为准（E #11–#15、S #28–#31）。工程缺口仍包括：B05-T01 �
 | SC12 | pass | typed 错误映射 |
 | SC13 | pass | 浏览器第四主题 + Worker |
 | SC14 | pass | F11 共享 vectors + 浏览器 |
-| SC15 | partial | Web CAS 已验证；Android 设备未运行 |
+| SC15 | partial | Web CAS 真实通过；Android 动作语义 unit 通过，设备交互未运行 |
 | SC16 | pass | v1 写入保护 + strict 解码 |
-| SC17 | partial | 角色枚举；UI block 级渲染 partial |
+| SC17 | pass | 依据面板按真实 block/角色渲染（原帖/续帖/引用/外链/第三方/unknown） |
 | SC18 | pass | 预算/截断进入实际请求（F14） |
-| SC19 | partial | 存储/状态具备；扩展触发流程未接 |
-| SC20 | partial | 适配器与 SSRF 测试；触发流程未接 |
+| SC19 | pass | entity-state 端点 + processor 触发 + 失败不清成功值，真实集成覆盖 |
+| SC20 | pass | processor 真实触发补证据，allowlist/DNS/IP/redirect 受控，blocked/failed 保旧内容 |
 | SC21 | pass（unit） | 重排回原序；真实检索未跑 |
 | SC22 | pass | 分组隔离 |
 | SC23 | pass | 真实空库应用 0001–0014 |
 | SC24 | pass | 级联删除 |
 | SC25 | pass | 全部目标 0 付费；公开产物无密钥 |
-| SC26 | partial | cache/spec 语义测试；部分重评端到端未跑 |
+| SC26 | partial | spec/cache 语义测试；部分问题级重用仍未端到端 |
 | SC27 | pass | `make test-ablation` |
 | SC28 | pass（browser）/ 设备未运行 | 29/29 |
 | SC29 | pass | 漂移门槛进入 Decide |
-| SC30 | partial | 预算/flag 具备；扩展触发端到端未跑 |
+| SC30 | pass | 扩展触发、预算耗尽、取消/回退与无隐式全库均有测试与真实集成证据 |
 
 ## 6. 代码 PR 与设计偏离
 
-- E PR #17（Draft，base main，head `impl/jev-v2-fixes-20260921`）——F01/F03–F14 的 Enricher 侧。
-- S PR #32（Draft，base main，head `impl/jev-v2-fixes-20260921`）——F02/F04–F13 的 Worker 侧。
+- E PR #17（Draft，base main，head `impl/jev-v2-fixes-20260921`）——F01/F03–F14 与 B06/B09 的 Enricher 侧。
+- S PR #32（Draft，base main，head `impl/jev-v2-fixes-20260921`）——F02/F04–F13 与 B05/B07/B09 的 Worker/Android 侧。
 - 设计偏离（有据）：
   1. provider `instructions`/`criteria` 在内部以 `json.RawMessage` 保存并在 hash 时规范化，以同时满足
      结构化支持与跨语言稳定 hash；
@@ -134,8 +162,8 @@ Issues 为准（E #11–#15、S #28–#31）。工程缺口仍包括：B05-T01 �
 未验证/阻塞：
 
 - 真实模型质量（无人工 gold、无 live 授权）→ quality_verified=false，inconclusive；
-- Android 设备执行（无设备）→ device 未运行；
-- 长周期 refresh-source 抓取、20 轮真实 A/B、in-flight target 切换、扩展触发端到端 → retest_required；
+- Android 设备执行（无设备）→ device 未运行（unit/lint/build/androidTest 编译均通过）；
+- 长周期 refresh-source 抓取、部分问题级重用、真实扩展质量收益 → retest_required；
 - 独立复审 → review_accepted=false。
 
 风险：
@@ -155,9 +183,9 @@ Issues 为准（E #11–#15、S #28–#31）。工程缺口仍包括：B05-T01 �
 
 | 维度 | 结论 |
 | --- | --- |
-| 工程完成 | F01–F14 已实现并有最低回归；原 126 任务中 B05/B06/B07/B09 仍有未完成工程 |
+| 工程完成 | F01–F14 已实现并有回归；第二轮补齐 B05/B06/B07/B09 已记录工程缺口（Android 设备交互除外） |
 | 真实质量 | 未验证（缺 gold/live），不得以工程测试替代 |
-| 设备验证 | 未运行（缺设备） |
+| 设备验证 | Android 设备交互未运行（缺设备）；unit/lint/build/androidTest 编译通过 |
 | 独立审查 | 未通过；等待独立复审，本报告不构成自批 |
 
 ## 9. 未执行的生产操作
