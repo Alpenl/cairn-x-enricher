@@ -12,8 +12,12 @@
 
 | 仓库 | 上一轮审查基线 | 本轮测试代码 SHA | 分支 / PR |
 | --- | --- | --- | --- |
-| cairn-x-enricher (E) | `4031200984d819b59baea593025621a04deeb984` | `6abc76d` | `impl/jev-v2-fixes-20260921` / E PR #17（Draft） |
-| cairn-share (S) | `8f98ac0a9d6e5257840bd518cc5960464b74a98c` | `e08d41f` | `impl/jev-v2-fixes-20260921` / S PR #32（Draft） |
+| cairn-x-enricher (E) | `2c00b7546187594d30424e0b340eb8da4258a744` | `1462fb4` | `impl/jev-v2-fixes-20260921` / E PR #17（Draft） |
+| cairn-share (S) | `3520c81695cfd17274982877bd0d404581662fc8` | `4632e86` | `impl/jev-v2-fixes-20260921` / S PR #32（Draft） |
+
+R2 复审修复轮：E `1462fb4`（测试代码）、S `4632e86`；本报告的文档提交为
+`git log -1 --format=%H -- docs/jev-v2/FINAL-REVIEW.md`。R1 的 F01–F14 为 E `faad44c`/S `4c03094`，
+B05/B06/B07/B09 工程为 E `a85b870`/S `ccd7080`，SC26/分批/B08 为 E `6abc76d`，设备修复为 S `e08d41f`。
 
 第三轮（SC26 问题级重用、B04-T06 有界分批、B08 生产导出、Android 设备验证）的提交：
 E `6abc76d`、S `e08d41f`；第二轮（B05/B06/B07/B09 工程）为 E `a85b870`、S `ccd7080`；
@@ -91,6 +95,31 @@ Schema/spec/model/policy 版本：
 - 设备测试发现并修复真实缺陷：多维区此前从 v1 词表渲染，现从 `/api/v2-taxonomy` 加载
   （S `e08d41f`）。
 
+
+## 3.4 R2-01–R2-14 修复结果（2026-09-21）
+
+| R2 | 处理 | 证据 |
+|---|---|---|
+| R2-01 | 同一事务谓词守卫 links/run/decision/operation；失败无成功历史，同 key 不能变成功 | Worker `R2-01` 回归（409×2、三表 0 行、projection 不变） |
+| R2-02 | claim 绑定 content revision/snapshot id/evidence hash；complete 事务内校验当前 target 与回显身份；run 用领取时 revision | `R2-02` 回归；真实集成生命周期 |
+| R2-03 | 旧 curation 导入 legacy_unknown override；automatic 用 AI 结果而非人工投影；旧端点写同一 override/事件；`classification:null` 恢复真实自动值 | 3 个既有 curation/App 回归 + 新测试；真实集成 |
+| R2-04 | Android flush 仅确认 Applied 才出队；离线/超时保留动作与草稿 | `V2CurationRepositoryTest`（离线/超时/混合） |
+| R2-05 | 串行动作队列不丢快速编辑；冲突重放原始逻辑动作与原 key | 单测 + 设备测试断言 `reject llm` 与原 key |
+| R2-06 | refresh epoch 持久意图；processor 绕过两种缓存真实抓取；成功/失败都 ack | `TestRefreshIntentBypassesSourceCaches` |
+| R2-07 | 消费领取时结构化快照（全 block/role/truncation）；内容 hash 排除 fetched_at；已决请求不重复 fetch | `TestBoundEvidenceUsesTheStructuredSnapshot`、`TestEvidenceEscalationSkipsDecidedRequests` |
+| R2-08 | entity_states 成功值成为实体自动基线；stale 用实体自身 revision | `R2-08` 回归 |
+| R2-09 | 仅模型成功清熔断；半开探测原子限量；退避跨故障增长 | `TestCircuitBreakerBackoffGrowsAcrossFailedProbes`、`TestCircuitBreakerProbeIsAtomic` |
+| R2-10 | Go DTO 接受 display_overridden；rename 不改语义身份、不阻断启动 | 真实集成 `TestLocalWorkerDisplayRenameKeepsSemantics` |
+| R2-11 | 测试按候选身份赋分；每问在 instructions 绑定自己的候选，越界回退原序 | `reader_v2_test.go`（捕获请求+重复 5 次）、`service_test.go` |
+| R2-12 | 各写入口比较归属收藏与规范 payload hash；异 link/payload/动作冲突 409 | `R2-12` 回归、run 同 key 异 payload |
+| R2-13 | 实际 state 重算 hash、batch 语义比较、跨模型不合并、usage 汇总、超限自动分批；生产复用 opt-in 且失败回退 | reuse/batch 单测、`TestPartialReuseIsOptInAndFallsBackSafely` |
+| R2-14 | includes/excludes 进入问题与 hash；spec id 内容寻址，语义变化注册新 spec，旧 spec 可重放 | excludes/label 单测、真实 rename 集成 |
+
+R2 轮门禁：E `make verify` exit 0、`make test-ablation` exit 0、浏览器 38/38、
+真实本地集成 3/3、真实浏览器 E2E 16/16；S `npm test` 117/117、typecheck、deploy:dry-run；
+Android unit 60/60、lint/build/androidTest 编译与 API 26 模拟器 `connectedDebugAndroidTest` 11/11。
+付费模型调用 0。
+
 ## 4. 门禁与调用计数
 
 | 命令 | 结果 | 备注 |
@@ -122,35 +151,35 @@ B09-T04/T05/T06/T09/T10/T11/T12 生命周期/补证据/重排/提案。逐任务
 | 场景 | 状态 | 依据 |
 | --- | --- | --- |
 | SC01 | pass | 真实 Worker 上 20 轮 legacy/v2 交替全部 204，完成任务不再领取（`TestLocalWorkerVersionCompetition`） |
-| SC02 | pass | 真实 in-flight 完成后切 target → 409，旧结果未覆盖投影（同一测试） |
+| SC02 | pass | 真实 in-flight 切换 + R2-01/02 事务守卫（content/lease/target 在提交边界校验） |
 | SC03 | pass | 浏览器 why-only 无 classification/override |
 | SC04 | pass | readingSchema + source_test |
 | SC05 | pass | note-only/URL 回归 |
 | SC06 | pass | policy 表驱动 |
 | SC07 | pass | API + UI 分开展示 pending/processing/failed/exhausted/waiting_source 与合法空 |
-| SC08 | pass | replay 0 调用 + F06 真实往返 |
+| SC08 | pass | replay 0 调用；refresh/reuse 语义分离（refresh 抓取、replay 零调用、retry 不抓源） |
 | SC09 | pass | 分布保留测试 |
 | SC10 | pass | 实际 body 无个人字段 |
-| SC11 | pass | F10 幂等 + 真丢响应恢复 |
+| SC11 | pass | F10 幂等 + 真丢响应恢复；R2-01 保证失败请求不落成功 operation/run |
 | SC12 | pass | typed 错误映射 |
 | SC13 | pass | 浏览器第四主题 + Worker |
-| SC14 | pass | F11 共享 vectors + 浏览器 |
+| SC14 | pass | F11 共享 vectors + 浏览器；R2-03 旧人工导入与 reset 恢复真实自动值 |
 | SC15 | pass | Web CAS 真实通过；Android 动作语义 unit + 真实设备（模拟器）交互 11/11 通过 |
-| SC16 | pass | v1 写入保护 + strict 解码 |
+| SC16 | pass | v1 写入保护 + strict 解码；R2-03 旧端点转统一 override 日志、R2-10 显示字段契约 |
 | SC17 | pass | 依据面板按真实 block/角色渲染（原帖/续帖/引用/外链/第三方/unknown） |
 | SC18 | pass | 预算/截断进入实际请求（F14） |
-| SC19 | pass | entity-state 端点 + processor 触发 + 失败不清成功值，真实集成覆盖 |
-| SC20 | pass | processor 真实触发补证据，allowlist/DNS/IP/redirect 受控，blocked/failed 保旧内容 |
+| SC19 | pass | 实体基线进入有效视图（R2-08），stale 用实体自身 revision，失败不清成功值 |
+| SC20 | pass | 补证据进入下一次 provider state（R2-07），已决请求不重复 fetch，blocked/failed 保旧内容 |
 | SC21 | pass（unit） | 重排回原序；真实检索未跑 |
 | SC22 | pass | 分组隔离 |
 | SC23 | pass | 真实空库应用 0001–0014 |
 | SC24 | pass | 级联删除 |
 | SC25 | pass | 全部目标 0 付费；公开产物无密钥 |
-| SC26 | pass | 问题级重用门槛（证据/问题/模型/batch）+ 仅变化问题入请求 + partial coverage 显式，测试与真实导出覆盖 |
+| SC26 | pass | 复用从实际 state 重算 hash、比较 batch 语义、跨模型不合并、usage 汇总；生产 opt-in 并回退 |
 | SC27 | pass | `make test-ablation` |
 | SC28 | pass（browser）/ 设备未运行 | 29/29 |
 | SC29 | pass | 漂移门槛进入 Decide |
-| SC30 | pass | 扩展触发、预算耗尽、取消/回退与无隐式全库均有测试与真实集成证据 |
+| SC30 | pass | 扩展触发/预算/回退 + R2-07 去重与 R2-09 熔断预算（不耗尽业务任务） |
 
 ## 6. 代码 PR 与设计偏离
 
@@ -168,6 +197,7 @@ B09-T04/T05/T06/T09/T10/T11/T12 生命周期/补证据/重排/提案。逐任务
 未验证/阻塞：
 
 - 真实模型质量（无人工 gold、无 live 授权）→ quality_verified=false，inconclusive；
+- R2 复审发现已在 E `1462fb4`/S `4632e86` 修复并有回归与真实集成证据；等待独立复审；
 - Android 设备执行（无设备）→ device 未运行（unit/lint/build/androidTest 编译均通过）；
 - 长周期 refresh-source 抓取、真实扩展质量收益 → retest_required；
 - 独立复审 → review_accepted=false。
