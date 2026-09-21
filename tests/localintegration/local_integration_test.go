@@ -289,7 +289,7 @@ func TestLocalWorkerVersionCompetition(t *testing.T) {
 	}
 	// Complete one job under the legacy protocol, which is what an old client
 	// uses.
-	legacyClaim := legacyClaim(t, base, enricherToken, id)
+	legacyClaim := legacyClaim(t, base, enricherToken)
 	if legacyClaim == nil {
 		t.Fatal("legacy claim returned no job")
 	}
@@ -382,7 +382,7 @@ func legacyComplete(t *testing.T, base, token string, id int64, job *cairn.Class
 }
 
 // legacyClaim posts the pre-v2 claim payload an old consumer sends.
-func legacyClaim(t *testing.T, base, token string, id int64) *cairn.ClassificationJob {
+func legacyClaim(t *testing.T, base, token string) *cairn.ClassificationJob {
 	t.Helper()
 	body, _ := json.Marshal(map[string]any{
 		"protocol": "legacy", "taxonomy_version": "2026-09-20.1",
