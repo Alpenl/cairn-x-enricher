@@ -179,6 +179,8 @@ type providerResponse struct {
 	Model   string               `json:"model"`
 	Answers map[string]RawAnswer `json:"answers"`
 	Usage   json.RawMessage      `json:"usage"`
+	// UsageMissing distinguishes an absent usage object from a genuine zero.
+	UsageMissing bool `json:"-"`
 }
 
 // BuildProviderRequest renders the exact outbound body for the compiled spec.
@@ -230,36 +232,16 @@ func (c *Client) Evaluate(ctx context.Context, input Input) (RawJudgments, error
 	if err != nil {
 		return RawJudgments{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
+	wire, err := c.callProvider(ctx, body)
 	if err != nil {
-		return RawJudgments{}, errors.New("invalid TypeSafe endpoint")
-	}
-	req.Header.Set("Authorization", "Bearer "+c.key)
-	req.Header.Set("Content-Type", "application/json")
-	response, err := c.http.Do(req)
-	if err != nil {
-		return RawJudgments{}, enrich.ClassifyModelError(fmt.Errorf("call TypeSafe: %w", err))
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusOK {
-		return RawJudgments{}, enrich.ClassifyModelError(&enrich.ModelHTTPError{StatusCode: response.StatusCode})
-	}
-	raw, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
-	if err != nil {
-		return RawJudgments{}, enrich.Classified(fmt.Errorf("read TypeSafe response: %w", err), enrich.ErrorClassTransient)
-	}
-	if err := rejectDuplicateKeys(raw); err != nil {
-		return RawJudgments{}, enrich.Classified(err, enrich.ErrorClassContract)
-	}
-	var wire providerResponse
-	if err := strictDecode(raw, &wire); err != nil {
-		return RawJudgments{}, enrich.Classified(fmt.Errorf("invalid TypeSafe response JSON: %w", err), enrich.ErrorClassContract)
-	}
-	if wire.Model == "" || len(wire.Model) > 200 {
-		return RawJudgments{}, enrich.Classified(errors.New("TypeSafe response missing model"), enrich.ErrorClassContract)
+		return RawJudgments{}, err
 	}
 	if err := ValidateAnswers(c.spec, wire.Answers); err != nil {
 		return RawJudgments{}, enrich.Classified(err, enrich.ErrorClassContract)
+	}
+	evidenceHash, err := hashEvidence(evidence)
+	if err != nil {
+		return RawJudgments{}, err
 	}
 	judgments := RawJudgments{
 		SpecID: c.spec.SpecID, SpecHash: c.spec.SemanticHash, TaxonomyVersion: c.spec.TaxonomyVersion,
@@ -267,7 +249,9 @@ func (c *Client) Evaluate(ctx context.Context, input Input) (RawJudgments, error
 		AliasDrift: wire.Model != c.model,
 		Judgments:  map[string]RawJudgment{}, Coverage: "complete",
 		EvidenceCoverage: evidence.Coverage, Truncated: evidence.Truncated,
-		Usage: wire.Usage, UsageMissing: len(wire.Usage) == 0,
+		EvidenceHash: evidenceHash, QuestionHashes: map[string]string{},
+		BatchSemantics: "single-request",
+		Usage:          wire.Usage, UsageMissing: wire.UsageMissing,
 	}
 	for _, question := range c.spec.Questions {
 		answer := wire.Answers[question.ID]
@@ -287,8 +271,60 @@ func (c *Client) Evaluate(ctx context.Context, input Input) (RawJudgments, error
 			judgment.Probabilities = answer.Score.Probabilities
 		}
 		judgments.Judgments[question.ID] = judgment
+		hash, hashErr := QuestionHash(question)
+		if hashErr != nil {
+			return RawJudgments{}, hashErr
+		}
+		judgments.QuestionHashes[question.ID] = hash
 	}
 	return judgments, nil
+}
+
+// hashEvidence returns the canonical hash of the objective evidence. It is the
+// identity per-question reuse compares against; two runs may only share an
+// answer when it matches.
+func hashEvidence(evidence Evidence) (string, error) {
+	encoded, err := evidence.stateForModel()
+	if err != nil {
+		return "", err
+	}
+	return sha256Hex(encoded), nil
+}
+
+// callProvider performs one bounded provider request and validates the response
+// envelope. It is shared by the full evaluation and the partial re-evaluation so
+// both paths use exactly the same contract handling.
+func (c *Client) callProvider(ctx context.Context, body []byte) (providerResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
+	if err != nil {
+		return providerResponse{}, errors.New("invalid TypeSafe endpoint")
+	}
+	req.Header.Set("Authorization", "Bearer "+c.key)
+	req.Header.Set("Content-Type", "application/json")
+	response, err := c.http.Do(req)
+	if err != nil {
+		return providerResponse{}, enrich.ClassifyModelError(fmt.Errorf("call TypeSafe: %w", err))
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return providerResponse{}, enrich.ClassifyModelError(&enrich.ModelHTTPError{StatusCode: response.StatusCode})
+	}
+	raw, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
+	if err != nil {
+		return providerResponse{}, enrich.Classified(fmt.Errorf("read TypeSafe response: %w", err), enrich.ErrorClassTransient)
+	}
+	if err := rejectDuplicateKeys(raw); err != nil {
+		return providerResponse{}, enrich.Classified(err, enrich.ErrorClassContract)
+	}
+	var wire providerResponse
+	if err := strictDecode(raw, &wire); err != nil {
+		return providerResponse{}, enrich.Classified(fmt.Errorf("invalid TypeSafe response JSON: %w", err), enrich.ErrorClassContract)
+	}
+	if wire.Model == "" || len(wire.Model) > 200 {
+		return providerResponse{}, enrich.Classified(errors.New("TypeSafe response missing model"), enrich.ErrorClassContract)
+	}
+	wire.UsageMissing = len(wire.Usage) == 0
+	return wire, nil
 }
 
 // legendOrdered converts the provider legend map into the ordered level list.

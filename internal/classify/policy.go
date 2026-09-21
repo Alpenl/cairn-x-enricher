@@ -45,6 +45,22 @@ type RawJudgments struct {
 	Coverage         string                 `json:"coverage"`
 	EvidenceCoverage string                 `json:"evidence_coverage,omitempty"`
 	Truncated        bool                   `json:"truncated,omitempty"`
+	// EvidenceHash is the canonical hash of the objective evidence this run was
+	// evaluated against. Per-question reuse is only legal when it matches.
+	EvidenceHash string `json:"evidence_hash,omitempty"`
+	// QuestionHashes records each question's semantic identity at evaluation
+	// time, so a partial re-evaluation can reuse an unchanged question without
+	// re-reading the historical spec.
+	QuestionHashes map[string]string `json:"question_hashes,omitempty"`
+	// Reused lists the questions whose answers were carried over from a
+	// previous run instead of being inferred again.
+	Reused []string `json:"reused,omitempty"`
+	// Missing lists the questions a bounded batch could not answer. It is only
+	// populated for partial coverage and never hidden behind a "complete" run.
+	Missing []string `json:"missing,omitempty"`
+	// BatchSemantics identifies how the questions were batched. A cached answer
+	// may only be reused when it matches.
+	BatchSemantics string `json:"batch_semantics,omitempty"`
 	// Usage is the provider's raw usage object. UsageMissing distinguishes an
 	// absent usage object from a genuine zero.
 	Usage        json.RawMessage `json:"usage,omitempty"`

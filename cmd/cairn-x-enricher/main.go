@@ -104,6 +104,7 @@ func newRootCommand() *cobra.Command {
 	root.AddCommand(newClassifyCommand())
 	root.AddCommand(newReplayCommand())
 	root.AddCommand(newRefreshSourceCommand())
+	root.AddCommand(newExportDatasetCommand())
 
 	var healthURL string
 	var healthTimeout time.Duration

@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Alpenl/cairn-x-enricher/experiments/classification"
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
@@ -247,6 +248,31 @@ func TestLocalWorkerFullLifecycle(t *testing.T) {
 		if topic == "llm" {
 			t.Fatalf("human rejection was revived by the replay: %+v", afterReplay.Selection)
 		}
+	}
+
+	// 8. The production run exports to an offline dataset with its real
+	// identity and no fabricated gold; the scorer reports it as inconclusive.
+	dataset, err := classification.ExportDataset(ctx, queue, classification.ExportOptions{
+		LinkIDs: []int64{id}, Name: "local-integration", Split: "holdout",
+	})
+	if err != nil {
+		t.Fatalf("export dataset: %v", err)
+	}
+	if len(dataset.Samples) != 1 || len(dataset.Prediction) != 1 {
+		t.Fatalf("dataset = %+v", dataset)
+	}
+	if dataset.Samples[0].Gold != nil || dataset.Samples[0].Provenance != classification.ProvenanceSynthetic {
+		t.Fatalf("a machine prediction must not be exported as gold: %+v", dataset.Samples[0])
+	}
+	if dataset.Prediction[0].Model != "jev-pinned-local" || dataset.Prediction[0].PolicyVersion != "jev-policy-v2" {
+		t.Fatalf("export lost the run identity: %+v", dataset.Prediction[0])
+	}
+	report, err := classification.Score(dataset)
+	if err != nil {
+		t.Fatalf("score export: %v", err)
+	}
+	if report.SamplesWithGold != 0 || !report.Inconclusive {
+		t.Fatalf("a gold-free export must be inconclusive: %+v", report)
 	}
 }
 

@@ -123,3 +123,23 @@ func TestReplayCommandRequiresAnIDAndDefaultsToNoCommit(t *testing.T) {
 		t.Fatal("replay without a positive id must fail before any network call")
 	}
 }
+
+func TestExportDatasetCommandIsExplicitAndBounded(t *testing.T) {
+	command := newExportDatasetCommand()
+	if flag := command.Flags().Lookup("ids"); flag == nil || flag.DefValue != "" {
+		t.Fatal("export-dataset must require explicit ids")
+	}
+	if _, err := parseLinkIDs(""); err == nil {
+		t.Fatal("an empty id list must be refused")
+	}
+	if _, err := parseLinkIDs("1,abc"); err == nil {
+		t.Fatal("a non-numeric id must be refused")
+	}
+	if _, err := parseLinkIDs("0"); err == nil {
+		t.Fatal("a zero id must be refused")
+	}
+	ids, err := parseLinkIDs("3, 7,9")
+	if err != nil || len(ids) != 3 || ids[0] != 3 || ids[2] != 9 {
+		t.Fatalf("parseLinkIDs = %v (%v)", ids, err)
+	}
+}
