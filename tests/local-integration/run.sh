@@ -102,3 +102,4 @@ run_case() {
 
 run_case lifecycle TestLocalWorkerFullLifecycle
 run_case competition TestLocalWorkerVersionCompetition
+run_case rename TestLocalWorkerDisplayRenameKeepsSemantics

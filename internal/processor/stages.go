@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -27,11 +28,21 @@ type StageQueue interface {
 	// SubmitEvidence persists the immutable evidence snapshot a run references.
 	// A backend without the v2 API reports cairn.IsUnsupported.
 	SubmitEvidence(context.Context, int64, any) error
+	// GetLatestRun returns the newest succeeded run, used only by the opt-in
+	// partial re-evaluation.
+	GetLatestRun(context.Context, int64) (*cairn.StoredRun, error)
+	// GetQuestionSpec loads the immutable spec a stored run was evaluated with.
+	GetQuestionSpec(context.Context, string) (cairn.StoredQuestionSpec, error)
 	// SubmitEntityState records the bounded entity lifecycle result.
 	SubmitEntityState(context.Context, int64, map[string]any) error
 	// CreateEvidenceRequest records a bounded escalation; the consumer performs
-	// the fetch under its own network policy.
-	CreateEvidenceRequest(context.Context, int64, map[string]any) (string, error)
+	// the fetch under its own network policy. The status says whether a fetch is
+	// still needed.
+	CreateEvidenceRequest(context.Context, int64, map[string]any) (string, string, error)
+	// GetEvidenceAt loads the exact snapshot the lease was bound to.
+	GetEvidenceAt(context.Context, int64, int64) (json.RawMessage, error)
+	// AckSourceRefresh consumes the one-shot refresh intent.
+	AckSourceRefresh(context.Context, int64, int64, string, string) error
 	// DecideEvidenceRequest reports the bounded outcome of an escalation.
 	DecideEvidenceRequest(context.Context, string, map[string]any) error
 	// RetryClassification re-arms the classification queue after new evidence.
@@ -64,6 +75,9 @@ type stages struct {
 	extensions  *extension.Service
 	fetcher     *http.Client
 	fetchPolicy extension.FetchPolicy
+	// partialReuse opts in to reusing unchanged stored answers. It defaults off:
+	// the conservative full evaluation is the production default (R2-13).
+	partialReuse bool
 }
 
 // ErrComponentPaused reports that the classification component is in a
@@ -83,6 +97,8 @@ type componentPause struct {
 	until    time.Time
 	reason   string
 	failures int
+	// probing is set while one half-open probe owns the recovery attempt.
+	probing bool
 }
 
 const (
@@ -94,9 +110,12 @@ func newComponentPause() *componentPause {
 	return &componentPause{now: time.Now}
 }
 
-// allow reports whether a claim may be attempted right now. When paused it also
-// reports the remaining backoff so the caller can log it.
-func (p *componentPause) allow() (bool, time.Duration) {
+// beginProbe reports whether work may be attempted right now. A healthy
+// component always allows work. A paused component only allows one atomic
+// half-open probe after its backoff elapsed; concurrent callers are refused so
+// a configuration fault cannot be probed by draining the business queue
+// (R2-09).
+func (p *componentPause) beginProbe() (allowed bool, remaining time.Duration) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.until.IsZero() {
@@ -105,13 +124,31 @@ func (p *componentPause) allow() (bool, time.Duration) {
 	if remaining := p.until.Sub(p.now()); remaining > 0 {
 		return false, remaining
 	}
-	// The backoff elapsed: this call is the single recovery probe.
+	if p.probing {
+		// Another caller owns the single probe for this window.
+		return false, pauseBaseBackoff
+	}
+	p.probing = true
 	return true, 0
+}
+
+// endProbe records the probe outcome. Only a success clears the breaker; a
+// failure extends it with the next backoff step.
+func (p *componentPause) endProbe(success bool, reason string) {
+	if success {
+		p.clear()
+		return
+	}
+	p.mu.Lock()
+	p.probing = false
+	p.mu.Unlock()
+	p.trip(reason)
 }
 
 func (p *componentPause) trip(reason string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.probing = false
 	p.failures++
 	backoff := pauseBaseBackoff << min(p.failures-1, 8)
 	if backoff > pauseMaxBackoff || backoff <= 0 {
@@ -127,6 +164,7 @@ func (p *componentPause) clear() {
 	p.until = time.Time{}
 	p.reason = ""
 	p.failures = 0
+	p.probing = false
 }
 
 // ClassificationPaused reports the component pause for health reporting.
@@ -135,6 +173,13 @@ func (p *Processor) ClassificationPaused() (bool, string, time.Duration) {
 		return false, "", 0
 	}
 	return p.stages.pause.state()
+}
+
+// isHealthy reports whether the breaker is currently closed.
+func (p *componentPause) isHealthy() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.until.IsZero()
 }
 
 // state reports the current pause for health reporting.
@@ -163,6 +208,13 @@ func NewStaged(queue StageQueue, reader SourceReader, classifier Classifier, ver
 	return p
 }
 
+// SetPartialReuse enables the opt-in partial re-evaluation.
+func (p *Processor) SetPartialReuse(enabled bool) {
+	if p.stages != nil {
+		p.stages.partialReuse = enabled
+	}
+}
+
 // Extensions exposes the attached extension service for the management UI so a
 // rerank action uses the same flags, budget and judge as the pipeline.
 func (p *Processor) Extensions() *extension.Service {
@@ -189,6 +241,25 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 	input := enrich.Input{ID: job.ID, URL: job.URL, Note: job.Note, Attempt: job.Attempt, SourceText: manual}
 	var source *enrich.Source
 	var err error
+	// An explicit refresh intent bypasses both reuse paths: the operator asked
+	// for a real fetch, not for the stored snapshot (R2-06).
+	if manual == "" && job.RefreshEpoch > 0 {
+		fetched, fetchErr := s.reader.FetchSource(ctx, input)
+		if fetchErr != nil {
+			// The old readable content and all human data are kept; the intent is
+			// consumed so a broken URL cannot loop forever.
+			_ = s.queue.AckSourceRefresh(context.WithoutCancel(ctx), job.ID, job.RefreshEpoch, "failed", boundedError(fetchErr))
+			return p.reportFailure(ctx, logger, job, failurePathSearch, fetchErr)
+		}
+		source = &fetched
+		if err = p.saveSourceWithEvidence(ctx, job, *source); err != nil {
+			_ = s.queue.AckSourceRefresh(context.WithoutCancel(ctx), job.ID, job.RefreshEpoch, "failed", boundedError(err))
+			return p.reportFailure(ctx, logger, job, failurePathSearch, err)
+		}
+		_ = s.queue.AckSourceRefresh(context.WithoutCancel(ctx), job.ID, job.RefreshEpoch, "completed", "")
+		logger.InfoContext(ctx, "source refreshed; classification queued")
+		return p.finishReading(ctx, job, *source, nil)
+	}
 	// Explicit manual text replaces a snapshot. Ordinary reruns reuse it.
 	if manual == "" {
 		source, err = s.queue.GetSource(ctx, job.ID)
@@ -316,10 +387,23 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 	var completed, failed int64
 	// The pause gate runs before any claim. A component that failed on the
 	// previous poll must not acquire another lease until the backoff elapses:
-	// claiming already increments the Worker's attempt counter (F09).
-	if allowed, remaining := s.pause.allow(); !allowed {
+	// claiming already increments the Worker's attempt counter (F09). The
+	// recovery attempt is a single atomic half-open probe (R2-09).
+	allowed, remaining := s.pause.beginProbe()
+	if !allowed {
 		_, reason, _ := s.pause.state()
 		return completed, failed, fmt.Errorf("%w: %s (probe in %s)", ErrComponentPaused, reason, remaining.Round(time.Second))
+	}
+	probePending := s.pause != nil && !s.pause.isHealthy()
+	settleProbe := func(success bool, reason string) {
+		if probePending {
+			s.pause.endProbe(success, reason)
+			probePending = false
+			return
+		}
+		if !success {
+			s.pause.trip(reason)
+		}
 	}
 	for range maxJobs {
 		if ctx.Err() != nil {
@@ -330,22 +414,31 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 			if enrich.PausesComponent(err) {
 				// Trip the breaker so the next poll does not claim and burn
 				// another attempt, then surface the state once.
-				s.pause.trip(err.Error())
+				settleProbe(false, err.Error())
 				return completed, failed, fmt.Errorf("%w: %w", ErrComponentPaused, err)
 			}
 			return completed, failed, fmt.Errorf("claim classification: %w", err)
 		}
-		// A reachable claim (even an empty queue) proves the component can talk
-		// to the Worker again.
-		s.pause.clear()
+		// A reachable Worker says nothing about the provider configuration: a
+		// claim success must not clear a model-side breaker (R2-09).
 		if job == nil {
+			// An empty queue during a probe proves the Worker is reachable and no
+			// job was consumed, so the probe counts as recovered; a healthy
+			// component simply has nothing to do.
+			if probePending {
+				s.pause.endProbe(true, "")
+				probePending = false
+			}
 			break
 		}
+		// The evaluation consumes exactly the snapshot the lease was bound to,
+		// preserving every stored block and role (R2-07).
+		p.attachBoundEvidence(ctx, job)
 		// An already acquired lease finishes under its own bounded deadline.
 		// WithoutCancel keeps shutdown from tearing down a paid inference that is
 		// about to succeed, but the deadline stops an unbounded drain.
 		workCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.classificationDeadline)
-		result, err := s.classifier.Classify(workCtx, job.Input)
+		result, err := p.classifyJob(workCtx, job)
 		if err != nil {
 			cancel()
 			if enrich.IsStale(err) {
@@ -361,7 +454,7 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 				// breaker so the next poll does not claim another job. The
 				// current lease is deliberately left to expire rather than marked
 				// failed, so this pause costs one attempt, not one per job.
-				s.pause.trip(err.Error())
+				settleProbe(false, err.Error())
 				return completed, failed, fmt.Errorf("%w: %w", ErrComponentPaused, err)
 			}
 			failed++
@@ -371,6 +464,8 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 			p.logger.WarnContext(ctx, "classification failed; source retained", "link_id", job.ID, "error", err)
 			continue
 		}
+		// The model stage succeeded: only now may the breaker clear.
+		settleProbe(true, "")
 		if err := s.queue.CompleteClassification(workCtx, job, result); err != nil {
 			cancel()
 			// Already-completed means the commit succeeded but the response was
@@ -389,6 +484,49 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		p.runExtensions(ctx, job)
 	}
 	return completed, failed, nil
+}
+
+// classifyJob evaluates one job, optionally reusing stored answers when the
+// opt-in partial re-evaluation is enabled and the previous run is compatible.
+// Any failure to reconstruct the previous run falls back to the full
+// evaluation; it never fails the job (R2-13).
+func (p *Processor) classifyJob(ctx context.Context, job *cairn.ClassificationJob) (classify.Result, error) {
+	s := p.stages
+	if s.partialReuse {
+		reuser, ok := s.classifier.(interface {
+			ClassifyReusing(context.Context, classify.Input, *classify.RawJudgments, string) (classify.Result, error)
+		})
+		if ok {
+			if previous := p.previousJudgments(ctx, job); previous != nil {
+				return reuser.ClassifyReusing(ctx, job.Input, previous, "single-request")
+			}
+		}
+	}
+	return s.classifier.Classify(ctx, job.Input)
+}
+
+// previousJudgments reconstructs the replayable judgments of the newest stored
+// run. A missing spec, a decode failure or a partial run returns nil so the
+// caller falls back to a full evaluation.
+func (p *Processor) previousJudgments(ctx context.Context, job *cairn.ClassificationJob) *classify.RawJudgments {
+	s := p.stages
+	run, err := s.queue.GetLatestRun(ctx, job.ID)
+	if err != nil || run == nil || run.Coverage != "complete" {
+		return nil
+	}
+	stored, err := s.queue.GetQuestionSpec(ctx, run.SpecID)
+	if err != nil {
+		return nil
+	}
+	spec, err := classify.DecodeSpec(stored.Payload)
+	if err != nil {
+		return nil
+	}
+	raw, err := classify.DecodeStoredJudgments(spec, run.RequestedModel, run.ResolvedModel, run.Answers, run.Coverage)
+	if err != nil {
+		return nil
+	}
+	return &raw
 }
 
 // runExtensions runs the opt-in bounded extensions after a successful
@@ -429,12 +567,19 @@ func (p *Processor) runExtensions(ctx context.Context, job *cairn.Classification
 	if gap != extension.GapExternalLink || s.fetcher == nil {
 		return
 	}
-	requestID, err := s.queue.CreateEvidenceRequest(context.WithoutCancel(ctx), job.ID, map[string]any{
+	requestID, requestStatus, err := s.queue.CreateEvidenceRequest(context.WithoutCancel(ctx), job.ID, map[string]any{
 		"scope":      "external_link",
 		"dedupe_key": fmt.Sprintf("evidence-%d-rev-%d", job.ID, job.InputRevision),
 		"budget":     map[string]any{"max_bytes": s.fetchPolicy.MaxBytes},
 	})
 	if err != nil || requestID == "" {
+		return
+	}
+	// A request that is already pending or decided must not be fetched again:
+	// the same gap would otherwise be re-fetched and re-queued on every poll
+	// (R2-07).
+	if requestStatus != "pending" {
+		p.logger.InfoContext(ctx, "evidence request already decided; skipping fetch", "link_id", job.ID, "status", requestStatus)
 		return
 	}
 	outcome := s.extensions.RequestEvidence(ctx, s.fetcher, s.fetchPolicy, firstAllowlisted(job.RelatedLinks, s.fetchPolicy))
@@ -493,4 +638,71 @@ func firstAllowlisted(links []string, policy extension.FetchPolicy) string {
 		}
 	}
 	return ""
+}
+
+// attachBoundEvidence loads the snapshot the lease was bound to and builds the
+// structured provider state from it. A missing or unreadable snapshot falls back
+// to the plain text fields; the completion identity check still guards the
+// result (R2-02/R2-07).
+func (p *Processor) attachBoundEvidence(ctx context.Context, job *cairn.ClassificationJob) {
+	if job.EvidenceSnapshotID < 1 {
+		return
+	}
+	payload, err := p.stages.queue.GetEvidenceAt(context.WithoutCancel(ctx), job.ID, job.EvidenceSnapshotID)
+	if err != nil {
+		p.logger.WarnContext(ctx, "bound evidence snapshot could not be loaded", "link_id", job.ID, "error", err)
+		return
+	}
+	evidence, err := evidenceFromSnapshot(payload)
+	if err != nil {
+		p.logger.WarnContext(ctx, "bound evidence snapshot is not usable", "link_id", job.ID, "error", err)
+		return
+	}
+	job.Evidence = evidence
+}
+
+// evidenceFromSnapshot converts the stored snapshot into the objective evidence
+// the provider sees. Roles, block order and truncation facts are preserved.
+func evidenceFromSnapshot(payload json.RawMessage) (*classify.Evidence, error) {
+	var view struct {
+		Snapshot struct {
+			Blocks []struct {
+				ID   string `json:"id"`
+				Role string `json:"role"`
+				Text string `json:"text"`
+				URL  string `json:"url"`
+			} `json:"blocks"`
+			Truncation struct {
+				Truncated bool `json:"truncated"`
+			} `json:"truncation"`
+		} `json:"snapshot"`
+		Completeness string `json:"completeness"`
+	}
+	if err := json.Unmarshal(payload, &view); err != nil {
+		return nil, err
+	}
+	if len(view.Snapshot.Blocks) == 0 {
+		return nil, errors.New("snapshot has no blocks")
+	}
+	evidence := &classify.Evidence{Truncated: view.Snapshot.Truncation.Truncated, Coverage: "complete"}
+	if evidence.Truncated {
+		evidence.Coverage = "truncated"
+	}
+	for index, block := range view.Snapshot.Blocks {
+		role := classify.BlockRole(block.Role)
+		if role == "" {
+			role = classify.RoleLegacyUnknown
+		}
+		if block.Role == string(classify.RolePrimary) || (index == 0 && evidence.Primary == "") {
+			evidence.Primary = block.Text
+			continue
+		}
+		evidence.Context = append(evidence.Context, classify.EvidenceBlock{
+			ID: block.ID, Role: role, Text: block.Text, URL: block.URL,
+		})
+	}
+	if strings.TrimSpace(evidence.Primary) == "" {
+		return nil, errors.New("snapshot has no primary block")
+	}
+	return evidence, nil
 }

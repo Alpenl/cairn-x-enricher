@@ -1,6 +1,7 @@
 package classify
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
@@ -183,6 +184,28 @@ func TestSpecHashIgnoresInactiveTermsAndDisplayLabels(t *testing.T) {
 	fifth.Topics[0].Aliases = []string{"new-alias"}
 	if hashOf(t, first) == hashOf(t, fifth) {
 		t.Fatal("an alias change is semantic and must change the spec hash")
+	}
+	// Boundary examples are semantic: changing only excludes must change both
+	// the question and the content-addressed spec identity (R2-14).
+	sixth := testCatalog()
+	sixth.Topics[0].Excludes = []string{"仅偶然提及"}
+	if hashOf(t, first) == hashOf(t, sixth) {
+		t.Fatal("an excludes change must change the semantic spec hash")
+	}
+	firstSpec, _ := CompileSpec(first, false)
+	sixthSpec, _ := CompileSpec(sixth, false)
+	if firstSpec.SpecID == sixthSpec.SpecID {
+		t.Fatalf("an excludes change must produce a new spec id: %s", firstSpec.SpecID)
+	}
+	if firstSpec.SpecID == "" || !strings.HasPrefix(firstSpec.SpecID, "classify-") {
+		t.Fatalf("spec id is not content-addressed: %q", firstSpec.SpecID)
+	}
+	// A display-only label rename keeps both the hash and the spec id.
+	seventh := testCatalog()
+	seventh.Topics[0].Label = "大语言模型"
+	seventhSpec, _ := CompileSpec(seventh, false)
+	if seventhSpec.SpecID != firstSpec.SpecID || seventhSpec.SemanticHash != firstSpec.SemanticHash {
+		t.Fatal("a display label rename must not change the spec identity")
 	}
 }
 

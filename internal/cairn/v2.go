@@ -141,6 +141,7 @@ func (c *Client) GetV2Catalog(ctx context.Context) (taxonomy.Catalog, error) {
 			out = append(out, taxonomy.Term{
 				ID: term.ID, Label: term.Label, Description: term.Description,
 				Aliases: term.Aliases, Active: term.Active && !term.Deprecated,
+				Includes: term.Includes, Excludes: term.Excludes,
 			})
 		}
 		return out
@@ -181,6 +182,10 @@ type TaxonomyTerm struct {
 	Description string   `json:"description,omitempty"`
 	Includes    []string `json:"includes,omitempty"`
 	Excludes    []string `json:"excludes,omitempty"`
+	// DisplayOverridden marks a label that was changed by an approved
+	// display-only proposal. It is display metadata: it must never influence the
+	// semantic question or the spec hash (R2-10).
+	DisplayOverridden bool `json:"display_overridden,omitempty"`
 }
 
 // GetV2Taxonomy loads the multidimensional vocabulary.
@@ -323,24 +328,26 @@ func (c *Client) SubmitEntityState(ctx context.Context, id int64, body map[strin
 	return c.stageWrite(ctx, fmt.Sprintf("/api/v2/links/%d/entity-state", id), body)
 }
 
-// CreateEvidenceRequest records a bounded, de-duplicated evidence escalation
-// and returns its id. It never fetches anything itself.
-func (c *Client) CreateEvidenceRequest(ctx context.Context, id int64, body map[string]any) (string, error) {
+// CreateEvidenceRequest records a bounded, de-duplicated evidence escalation.
+// The returned status tells the caller whether a fetch is still needed: an
+// already pending/completed request must not be fetched again (R2-07).
+func (c *Client) CreateEvidenceRequest(ctx context.Context, id int64, body map[string]any) (string, string, error) {
 	response, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v2/links/%d/evidence-requests", id), body)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return "", apiError(response)
+		return "", "", apiError(response)
 	}
 	var payload struct {
-		ID string `json:"id"`
+		ID     string `json:"id"`
+		Status string `json:"status"`
 	}
 	if err := decodeJSON(response.Body, &payload); err != nil {
-		return "", fmt.Errorf("decode evidence request: %w", err)
+		return "", "", fmt.Errorf("decode evidence request: %w", err)
 	}
-	return payload.ID, nil
+	return payload.ID, payload.Status, nil
 }
 
 // DecideEvidenceRequest reports the bounded outcome of an escalation.

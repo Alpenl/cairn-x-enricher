@@ -49,6 +49,11 @@ type Config struct {
 	ExtensionRerank    bool
 	ExtensionProposal  bool
 	ExtensionAllowlist []string
+
+	// PartialReuse opts in to reusing unchanged stored answers for a new
+	// classification. It is off by default; the conservative full evaluation is
+	// the production default (R2-13).
+	PartialReuse bool
 }
 
 // Role identifies which components a command actually uses. Configuration is
@@ -104,6 +109,7 @@ func baseConfig() Config {
 		ExtensionRerank:    boolValue("CAIRN_EXTENSION_RERANK"),
 		ExtensionProposal:  boolValue("CAIRN_EXTENSION_PROPOSAL"),
 		ExtensionAllowlist: splitCSV(valueOrDefault("CAIRN_EVIDENCE_ALLOWED_HOSTS", "x.com,mp.weixin.qq.com")),
+		PartialReuse:       boolValue("CAIRN_PARTIAL_REUSE"),
 	}
 }
 

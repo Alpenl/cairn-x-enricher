@@ -106,11 +106,29 @@ func TestDecidePolicyScenarios(t *testing.T) {
 	}
 }
 
-func TestDecideRejectsIncompleteCoverage(t *testing.T) {
+func TestDecideRejectsUnknownCoverageButMarksPartial(t *testing.T) {
+	// A partial run may be decided over the answers it has, but it must record
+	// what is missing so it can never masquerade as complete (R2-13).
 	raw := completeRaw(rawNoul("llm", 0.9))
 	raw.Coverage = "partial"
+	raw.Missing = []string{"form"}
+	proposals, err := Decide(raw, DefaultPolicy())
+	if err != nil {
+		t.Fatalf("partial coverage should decide: %v", err)
+	}
+	marked := false
+	for _, incomplete := range proposals.Incomplete {
+		if incomplete == "missing:form" {
+			marked = true
+		}
+	}
+	if !marked {
+		t.Fatalf("partial coverage must record its missing questions: %v", proposals.Incomplete)
+	}
+	// An unknown coverage value is still a contract error.
+	raw.Coverage = "mystery"
 	if _, err := Decide(raw, DefaultPolicy()); err == nil {
-		t.Fatal("partial coverage must not decide as if complete")
+		t.Fatal("unknown coverage must not decide")
 	}
 }
 

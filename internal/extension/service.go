@@ -224,42 +224,51 @@ func (s *Service) RerankCandidates(ctx context.Context, query string, candidates
 	if err := ledger.Reserve(estimatedEntityTokens * len(authorized)); err != nil {
 		return Rerank(candidates, nil, false)
 	}
+	// Every question names exactly one candidate in its own instructions, so the
+	// model always knows which material it is rating. The shared rubric stays
+	// constant; the evaluation target does not (R2-11).
 	questions := make(map[string]classify.ProviderQuestion, len(authorized))
-	byID := make(map[string]Candidate, len(authorized))
-	for index, candidate := range authorized {
-		id := fmt.Sprintf("rerank_%d", index)
-		byID[id] = candidate
+	for _, candidate := range authorized {
+		id := "rerank_" + candidate.ID
+		text := candidate.Text
+		if runes := []rune(text); len(runes) > 600 {
+			text = string(runes[:600])
+		}
 		questions[id] = classify.ProviderQuestion{
 			Type: classify.TypeScore,
-			Instructions: "在同一个标准下，以下材料与查询 `" + query + "` 的相关程度如何？" +
-				"只比较材料本身，不因为标题或来源不同而加减分。",
+			Instructions: "在同一个标准下，材料 `" + candidate.ID + "` 与查询 `" + query + "` 的相关程度如何？" +
+				"被评价材料：`" + text + "`。只评价这一条材料本身，不因为标题、来源或其他候选而加减分。",
 			Criteria: []string{"不相关", "略有关系", "明显相关", "高度相关"},
 		}
 	}
-	state := map[string]any{
-		"query": query,
-		"candidates": func() []map[string]string {
-			out := make([]map[string]string, 0, len(authorized))
-			for id, candidate := range byID {
-				out = append(out, map[string]string{"id": id, "text": candidate.Text})
-			}
-			sort.Slice(out, func(i, j int) bool { return out[i]["id"] < out[j]["id"] })
-			return out
-		}(),
-	}
+	state := map[string]any{"query": query}
 	answers, err := s.Judge.Judge(ctx, state, questions)
 	if err != nil {
 		return Rerank(candidates, nil, false)
 	}
 	scores := make([]RerankScore, 0, len(answers))
 	for id, answer := range answers {
-		candidate, ok := byID[id]
-		if !ok || answer.Type != classify.TypeScore || answer.Score == nil {
+		if answer.Type != classify.TypeScore || answer.Score == nil || !strings.HasPrefix(id, "rerank_") {
 			return Rerank(candidates, nil, false)
 		}
-		scores = append(scores, RerankScore{ID: candidate.ID, Score: int(answer.Score.Score*100 + 0.5)})
+		candidateID := strings.TrimPrefix(id, "rerank_")
+		if !hasCandidate(authorized, candidateID) {
+			// An answer that does not target an authorized candidate invalidates
+			// the ranking instead of injecting a result.
+			return Rerank(candidates, nil, false)
+		}
+		scores = append(scores, RerankScore{ID: candidateID, Score: int(answer.Score.Score*100 + 0.5)})
 	}
 	return Rerank(candidates, scores, true)
+}
+
+func hasCandidate(candidates []Candidate, id string) bool {
+	for _, candidate := range candidates {
+		if candidate.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func boundedReason(err error) string {

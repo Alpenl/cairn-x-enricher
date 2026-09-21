@@ -74,7 +74,7 @@ func TestEvaluateReusingReusesEverythingWhenNothingChanged(t *testing.T) {
 	if atomic.LoadInt32(&calls) != 1 {
 		t.Fatalf("first evaluation calls = %d", calls)
 	}
-	merged, err := client.EvaluateReusing(context.Background(), Input{OriginalText: "text"}, &first, first.EvidenceHash, "batch-1")
+	merged, err := client.EvaluateReusing(context.Background(), Input{OriginalText: "text"}, &first, first.BatchSemantics)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestEvaluateReusingInfersOnlyTheChangedQuestion(t *testing.T) {
 	next.SemanticHash = hash
 	client.spec = next
 	before := atomic.LoadInt32(&calls)
-	merged, err := client.EvaluateReusing(context.Background(), Input{OriginalText: "text"}, &first, first.EvidenceHash, "batch-1")
+	merged, err := client.EvaluateReusing(context.Background(), Input{OriginalText: "text"}, &first, first.BatchSemantics)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,10 +165,19 @@ func TestEvaluateReusingReinfersWhenEvidenceOrModelChanges(t *testing.T) {
 	if len(plan.Reusable) != 0 {
 		t.Fatalf("model change must invalidate every question: %+v", plan)
 	}
+	// A different batch semantics invalidates reuse even when everything else
+	// matches.
+	plan, err = PlanReuse(&first, client.Spec(), first.EvidenceHash, "jev-latest", "chunks-of-2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Reusable) != 0 {
+		t.Fatalf("a batch semantics change must invalidate every question: %+v", plan)
+	}
 	// A previous run without an evidence hash cannot be reused safely.
 	stripped := first
 	stripped.EvidenceHash = ""
-	plan, err = PlanReuse(&stripped, client.Spec(), first.EvidenceHash, "jev-latest", "batch-1")
+	plan, err = PlanReuse(&stripped, client.Spec(), first.EvidenceHash, "jev-latest", first.BatchSemantics)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +189,7 @@ func TestEvaluateReusingReinfersWhenEvidenceOrModelChanges(t *testing.T) {
 	partial.Coverage = "partial"
 	delete(partial.Judgments, "topic_llm")
 	delete(partial.QuestionHashes, "topic_llm")
-	plan, err = PlanReuse(&partial, client.Spec(), first.EvidenceHash, "jev-latest", "batch-1")
+	plan, err = PlanReuse(&partial, client.Spec(), first.EvidenceHash, "jev-latest", first.BatchSemantics)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,9 +210,9 @@ func TestEvaluateReusingRefusesToMixModels(t *testing.T) {
 	}
 	previous := RawJudgments{
 		SpecID: "classify-v1", ResolvedModel: "jev-pinned-old", RequestedModel: "jev-pinned-old",
-		EvidenceHash: "e", QuestionHashes: map[string]string{}, Judgments: map[string]RawJudgment{},
+		EvidenceHash: "e", BatchSemantics: "batch-1", QuestionHashes: map[string]string{}, Judgments: map[string]RawJudgment{},
 	}
-	if _, err := client.EvaluateReusing(context.Background(), Input{OriginalText: "text"}, &previous, "e", "batch-1"); !errors.Is(err, ErrReuseUnsafe) {
+	if _, err := client.EvaluateReusing(context.Background(), Input{OriginalText: "text"}, &previous, "batch-1"); !errors.Is(err, ErrReuseUnsafe) {
 		t.Fatalf("mixing runs from another resolved model must fail explicitly, got %v", err)
 	}
 }

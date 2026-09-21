@@ -30,6 +30,10 @@ type Job struct {
 	Attempt    int    `json:"attempt"`
 	LeaseToken string `json:"lease_token"`
 	LeaseUntil string `json:"lease_until"`
+	// RefreshEpoch is non-zero when the operator explicitly requested a source
+	// refresh. The processor must then fetch the source instead of reusing the
+	// stored snapshot (R2-06).
+	RefreshEpoch int64 `json:"refresh_epoch,omitempty"`
 }
 
 // Completion is the validated enrichment payload written back to Cairn Share.

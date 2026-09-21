@@ -138,7 +138,7 @@ func (c *Client) EvaluateBatched(ctx context.Context, input Input, maxPerRequest
 		// handling stay identical.
 		return c.Evaluate(ctx, input)
 	}
-	evidence, err := PrepareEvidence(input.OriginalText, contextBlocks(input.ContextText), c.budget)
+	evidence, err := c.evidenceFor(input)
 	if err != nil {
 		return RawJudgments{}, err
 	}
@@ -173,13 +173,28 @@ func (c *Client) EvaluateBatched(ctx context.Context, input Input, maxPerRequest
 		for id, judgment := range fresh.Judgments {
 			merged.Judgments[id] = judgment
 		}
+		// A chunk that resolved to a different model than the first chunk cannot
+		// be merged into a same-model run; its questions stay missing and the
+		// coverage is partial (R2-13).
+		if mergedModel := merged.ResolvedModel; mergedModel != "" && fresh.ResolvedModel != "" && fresh.ResolvedModel != mergedModel {
+			for _, question := range chunk.Questions {
+				missing = append(missing, question.ID)
+			}
+			merged.Usage = mergeUsage(merged.Usage, fresh.Usage)
+			continue
+		}
 		for id, hash := range fresh.QuestionHashes {
 			merged.QuestionHashes[id] = hash
 		}
-		merged.Usage = fresh.Usage
-		merged.UsageMissing = fresh.UsageMissing
+		for id, judgment := range fresh.Judgments {
+			merged.Judgments[id] = judgment
+		}
+		merged.Usage = mergeUsage(merged.Usage, fresh.Usage)
+		if fresh.UsageMissing {
+			merged.UsageMissing = true
+		}
 		merged.ResolvedModel = fresh.ResolvedModel
-		merged.AliasDrift = fresh.AliasDrift
+		merged.AliasDrift = merged.AliasDrift || fresh.AliasDrift
 	}
 	sort.Strings(missing)
 	merged.Missing = missing

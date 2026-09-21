@@ -91,6 +91,12 @@ type ClassificationJob struct {
 	// RelatedLinks are the stored source links, used only by the opt-in
 	// evidence escalation to find a real material gap.
 	RelatedLinks []string `json:"related_links,omitempty"`
+	// ContentRevision, EvidenceSnapshotID and EvidenceHash are the identity the
+	// lease was bound to; the completion echoes them back so the Worker can
+	// prove the inference and the stored run describe the same input (R2-02).
+	ContentRevision    int64  `json:"content_revision,omitempty"`
+	EvidenceSnapshotID int64  `json:"evidence_snapshot_id,omitempty"`
+	EvidenceHash       string `json:"evidence_hash,omitempty"`
 	classify.Input
 }
 
@@ -187,6 +193,7 @@ func (c *Client) CompleteClassification(ctx context.Context, job *Classification
 	body := map[string]any{
 		"lease_token": job.LeaseToken, "revision": job.Revision, "input_revision": job.InputRevision,
 		"target_generation": job.TargetGeneration, "spec_id": job.SpecID,
+		"content_revision": job.ContentRevision, "evidence_hash": job.EvidenceHash,
 		"operation_key": ClassificationOperationKey(job),
 		"result":        result,
 	}
@@ -270,6 +277,36 @@ func (c *Client) FailClassification(ctx context.Context, job *ClassificationJob,
 // never calls a model.
 func (c *Client) RetryClassification(ctx context.Context, id int64) error {
 	return c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/classifications/%d/retry", id), map[string]any{})
+}
+
+// GetEvidenceAt loads one evidence snapshot by id so the consumer can evaluate
+// exactly the material its lease was bound to (R2-07).
+func (c *Client) GetEvidenceAt(ctx context.Context, id, snapshotID int64) (json.RawMessage, error) {
+	if id < 1 || snapshotID < 1 {
+		return nil, errors.New("bookmark and snapshot IDs must be positive")
+	}
+	response, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v2/links/%d/evidence?snapshot_id=%d", id, snapshotID), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return nil, apiError(response)
+	}
+	var payload json.RawMessage
+	if err := decodeJSON(response.Body, &payload); err != nil {
+		return nil, fmt.Errorf("decode evidence snapshot: %w", err)
+	}
+	return payload, nil
+}
+
+// AckSourceRefresh consumes the one-shot refresh intent after the fetch attempt.
+func (c *Client) AckSourceRefresh(ctx context.Context, id, epoch int64, status, reason string) error {
+	body := map[string]any{"epoch": epoch, "status": status}
+	if reason != "" {
+		body["reason"] = reason
+	}
+	return c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/jobs/%d/refresh-source/ack", id), body)
 }
 
 // RefreshSource schedules a bounded retrieval of the link's source. It is a
@@ -385,6 +422,21 @@ func (c *Client) PutQuestionSpec(ctx context.Context, spec classify.QuestionSpec
 // never overwrite human curation with a stale or fabricated view.
 func (c *Client) SubmitDecision(ctx context.Context, id int64, body map[string]any) error {
 	return c.stageWrite(ctx, fmt.Sprintf("/api/v2/links/%d/decisions", id), body)
+}
+
+// GetLatestRun returns the newest succeeded run for a link, or nil when there
+// is none. It is used by the opt-in partial re-evaluation.
+func (c *Client) GetLatestRun(ctx context.Context, id int64) (*StoredRun, error) {
+	runs, err := c.GetRuns(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	for index := len(runs) - 1; index >= 0; index-- {
+		if runs[index].Status == "succeeded" && len(runs[index].Answers) > 0 {
+			return &runs[index], nil
+		}
+	}
+	return nil, nil
 }
 
 // GetRuns returns the stored runs for a link, oldest first.

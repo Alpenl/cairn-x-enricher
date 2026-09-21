@@ -519,3 +519,78 @@ func switchTarget(t *testing.T, base, token string, classifier *classify.Client)
 		t.Fatalf("switch target status = %d", response.StatusCode)
 	}
 }
+
+// TestLocalWorkerDisplayRenameKeepsSemantics is the R2-10 regression: an
+// approved display-only rename flows through the real Worker into the real Go
+// catalog without changing the semantic spec identity or blocking startup.
+func TestLocalWorkerDisplayRenameKeepsSemantics(t *testing.T) {
+	base := workerURL(t)
+	enricherToken := envOr("CAIRN_ENRICHER_TOKEN", "internal")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	queue := cairn.NewClient(base, enricherToken, &http.Client{Timeout: 30 * time.Second})
+
+	before, err := queue.GetV2Catalog(ctx)
+	if err != nil {
+		t.Fatalf("load v2 catalog: %v", err)
+	}
+	beforeSpec, err := classify.CompileSpec(before, false)
+	if err != nil {
+		t.Fatalf("compile spec: %v", err)
+	}
+	if len(before.Topics) == 0 {
+		t.Fatal("the real taxonomy has no topics")
+	}
+	target := before.Topics[0]
+
+	created := postJSON(t, ctx, fmt.Sprintf("%s/api/v2/taxonomy/proposals", base), enricherToken, map[string]any{
+		"kind": "rename_label", "dimension": "topics", "term_id": target.ID,
+		"payload": map[string]any{"label": "重命名后的显示名"},
+	})
+	proposalID := created["id"].(string)
+	postJSON(t, ctx, fmt.Sprintf("%s/api/v2/taxonomy/proposals/%s/decision", base, proposalID), enricherToken, map[string]any{"decision": "approved"})
+	postJSON(t, ctx, fmt.Sprintf("%s/api/v2/taxonomy/proposals/%s/apply", base, proposalID), enricherToken, map[string]any{})
+
+	after, err := queue.GetV2Catalog(ctx)
+	if err != nil {
+		t.Fatalf("the rename broke the Go catalog read: %v", err)
+	}
+	afterSpec, err := classify.CompileSpec(after, false)
+	if err != nil {
+		t.Fatalf("the rename broke spec compilation: %v", err)
+	}
+	if afterSpec.SemanticHash != beforeSpec.SemanticHash || afterSpec.SpecID != beforeSpec.SpecID {
+		t.Fatalf("a display rename changed the semantic identity: %s -> %s", beforeSpec.SpecID, afterSpec.SpecID)
+	}
+	renamed := false
+	for _, term := range after.Topics {
+		if term.ID == target.ID {
+			renamed = term.Label == "重命名后的显示名"
+		}
+	}
+	if !renamed {
+		t.Fatalf("the display rename did not reach the Go catalog: %+v", after.Topics)
+	}
+}
+
+func postJSON(t *testing.T, ctx context.Context, url, token string, body map[string]any) map[string]any {
+	t.Helper()
+	payload, _ := json.Marshal(body)
+	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("POST %s: %v", url, err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		t.Fatalf("POST %s status = %d: %s", url, response.StatusCode, raw)
+	}
+	var decoded map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		t.Fatalf("decode %s: %v", url, err)
+	}
+	return decoded
+}

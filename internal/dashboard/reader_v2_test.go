@@ -13,21 +13,36 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/extension"
 )
 
-type rerankJudge struct{}
+// rerankJudge scores by the candidate id embedded in the question instructions,
+// so the test is independent of map iteration order (R2-11).
+type rerankJudge struct {
+	requests *[]map[string]classify.ProviderQuestion
+}
 
-func (rerankJudge) Judge(_ context.Context, _ any, questions map[string]classify.ProviderQuestion) (map[string]classify.RawAnswer, error) {
+func (judge rerankJudge) Judge(_ context.Context, _ any, questions map[string]classify.ProviderQuestion) (map[string]classify.RawAnswer, error) {
+	if judge.requests != nil {
+		*judge.requests = append(*judge.requests, questions)
+	}
 	answers := map[string]classify.RawAnswer{}
-	// The second candidate is the more relevant one.
-	index := 0
-	for id := range questions {
+	for id, question := range questions {
 		value := 0.0
-		if index == 1 {
+		// The second candidate carries the higher relevance in its own text.
+		if strings.Contains(instructionText(question.Instructions), "高相关材料") {
 			value = 3
 		}
 		answers[id] = classify.RawAnswer{Type: classify.TypeScore, Score: &classify.ScoreAnswer{Score: value}}
-		index++
 	}
 	return answers, nil
+}
+
+func instructionText(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	default:
+		encoded, _ := json.Marshal(typed)
+		return string(encoded)
+	}
 }
 
 // TestRerankEndpointKeepsCandidatesAndFallsBackExplicitly covers B09-T09/T10 at
@@ -60,7 +75,8 @@ func TestRerankEndpointIsBoundedAndFallsBackExplicitly(t *testing.T) {
 
 	flags := extension.DefaultFlags()
 	flags.Rerank = true
-	server.SetExtensions(extension.NewService(flags, extension.DefaultBudget(), rerankJudge{}))
+	var captured []map[string]classify.ProviderQuestion
+	server.SetExtensions(extension.NewService(flags, extension.DefaultBudget(), rerankJudge{requests: &captured}))
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/rerank", `{"query":"llm","limit":5}`))
 	if response.Code != http.StatusOK {
@@ -75,6 +91,33 @@ func TestRerankEndpointIsBoundedAndFallsBackExplicitly(t *testing.T) {
 	}
 	if ranked.Candidates[0].ID != "2" {
 		t.Fatalf("the higher-scored candidate must rank first: %+v", ranked.Candidates)
+	}
+	// Every question must name exactly its own candidate; a shared question with
+	// no target would let the model rate the wrong material (R2-11).
+	if len(captured) != 1 || len(captured[0]) != 2 {
+		t.Fatalf("captured rerank questions = %+v", captured)
+	}
+	for id, question := range captured[0] {
+		text := instructionText(question.Instructions)
+		candidateID := strings.TrimPrefix(id, "rerank_")
+		if candidateID == id {
+			t.Fatalf("question key %q is not bound to a candidate", id)
+		}
+		if !strings.Contains(text, "材料 `"+candidateID+"`") {
+			t.Fatalf("question %s does not bind its candidate: %s", id, text)
+		}
+	}
+	// Repeat runs are stable and never depend on map order.
+	for run := 0; run < 5; run++ {
+		repeat := httptest.NewRecorder()
+		handler.ServeHTTP(repeat, jsonRequest(http.MethodPost, "/api/rerank", `{"query":"llm","limit":5}`))
+		var again extension.RerankResult
+		if err := json.Unmarshal(repeat.Body.Bytes(), &again); err != nil {
+			t.Fatal(err)
+		}
+		if again.Candidates[0].ID != "2" {
+			t.Fatalf("run %d ordered %+v", run, again.Candidates)
+		}
 	}
 	// A candidate outside the authorized set is never returned.
 	for _, candidate := range ranked.Candidates {

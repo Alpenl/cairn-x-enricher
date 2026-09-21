@@ -223,3 +223,35 @@ func sortedStrings(values []string) bool {
 	}
 	return true
 }
+
+// TestPartialCoverageDecidesHonestly proves a partial run still produces a
+// decision over the answered fields while recording what is missing (R2-13).
+func TestPartialCoverageDecidesHonestly(t *testing.T) {
+	spec, err := CompileSpec(testCatalog(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := RawJudgments{
+		SpecID: spec.SpecID, Coverage: "partial", Missing: []string{"topic_llm", "use"},
+		Judgments: map[string]RawJudgment{
+			"topic_eval": {QuestionID: "topic_eval", Kind: QuestionNoul, Dimension: "topics", TermID: "eval", Noul: ptr(0.9)},
+			"form":       {QuestionID: "form", Kind: QuestionChoice, Dimension: "form", Choice: "method", Probabilities: map[string]float64{"method": 1}},
+		},
+	}
+	proposals, err := Decide(raw, DefaultPolicy())
+	if err != nil {
+		t.Fatalf("a partial run must still decide: %v", err)
+	}
+	if len(proposals.Topics) != 1 || proposals.Topics[0] != "eval" {
+		t.Fatalf("partial topics = %v", proposals.Topics)
+	}
+	found := false
+	for _, incomplete := range proposals.Incomplete {
+		if incomplete == "missing:topic_llm" || incomplete == "missing:use" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("missing questions must be recorded: %v", proposals.Incomplete)
+	}
+}

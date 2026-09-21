@@ -404,6 +404,7 @@ func newProcessor(
 	worker := processor.NewStaged(queue, model, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
 	fetcher, policy := evidenceFetcher(cfg)
 	worker.SetExtensions(extensionService(cfg, classifier), fetcher, policy)
+	worker.SetPartialReuse(cfg.PartialReuse)
 	return worker, queue, nil
 }
 

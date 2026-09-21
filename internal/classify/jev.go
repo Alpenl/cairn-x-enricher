@@ -30,6 +30,11 @@ type Input struct {
 	OriginalText string `json:"original_text"`
 	ContextText  string `json:"context_text"`
 	Note         string `json:"note"`
+	// Evidence is the structured objective snapshot the lease was bound to.
+	// When present it is the exact state sent to the provider, preserving every
+	// stored block, role and truncation fact; the plain text fields remain for
+	// the legacy paths (R2-07).
+	Evidence *Evidence `json:"evidence,omitempty"`
 }
 
 // AutomaticView is the pure decision's per-dimension proposal before any human
@@ -187,10 +192,7 @@ type providerResponse struct {
 // It is exported for the contract tests so a fixture can be compared against
 // the same code path the production client uses.
 func (c *Client) BuildProviderRequest(input Input) ([]byte, Evidence, error) {
-	if strings.TrimSpace(input.OriginalText) == "" {
-		return nil, Evidence{}, errors.New("classification requires source text")
-	}
-	evidence, err := PrepareEvidence(input.OriginalText, contextBlocks(input.ContextText), c.budget)
+	evidence, err := c.evidenceFor(input)
 	if err != nil {
 		return nil, Evidence{}, err
 	}
@@ -209,6 +211,22 @@ func (c *Client) BuildProviderRequest(input Input) ([]byte, Evidence, error) {
 		return nil, Evidence{}, err
 	}
 	return body, evidence, nil
+}
+
+// evidenceFor selects the objective state: the structured snapshot when the
+// caller has one, otherwise a bounded preparation of the plain text fields.
+func (c *Client) evidenceFor(input Input) (Evidence, error) {
+	if input.Evidence != nil {
+		evidence := *input.Evidence
+		if strings.TrimSpace(evidence.Primary) == "" {
+			return Evidence{}, errors.New("classification requires primary evidence")
+		}
+		return evidence, nil
+	}
+	if strings.TrimSpace(input.OriginalText) == "" {
+		return Evidence{}, errors.New("classification requires source text")
+	}
+	return PrepareEvidence(input.OriginalText, contextBlocks(input.ContextText), c.budget)
 }
 
 // contextBlocks labels secondary context. The exact provenance of a stored
@@ -436,10 +454,34 @@ func (c *Client) Judge(ctx context.Context, state any, questions map[string]Prov
 // for the production path; Decide and Resolve remain independently callable
 // for replay.
 func (c *Client) Classify(ctx context.Context, input Input) (Result, error) {
-	raw, err := c.Evaluate(ctx, input)
+	// A large question set is evaluated in deterministic bounded requests; the
+	// common single-request path stays exactly as before (R2-13).
+	var raw RawJudgments
+	var err error
+	if len(c.spec.Questions) > DefaultMaxQuestionsPerRequest {
+		raw, err = c.EvaluateBatched(ctx, input, DefaultMaxQuestionsPerRequest)
+	} else {
+		raw, err = c.Evaluate(ctx, input)
+	}
 	if err != nil {
 		return Result{}, err
 	}
+	return c.resultFromRaw(raw)
+}
+
+// ClassifyReusing decides a partial re-evaluation: it reuses the stored answers
+// that are still valid for this evidence, model and batch semantics and only
+// infers the rest (R2-13). The caller owns the opt-in; the default production
+// path is a full evaluation.
+func (c *Client) ClassifyReusing(ctx context.Context, input Input, previous *RawJudgments, batchSemantics string) (Result, error) {
+	raw, err := c.EvaluateReusing(ctx, input, previous, batchSemantics)
+	if err != nil {
+		return Result{}, err
+	}
+	return c.resultFromRaw(raw)
+}
+
+func (c *Client) resultFromRaw(raw RawJudgments) (Result, error) {
 	proposals, err := Decide(raw, c.policy)
 	if err != nil {
 		return Result{}, enrich.Classified(err, enrich.ErrorClassContract)

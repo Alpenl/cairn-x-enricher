@@ -136,7 +136,7 @@ func TestRerankFallbacksKeepTheOriginalOrder(t *testing.T) {
 		t.Fatalf("a failed rerank must keep the original order: %+v", result)
 	}
 	// A disabled flag never calls the model.
-	judge := &fakeJudge{answers: map[string]classify.RawAnswer{"rerank_0": score(3), "rerank_1": score(0)}}
+	judge := &fakeJudge{answers: map[string]classify.RawAnswer{"rerank_1": score(3), "rerank_2": score(0)}}
 	disabled := NewService(DefaultFlags(), DefaultBudget(), judge)
 	result = disabled.RerankCandidates(context.Background(), "query", candidates)
 	if result.Applied || judge.calls != 0 {
@@ -146,9 +146,11 @@ func TestRerankFallbacksKeepTheOriginalOrder(t *testing.T) {
 
 func TestRerankOrdersBySharedRubricScore(t *testing.T) {
 	candidates := []Candidate{
-		{ID: "1", Rank: 0, Allowed: true}, {ID: "2", Rank: 1, Allowed: true}, {ID: "3", Rank: 2, Allowed: false},
+		{ID: "1", Text: "低相关材料", Rank: 0, Allowed: true},
+		{ID: "2", Text: "高相关材料", Rank: 1, Allowed: true},
+		{ID: "3", Text: "未授权材料", Rank: 2, Allowed: false},
 	}
-	judge := &fakeJudge{answers: map[string]classify.RawAnswer{"rerank_0": score(0), "rerank_1": score(3)}}
+	judge := &fakeJudge{answers: map[string]classify.RawAnswer{"rerank_1": score(0), "rerank_2": score(3)}}
 	flags := DefaultFlags()
 	flags.Rerank = true
 	service := NewService(flags, DefaultBudget(), judge)
@@ -156,11 +158,31 @@ func TestRerankOrdersBySharedRubricScore(t *testing.T) {
 	if !result.Applied || len(result.Candidates) != 2 || result.Candidates[0].ID != "2" {
 		t.Fatalf("rerank did not order by score: %+v", result)
 	}
+	// Every question binds exactly its own candidate.
+	if len(judge.lastQ) != 2 {
+		t.Fatalf("questions = %d, want 2", len(judge.lastQ))
+	}
+	for id, question := range judge.lastQ {
+		candidateID := strings.TrimPrefix(id, "rerank_")
+		instructions, _ := question.Instructions.(string)
+		if !strings.Contains(instructions, "材料 `"+candidateID+"`") {
+			t.Fatalf("question %s does not bind its candidate: %v", id, question.Instructions)
+		}
+		if candidateID == "3" {
+			t.Fatal("a denied candidate was sent to the model")
+		}
+	}
 	// A denied candidate is never returned.
 	for _, candidate := range result.Candidates {
 		if candidate.ID == "3" {
 			t.Fatal("a denied candidate leaked into the rerank result")
 		}
+	}
+	// An answer that targets an unknown candidate invalidates the ranking.
+	rogue := &fakeJudge{answers: map[string]classify.RawAnswer{"rerank_1": score(3), "rerank_99": score(3)}}
+	result = NewService(flags, DefaultBudget(), rogue).RerankCandidates(context.Background(), "query", candidates)
+	if result.Applied {
+		t.Fatalf("an out-of-set answer must fall back to the original order: %+v", result)
 	}
 }
 

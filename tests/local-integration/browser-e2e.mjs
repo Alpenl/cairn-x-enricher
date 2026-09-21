@@ -76,11 +76,16 @@ async function main() {
     await mock.close();
   };
   try {
-    // 1. The real service registers its immutable spec on startup.
+    // 1. The real service registers its immutable, content-addressed spec on
+    // startup. The id is derived from the semantics, so it is discovered rather
+    // than assumed.
     const spec = await waitFor("the Go service to register its question spec", async () => {
       if (go.exitCode !== null) throw new Error(`go serve exited: ${goLog.slice(-2000)}`);
-      const result = await jsonFetch(`${workerURL}/api/v2/question-specs/classify-v1`, { headers: auth(enricherToken) });
-      return result.status === 200 ? result.payload : null;
+      const list = await jsonFetch(`${workerURL}/api/v2/question-specs`, { headers: auth(enricherToken) });
+      const entry = (list.payload.specs ?? []).find((candidate) => String(candidate.spec_id).startsWith("classify-"));
+      if (!entry) return null;
+      const detail = await jsonFetch(`${workerURL}/api/v2/question-specs/${entry.spec_id}`, { headers: auth(enricherToken) });
+      return detail.status === 200 ? detail.payload : null;
     }, 90000);
     check("the real Go service registered the compiled spec", typeof spec.spec_hash === "string" && spec.spec_hash.length === 64, JSON.stringify(spec).slice(0, 200));
     const taxonomyVersion = (spec.spec || spec.payload || {}).taxonomy_version;
@@ -90,7 +95,7 @@ async function main() {
     const activated = await jsonFetch(`${workerURL}/api/enrichment/classifications/target`, {
       method: "POST", headers: auth(enricherToken),
       body: JSON.stringify({
-        spec_id: "classify-v1", spec_hash: spec.spec_hash, taxonomy_version: taxonomyVersion,
+        spec_id: spec.spec_id, spec_hash: spec.spec_hash, taxonomy_version: taxonomyVersion,
         policy_version: "jev-policy-v2", requested_model: "jev-latest", protocol: "v2"
       })
     });

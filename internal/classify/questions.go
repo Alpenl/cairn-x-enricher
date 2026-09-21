@@ -233,14 +233,16 @@ func CompileSpec(catalog taxonomy.Catalog, scoreEnabled bool) (QuestionSpec, err
 		})
 	}
 	sort.SliceStable(questions, func(i, j int) bool { return questions[i].ID < questions[j].ID })
-	specID := "classify-v1"
-	if scoreEnabled {
-		// A Score question changes the model input, so it must not be stored
-		// under the identity of a spec that never asked it.
-		specID = "classify-v1-score"
+	// The spec id is content-addressed over the provider-visible semantics, so a
+	// changed definition, criteria, boundary example or Score flag registers a
+	// new immutable spec instead of colliding with the old one. A display-only
+	// rename does not change it (R2-14).
+	identity, err := hashSpecIdentity(QuestionSpec{SpecVersion: 1, Questions: questions, ScoreEnabled: scoreEnabled})
+	if err != nil {
+		return QuestionSpec{}, err
 	}
 	spec := QuestionSpec{
-		SpecID: specID, SpecVersion: 1, TaxonomyVersion: catalog.Version,
+		SpecID: "classify-" + identity[:12], SpecVersion: 1, TaxonomyVersion: catalog.Version,
 		Questions: questions, ScoreEnabled: scoreEnabled,
 	}
 	hash, err := HashSpec(spec)
@@ -251,13 +253,48 @@ func CompileSpec(catalog taxonomy.Catalog, scoreEnabled bool) (QuestionSpec, err
 	return spec, nil
 }
 
+// hashSpecIdentity hashes the provider-visible semantics without the spec id, so
+// the id can be derived from the content it identifies. It uses exactly the same
+// projection as HashSpec minus the id.
+func hashSpecIdentity(spec QuestionSpec) (string, error) {
+	type hashQuestion struct {
+		ID           string          `json:"id"`
+		Kind         QuestionKind    `json:"kind"`
+		Instructions json.RawMessage `json:"instructions"`
+		Criteria     json.RawMessage `json:"criteria,omitempty"`
+	}
+	payload := struct {
+		SpecVersion  int            `json:"spec_version"`
+		ScoreEnabled bool           `json:"score_enabled"`
+		Questions    []hashQuestion `json:"questions"`
+	}{SpecVersion: spec.SpecVersion, ScoreEnabled: spec.ScoreEnabled}
+	for _, question := range spec.Questions {
+		payload.Questions = append(payload.Questions, hashQuestion{
+			ID: question.ID, Kind: question.Kind, Instructions: question.Instructions, Criteria: question.Criteria,
+		})
+	}
+	encoded, err := canonicalJSONBytes(payload)
+	if err != nil {
+		return "", err
+	}
+	return sha256Hex(encoded), nil
+}
+
 // semanticDescription is the model-facing definition of a term. The display
 // label is deliberately excluded: renaming a label for the UI must not change
-// the request or invalidate a stored run (F14).
+// the request or invalidate a stored run (F14). The boundary examples are
+// included: they change what the model is asked and therefore the spec identity
+// (R2-14).
 func semanticDescription(term taxonomy.Term) string {
 	parts := []string{"定义：" + term.Description}
 	if len(term.Aliases) > 0 {
 		parts = append(parts, "别名："+strings.Join(term.Aliases, "、"))
+	}
+	if len(term.Includes) > 0 {
+		parts = append(parts, "包含示例："+strings.Join(term.Includes, "、"))
+	}
+	if len(term.Excludes) > 0 {
+		parts = append(parts, "排除示例："+strings.Join(term.Excludes, "、"))
 	}
 	return strings.Join(parts, "；")
 }

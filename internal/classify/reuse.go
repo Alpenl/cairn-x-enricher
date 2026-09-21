@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 )
@@ -75,6 +74,10 @@ func PlanReuse(previous *RawJudgments, next QuestionSpec, evidenceHash, model, b
 			decision.Reason = "evidence changed"
 		case previous.ResolvedModel != model:
 			decision.Reason = "model changed"
+		case previous.BatchSemantics != "" && previous.BatchSemantics != batchSemantics:
+			// A different batching shape means the answers were produced under a
+			// different request semantics; reuse would mix them (R2-13).
+			decision.Reason = "batch semantics changed"
 		default:
 			storedHash, ok := previous.QuestionHashes[question.ID]
 			if !ok {
@@ -110,10 +113,19 @@ func PlanReuse(previous *RawJudgments, next QuestionSpec, evidenceHash, model, b
 var ErrReuseUnsafe = errors.New("partial reuse would mix incomparable results")
 
 // EvaluateReusing performs the smallest provider call the plan allows and merges
-// the stored answers with the new ones. Coverage is explicit: a question the
-// provider did not answer makes the merged run "partial", never "complete"
-// (SC26).
-func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *RawJudgments, evidenceHash, batchSemantics string) (RawJudgments, error) {
+// the stored answers with the new ones. The evidence hash is recomputed from the
+// actual serialized state, never trusted from the caller (R2-13). Coverage is
+// explicit: a question the provider did not answer makes the merged run
+// "partial", never "complete" (SC26).
+func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *RawJudgments, batchSemantics string) (RawJudgments, error) {
+	evidence, err := c.evidenceFor(input)
+	if err != nil {
+		return RawJudgments{}, err
+	}
+	evidenceHash, err := hashEvidence(evidence)
+	if err != nil {
+		return RawJudgments{}, err
+	}
 	// Answers from another resolved model are not comparable, so a partial
 	// re-evaluation refuses to merge them instead of producing a mixed run.
 	if previous != nil && previous.ResolvedModel != "" && previous.ResolvedModel != c.model {
@@ -122,6 +134,9 @@ func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *Raw
 	plan, err := PlanReuse(previous, c.spec, evidenceHash, c.model, batchSemantics)
 	if err != nil {
 		return RawJudgments{}, err
+	}
+	if previous != nil && previous.EvidenceHash != "" && previous.EvidenceHash != evidenceHash && len(plan.ToInfer) == 0 {
+		return RawJudgments{}, fmt.Errorf("%w: evidence hash mismatch", ErrReuseUnsafe)
 	}
 	if len(plan.ToInfer) == 0 {
 		// Nothing changed: reuse every answer with zero model calls.
@@ -159,7 +174,13 @@ func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *Raw
 	merged := fresh
 	merged.Reused = plan.Reusable
 	merged.BatchSemantics = batchSemantics
-	if previous != nil {
+	// A reused answer came from a run with the same resolved model (PlanReuse
+	// checked it). If the new response resolved to a different model, the two
+	// sets are not comparable, so the run is partial instead of looking like a
+	// complete same-model run (R2-13).
+	drift := previous != nil && previous.ResolvedModel != "" && fresh.ResolvedModel != "" &&
+		previous.ResolvedModel != fresh.ResolvedModel
+	if previous != nil && !drift {
 		for _, id := range plan.Reusable {
 			stored, ok := previous.Judgments[id]
 			if !ok {
@@ -168,6 +189,10 @@ func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *Raw
 			merged.Judgments[id] = stored
 			merged.QuestionHashes[id] = previous.QuestionHashes[id]
 		}
+	} else if drift {
+		merged.Missing = append(merged.Missing, plan.Reusable...)
+		sort.Strings(merged.Missing)
+		merged.Coverage = "partial"
 	}
 	// Coverage is honest: every question must have an answer for "complete".
 	if len(merged.Judgments) != len(c.spec.Questions) {
@@ -176,16 +201,46 @@ func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *Raw
 	return merged, nil
 }
 
+// mergeUsage sums numeric usage fields across chunks. If any chunk lacks usage,
+// the merged usage is marked missing instead of reporting a smaller number as
+// if it were complete (R2-13).
+func mergeUsage(existing, next json.RawMessage) json.RawMessage {
+	if len(existing) == 0 {
+		return next
+	}
+	if len(next) == 0 {
+		return existing
+	}
+	var left, right map[string]float64
+	if err := json.Unmarshal(existing, &left); err != nil {
+		return existing
+	}
+	if err := json.Unmarshal(next, &right); err != nil {
+		return existing
+	}
+	if left["missing"] == 1 || right["missing"] == 1 {
+		return json.RawMessage(`{"missing":true}`)
+	}
+	for key, value := range right {
+		if key == "missing" {
+			continue
+		}
+		left[key] += value
+	}
+	merged, err := json.Marshal(left)
+	if err != nil {
+		return existing
+	}
+	return merged
+}
+
 // evaluateQuestions runs one bounded provider request for a question subset and
 // returns the replayable judgments for exactly those questions.
 func (c *Client) evaluateQuestions(ctx context.Context, input Input, questions []Question, evidenceHash, batchSemantics string) (RawJudgments, error) {
 	if len(questions) == 0 {
 		return RawJudgments{}, errors.New("no questions to evaluate")
 	}
-	if strings.TrimSpace(input.OriginalText) == "" {
-		return RawJudgments{}, errors.New("classification requires source text")
-	}
-	evidence, err := PrepareEvidence(input.OriginalText, contextBlocks(input.ContextText), c.budget)
+	evidence, err := c.evidenceFor(input)
 	if err != nil {
 		return RawJudgments{}, err
 	}

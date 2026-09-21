@@ -15,13 +15,17 @@ import (
 
 var idPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 
-// Term is one stable identifier, display label, and explicitly accepted aliases.
+// Term is one stable identifier, display label, and explicitly accepted
+// aliases. Includes/Excludes are boundary examples that carry semantics: they
+// are part of the compiled question and its hash, unlike the display label.
 type Term struct {
 	Description string   `json:"description,omitempty"`
 	ID          string   `json:"id"`
 	Label       string   `json:"label"`
 	Aliases     []string `json:"aliases"`
 	Active      bool     `json:"active"`
+	Includes    []string `json:"includes,omitempty"`
+	Excludes    []string `json:"excludes,omitempty"`
 }
 
 // Catalog is supplied by the Worker so generation, storage, and the UI agree.

@@ -178,8 +178,11 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 	if err := policy.Validate(); err != nil {
 		return Proposals{}, err
 	}
-	if raw.Coverage != "complete" {
-		return Proposals{}, fmt.Errorf("decide requires complete coverage, got %q", raw.Coverage)
+	// A partial run may still be decided over the fields it does have, but the
+	// missing questions are recorded so the result can never masquerade as a
+	// complete evaluation (R2-13).
+	if raw.Coverage != "complete" && raw.Coverage != "partial" {
+		return Proposals{}, fmt.Errorf("decide requires complete or partial coverage, got %q", raw.Coverage)
 	}
 	// A drifted alias must not inherit a calibrated policy: the calibration was
 	// measured on a specific resolved model. Replaying an uncalibrated policy is
@@ -323,6 +326,11 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 	for _, dimension := range []string{"topics", "form", "use"} {
 		if !dimensionSeen[dimension] {
 			proposals.Incomplete = append(proposals.Incomplete, dimension)
+		}
+	}
+	if raw.Coverage == "partial" {
+		for _, questionID := range raw.Missing {
+			proposals.Incomplete = append(proposals.Incomplete, "missing:"+questionID)
 		}
 	}
 	sort.Strings(proposals.Incomplete)
