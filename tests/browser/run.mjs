@@ -70,7 +70,11 @@ function createMock() {
     requests: [],
     modelCalls: 0,
     xSearchCalls: 0,
-    operations: new Map()
+    operations: new Map(),
+    // Test controls: delay the next override response so a rapid second action
+    // is genuinely in flight, and force the next CAS check to conflict.
+    delayNextMs: 0,
+    forceConflict: false
   };
   return state;
 }
@@ -133,15 +137,33 @@ function startServer(state) {
       state.requests.push({ path: url.pathname, body });
       const key = body.operation_key;
       if (state.operations.has(key)) return send(200, state.operations.get(key));
+      if (state.delayNextMs > 0) {
+        const delay = state.delayNextMs;
+        state.delayNextMs = 0;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+      if (state.forceConflict) {
+        state.forceConflict = false;
+        state.revision += 1; // another client moved first
+        return send(409, { error: "revision_conflict", revision: state.revision });
+      }
       if (body.expected_revision !== undefined && body.expected_revision !== state.revision) {
         return send(409, { error: "revision_conflict", revision: state.revision });
       }
+      // Mirror the real Worker's validation: only the four v2 dimensions, only
+      // the four actions, and never a why/status accept event.
       if (body.field === "why" || body.field === "status") return send(400, { error: "invalid_override" });
-      state.revision += 1;
-      if (body.action === "reject") state.rejected.add(body.term);
-      if (body.action === "accept" && !state.selection[body.field].includes(body.term)) state.selection[body.field].push(body.term);
-      if (body.action === "reject") state.selection[body.field] = state.selection[body.field].filter((id) => id !== body.term);
+      const singleValued = ["carriers", "form", "use"].includes(body.field);
+      if (body.action === "accept") {
+        if (singleValued) state.selection[body.field] = [body.term];
+        else if (!state.selection[body.field].includes(body.term)) state.selection[body.field].push(body.term);
+      }
+      if (body.action === "reject") {
+        state.rejected.add(body.term);
+        state.selection[body.field] = state.selection[body.field].filter((id) => id !== body.term);
+      }
       if (body.action === "set_empty") state.selection[body.field] = [];
+      state.revision += 1;
       const response = { id: 12, field: body.field, term: body.term, action: body.action, revision: state.revision, replayed: false };
       state.operations.set(key, response);
       return send(200, response);
@@ -208,7 +230,8 @@ async function main() {
   // 5. Idempotent replay of the same operation key.
   // Replaying the same key must return the stored result regardless of the
   // revision having advanced, because the operation already happened.
-  const replayBody = { field: "topics", term: "eng", action: "accept", operation_key: rejectRequest.operation_key };
+  const storedKey = [...state.operations.keys()][0];
+  const replayBody = { field: "topics", term: "eng", action: "accept", operation_key: storedKey };
   const replay = await page.evaluate(async (payload) => {
     const response = await fetch("/api/bookmarks/12/v2-override", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     return response.status;
@@ -233,7 +256,52 @@ async function main() {
   const overrideAfterWhy = state.requests.slice(requestsBeforeWhy).find((entry) => entry.path.endsWith("/v2-override"));
   check("why-only save produces no override event", overrideAfterWhy === undefined);
 
-  // 8. No model or X Search call happened for any of the above.
+  // 8. F12: rapid actions are queued, each with its own operation id, and none
+  // is dropped while the previous request is still in flight.
+  const overrideRequests = () => state.requests.filter((entry) => entry.path.endsWith("/v2-override"));
+  const beforeRapid = overrideRequests().length;
+  const checkedBeforeRapid = await page.$$eval("#v2-topics input:checked", (nodes) => nodes.map((node) => node.value));
+  check("the draft reflects the server state before the rapid actions",
+    !checkedBeforeRapid.includes("eng"), JSON.stringify({ checkedBeforeRapid, serverTopics: state.selection.topics }));
+  state.delayNextMs = 400;
+  await page.click("#v2-topics input[value='llm']");
+  await page.click("#v2-topics input[value='eng']");
+  await waitFor(() => overrideRequests().length >= beforeRapid + 2, 8000);
+  const rapid = overrideRequests().slice(beforeRapid);
+  check("both rapid actions reached the server", rapid.length === 2, JSON.stringify(rapid.map((entry) => entry.body)));
+  const rapidKeys = new Set(rapid.map((entry) => entry.body.operation_key));
+  check("each new logical action has a distinct operation id", rapidKeys.size === rapid.length, JSON.stringify([...rapidKeys]));
+  equal("rapid actions preserve both intents", rapid.map((entry) => `${entry.body.action}:${entry.body.term}`).sort(), ["accept:eng", "reject:llm"]);
+
+  // 9. F12: reload starts a new action identity; the same click is a new action,
+  // not a replay of the previous operation key.
+  await page.reload({ waitUntil: "load" });
+  await page.waitForSelector("#v2-curation:not([hidden])");
+  // A reload closes the <details> panel, so open it again before clicking.
+  await page.click("#v2-curation > summary");
+  await page.waitForSelector("#v2-topics input[value='eval']", { state: "visible" });
+  const beforeReload = overrideRequests().length;
+  await page.click("#v2-topics input[value='eval']");
+  await waitFor(() => overrideRequests().length > beforeReload, 5000);
+  const reloaded = overrideRequests()[beforeReload];
+  check("a post-reload action uses a fresh operation id", !rapidKeys.has(reloaded.body.operation_key), JSON.stringify(reloaded.body));
+
+  // 10. F12: a CAS conflict preserves the draft and requires an explicit re-apply.
+  state.forceConflict = true;
+  const beforeConflict = overrideRequests().length;
+  await page.click("#v2-topics input[value='design']");
+  await waitFor(() => overrideRequests().length > beforeConflict, 5000);
+  await page.waitForSelector("#v2-conflict:not([hidden])");
+  check("conflict is explained to the user", await page.isVisible("#v2-conflict"));
+  const draftPreserved = await page.$eval("#v2-topics input[value='design']", (node) => node.checked);
+  check("conflict does not discard the unsaved draft", draftPreserved === false);
+  await page.click("#v2-conflict button");
+  await waitFor(() => overrideRequests().length > beforeConflict + 1, 5000);
+  const reapplied = overrideRequests()[beforeConflict + 1];
+  check("re-apply submits the preserved action", reapplied.body.action === "reject" && reapplied.body.term === "design", JSON.stringify(reapplied.body));
+  await page.waitForSelector("#v2-conflict", { state: "hidden" });
+
+  // 11. No model or X Search call happened for any of the above.
   check("no model calls occurred", state.modelCalls === 0);
   check("no X Search calls occurred", state.xSearchCalls === 0);
 

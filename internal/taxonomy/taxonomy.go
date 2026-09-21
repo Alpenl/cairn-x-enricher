@@ -32,6 +32,12 @@ type Catalog struct {
 	Topics  []Term `json:"topics"`
 	Forms   []Term `json:"forms"`
 	Uses    []Term `json:"uses"`
+	// The multidimensional vocabulary is optional so the legacy taxonomy
+	// endpoint keeps working; when present it is compiled into its own
+	// questions and carried through the v2 effective view.
+	ContentFunctions []Term `json:"content_functions,omitempty"`
+	Carriers         []Term `json:"carriers,omitempty"`
+	Affordances      []Term `json:"affordances,omitempty"`
 }
 
 // Renderer caches the prompt fragment and JSON Schema derived from one
@@ -73,7 +79,14 @@ func (c Catalog) Validate() error {
 	if strings.TrimSpace(c.Version) == "" || len(c.Version) > 64 {
 		return errors.New("taxonomy version must contain 1 to 64 bytes")
 	}
-	for name, terms := range map[string][]Term{"topics": c.Topics, "forms": c.Forms, "uses": c.Uses} {
+	dimensions := map[string][]Term{"topics": c.Topics, "forms": c.Forms, "uses": c.Uses}
+	optional := map[string][]Term{"content_functions": c.ContentFunctions, "carriers": c.Carriers, "affordances": c.Affordances}
+	for name, terms := range optional {
+		if len(terms) > 0 {
+			dimensions[name] = terms
+		}
+	}
+	for name, terms := range dimensions {
 		if len(terms) == 0 || len(terms) > 40 {
 			return fmt.Errorf("taxonomy %s must contain 1 to 40 terms", name)
 		}

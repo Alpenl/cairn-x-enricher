@@ -127,17 +127,35 @@ type CurationUpdate struct {
 	Classification json.RawMessage `json:"classification,omitempty"`
 }
 
-// APIError reports a stable error returned by the Cairn Share Worker.
+// APIError reports a stable error returned by the Cairn Share Worker. Revision
+// carries the server's current revision for the conflict codes that expose one,
+// so a UI can explain a CAS conflict instead of showing a generic backend error
+// (F04).
 type APIError struct {
 	StatusCode int
 	Code       string
+	Revision   *int64
 }
 
 func (e *APIError) Error() string {
+	base := fmt.Sprintf("cairn API returned HTTP %d", e.StatusCode)
 	if e.Code == "" {
-		return fmt.Sprintf("cairn API returned HTTP %d", e.StatusCode)
+		return base
 	}
-	return fmt.Sprintf("cairn API returned HTTP %d (%s)", e.StatusCode, e.Code)
+	if e.Revision != nil {
+		return fmt.Sprintf("%s (%s, revision %d)", base, e.Code, *e.Revision)
+	}
+	return fmt.Sprintf("%s (%s)", base, e.Code)
+}
+
+// IsConflict reports whether the error is an actionable optimistic-concurrency
+// conflict rather than an internal failure.
+func (e *APIError) IsConflict() bool {
+	switch e.Code {
+	case "revision_conflict", "snapshot_conflict", "hidden_value_conflict", "spec_conflict", "operation_conflict":
+		return true
+	}
+	return false
 }
 
 // Class maps a Worker error to the shared runtime class. The Worker returns a
@@ -150,11 +168,11 @@ func (e *APIError) Class() enrich.ErrorClass {
 		return enrich.ErrorClassConfiguration
 	case "invalid_classification", "invalid_classification_config", "invalid_source", "invalid_operation_key", "invalid_json":
 		return enrich.ErrorClassContract
-	case "target_changed", "input_changed", "lease_expired":
+	case "target_changed", "input_changed", "lease_expired", "revision_conflict", "snapshot_conflict", "hidden_value_conflict", "run_stale":
 		return enrich.ErrorClassStale
 	case "already_completed":
 		return enrich.ErrorClassCompleted
-	case "operation_conflict":
+	case "operation_conflict", "spec_conflict", "spec_hash_mismatch", "invalid_override", "invalid_automatic", "run_spec_mismatch", "run_model_mismatch", "run_not_succeeded", "unknown_run":
 		return enrich.ErrorClassContract
 	}
 	switch e.StatusCode {
@@ -489,10 +507,11 @@ func decodeJSON(reader io.Reader, target any) error {
 
 func apiError(response *http.Response) error {
 	var payload struct {
-		Code string `json:"error"`
+		Code     string `json:"error"`
+		Revision *int64 `json:"revision"`
 	}
 	_ = json.NewDecoder(io.LimitReader(response.Body, 8<<10)).Decode(&payload)
-	return &APIError{StatusCode: response.StatusCode, Code: payload.Code}
+	return &APIError{StatusCode: response.StatusCode, Code: payload.Code, Revision: payload.Revision}
 }
 
 func validBookmarkStatus(status string) bool {

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
@@ -120,8 +121,8 @@ func (c *Client) SaveSource(ctx context.Context, id int64, token string, source 
 // server's goal rather than to the local policy version. A capability mismatch
 // is returned as a classified configuration error so the caller pauses the
 // component instead of burning the queue's attempts.
-func (c *Client) ClaimClassification(ctx context.Context, version, model string) (*ClassificationJob, error) {
-	handshake, err := c.Handshake(ctx, ClassificationCapabilities(version, model))
+func (c *Client) ClaimClassification(ctx context.Context, specID, version, model string) (*ClassificationJob, error) {
+	handshake, err := c.Handshake(ctx, ClassificationCapabilities(specID, version, model))
 	if err != nil {
 		return nil, err
 	}
@@ -157,32 +158,93 @@ func (c *Client) ClaimClassification(ctx context.Context, version, model string)
 
 // ClassificationCapabilities describes the single target this build supports.
 // Keeping it in one place means the handshake, the claim and a retry can never
-// disagree about what this consumer can process.
-func ClassificationCapabilities(version, model string) Capabilities {
+// disagree about what this consumer can process. The spec id comes from the
+// compiled question set so enabling Score or redefining a question changes the
+// announced identity instead of silently reusing the old one.
+func ClassificationCapabilities(specID, version, model string) Capabilities {
 	return Capabilities{
 		Protocol:         "v2",
-		SpecIDs:          []string{SpecID},
+		SpecIDs:          []string{specID},
 		TaxonomyVersions: []string{version},
 		PolicyVersions:   []string{classify.PolicyVersion},
 		Models:           []string{model},
 	}
 }
 
-// SpecID identifies the immutability contract for the classification question
-// set. It changes when the meaning of the questions changes, not when a label
-// is renamed.
-const SpecID = "classify-v1"
-
 // CompleteClassification commits suggestions only for the current input revision.
 // The operation key is derived from the source revision so a retried commit after
 // a lost response is idempotent at the Worker: it replays the stored result
 // instead of paying for a second classification.
+//
+// A transient failure is genuinely uncertain: the commit may have succeeded and
+// only the response was lost. The client therefore queries the job and retries
+// the *same* operation key with the *same* result, bounded and with backoff. It
+// never re-runs inference, and it never fabricates a success (F10).
 func (c *Client) CompleteClassification(ctx context.Context, job *ClassificationJob, result classify.Result) error {
-	return c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/classifications/%d/complete", job.ID), map[string]any{
+	body := map[string]any{
 		"lease_token": job.LeaseToken, "revision": job.Revision, "input_revision": job.InputRevision,
 		"target_generation": job.TargetGeneration, "spec_id": job.SpecID,
 		"operation_key": ClassificationOperationKey(job),
-		"result":        result})
+		"result":        result,
+	}
+	err := c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/classifications/%d/complete", job.ID), body)
+	if err == nil || enrich.ClassOf(err) == enrich.ErrorClassCompleted {
+		return err
+	}
+	if enrich.ClassOf(err) != enrich.ErrorClassTransient {
+		return err
+	}
+	for attempt, delay := range submitRecoveryBackoff {
+		if ctx.Err() != nil {
+			return err
+		}
+		if completed, queryErr := c.ClassificationCompleted(ctx, job.ID); queryErr == nil && completed {
+			// The commit did land; only its response was lost.
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(delay):
+		}
+		retryErr := c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/classifications/%d/complete", job.ID), body)
+		if retryErr == nil || enrich.ClassOf(retryErr) == enrich.ErrorClassCompleted {
+			return retryErr
+		}
+		if enrich.ClassOf(retryErr) != enrich.ErrorClassTransient {
+			return retryErr
+		}
+		err = retryErr
+		_ = attempt
+	}
+	// Still uncertain after the bounded recovery. The lease is left to expire
+	// rather than re-running inference, and the caller records the uncertainty.
+	return err
+}
+
+// submitRecoveryBackoff bounds how long an uncertain completion is retried.
+var submitRecoveryBackoff = []time.Duration{250 * time.Millisecond, time.Second, 2 * time.Second}
+
+// ClassificationCompleted reports whether the Worker already recorded a
+// successful completion for the job. It is the query half of the recovery path:
+// a lost response must be confirmed, not guessed.
+func (c *Client) ClassificationCompleted(ctx context.Context, id int64) (bool, error) {
+	response, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/enrichment/classifications/%d", id), nil)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return false, apiError(response)
+	}
+	var job struct {
+		ID     int64  `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := decodeJSON(response.Body, &job); err != nil {
+		return false, err
+	}
+	return job.Status == "completed", nil
 }
 
 // ClassificationOperationKey is deterministic for one input revision and target
@@ -201,8 +263,34 @@ func (c *Client) FailClassification(ctx context.Context, job *ClassificationJob,
 }
 
 // RetryClassification enrolls a historical source or retries an inactive job.
+// It only re-arms the classification queue: it never re-fetches the source and
+// never calls a model.
 func (c *Client) RetryClassification(ctx context.Context, id int64) error {
 	return c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/classifications/%d/retry", id), map[string]any{})
+}
+
+// RefreshSource schedules a bounded retrieval of the link's source. It is a
+// distinct action from a classification retry (which never fetches) and from a
+// policy replay (which never touches the network beyond the stored run): the
+// Worker re-arms the retrieval queue while keeping the old readable content and
+// human curation until new source bytes actually arrive (F13).
+func (c *Client) RefreshSource(ctx context.Context, id int64) (json.RawMessage, error) {
+	if id < 1 {
+		return nil, errors.New("bookmark ID must be positive")
+	}
+	response, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/enrichment/jobs/%d/refresh-source", id), map[string]any{})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return nil, apiError(response)
+	}
+	var payload json.RawMessage
+	if err := decodeJSON(response.Body, &payload); err != nil {
+		return nil, fmt.Errorf("decode refresh response: %w", err)
+	}
+	return payload, nil
 }
 
 // StoredRun is one append-only classification run returned by the v2 API. It
@@ -210,21 +298,90 @@ func (c *Client) RetryClassification(ctx context.Context, id int64) error {
 // The answers field is decoded lazily by the caller so this package does not
 // depend on the classify package's internal shapes.
 type StoredRun struct {
-	ID               int64           `json:"id"`
-	ContentRevision  int64           `json:"content_revision"`
-	SpecID           string          `json:"spec_id"`
-	SpecHash         string          `json:"spec_hash"`
-	TargetGeneration int64           `json:"target_generation"`
-	RequestedModel   string          `json:"requested_model"`
-	ResolvedModel    string          `json:"resolved_model"`
-	PolicyVersion    string          `json:"policy_version"`
+	ID               int64  `json:"id"`
+	ContentRevision  int64  `json:"content_revision"`
+	SpecID           string `json:"spec_id"`
+	SpecHash         string `json:"spec_hash"`
+	TargetGeneration int64  `json:"target_generation"`
+	RequestedModel   string `json:"requested_model"`
+	ResolvedModel    string `json:"resolved_model"`
+	PolicyVersion    string `json:"policy_version"`
+	// Policy is the historical policy payload stored with the run. A replay must
+	// use it rather than substituting a default with the same version name.
+	Policy           json.RawMessage `json:"policy"`
 	Answers          json.RawMessage `json:"answers"`
 	Usage            json.RawMessage `json:"usage"`
 	Attempt          int             `json:"attempt"`
 	OperationKey     string          `json:"operation_key"`
 	Coverage         string          `json:"coverage"`
+	EvidenceCoverage string          `json:"evidence_coverage"`
+	AliasDrift       bool            `json:"alias_drift"`
 	Status           string          `json:"status"`
 	CreatedAt        string          `json:"created_at"`
+}
+
+// StoredQuestionSpec is the immutable question definition recovered for a
+// replay. The payload is what the consumer compiled and registered, so the
+// replay can rebuild the exact typed judgments of the run (F06).
+type StoredQuestionSpec struct {
+	SpecID         string          `json:"spec_id"`
+	SpecHash       string          `json:"spec_hash"`
+	SpecVersion    int             `json:"spec_version"`
+	Payload        json.RawMessage `json:"payload"`
+	RequestedModel string          `json:"requested_model,omitempty"`
+	DisplayOnly    int             `json:"display_only,omitempty"`
+	CreatedAt      string          `json:"created_at,omitempty"`
+	// Spec is the parsed form the Worker returns alongside the payload.
+	Spec json.RawMessage `json:"spec,omitempty"`
+}
+
+// GetQuestionSpec loads the immutable question spec by id.
+func (c *Client) GetQuestionSpec(ctx context.Context, specID string) (StoredQuestionSpec, error) {
+	if strings.TrimSpace(specID) == "" {
+		return StoredQuestionSpec{}, errors.New("spec id is required")
+	}
+	response, err := c.do(ctx, http.MethodGet, "/api/v2/question-specs/"+url.PathEscape(specID), nil)
+	if err != nil {
+		return StoredQuestionSpec{}, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return StoredQuestionSpec{}, apiError(response)
+	}
+	var stored StoredQuestionSpec
+	if err := decodeJSON(response.Body, &stored); err != nil {
+		return StoredQuestionSpec{}, fmt.Errorf("decode question spec: %w", err)
+	}
+	return stored, nil
+}
+
+// SubmitEvidence registers an immutable evidence snapshot before a run
+// references it. It is idempotent for identical bytes.
+func (c *Client) SubmitEvidence(ctx context.Context, id int64, snapshot any) error {
+	return c.stageWrite(ctx, fmt.Sprintf("/api/v2/links/%d/evidence", id), map[string]any{"snapshot": snapshot})
+}
+
+// PutQuestionSpec registers the immutable compiled question set. The Worker
+// rejects a different definition under the same id, so the semantic hash and
+// the payload must be produced from the same spec.
+func (c *Client) PutQuestionSpec(ctx context.Context, spec classify.QuestionSpec) error {
+	payload, err := classify.MarshalSpec(spec)
+	if err != nil {
+		return fmt.Errorf("marshal question spec: %w", err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(payload, &body); err != nil {
+		return fmt.Errorf("encode question spec: %w", err)
+	}
+	body["spec_hash"] = spec.SemanticHash
+	return c.stageWrite(ctx, "/api/v2/question-specs", body)
+}
+
+// SubmitDecision records a pure decision over stored runs. The Worker validates
+// the run references and derives the effective view itself, so this call can
+// never overwrite human curation with a stale or fabricated view.
+func (c *Client) SubmitDecision(ctx context.Context, id int64, body map[string]any) error {
+	return c.stageWrite(ctx, fmt.Sprintf("/api/v2/links/%d/decisions", id), body)
 }
 
 // GetRuns returns the stored runs for a link, oldest first.
@@ -252,12 +409,6 @@ func (c *Client) GetRuns(ctx context.Context, id int64) ([]StoredRun, error) {
 // SubmitRun appends a run through the v2 API. It is idempotent by operation key.
 func (c *Client) SubmitRun(ctx context.Context, id int64, body map[string]any) error {
 	return c.stageWrite(ctx, fmt.Sprintf("/api/v2/links/%d/runs", id), body)
-}
-
-// PutQuestionSpec registers an immutable question spec. Re-registering the same
-// id with a different definition is rejected by the Worker.
-func (c *Client) PutQuestionSpec(ctx context.Context, body map[string]any) error {
-	return c.stageWrite(ctx, "/api/v2/question-specs", body)
 }
 
 func (c *Client) stageWrite(ctx context.Context, path string, body any) error {

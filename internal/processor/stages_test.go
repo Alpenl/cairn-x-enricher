@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
@@ -16,7 +17,11 @@ type stageQueue struct {
 	job                    *cairn.ClassificationJob
 	classificationFailures int
 	classified             int
+	claims                 int
+	claimErr               error
 	completeErr            error
+	evidence               int
+	evidenceErr            error
 }
 
 func (q *stageQueue) GetSource(context.Context, int64) (*enrich.Source, error) { return q.source, nil }
@@ -25,7 +30,11 @@ func (q *stageQueue) SaveSource(_ context.Context, id int64, _ string, s enrich.
 	q.job = &cairn.ClassificationJob{ID: id, Input: classify.Input{OriginalText: s.OriginalText}}
 	return nil
 }
-func (q *stageQueue) ClaimClassification(context.Context, string, string) (*cairn.ClassificationJob, error) {
+func (q *stageQueue) ClaimClassification(context.Context, string, string, string) (*cairn.ClassificationJob, error) {
+	q.claims++
+	if q.claimErr != nil {
+		return nil, q.claimErr
+	}
 	j := q.job
 	q.job = nil
 	return j, nil
@@ -40,6 +49,10 @@ func (q *stageQueue) CompleteClassification(context.Context, *cairn.Classificati
 func (q *stageQueue) FailClassification(context.Context, *cairn.ClassificationJob, string) error {
 	q.classificationFailures++
 	return nil
+}
+func (q *stageQueue) SubmitEvidence(context.Context, int64, any) error {
+	q.evidence++
+	return q.evidenceErr
 }
 
 type stageReader struct {
@@ -63,6 +76,8 @@ func (r *stageReader) Transform(_ context.Context, i enrich.Input) (enrich.Resul
 }
 
 type stageClassifier struct{ fail bool }
+
+func (stageClassifier) SpecID() string { return "classify-v1" }
 
 func (c stageClassifier) Classify(context.Context, classify.Input) (classify.Result, error) {
 	if c.fail {
@@ -108,6 +123,8 @@ func TestClassificationFailureDoesNotFailSourceJob(t *testing.T) {
 // handling of each runtime class can be exercised without a live provider.
 type classifiedClassifier struct{ err error }
 
+func (classifiedClassifier) SpecID() string { return "classify-v1" }
+
 func (c classifiedClassifier) Classify(context.Context, classify.Input) (classify.Result, error) {
 	return classify.Result{}, c.err
 }
@@ -151,5 +168,64 @@ func TestAlreadyCompletedCompletionCountsAsSuccess(t *testing.T) {
 	done, failed, err := p.RunClassifications(context.Background(), 1)
 	if err != nil || done != 1 || failed != 0 {
 		t.Fatalf("lost completion response should be success: done=%d failed=%d err=%v", done, failed, err)
+	}
+}
+
+// TestPauseSurvivesPollsAndDoesNotClaim is the F09 regression: one component
+// fault must stop every later poll from claiming and burning attempts, and the
+// pause must clear only after a successful probe.
+func TestPauseSurvivesPollsAndDoesNotClaim(t *testing.T) {
+	q := &stageQueue{fakeQueue: newFakeQueue(), job: &cairn.ClassificationJob{ID: 1}}
+	classErr := enrich.Classified(errors.New("bad key"), enrich.ErrorClassConfiguration)
+	p := NewStaged(q, nil, classifiedClassifier{err: classErr}, "v1", "jev", discardLogger(), 1)
+	if _, _, err := p.RunClassifications(context.Background(), 5); !errors.Is(err, ErrComponentPaused) {
+		t.Fatalf("first poll should pause: %v", err)
+	}
+	if q.claims != 1 {
+		t.Fatalf("claims after the fault = %d, want 1", q.claims)
+	}
+	// More jobs are queued and several ticks pass: nothing may be claimed.
+	q.job = &cairn.ClassificationJob{ID: 2}
+	for tick := 0; tick < 3; tick++ {
+		if _, _, err := p.RunClassifications(context.Background(), 5); !errors.Is(err, ErrComponentPaused) {
+			t.Fatalf("tick %d should stay paused: %v", tick, err)
+		}
+	}
+	if q.claims != 1 {
+		t.Fatalf("a paused component claimed more jobs: %d", q.claims)
+	}
+	if paused, reason, remaining := p.ClassificationPaused(); !paused || reason == "" || remaining <= 0 {
+		t.Fatalf("pause state not reported: %v %q %v", paused, reason, remaining)
+	}
+	// Advance past the backoff with the provider reachable again: one probe runs
+	// and success clears the pause.
+	p.stages.classifier = stageClassifier{}
+	p.stages.pause.now = func() time.Time { return time.Now().Add(time.Hour) }
+	done, failed, err := p.RunClassifications(context.Background(), 5)
+	if err != nil || done != 1 || failed != 0 {
+		t.Fatalf("recovery probe failed: done=%d failed=%d err=%v", done, failed, err)
+	}
+	if paused, _, _ := p.ClassificationPaused(); paused {
+		t.Fatal("a successful probe must clear the pause")
+	}
+}
+
+// TestClaimLevel401PausesWithoutConsumingJobs is the cross-lease variant: the
+// fault happens before a lease exists, so no attempt is spent at all.
+func TestClaimLevel401PausesWithoutConsumingJobs(t *testing.T) {
+	q := &stageQueue{fakeQueue: newFakeQueue()}
+	q.claimErr = enrich.Classified(&cairn.APIError{StatusCode: 401, Code: "configuration_error"}, enrich.ErrorClassConfiguration)
+	p := NewStaged(q, nil, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+	for tick := 0; tick < 3; tick++ {
+		if _, _, err := p.RunClassifications(context.Background(), 5); !errors.Is(err, ErrComponentPaused) {
+			t.Fatalf("tick %d should pause: %v", tick, err)
+		}
+	}
+	if q.claims != 1 {
+		t.Fatalf("paused claim path was re-entered %d times", q.claims)
+	}
+	// The lease/attempt budget is untouched because no job was handed out.
+	if q.classificationFailures != 0 {
+		t.Fatalf("paused claim reported a job failure: %d", q.classificationFailures)
 	}
 }

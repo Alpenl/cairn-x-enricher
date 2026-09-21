@@ -15,7 +15,7 @@ func rawChoice(dimension, value string, distribution map[string]float64) RawJudg
 	return RawJudgment{QuestionID: dimension, Kind: QuestionChoice, Dimension: dimension, Choice: value, Probabilities: distribution}
 }
 
-func rawScore(questionID string, score int, levels []string, distribution map[string]float64) RawJudgment {
+func rawScore(questionID string, score float64, levels []string, distribution map[string]float64) RawJudgment {
 	return RawJudgment{QuestionID: questionID, Kind: QuestionScore, Dimension: "importance", Score: &score, Levels: levels, Probabilities: distribution}
 }
 
@@ -28,8 +28,9 @@ func completeRaw(judgments ...RawJudgment) RawJudgments {
 }
 
 func decisionFor(proposals Proposals, dimension, term string) FieldDecision {
+	wanted := normalizeDimension(dimension)
 	for _, decision := range proposals.Decisions {
-		if decision.Dimension == dimension && decision.TermID == term {
+		if decision.Dimension == wanted && decision.TermID == term {
 			return decision
 		}
 	}

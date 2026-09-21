@@ -1,0 +1,97 @@
+{
+  "note": "Shared human-override behaviour vectors. The Go resolver (internal/classify/resolve_test.go) and the Worker resolver (test/domain.test.ts) must both produce `expected` byte-for-byte for every vector. Fields use the v2 plural vocabulary with legacy singular aliases included where a stored row may still carry them.",
+  "vectors": [
+    {
+      "name": "single-value accept replaces the automatic value",
+      "automatic": { "topics": ["llm"], "content_functions": [], "carriers": ["single_post"], "affordances": [], "form": "method", "use": "try", "entities": [] },
+      "overrides": [{ "field": "form", "term": "case", "action": "accept", "revision": 1 }],
+      "expected": { "topics": ["llm"], "content_functions": [], "carriers": ["single_post"], "affordances": [], "form": "case", "use": "try", "entities": [] }
+    },
+    {
+      "name": "second single-value accept still replaces the first",
+      "automatic": { "topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "method", "use": "", "entities": [] },
+      "overrides": [
+        { "field": "form", "term": "case", "action": "accept", "revision": 1 },
+        { "field": "form", "term": "data", "action": "accept", "revision": 2 }
+      ],
+      "expected": { "topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "data", "use": "", "entities": [] }
+    },
+    {
+      "name": "per-tag reset restores the automatic value for that tag only",
+      "automatic": { "topics": ["llm"], "content_functions": [], "carriers": [], "affordances": [], "form": "method", "use": "", "entities": [] },
+      "overrides": [
+        { "field": "form", "term": "case", "action": "accept", "revision": 1 },
+        { "field": "form", "term": "case", "action": "reset", "revision": 2 }
+      ],
+      "expected": { "topics": ["llm"], "content_functions": [], "carriers": [], "affordances": [], "form": "method", "use": "", "entities": [] }
+    },
+    {
+      "name": "whole-field reset removes every override in the field",
+      "automatic": { "topics": ["llm", "eval"], "content_functions": [], "carriers": [], "affordances": [], "form": "method", "use": "", "entities": [] },
+      "overrides": [
+        { "field": "topics", "term": "llm", "action": "reject", "revision": 1 },
+        { "field": "topics", "term": "eng", "action": "accept", "revision": 2 },
+        { "field": "topics", "term": "", "action": "set_empty", "revision": 3 },
+        { "field": "topics", "term": "", "action": "reset", "revision": 4 }
+      ],
+      "expected": { "topics": ["llm", "eval"], "content_functions": [], "carriers": [], "affordances": [], "form": "method", "use": "", "entities": [] }
+    },
+    {
+      "name": "reject then per-tag reset restores the automatic tag",
+      "automatic": { "topics": ["llm", "eval"], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "", "entities": [] },
+      "overrides": [
+        { "field": "topics", "term": "llm", "action": "reject", "revision": 1 },
+        { "field": "topics", "term": "llm", "action": "reset", "revision": 2 }
+      ],
+      "expected": { "topics": ["llm", "eval"], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "", "entities": [] }
+    },
+    {
+      "name": "multi-value accept accumulates and reject removes one tag",
+      "automatic": { "topics": ["llm"], "content_functions": ["method"], "carriers": [], "affordances": [], "form": "", "use": "", "entities": [] },
+      "overrides": [
+        { "field": "content_functions", "term": "data", "action": "accept", "revision": 1 },
+        { "field": "content_functions", "term": "method", "action": "reject", "revision": 2 }
+      ],
+      "expected": { "topics": ["llm"], "content_functions": ["data"], "carriers": [], "affordances": [], "form": "", "use": "", "entities": [] }
+    },
+    {
+      "name": "set_empty is distinct from reset",
+      "automatic": { "topics": ["llm"], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "", "entities": [] },
+      "overrides": [{ "field": "topics", "term": "", "action": "set_empty", "revision": 1 }],
+      "expected": { "topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "", "entities": [] }
+    },
+    {
+      "name": "accept after set_empty re-adds a tag",
+      "automatic": { "topics": ["llm"], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "", "entities": [] },
+      "overrides": [
+        { "field": "topics", "term": "", "action": "set_empty", "revision": 1 },
+        { "field": "topics", "term": "eng", "action": "accept", "revision": 2 }
+      ],
+      "expected": { "topics": ["eng"], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "", "entities": [] }
+    },
+    {
+      "name": "legacy singular field names still resolve",
+      "automatic": { "topics": ["llm"], "content_functions": [], "carriers": [], "affordances": [], "form": "method", "use": "", "entities": [] },
+      "overrides": [
+        { "field": "topic", "term": "eng", "action": "accept", "revision": 1 },
+        { "field": "entity", "term": "acme", "action": "accept", "revision": 2 }
+      ],
+      "expected": { "topics": ["llm", "eng"], "content_functions": [], "carriers": [], "affordances": [], "form": "method", "use": "", "entities": ["acme"] }
+    },
+    {
+      "name": "carrier is single-valued: accept replaces the automatic carrier",
+      "automatic": { "topics": [], "content_functions": [], "carriers": ["single_post"], "affordances": [], "form": "", "use": "", "entities": [] },
+      "overrides": [{ "field": "carriers", "term": "external_link", "action": "accept", "revision": 1 }],
+      "expected": { "topics": [], "content_functions": [], "carriers": ["external_link"], "affordances": [], "form": "", "use": "", "entities": [] }
+    },
+    {
+      "name": "carrier per-tag reset restores the automatic carrier",
+      "automatic": { "topics": [], "content_functions": [], "carriers": ["single_post"], "affordances": [], "form": "", "use": "", "entities": [] },
+      "overrides": [
+        { "field": "carriers", "term": "external_link", "action": "accept", "revision": 1 },
+        { "field": "carriers", "term": "external_link", "action": "reset", "revision": 2 }
+      ],
+      "expected": { "topics": [], "content_functions": [], "carriers": ["single_post"], "affordances": [], "form": "", "use": "", "entities": [] }
+    }
+  ]
+}

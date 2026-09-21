@@ -1,6 +1,7 @@
 package classify
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -19,20 +20,35 @@ type RawJudgment struct {
 	Noul          *float64           `json:"noul,omitempty"`
 	Choice        string             `json:"choice,omitempty"`
 	Probabilities map[string]float64 `json:"probabilities,omitempty"`
-	Levels        []string           `json:"levels,omitempty"`
-	Score         *int               `json:"score,omitempty"`
-	Confidence    *float64           `json:"confidence,omitempty"`
+	// Levels is the ordered legend (index order) for a Score judgment.
+	Levels     []string `json:"levels,omitempty"`
+	Score      *float64 `json:"score,omitempty"`
+	Confidence *float64 `json:"confidence,omitempty"`
 }
 
-// RawJudgments is the complete, replayable output of one evaluation.
+// RawJudgments is the complete, replayable output of one evaluation. Coverage
+// describes whether every question was answered; EvidenceCoverage records
+// whether the objective input was truncated by the evidence budget. They are
+// separate so a truncated input is never confused with an incomplete answer
+// set, and both are stored with the run (F14).
 type RawJudgments struct {
-	SpecID          string                 `json:"spec_id"`
-	SpecHash        string                 `json:"spec_hash"`
-	TaxonomyVersion string                 `json:"taxonomy_version"`
-	RequestedModel  string                 `json:"requested_model"`
-	ResolvedModel   string                 `json:"resolved_model"`
-	Judgments       map[string]RawJudgment `json:"judgments"`
-	Coverage        string                 `json:"coverage"`
+	SpecID          string `json:"spec_id"`
+	SpecHash        string `json:"spec_hash"`
+	TaxonomyVersion string `json:"taxonomy_version"`
+	RequestedModel  string `json:"requested_model"`
+	ResolvedModel   string `json:"resolved_model"`
+	// AliasDrift is true when the provider resolved a different model than the
+	// one requested (an alias moved). A calibrated policy must not silently
+	// apply old thresholds to a drifted model.
+	AliasDrift       bool                   `json:"alias_drift"`
+	Judgments        map[string]RawJudgment `json:"judgments"`
+	Coverage         string                 `json:"coverage"`
+	EvidenceCoverage string                 `json:"evidence_coverage,omitempty"`
+	Truncated        bool                   `json:"truncated,omitempty"`
+	// Usage is the provider's raw usage object. UsageMissing distinguishes an
+	// absent usage object from a genuine zero.
+	Usage        json.RawMessage `json:"usage,omitempty"`
+	UsageMissing bool            `json:"usage_missing,omitempty"`
 }
 
 // Policy is a versioned, pure decision rule. Changing thresholds or display
@@ -57,6 +73,10 @@ type Policy struct {
 	// MaxEffectiveTopics bounds how many topics may be effective. It is a
 	// separate safety limit from display.
 	MaxEffectiveTopics int `json:"max_effective_topics"`
+	// AllowAliasDrift opts a calibrated policy into running against a resolved
+	// model that differs from the requested one. It is false by default so a
+	// provider alias change cannot inherit old calibration silently.
+	AllowAliasDrift bool `json:"allow_alias_drift"`
 }
 
 // DefaultPolicy is the conservative, explicitly uncalibrated v1 baseline.
@@ -115,15 +135,21 @@ type FieldDecision struct {
 	Probability float64 `json:"probability,omitempty"`
 }
 
-// Proposals is the pure output of Decide.
+// Proposals is the pure output of Decide. The multidimensional fields are the
+// automatic baseline the Worker stores with the decision; human overrides are
+// applied afterwards by Resolve.
 type Proposals struct {
-	PolicyVersion string          `json:"policy_version"`
-	SpecID        string          `json:"spec_id"`
-	Decisions     []FieldDecision `json:"decisions"`
-	Topics        []string        `json:"topics"`
-	Form          string          `json:"form"`
-	Use           string          `json:"use"`
-	Scores        map[string]int  `json:"scores,omitempty"`
+	PolicyVersion    string             `json:"policy_version"`
+	SpecID           string             `json:"spec_id"`
+	Decisions        []FieldDecision    `json:"decisions"`
+	Topics           []string           `json:"topics"`
+	ContentFunctions []string           `json:"content_functions"`
+	Carriers         []string           `json:"carriers"`
+	Affordances      []string           `json:"affordances"`
+	Entities         []string           `json:"entities"`
+	Form             string             `json:"form"`
+	Use              string             `json:"use"`
+	Scores           map[string]float64 `json:"scores,omitempty"`
 	// Incomplete records which dimensions produced no decision, so an empty
 	// result can be distinguished from a not-run or failed one.
 	Incomplete []string `json:"incomplete"`
@@ -139,18 +165,25 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 	if raw.Coverage != "complete" {
 		return Proposals{}, fmt.Errorf("decide requires complete coverage, got %q", raw.Coverage)
 	}
+	// A drifted alias must not inherit a calibrated policy: the calibration was
+	// measured on a specific resolved model. Replaying an uncalibrated policy is
+	// still allowed because it makes no accuracy claim.
+	if raw.AliasDrift && policy.Calibrated && !policy.AllowAliasDrift {
+		return Proposals{}, fmt.Errorf("resolved model %q differs from requested %q; a calibrated policy requires an explicit drift opt-in",
+			raw.ResolvedModel, raw.RequestedModel)
+	}
 	proposals := Proposals{PolicyVersion: policy.Version, SpecID: raw.SpecID, Decisions: []FieldDecision{}, Incomplete: []string{}}
-	// Group topic judgments so the safety limit is applied to the effective
-	// set, not to the display fold.
-	type topicCandidate struct {
+	// Multi-valued Noul dimensions are collected per dimension so the topic
+	// safety limit cannot accidentally bound a different dimension.
+	type candidate struct {
 		term string
 		p    float64
-		keep bool
 	}
-	candidates := []topicCandidate{}
+	candidatesByDimension := map[string][]candidate{}
 	dimensionSeen := map[string]bool{}
 	for _, judgment := range raw.Judgments {
-		dimensionSeen[judgment.Dimension] = true
+		dimension := normalizeDimension(judgment.Dimension)
+		dimensionSeen[dimension] = true
 		switch judgment.Kind {
 		case QuestionNoul:
 			if judgment.Noul == nil {
@@ -159,17 +192,18 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 			p := *judgment.Noul
 			switch {
 			case p >= policy.TopicAccept:
-				candidates = append(candidates, topicCandidate{term: judgment.TermID, p: p, keep: true})
+				candidatesByDimension[dimension] = append(candidatesByDimension[dimension],
+					candidate{term: judgment.TermID, p: p})
 			case p <= policy.TopicReject:
 				proposals.Decisions = append(proposals.Decisions, FieldDecision{
-					Dimension: judgment.Dimension, TermID: judgment.TermID, Verdict: VerdictRejected,
+					Dimension: dimension, TermID: judgment.TermID, Verdict: VerdictRejected,
 					Reason: "evidence is present but the topic is not substantively discussed", Probability: p,
 				})
 			default:
 				// A single ambiguous candidate abstains locally and does not
 				// make the whole record uncertain.
 				proposals.Decisions = append(proposals.Decisions, FieldDecision{
-					Dimension: judgment.Dimension, TermID: judgment.TermID, Verdict: VerdictAbstained,
+					Dimension: dimension, TermID: judgment.TermID, Verdict: VerdictAbstained,
 					Reason: "probability falls between the reject and accept bounds", Probability: p,
 				})
 			}
@@ -194,7 +228,7 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 				reason = "no option reached the accept threshold"
 			}
 			proposals.Decisions = append(proposals.Decisions, FieldDecision{
-				Dimension: judgment.Dimension, TermID: judgment.TermID, Verdict: verdict, Value: value,
+				Dimension: dimension, TermID: judgment.TermID, Verdict: verdict, Value: value,
 				Reason: reason, Probability: feature.MaxProb,
 			})
 		case QuestionScore:
@@ -202,56 +236,101 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 				return Proposals{}, fmt.Errorf("judgment %s has no score", judgment.QuestionID)
 			}
 			if proposals.Scores == nil {
-				proposals.Scores = map[string]int{}
+				proposals.Scores = map[string]float64{}
 			}
 			// The score is stored with its distribution; the distribution is
-			// not collapsed into confidence.
+			// not collapsed into confidence. It is a probability-weighted float
+			// that may fall between levels.
 			proposals.Scores[judgment.QuestionID] = *judgment.Score
 			proposals.Decisions = append(proposals.Decisions, FieldDecision{
-				Dimension: judgment.Dimension, Verdict: VerdictAccepted,
+				Dimension: dimension, Verdict: VerdictAccepted,
 				Reason: "ordinal score with a retained distribution", Probability: DescribeDistribution(judgment.Probabilities).MaxProb,
 			})
 		}
 	}
-	// Rank topics by probability with a deterministic tie-break so the same
-	// judgments always produce the same order.
-	sort.SliceStable(candidates, func(i, j int) bool {
-		if candidates[i].p == candidates[j].p {
-			return candidates[i].term < candidates[j].term
-		}
-		return candidates[i].p > candidates[j].p
-	})
-	if len(candidates) > policy.MaxEffectiveTopics {
-		for _, dropped := range candidates[policy.MaxEffectiveTopics:] {
+	// Rank each dimension by probability with a deterministic tie-break so the
+	// same judgments always produce the same order.
+	rank := func(values []candidate) []candidate {
+		ordered := append([]candidate(nil), values...)
+		sort.SliceStable(ordered, func(i, j int) bool {
+			if ordered[i].p == ordered[j].p {
+				return ordered[i].term < ordered[j].term
+			}
+			return ordered[i].p > ordered[j].p
+		})
+		return ordered
+	}
+	topics := rank(candidatesByDimension["topics"])
+	if len(topics) > policy.MaxEffectiveTopics {
+		for _, dropped := range topics[policy.MaxEffectiveTopics:] {
 			proposals.Decisions = append(proposals.Decisions, FieldDecision{
-				Dimension: "topic", TermID: dropped.term, Verdict: VerdictAbstained,
+				Dimension: "topics", TermID: dropped.term, Verdict: VerdictAbstained,
 				Reason: "beyond the effective topic safety limit", Probability: dropped.p,
 			})
 		}
-		candidates = candidates[:policy.MaxEffectiveTopics]
+		topics = topics[:policy.MaxEffectiveTopics]
 	}
-	for _, candidate := range candidates {
-		proposals.Topics = append(proposals.Topics, candidate.term)
+	for _, item := range topics {
+		proposals.Topics = append(proposals.Topics, item.term)
 		proposals.Decisions = append(proposals.Decisions, FieldDecision{
-			Dimension: "topic", TermID: candidate.term, Verdict: VerdictAccepted,
-			Reason: "topic probability is at or above the accept bound", Probability: candidate.p,
+			Dimension: "topics", TermID: item.term, Verdict: VerdictAccepted,
+			Reason: "topic probability is at or above the accept bound", Probability: item.p,
 		})
 	}
-	for _, decision := range proposals.Decisions {
-		if decision.Dimension == "form" && decision.Verdict == VerdictAccepted {
-			proposals.Form = decision.Value
-		}
-		if decision.Dimension == "use" && decision.Verdict == VerdictAccepted {
-			proposals.Use = decision.Value
+	multiDimensions := []struct {
+		name   string
+		target *[]string
+	}{
+		{"content_functions", &proposals.ContentFunctions},
+		{"affordances", &proposals.Affordances},
+	}
+	for _, dimension := range multiDimensions {
+		for _, item := range rank(candidatesByDimension[dimension.name]) {
+			*dimension.target = append(*dimension.target, item.term)
+			proposals.Decisions = append(proposals.Decisions, FieldDecision{
+				Dimension: dimension.name, TermID: item.term, Verdict: VerdictAccepted,
+				Reason: "probability is at or above the accept bound", Probability: item.p,
+			})
 		}
 	}
-	for _, dimension := range []string{"topic", "form", "use"} {
+	// Legacy dimensions that keep the v1 projection alive.
+	for _, decision := range proposals.Decisions {
+		switch {
+		case decision.Dimension == "form" && decision.Verdict == VerdictAccepted:
+			proposals.Form = decision.Value
+		case decision.Dimension == "use" && decision.Verdict == VerdictAccepted:
+			proposals.Use = decision.Value
+		case decision.Dimension == "carriers" && decision.Verdict == VerdictAccepted && decision.Value != "":
+			proposals.Carriers = []string{decision.Value}
+		}
+	}
+	for _, dimension := range []string{"topics", "form", "use"} {
 		if !dimensionSeen[dimension] {
 			proposals.Incomplete = append(proposals.Incomplete, dimension)
 		}
 	}
 	sort.Strings(proposals.Incomplete)
 	return proposals, nil
+}
+
+// normalizeDimension maps the legacy singular dimension names onto the v2
+// vocabulary so a stored run produced before the rename still decides through
+// the same policy path.
+func normalizeDimension(dimension string) string {
+	switch dimension {
+	case "topic":
+		return "topics"
+	case "content_function":
+		return "content_functions"
+	case "carrier":
+		return "carriers"
+	case "affordance":
+		return "affordances"
+	case "entity":
+		return "entities"
+	default:
+		return dimension
+	}
 }
 
 // PartitionTopics splits the effective topics into the ones shown on a card and

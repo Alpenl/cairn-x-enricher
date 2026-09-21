@@ -22,9 +22,14 @@
     available: false,
     dirty: false,
     revision: 0,
-    operationSeq: 0,
     saving: false,
-    effective: null
+    effective: null,
+    // Every new logical action gets its own UUID. Only a retry of the same
+    // action reuses it, so the same click on a later visit can never replay a
+    // stored response as a silent no-op (F12).
+    queue: [],
+    inFlight: false,
+    conflicted: null
   };
 
   const DIMENSIONS = [
@@ -34,9 +39,9 @@
     { key: "affordances", label: "潜在用途", multi: true, max: 8 }
   ];
 
-  function nextOperationKey(action, field, term) {
-    state.operationSeq += 1;
-    return `curation-${bookmarkID}-${action}-${field}-${term || "none"}-${state.operationSeq}`;
+  function newActionID() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `curation-${bookmarkID}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
   function markDirty(value) {
@@ -123,15 +128,17 @@
   function applyLocal(field, term, action) {
     const selection = state.selection;
     if (!selection) return;
+    const dimension = DIMENSIONS.find((entry) => entry.key === field);
     const current = selection[field] || [];
     switch (action) {
       case "accept":
-        if (!current.includes(term)) selection[field] = [...current, term];
+        // A single-valued dimension replaces; a multi-valued one accumulates.
+        if (dimension && dimension.multi === false) selection[field] = term ? [term] : [];
+        else if (!current.includes(term)) selection[field] = [...current, term];
         break;
       case "reject":
       case "reset":
-        if (action === "reject") selection[field] = current.filter((id) => id !== term);
-        else selection[field] = current.filter((id) => id !== term);
+        selection[field] = current.filter((id) => id !== term);
         break;
       case "set_empty":
         selection[field] = [];
@@ -141,40 +148,111 @@
     render();
   }
 
-  async function submitOverride(field, term, action) {
-    if (state.saving) return;
+  // enqueue records one logical action and serialises submission. Nothing is
+  // dropped while a request is in flight: the action is queued and submitted
+  // afterwards with its own identity (F12).
+  function enqueue(field, term, action) {
+    if (state.conflicted) {
+      setStatus("请先处理上面的冲突（重新应用或放弃修改），再继续编辑。", true);
+      return;
+    }
+    const entry = { id: newActionID(), field, term, action };
+    applyLocal(field, term, action);
+    state.queue.push(entry);
+    setBusy(true);
+    pump();
+  }
+
+  // setBusy marks the panel busy for assistive technology but never disables
+  // the controls: a rapid second action is queued, not silently dropped (F12).
+  function setBusy(busy) {
+    const panel = ui.byId("v2-curation");
+    if (!panel) return;
+    panel.setAttribute("aria-busy", busy ? "true" : "false");
+  }
+
+  async function pump() {
+    if (state.inFlight || state.queue.length === 0 || state.conflicted) return;
+    const entry = state.queue[0];
+    state.inFlight = true;
     state.saving = true;
-    setStatus("");
+    setStatus("保存中…");
     try {
       const payload = await ui.fetchJSON(`/api/bookmarks/${bookmarkID}/v2-override`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          field, term, action,
-          operation_key: nextOperationKey(action, field, term),
+          field: entry.field, term: entry.term, action: entry.action,
+          operation_key: entry.id,
           expected_revision: state.revision
         })
       });
       state.revision = payload.revision ?? state.revision;
-      setStatus("已保存");
-      markDirty(false);
-      await load();
-    } catch (error) {
-      const code = error?.message || "override_failed";
-      if (code === "revision_conflict") {
-        // A stale client must see the real difference and re-apply explicitly,
-        // never silently last-write-win.
-        setStatus("这条整理已被其他客户端更新，请确认后重新提交。", true);
-        await load();
-      } else {
-        setStatus(`保存失败：${ui.errorLabel(code)}`, true);
-      }
-    } finally {
+      state.queue.shift();
+      setStatus(state.queue.length > 0 ? "保存中…" : "已保存");
+      if (state.queue.length === 0) markDirty(false);
+      state.inFlight = false;
       state.saving = false;
+      setBusy(state.queue.length > 0);
+      if (state.queue.length > 0) {
+        pump();
+      } else {
+        await load();
+      }
+    } catch (error) {
+      state.inFlight = false;
+      state.saving = false;
+      const code = error?.message || "override_failed";
+      if (code === "revision_conflict" || code === "snapshot_conflict") {
+        // Keep the draft and the queued action, adopt the server's revision and
+        // require an explicit re-apply. Loading the server value here would
+        // silently discard the user's unsaved intent.
+        if (typeof error.revision === "number") state.revision = error.revision;
+        state.conflicted = entry;
+        setStatus("这条整理已被其他客户端更新。草稿已保留，请点“重新应用”提交你的修改。", true);
+        renderConflict();
+      } else {
+        // A transient failure keeps the same action id, so the retry is the
+        // same logical commit rather than a new one.
+        setStatus(`保存失败：${ui.errorLabel(code)}。可重试。`, true);
+        renderConflict();
+      }
+      setBusy(false);
     }
   }
 
+  function renderConflict() {
+    const holder = ui.byId("v2-conflict");
+    if (!holder) return;
+    holder.replaceChildren();
+    holder.hidden = false;
+    const retry = ui.element("button", "text-btn", "重试保存");
+    retry.type = "button";
+    retry.addEventListener("click", () => {
+      holder.hidden = true;
+      // Clear the conflict before pumping, otherwise the guard would refuse to
+      // resubmit the preserved action.
+      state.conflicted = null;
+      setBusy(true);
+      pump();
+    });
+    const discard = ui.element("button", "text-btn", "放弃我的修改");
+    discard.type = "button";
+    discard.addEventListener("click", async () => {
+      holder.hidden = true;
+      state.queue = [];
+      state.conflicted = null;
+      markDirty(false);
+      setStatus("");
+      await load();
+    });
+    holder.append(retry, discard);
+  }
+
   async function load() {
+    // A poll or refresh must never overwrite an unsaved draft or a pending
+    // action (F12).
+    if (state.dirty || state.queue.length > 0 || state.conflicted) return;
     try {
       const response = await ui.fetchJSON(`/api/bookmarks/${bookmarkID}/v2-selection`);
       state.available = Boolean(response.available);
@@ -206,15 +284,7 @@
     if (!(target instanceof HTMLElement)) return;
     const action = target.dataset?.action;
     if (!action) return;
-    const field = target.dataset.field;
-    const term = target.dataset.term || "";
-    if (action === "set_empty" || action === "reset") {
-      applyLocal(field, term, action);
-      submitOverride(field, term, action);
-      return;
-    }
-    applyLocal(field, term, action);
-    submitOverride(field, term, action);
+    enqueue(target.dataset.field, target.dataset.term || "", action);
   }
 
   function onChange(event) {
@@ -222,10 +292,7 @@
     if (!(target instanceof HTMLInputElement)) return;
     const field = target.dataset.field;
     if (!field) return;
-    const term = target.dataset.term;
-    if (target.checked) applyLocal(field, term, "accept");
-    else applyLocal(field, term, "reject");
-    submitOverride(field, term, target.checked ? "accept" : "reject");
+    enqueue(field, target.dataset.term, target.checked ? "accept" : "reject");
   }
 
   document.addEventListener("click", onClick);

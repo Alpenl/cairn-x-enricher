@@ -154,7 +154,7 @@ func TestCapabilityMismatchPausesTheComponent(t *testing.T) {
 	defer server.Close()
 	client := NewClient(server.URL, "token", server.Client())
 
-	_, err := client.ClaimClassification(context.Background(), "v1", "jev")
+	_, err := client.ClaimClassification(context.Background(), "classify-v1", "v1", "jev")
 	if err == nil {
 		t.Fatal("expected a capability mismatch")
 	}

@@ -85,7 +85,7 @@ type Backend interface {
 // implement it degrades to read-only v1 rather than showing empty data.
 type V2Backend interface {
 	GetV2Selection(context.Context, int64) (cairn.V2SelectionView, error)
-	UpdateV2Selection(context.Context, int64, cairn.V2Selection) (cairn.V2SelectionView, error)
+	UpdateV2Selection(context.Context, int64, cairn.V2SelectionUpdate) (cairn.V2SelectionView, error)
 	GetV2Taxonomy(context.Context) (cairn.V2Taxonomy, error)
 	ApplyV2Override(context.Context, int64, cairn.V2Override) (json.RawMessage, error)
 	GetV2Effective(context.Context, int64) (json.RawMessage, error)
@@ -508,7 +508,7 @@ func (s *Server) updateV2Selection(writer http.ResponseWriter, request *http.Req
 	request.Body = http.MaxBytesReader(writer, request.Body, maxActionBody)
 	decoder := json.NewDecoder(request.Body)
 	decoder.DisallowUnknownFields()
-	var selection cairn.V2Selection
+	var selection cairn.V2SelectionUpdate
 	if err := decoder.Decode(&selection); err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid_json")
 		return
@@ -1069,6 +1069,21 @@ func (s *Server) writeBackendError(writer http.ResponseWriter, operation string,
 			return
 		case "invalid_limit", "invalid_before_id", "invalid_status", "invalid_query", "invalid_curation":
 			writeError(writer, http.StatusBadRequest, apiErr.Code)
+			return
+		}
+		// An optimistic-concurrency conflict is actionable: the UI must show the
+		// current revision and let the user re-apply, not a generic 502. The
+		// server's revision is forwarded when it provided one (F04).
+		if apiErr.IsConflict() {
+			payload := map[string]any{"error": apiErr.Code}
+			if apiErr.Revision != nil {
+				payload["revision"] = *apiErr.Revision
+			}
+			writeJSON(writer, http.StatusConflict, payload)
+			return
+		}
+		if apiErr.StatusCode == http.StatusConflict {
+			writeError(writer, http.StatusConflict, apiErr.Code)
 			return
 		}
 	}

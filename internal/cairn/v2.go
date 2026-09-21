@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
 // V2Selection is the multidimensional selection exposed by the Worker's v2
@@ -20,23 +22,60 @@ type V2Selection struct {
 	Use              string   `json:"use"`
 }
 
-// V2SelectionView is the response shape for a selection read. `available` is
-// false when the Worker does not support v2; the caller must then fall back to
-// the v1 projection rather than treating the selection as empty.
+// V2SelectionView is the response shape for a selection read. It carries every
+// field the Worker actually returns, in both the fallback (why/curation_status)
+// and the v2 (definition_version/provenance/revised_at) shapes: a strict
+// decoder that rejects them turns a working backend into a 502 and hides the
+// panel (F03).
 type V2SelectionView struct {
-	ID              int64       `json:"id"`
-	Selection       V2Selection `json:"selection"`
-	TaxonomyVersion string      `json:"taxonomy_version,omitempty"`
-	V1Only          bool        `json:"v1_only,omitempty"`
-	Revision        int64       `json:"revision"`
-	Available       bool        `json:"-"`
-	V1Projection    V2Selection `json:"v1_projection,omitempty"`
+	ID                int64           `json:"id"`
+	Selection         V2Selection     `json:"selection"`
+	TaxonomyVersion   string          `json:"taxonomy_version,omitempty"`
+	DefinitionVersion int             `json:"definition_version,omitempty"`
+	Provenance        json.RawMessage `json:"provenance,omitempty"`
+	RevisedAt         string          `json:"revised_at,omitempty"`
+	V1Only            bool            `json:"v1_only,omitempty"`
+	Revision          int64           `json:"revision"`
+	Available         bool            `json:"-"`
+	V1Projection      V2Selection     `json:"v1_projection,omitempty"`
+	// Empty records which dimensions the human explicitly set empty.
+	Empty          json.RawMessage `json:"empty,omitempty"`
+	Why            string          `json:"why,omitempty"`
+	CurationStatus string          `json:"curation_status,omitempty"`
+}
+
+// V2SelectionUpdate is the whole-selection write. The operation identity and
+// expected revision travel with it so a retried write is idempotent and a stale
+// client gets an actionable conflict instead of a silent last-write-wins.
+type V2SelectionUpdate struct {
+	V2Selection
+	OperationKey     string `json:"operation_key,omitempty"`
+	ExpectedRevision *int64 `json:"expected_revision,omitempty"`
 }
 
 // ErrV2Unsupported reports that the Worker does not implement the v2 API. It is
 // distinct from an empty selection so the UI can degrade to read-only instead
 // of showing an empty record.
 var ErrV2Unsupported = errors.New("backend does not support the v2 selection API")
+
+// IsUnsupported reports whether an error means the backend simply does not
+// implement the v2 endpoint. Callers use it to fall back to the legacy path
+// instead of treating a missing route as a data error.
+func IsUnsupported(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrV2Unsupported) {
+		return true
+	}
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		if apiErr.StatusCode == http.StatusNotFound || apiErr.StatusCode == http.StatusMethodNotAllowed {
+			return true
+		}
+	}
+	return false
+}
 
 // GetV2Selection reads the multidimensional selection for a link.
 func (c *Client) GetV2Selection(ctx context.Context, id int64) (V2SelectionView, error) {
@@ -63,7 +102,7 @@ func (c *Client) GetV2Selection(ctx context.Context, id int64) (V2SelectionView,
 }
 
 // UpdateV2Selection writes the multidimensional selection for a link.
-func (c *Client) UpdateV2Selection(ctx context.Context, id int64, selection V2Selection) (V2SelectionView, error) {
+func (c *Client) UpdateV2Selection(ctx context.Context, id int64, selection V2SelectionUpdate) (V2SelectionView, error) {
 	if id < 1 {
 		return V2SelectionView{}, errors.New("bookmark ID must be positive")
 	}
@@ -84,6 +123,38 @@ func (c *Client) UpdateV2Selection(ctx context.Context, id int64, selection V2Se
 	}
 	view.Available = true
 	return view, nil
+}
+
+// GetV2Catalog loads the multidimensional vocabulary and converts it into the
+// shared taxonomy catalog. Production classification uses this so the compiled
+// questions cover topics, content functions, carriers and affordances instead
+// of the legacy single-choice subset (F04/F05).
+func (c *Client) GetV2Catalog(ctx context.Context) (taxonomy.Catalog, error) {
+	vocabulary, err := c.GetV2Taxonomy(ctx)
+	if err != nil {
+		return taxonomy.Catalog{}, err
+	}
+	convert := func(terms []TaxonomyTerm) []taxonomy.Term {
+		out := make([]taxonomy.Term, 0, len(terms))
+		for _, term := range terms {
+			out = append(out, taxonomy.Term{
+				ID: term.ID, Label: term.Label, Description: term.Description,
+				Aliases: term.Aliases, Active: term.Active && !term.Deprecated,
+			})
+		}
+		return out
+	}
+	catalog := taxonomy.Catalog{
+		Version: vocabulary.Version, Topics: convert(vocabulary.Topics),
+		Forms: convert(vocabulary.Forms), Uses: convert(vocabulary.Uses),
+		ContentFunctions: convert(vocabulary.ContentFunctions),
+		Carriers:         convert(vocabulary.Carriers),
+		Affordances:      convert(vocabulary.Affordances),
+	}
+	if err := catalog.Validate(); err != nil {
+		return taxonomy.Catalog{}, fmt.Errorf("v2 taxonomy is not a usable catalog: %w", err)
+	}
+	return catalog, nil
 }
 
 // V2Taxonomy is the multidimensional vocabulary. Dimensions not present in an

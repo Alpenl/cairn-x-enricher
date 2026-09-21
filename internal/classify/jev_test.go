@@ -20,7 +20,7 @@ func testCatalog() taxonomy.Catalog {
 	}, Forms: []taxonomy.Term{{ID: "method", Label: "方法", Active: true}}, Uses: []taxonomy.Term{{ID: "try", Label: "待试", Active: true}}}
 }
 
-// wireAnswers builds the provider's answer map in the inlined shape.
+// wireAnswers builds the provider's answer map in the official inlined shape.
 func wireAnswers() map[string]map[string]any {
 	return map[string]map[string]any{
 		"topic_llm":     {"type": "noul", "noul": 0.93},
@@ -32,18 +32,59 @@ func wireAnswers() map[string]map[string]any {
 	}
 }
 
-func serveAnswers(t *testing.T, answers map[string]map[string]any, check func(wireRequest)) *httptest.Server {
+// providerRequestShape mirrors the official TypeSafe request contract as
+// documented at https://docs.typesafe.ai/api (read 2026-09-21). It is
+// deliberately independent of the implementation's own DTO types: a mock that
+// validated the implementation against itself would prove nothing.
+type providerRequestShape struct {
+	Model     string `json:"model"`
+	State     any    `json:"state"`
+	Questions map[string]struct {
+		Type         string `json:"type"`
+		Instructions any    `json:"instructions"`
+		Criteria     any    `json:"criteria"`
+	} `json:"questions"`
+}
+
+// contractServer serves the official answer shape and refuses any request that
+// does not match the official contract, so a regression to the internal array
+// or `kind` shape fails loudly instead of being silently accepted.
+func contractServer(t *testing.T, answers map[string]map[string]any) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/systemone" || r.Header.Get("Authorization") != "Bearer secret" {
 			t.Error("wrong endpoint or authorization")
 		}
-		var req wireRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
 			t.Fatal(err)
 		}
-		if check != nil {
-			check(req)
+		var generic map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &generic); err != nil {
+			t.Fatalf("request is not an object: %v", err)
+		}
+		var questions json.RawMessage
+		if err := json.Unmarshal(generic["questions"], &questions); err != nil {
+			t.Fatalf("questions is missing: %v", err)
+		}
+		if len(questions) == 0 || questions[0] == '[' {
+			t.Errorf("questions must be a map keyed by question id, got %s", questions)
+		}
+		if strings.Contains(string(raw), `"kind"`) || strings.Contains(string(raw), `"dimension"`) ||
+			strings.Contains(string(raw), `"term_id"`) || strings.Contains(string(raw), `"depends_on"`) {
+			t.Errorf("internal fields leaked to the provider contract: %s", raw)
+		}
+		var shape providerRequestShape
+		if err := json.Unmarshal(raw, &shape); err != nil {
+			t.Fatalf("request does not match the official shape: %v", err)
+		}
+		for id, question := range shape.Questions {
+			if question.Type != TypeNoul && question.Type != TypeChoice && question.Type != TypeScore {
+				t.Errorf("question %s has no official type: %q", id, question.Type)
+			}
+			if question.Instructions == nil {
+				t.Errorf("question %s has no instructions", id)
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -53,19 +94,7 @@ func serveAnswers(t *testing.T, answers map[string]map[string]any, check func(wi
 }
 
 func TestClassifyUsesIndependentTopicsAndControlledChoices(t *testing.T) {
-	server := serveAnswers(t, wireAnswers(), func(req wireRequest) {
-		if req.State.OriginalText != "Compare LLM evaluation methods." {
-			t.Errorf("wrong state: %+v", req.State)
-		}
-		// Questions are an ordered array, not a map keyed by ID.
-		kinds := map[string]QuestionKind{}
-		for _, question := range req.Questions {
-			kinds[question.ID] = question.Kind
-		}
-		if kinds["topic_eval"] != QuestionNoul || kinds["form"] != QuestionChoice {
-			t.Errorf("wrong compiled question kinds: %+v", kinds)
-		}
-	})
+	server := contractServer(t, wireAnswers())
 	defer server.Close()
 	c, err := NewClient(server.URL, "secret", "jev-latest", server.Client(), testCatalog())
 	if err != nil {
@@ -81,6 +110,157 @@ func TestClassifyUsesIndependentTopicsAndControlledChoices(t *testing.T) {
 	}
 	if len(r.RawJudgments.Judgments) != 6 {
 		t.Fatalf("raw judgments not retained: %+v", r.RawJudgments)
+	}
+	// The request is bounded evidence, not the raw text: truncation state is
+	// recorded and usage is preserved verbatim.
+	if r.EvidenceCoverage != "complete" {
+		t.Fatalf("evidence coverage = %q", r.EvidenceCoverage)
+	}
+	var usage map[string]int
+	if err := json.Unmarshal(r.Usage, &usage); err != nil || usage["input_tokens"] != 100 {
+		t.Fatalf("provider usage was not preserved: %s (%v)", r.Usage, err)
+	}
+}
+
+// TestProviderRequestMatchesOfficialFixture pins the outbound body against a
+// fixture written from the official contract, independent of the Go types.
+func TestProviderRequestMatchesOfficialFixture(t *testing.T) {
+	c, err := NewClient("https://api.typesafe.ai", "secret", "jev-latest", nil, testCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _, err := c.BuildProviderRequest(Input{OriginalText: "Compare LLM evaluation methods.", ContextText: "a comment"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Questions map[string]struct {
+			Type         string          `json:"type"`
+			Instructions json.RawMessage `json:"instructions"`
+			Criteria     json.RawMessage `json:"criteria"`
+		} `json:"questions"`
+		State struct {
+			Primary string `json:"primary"`
+		} `json:"state"`
+	}
+	if err := json.Unmarshal(body, &fixture); err != nil {
+		t.Fatalf("body is not the official shape: %v", err)
+	}
+	if fixture.State.Primary != "Compare LLM evaluation methods." {
+		t.Fatalf("state.primary = %q", fixture.State.Primary)
+	}
+	noul, ok := fixture.Questions["topic_llm"]
+	if !ok || noul.Type != "noul" {
+		t.Fatalf("topic_llm is not a noul question: %+v", noul)
+	}
+	var noulCriteria map[string]string
+	if err := json.Unmarshal(noul.Criteria, &noulCriteria); err != nil || noulCriteria["true"] == "" || noulCriteria["false"] == "" {
+		t.Fatalf("noul criteria is not a true/false object: %s (%v)", noul.Criteria, err)
+	}
+	choice := fixture.Questions["form"]
+	if choice.Type != "choice" {
+		t.Fatalf("form is not a choice: %+v", choice)
+	}
+	var options map[string]string
+	if err := json.Unmarshal(choice.Criteria, &options); err != nil || options["method"] == "" || options["none"] == "" {
+		t.Fatalf("choice criteria is not an option map: %s (%v)", choice.Criteria, err)
+	}
+	if _, ok := options["id"]; ok {
+		t.Fatal("internal id leaked into choice criteria")
+	}
+}
+
+// TestScoreUsesOfficialFloatLegendContract is the F01 Score regression: a
+// probability-weighted float score, an index legend and index-keyed
+// probabilities decode and survive into the raw record without re-sorting.
+func TestScoreUsesOfficialFloatLegendContract(t *testing.T) {
+	catalog := testCatalog()
+	answers := wireAnswers()
+	answers["importance"] = map[string]any{
+		"type": "score", "score": 1.05,
+		"legend":        map[string]string{"0": "Zeta", "1": "Frustrated", "2": "Alpha"},
+		"probabilities": map[string]float64{"0": 0.0, "1": 0.95, "2": 0.05},
+		"confidence":    0.92,
+	}
+	server := contractServer(t, answers)
+	defer server.Close()
+	client, err := NewClient(server.URL, "secret", "jev-latest", server.Client(), catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A Score question whose level descriptions are deliberately not in
+	// alphabetical order, so a re-sort would be detected.
+	scoreSpec, err := CompileSpec(catalog, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range scoreSpec.Questions {
+		if scoreSpec.Questions[index].ID == "importance" {
+			scoreSpec.Questions[index].Criteria = mustJSON([]string{"Zeta", "Frustrated", "Alpha"})
+		}
+	}
+	hash, err := HashSpec(scoreSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scoreSpec.SemanticHash = hash
+	client.spec = scoreSpec
+	raw, err := client.Evaluate(context.Background(), Input{OriginalText: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	judgment, ok := raw.Judgments["importance"]
+	if !ok || judgment.Score == nil {
+		t.Fatalf("score judgment missing: %+v", raw.Judgments)
+	}
+	if *judgment.Score != 1.05 {
+		t.Fatalf("score = %v, want the float position 1.05", *judgment.Score)
+	}
+	if len(judgment.Levels) != 3 || judgment.Levels[0] != "Zeta" || judgment.Levels[2] != "Alpha" {
+		t.Fatalf("legend order was not preserved: %v", judgment.Levels)
+	}
+	proposals, err := Decide(raw, DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proposals.Scores["importance"] != 1.05 {
+		t.Fatalf("decision lost the float score: %+v", proposals.Scores)
+	}
+}
+
+func TestScoreRejectsMisorderedLegendAndOutOfRangeValue(t *testing.T) {
+	catalog := testCatalog()
+	spec, err := CompileSpec(catalog, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var question Question
+	for _, candidate := range spec.Questions {
+		if candidate.ID == "importance" {
+			question = candidate
+		}
+	}
+	if question.ID != "importance" {
+		t.Fatalf("score question missing from %d compiled questions", len(spec.Questions))
+	}
+	valid := RawAnswer{Type: TypeScore, Score: &ScoreAnswer{
+		Score: 1.0, Legend: map[string]string{"0": "low", "1": "medium", "2": "high"},
+		Probabilities: map[string]float64{"0": 0.1, "1": 0.8, "2": 0.1},
+	}}
+	if err := validateAnswer(question, valid); err != nil {
+		t.Fatalf("valid score rejected: %v", err)
+	}
+	wrongLegend := valid
+	wrongLegend.Score = &ScoreAnswer{Score: 1.0, Legend: map[string]string{"0": "high", "1": "medium", "2": "low"},
+		Probabilities: map[string]float64{"0": 0.1, "1": 0.8, "2": 0.1}}
+	if err := validateAnswer(question, wrongLegend); err == nil {
+		t.Fatal("a re-ordered legend must be rejected")
+	}
+	outOfRange := valid
+	outOfRange.Score = &ScoreAnswer{Score: 3.5, Legend: map[string]string{"0": "low", "1": "medium", "2": "high"},
+		Probabilities: map[string]float64{"0": 0.1, "1": 0.8, "2": 0.1}}
+	if err := validateAnswer(question, outOfRange); err == nil {
+		t.Fatal("a score outside the levels must be rejected")
 	}
 }
 
@@ -106,6 +286,9 @@ func TestObjectiveStateExcludesPersonalFields(t *testing.T) {
 		if strings.Contains(string(seen), forbidden) {
 			t.Fatalf("objective body leaked personal content %q: %s", forbidden, seen)
 		}
+	}
+	if err := CheckNoPersonalFields(seen); err != nil {
+		t.Fatalf("objective body contains a personal field: %v", err)
 	}
 }
 
@@ -159,7 +342,7 @@ func TestValidateAnswersRejectsMalformedShapes(t *testing.T) {
 func TestLocalAbstentionDoesNotContaminateOtherFields(t *testing.T) {
 	answers := wireAnswers()
 	answers["topic_eng"] = map[string]any{"type": "noul", "noul": 0.5}
-	server := serveAnswers(t, answers, nil)
+	server := contractServer(t, answers)
 	defer server.Close()
 	c, _ := NewClient(server.URL, "secret", "jev", server.Client(), testCatalog())
 	r, err := c.Classify(context.Background(), Input{OriginalText: "text"})
@@ -172,7 +355,6 @@ func TestLocalAbstentionDoesNotContaminateOtherFields(t *testing.T) {
 	if !hasAbstained(r.RawJudgments, "topic_eng") {
 		t.Fatal("ambiguous candidate was not recorded")
 	}
-	// The form/use answers are still decided.
 	if r.Classification.Form != "method" || r.Classification.Use != "try" {
 		t.Fatalf("unrelated fields lost their decision: %+v", r.Classification)
 	}
@@ -241,6 +423,98 @@ func TestClassifyRejectsTrailingAndDuplicateProviderDataAsContractError(t *testi
 				t.Fatalf("%s class = %s, want contract", name, enrich.ClassOf(err))
 			}
 		})
+	}
+}
+
+// TestEvidenceBudgetBoundsTheActualRequestBody is the F14 regression: an
+// over-long source is truncated by the configured budget, the truncation is
+// recorded, and the outbound body never exceeds the budget.
+func TestEvidenceBudgetBoundsTheActualRequestBody(t *testing.T) {
+	var seen []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen, _ = readAll(r)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-pinned", "answers": wireAnswers()})
+	}))
+	defer server.Close()
+	c, _ := NewClient(server.URL, "secret", "jev", server.Client(), testCatalog())
+	if err := c.SetBudget(Budget{MaxRunes: 200, MaxBlocks: 2}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := c.Evaluate(context.Background(), Input{OriginalText: strings.Repeat("长", 5000), ContextText: strings.Repeat("注", 500)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !raw.Truncated || raw.EvidenceCoverage != "truncated" {
+		t.Fatalf("truncation was not recorded: %+v", raw)
+	}
+	if len(seen) > 8<<10 {
+		t.Fatalf("outbound body was not bounded by the evidence budget: %d bytes", len(seen))
+	}
+	var body struct {
+		State struct {
+			Primary string `json:"primary"`
+			Context []struct {
+				Text string `json:"text"`
+			} `json:"context"`
+		} `json:"state"`
+	}
+	if err := json.Unmarshal(seen, &body); err != nil {
+		t.Fatal(err)
+	}
+	if len([]rune(body.State.Primary)) > 200 {
+		t.Fatalf("primary evidence exceeded the budget: %d runes", len([]rune(body.State.Primary)))
+	}
+}
+
+// TestAliasDriftBlocksCalibratedPolicy is the F14 drift gate: an uncalibrated
+// policy still runs, a calibrated one refuses until the operator opts in.
+func TestAliasDriftBlocksCalibratedPolicy(t *testing.T) {
+	answers := wireAnswers()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-2.0.0", "answers": answers})
+	}))
+	defer server.Close()
+	c, _ := NewClient(server.URL, "secret", "jev-latest", server.Client(), testCatalog())
+	raw, err := c.Evaluate(context.Background(), Input{OriginalText: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !raw.AliasDrift || raw.ResolvedModel != "jev-2.0.0" || raw.RequestedModel != "jev-latest" {
+		t.Fatalf("drift was not recorded: %+v", raw)
+	}
+	if _, err := Decide(raw, DefaultPolicy()); err != nil {
+		t.Fatalf("uncalibrated policy must still replay: %v", err)
+	}
+	calibrated := DefaultPolicy()
+	calibrated.Calibrated = true
+	if _, err := Decide(raw, calibrated); err == nil {
+		t.Fatal("a calibrated policy must refuse a drifted alias")
+	}
+	calibrated.AllowAliasDrift = true
+	if _, err := Decide(raw, calibrated); err != nil {
+		t.Fatalf("explicit drift opt-in must allow the decision: %v", err)
+	}
+}
+
+// TestMissingUsageIsMarkedNotZero is the F14 usage regression.
+func TestMissingUsageIsMarkedNotZero(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-pinned", "answers": wireAnswers()})
+	}))
+	defer server.Close()
+	c, _ := NewClient(server.URL, "secret", "jev", server.Client(), testCatalog())
+	result, err := c.Classify(context.Background(), Input{OriginalText: "text"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(result.Usage), "missing") {
+		t.Fatalf("missing usage must be marked, got %s", result.Usage)
+	}
+	if !result.RawJudgments.UsageMissing {
+		t.Fatal("raw judgments did not record the missing usage")
 	}
 }
 

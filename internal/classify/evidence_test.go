@@ -142,16 +142,25 @@ func TestCompileSpecQuestionsAreIndependentAndTyped(t *testing.T) {
 	}
 	found := false
 	for _, question := range withScore.Questions {
-		if question.ID == "importance" && question.Kind == QuestionScore && len(question.Levels) >= 2 {
+		legend := question.ScoreLegend()
+		if question.ID == "importance" && question.Kind == QuestionScore && len(legend) >= 2 {
 			found = true
 		}
 	}
 	if !found {
 		t.Fatal("score question missing when enabled")
 	}
+	// The spec identity changes when Score is enabled: the Worker stores one
+	// spec per id, so reusing classify-v1 would be rejected as a conflict.
+	if withScore.SpecID == spec.SpecID {
+		t.Fatal("enabling Score must produce a distinct immutable spec id")
+	}
+	if withScore.SemanticHash == spec.SemanticHash {
+		t.Fatal("enabling Score must change the semantic hash")
+	}
 }
 
-func TestCatalogHashIgnoresInactiveTermsAndKeyOrder(t *testing.T) {
+func TestSpecHashIgnoresInactiveTermsAndDisplayLabels(t *testing.T) {
 	first := testCatalog()
 	second := testCatalog()
 	second.Topics = append(second.Topics, taxonomyTerm("hidden", false))
@@ -162,6 +171,18 @@ func TestCatalogHashIgnoresInactiveTermsAndKeyOrder(t *testing.T) {
 	third.Topics[0].Description = "changed definition"
 	if hashOf(t, first) == hashOf(t, third) {
 		t.Fatal("a definition change must change the spec hash")
+	}
+	// A display-only label rename must not invalidate stored runs: the label is
+	// not part of the model input.
+	fourth := testCatalog()
+	fourth.Topics[0].Label = "Large Language Models"
+	if hashOf(t, first) != hashOf(t, fourth) {
+		t.Fatal("a display label rename must not change the semantic spec hash")
+	}
+	fifth := testCatalog()
+	fifth.Topics[0].Aliases = []string{"new-alias"}
+	if hashOf(t, first) == hashOf(t, fifth) {
+		t.Fatal("an alias change is semantic and must change the spec hash")
 	}
 }
 
@@ -183,9 +204,9 @@ func taxonomyTerm(id string, active bool) taxonomy.Term {
 
 func hashOf(t *testing.T, catalog taxonomy.Catalog) string {
 	t.Helper()
-	hash, err := HashCatalog(catalog)
+	spec, err := CompileSpec(catalog, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return hash
+	return spec.SemanticHash
 }

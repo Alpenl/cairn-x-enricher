@@ -354,9 +354,19 @@ func newProcessor(
 		},
 	}
 	queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, httpClient)
-	catalog, err := queue.GetTaxonomy(ctx)
+	// Prefer the multidimensional v2 vocabulary so the compiled questions cover
+	// topics, content functions, carriers and affordances. A backend without the
+	// v2 API falls back to the legacy vocabulary instead of failing to start.
+	catalog, err := queue.GetV2Catalog(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("load Worker taxonomy (requires curation backend migration): %w", err)
+		if !cairn.IsUnsupported(err) {
+			return nil, nil, fmt.Errorf("load Worker v2 taxonomy (requires curation backend migration): %w", err)
+		}
+		catalog, err = queue.GetTaxonomy(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("load Worker taxonomy (requires curation backend migration): %w", err)
+		}
+		logger.Warn("backend has no v2 taxonomy; running the legacy single-dimension vocabulary")
 	}
 	userAgent := "cairn-x-enricher/" + buildinfo.Version
 	model := enrich.NewResponsesClient(
@@ -376,6 +386,16 @@ func newProcessor(
 	classifier, err := classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel, httpClient, catalog)
 	if err != nil {
 		return nil, nil, err
+	}
+	// Register the immutable question spec so a stored run can be replayed
+	// against the exact definition it was evaluated with. Re-registering the
+	// same bytes is idempotent; a changed definition under the same id is
+	// rejected by the Worker, which is why the spec id changes with semantics.
+	if err := queue.PutQuestionSpec(ctx, classifier.Spec()); err != nil {
+		if !cairn.IsUnsupported(err) {
+			return nil, nil, fmt.Errorf("register classification question spec: %w", err)
+		}
+		logger.Warn("backend has no v2 question-spec endpoint; stored runs will not be replayable")
 	}
 	tracker.MarkStarted()
 	return processor.NewStaged(queue, model, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency), queue, nil

@@ -26,7 +26,7 @@ func TestHandshakeDeclaresCapabilitiesAndReportsSupport(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(server.URL, "token", server.Client())
-	result, err := client.Handshake(context.Background(), ClassificationCapabilities("2026-09-20.1", "jev-latest"))
+	result, err := client.Handshake(context.Background(), ClassificationCapabilities("classify-v1", "2026-09-20.1", "jev-latest"))
 	if err != nil {
 		t.Fatalf("Handshake() error = %v", err)
 	}
@@ -53,7 +53,7 @@ func TestClaimClassificationPausesOnCapabilityMismatch(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(server.URL, "token", server.Client())
-	_, err := client.ClaimClassification(context.Background(), "2026-09-20.1", "jev-latest")
+	_, err := client.ClaimClassification(context.Background(), "classify-v1", "2026-09-20.1", "jev-latest")
 	if err == nil {
 		t.Fatal("ClaimClassification() expected an unsupported-target error")
 	}

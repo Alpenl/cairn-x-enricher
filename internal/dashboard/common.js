@@ -295,7 +295,12 @@
     const response = await fetch(path, { cache: "no-store", ...options });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
-      throw new Error(payload.error || `HTTP ${response.status}`);
+      const error = new Error(payload.error || `HTTP ${response.status}`);
+      // The server's current revision travels with a CAS conflict so the UI can
+      // explain it and let the user re-apply instead of showing a generic error.
+      error.status = response.status;
+      if (typeof payload.revision === "number") error.revision = payload.revision;
+      throw error;
     }
     return response.json();
   }
