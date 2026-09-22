@@ -176,3 +176,27 @@ func TestPinnedDialKeepsOriginalHTTPSHostAcrossRedirect(t *testing.T) {
 		}
 	}
 }
+
+func TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting(t *testing.T) {
+	blocked := []string{"0.1.2.3", "100.64.0.1", "100.127.255.254", "192.0.0.9", "192.0.2.1", "192.88.99.1", "198.18.1.1", "198.19.255.254", "198.51.100.1", "203.0.113.1", "240.0.0.1", "255.255.255.255", "::ffff:100.64.0.1", "::127.0.0.1", "64:ff9b::7f00:1", "64:ff9b:1::1", "100::1", "100:0:0:1::1", "2001:2::1", "2001:db8::1", "2002:7f00:1::1", "3fff::1", "5f00::1", "fec0::1"}
+	for _, value := range blocked {
+		t.Run(value, func(t *testing.T) {
+			lookup := func(context.Context, string) ([]net.IPAddr, error) {
+				return []net.IPAddr{{IP: net.ParseIP("8.8.8.8")}, {IP: net.ParseIP(value)}}, nil
+			}
+			dial := func(context.Context, string, string) (net.Conn, error) {
+				t.Fatal("special answer must prevent every connection")
+				return nil, nil
+			}
+			_, err := dialGuard(time.Second, lookup, dial)(context.Background(), "tcp", "allowed.example:443")
+			if !errors.Is(err, ErrFetchBlocked) {
+				t.Fatalf("%s passed: %v", value, err)
+			}
+		})
+	}
+	for _, value := range []string{"8.8.8.8", "1.1.1.1", "100.63.255.254", "100.128.0.1", "198.17.255.254", "198.20.0.1", "2606:4700:4700::1111", "2001:4860:4860::8888", "::ffff:8.8.8.8"} {
+		if err := blockPrivateIP(net.ParseIP(value)); err != nil {
+			t.Errorf("ordinary public address %s rejected: %v", value, err)
+		}
+	}
+}

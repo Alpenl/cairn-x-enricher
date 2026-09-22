@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
@@ -45,26 +46,56 @@ func DefaultFetchPolicy(allowed []string) FetchPolicy {
 // ErrFetchBlocked reports a URL the policy refuses to fetch.
 var ErrFetchBlocked = errors.New("external fetch blocked by policy")
 
-// blockPrivateIP rejects loopback, private, link-local, unspecified, multicast
-// and the cloud metadata address. It checks the actual resolved IP, not the
-// hostname string, so a DNS rebinding answer cannot pass a name check.
+// These special-purpose ranges are not ordinary public HTTP destinations.
+// The policy deliberately also excludes protocol anycasts and transition
+// prefixes, even where a more-specific IANA assignment is globally reachable.
+// Sources (checked 2026-09-22):
+// https://www.iana.org/assignments/iana-ipv4-special-registry/
+// https://www.iana.org/assignments/iana-ipv6-special-registry/
+var blockedFetchPrefixes = []netip.Prefix{
+	netip.MustParsePrefix("0.0.0.0/8"),
+	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("192.0.2.0/24"),
+	netip.MustParsePrefix("192.88.99.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("198.51.100.0/24"),
+	netip.MustParsePrefix("203.0.113.0/24"),
+	netip.MustParsePrefix("240.0.0.0/4"),
+	netip.MustParsePrefix("::/96"),
+	netip.MustParsePrefix("64:ff9b::/96"),
+	netip.MustParsePrefix("64:ff9b:1::/48"),
+	netip.MustParsePrefix("100::/64"),
+	netip.MustParsePrefix("100:0:0:1::/64"),
+	netip.MustParsePrefix("2001::/23"),
+	netip.MustParsePrefix("2001:db8::/32"),
+	netip.MustParsePrefix("2002::/16"),
+	netip.MustParsePrefix("3fff::/20"),
+	netip.MustParsePrefix("5f00::/16"),
+	netip.MustParsePrefix("fec0::/10"),
+}
+
+// blockPrivateIP checks actual resolved bytes, including IPv4-mapped IPv6.
+// IsGlobalUnicast alone does not exclude shared/documentation/reserved space.
 func blockPrivateIP(ip net.IP) error {
-	if ip == nil {
+	addr, ok := netip.AddrFromSlice(ip)
+	if !ok {
 		return fmt.Errorf("%w: unresolved address", ErrFetchBlocked)
 	}
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
-		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() {
-		return fmt.Errorf("%w: non-public address %s", ErrFetchBlocked, ip)
+	addr = addr.Unmap()
+	if !addr.IsGlobalUnicast() || addr.IsPrivate() {
+		return fmt.Errorf("%w: non-public address %s", ErrFetchBlocked, addr)
 	}
-	// 169.254.169.254 is covered by IsLinkLocalUnicast, but keep an explicit
-	// check so the intent is obvious.
-	if ip.String() == "169.254.169.254" {
-		return fmt.Errorf("%w: metadata address", ErrFetchBlocked)
+	for _, prefix := range blockedFetchPrefixes {
+		if prefix.Contains(addr) {
+			return fmt.Errorf("%w: special-purpose address %s", ErrFetchBlocked, addr)
+		}
 	}
 	return nil
 }
 
-// ValidateURL checks scheme, credentials, port and resolved addresses. An IP
+// ValidateURL checks scheme, credentials, port and allowlisted names.
+// DialGuard checks resolved addresses when opening each connection. An IP
 // literal is rejected outright because it cannot be allowlisted by name.
 func ValidateURL(policy FetchPolicy, raw string) (*url.URL, error) {
 	parsed, err := url.Parse(raw)
