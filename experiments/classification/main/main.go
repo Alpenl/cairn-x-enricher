@@ -1,6 +1,6 @@
-// Command classification-eval scores a labelled dataset, searches thresholds on
-// the training split, applies the promotion gate and prints a machine-readable
-// report. All of it is offline: only the explicit `-live` flag may call a model,
+// Command classification-eval scores a reference dataset, applies the promotion
+// gate and prints a machine-readable report. Wire recovery is offline; only
+// the explicit `-live` flag may call a model,
 // and it is never invoked by make verify or CI.
 package main
 
@@ -20,12 +20,14 @@ func main() {
 	var gatePath string
 	var dryRun bool
 	var live bool
+	var recoverFrom string
 	var maxCalls int
 	var liveConfig liveConfig
 	flag.StringVar(&datasetPath, "dataset", "", "path to a dataset JSON file (samples + predictions)")
 	flag.StringVar(&gatePath, "gate", "", "optional path to a gate threshold JSON file")
 	flag.BoolVar(&dryRun, "dry-run", false, "print the plan without scoring or calling a model")
 	flag.BoolVar(&live, "live", false, "explicitly opt in to a live model run (costs money)")
+	flag.StringVar(&recoverFrom, "recover-from", "", "comma-separated saved live directories; validate/recover wires OFFLINE, never retry")
 	flag.IntVar(&maxCalls, "max-calls", 0, "hard budget for a live run; 0 means no live run is permitted")
 	flag.StringVar(&liveConfig.catalogPath, "catalog", "", "frozen taxonomy JSON for live/dry-run")
 	flag.StringVar(&liveConfig.output, "output", "", "new PRIVATE artifact directory for a live run (never overwritten)")
@@ -37,6 +39,10 @@ func main() {
 	flag.Int64Var(&liveConfig.maxTokens, "max-tokens", 0, "hard INPUT-token reservation budget, 65536 reserved per attempt")
 	flag.DurationVar(&liveConfig.timeout, "timeout", 60*time.Second, "per-call timeout")
 	flag.Parse()
+	if recoverFrom != "" && live {
+		fmt.Fprintln(os.Stderr, "error: wire recovery is offline and cannot be combined with -live")
+		os.Exit(2)
+	}
 
 	if live && maxCalls <= 0 {
 		fmt.Fprintln(os.Stderr, "error: a live run requires an explicit positive -max-calls budget")
@@ -75,6 +81,14 @@ func main() {
 			fmt.Fprintln(os.Stderr, "error: decode gate:", err)
 			os.Exit(1)
 		}
+	}
+
+	if recoverFrom != "" {
+		if err := runRecoveryCommand(dataset, recoverFrom, liveConfig.output, dryRun, gate); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	if live {

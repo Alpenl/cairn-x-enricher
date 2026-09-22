@@ -72,7 +72,9 @@ type RawJudgments struct {
 // it never produces a new model run.
 type Policy struct {
 	Version string `json:"version"`
-	// Calibrated is false until human-reviewed gold establishes the thresholds.
+	// Calibrated is false until versioned reference evaluation establishes the
+	// thresholds. The evaluation artifact records human/automatic provenance;
+	// fitting training data alone is not validation or permission to promote.
 	Calibrated bool `json:"calibrated"`
 	// TopicAccept is the probability at or above which a topic is accepted.
 	TopicAccept float64 `json:"topic_accept"`

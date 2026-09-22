@@ -45,3 +45,32 @@ go run ./experiments/classification/main \
 Removing `-dry-run` requires credentials and a **new** explicit `-output` directory. Use `-env-file .env` only when intentionally authorizing that local credential source. Each call writes a synced reservation before HTTP, then real usage, requested/resolved model, source/state/spec identity, latency, attempt and typed judgments. Actual request/response bytes are stored separately without auth headers. No retry/cache/implicit resumption or policy fitting occurs. Failure or cancellation stops further calls, retaining prior costs and incomplete results. Existing output directories are refused so a restart does not silently repeat paid work. Raw artifacts are private (0700 directory, 0600 files); ordinary tests and CI never enable live calls.
 
 The original v1 historical outputs and real-user retrieval relevance labels are absent. They are not fabricated by this corpus. Controlled v1/v2 comparisons, ablations, retrieval, Score-distribution evaluation, performance/cost reporting and final quality interpretation are tracked separately in B08.
+
+### Recovering a stopped run without repeating paid calls
+
+The offline recovery command rereads saved HTTP responses through the production
+decoder and decision policy. It requires the same frozen references, exact
+outbound request, model/spec, source and wire-state hashes, and a complete
+reserved/finished journal. It has an in-memory transport with no network fallback
+and reads no API key. It preserves the original failure, reported usage and
+latency, and hashes the source artifacts. It never overwrites the original run.
+
+```sh
+go run ./experiments/classification/main \
+  -dataset experiments/classification/reference-v1/frozen/train.json \
+  -recover-from /private/run-a,/private/run-b \
+  -output /private/new-recovery
+```
+
+`dataset.json` contains the recovered predictions; `unattempted.json` contains
+only samples that have never been attempted in those runs. A failed attempt stays
+out of that file even if its response still cannot be decoded. Missing/truncated
+journals and overlapping samples are rejected, not retried. A deliberate live run
+over `unattempted.json` needs its own explicit opt-in and budget. Combine the
+original and continuation directories in a later offline recovery to score the
+full original reference hash. Never include the separate smoke test in that merge;
+its extra call belongs in total cost accounting.
+
+The gate requires at least 20 independent groups as well as 20 reference samples.
+The train (7 groups) and dev (6 groups) splits are therefore tuning/diagnostic
+sets, not sufficient promotion evidence. The 27-group holdout remains separate.

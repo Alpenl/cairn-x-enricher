@@ -230,13 +230,23 @@ func RunLive(ctx context.Context, dataset Dataset, evaluator LiveEvaluator, opti
 		if entry.Error != "" {
 			return result, errors.New(entry.Error)
 		}
-		proposals, err := classify.Decide(raw, evaluator.Policy())
+		prediction, err := PredictionFromJudgments(sample.SampleID, raw, evaluator.Policy())
 		if err != nil {
 			return result, errors.New("stored judgments could not be decided")
 		}
-		result.Dataset.Prediction = append(result.Dataset.Prediction, Prediction{SampleID: sample.SampleID, SpecID: raw.SpecID, SpecHash: raw.SpecHash, Model: raw.ResolvedModel, PolicyVersion: evaluator.Policy().Version,
-			Topics: proposals.Topics, ContentFunctions: proposals.ContentFunctions, Carriers: proposals.Carriers, Affordances: proposals.Affordances, Form: proposals.Form, Use: proposals.Use, TopicProbabilities: topicProbabilities(raw), Abstained: abstainedDimensions(proposals)})
+		result.Dataset.Prediction = append(result.Dataset.Prediction, prediction)
 	}
 	result.Completed = true
 	return result, nil
+}
+
+// PredictionFromJudgments uses the same pure production decision for live and
+// offline wire recovery. It never performs inference or changes reference labels.
+func PredictionFromJudgments(sampleID string, raw classify.RawJudgments, policy classify.Policy) (Prediction, error) {
+	proposals, err := classify.Decide(raw, policy)
+	if err != nil {
+		return Prediction{}, err
+	}
+	return Prediction{SampleID: sampleID, SpecID: raw.SpecID, SpecHash: raw.SpecHash, Model: raw.ResolvedModel, PolicyVersion: policy.Version,
+		Topics: proposals.Topics, ContentFunctions: proposals.ContentFunctions, Carriers: proposals.Carriers, Affordances: proposals.Affordances, Form: proposals.Form, Use: proposals.Use, TopicProbabilities: topicProbabilities(raw), Abstained: abstainedDimensions(proposals)}, nil
 }

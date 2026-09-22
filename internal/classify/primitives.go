@@ -176,7 +176,11 @@ func ValidateProbabilityMap(distribution map[string]float64, allowed []string) e
 		}
 		total += value
 	}
-	if math.Abs(total-1) > 0.01 {
+	// Keep the existing one-percent rounding tolerance inclusive. Decimal
+	// probabilities such as 0.34 + 0.27 + 0.01 + 0.01 + 0.16 + 0.20 can
+	// produce 0.9899999999999999 in binary floating point. The epsilon only
+	// covers arithmetic noise; it does not normalize or widen rounded inputs.
+	if math.Abs(total-1) > 0.01+1e-12 {
 		return fmt.Errorf("distribution sums to %.4f, want 1", total)
 	}
 	return nil
