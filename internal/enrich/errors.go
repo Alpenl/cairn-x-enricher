@@ -27,8 +27,9 @@ const (
 	// changed underneath the job. It is not a semantic model failure and must
 	// not be counted as one.
 	ErrorClassStale ErrorClass = "stale"
-	// ErrorClassCompleted covers a commit that already succeeded, possibly with
-	// a lost response. It is retried idempotently rather than re-inferred.
+	// ErrorClassCompleted reports that the bookmark is already completed. It
+	// does not confirm the caller's operation; only its exact idempotent replay
+	// may do so. Keep this class for compatibility with older Worker errors.
 	ErrorClassCompleted ErrorClass = "already_completed"
 	// ErrorClassUnknown is the default when nothing else applies. It is treated
 	// conservatively as a job-level failure, never as a component pause.

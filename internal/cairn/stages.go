@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -186,7 +187,7 @@ func ClassificationCapabilities(specID, version, model string) Capabilities {
 // instead of paying for a second classification.
 //
 // A transient failure is genuinely uncertain: the commit may have succeeded and
-// only the response was lost. The client therefore queries the job and retries
+// only the response was lost. The client therefore retries
 // the *same* operation key with the *same* result, bounded and with backoff. It
 // never re-runs inference, and it never fabricates a success (F10).
 func (c *Client) CompleteClassification(ctx context.Context, job *ClassificationJob, result classify.Result) error {
@@ -197,35 +198,30 @@ func (c *Client) CompleteClassification(ctx context.Context, job *Classification
 		"operation_key": ClassificationOperationKey(job),
 		"result":        result,
 	}
-	err := c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/classifications/%d/complete", job.ID), body)
-	if err == nil || enrich.ClassOf(err) == enrich.ErrorClassCompleted {
+	err := c.commitClassification(ctx, job.ID, body)
+	if err == nil {
 		return err
 	}
 	if enrich.ClassOf(err) != enrich.ErrorClassTransient {
 		return err
 	}
-	for attempt, delay := range submitRecoveryBackoff {
+	for _, delay := range submitRecoveryBackoff {
 		if ctx.Err() != nil {
 			return err
-		}
-		if completed, queryErr := c.ClassificationCompleted(ctx, job.ID); queryErr == nil && completed {
-			// The commit did land; only its response was lost.
-			return nil
 		}
 		select {
 		case <-ctx.Done():
 			return err
 		case <-time.After(delay):
 		}
-		retryErr := c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/classifications/%d/complete", job.ID), body)
-		if retryErr == nil || enrich.ClassOf(retryErr) == enrich.ErrorClassCompleted {
+		retryErr := c.commitClassification(ctx, job.ID, body)
+		if retryErr == nil {
 			return retryErr
 		}
 		if enrich.ClassOf(retryErr) != enrich.ErrorClassTransient {
 			return retryErr
 		}
 		err = retryErr
-		_ = attempt
 	}
 	// Still uncertain after the bounded recovery. The lease is left to expire
 	// rather than re-running inference, and the caller records the uncertainty.
@@ -235,26 +231,33 @@ func (c *Client) CompleteClassification(ctx context.Context, job *Classification
 // submitRecoveryBackoff bounds how long an uncertain completion is retried.
 var submitRecoveryBackoff = []time.Duration{250 * time.Millisecond, time.Second, 2 * time.Second}
 
-// ClassificationCompleted reports whether the Worker already recorded a
-// successful completion for the job. It is the query half of the recovery path:
-// a lost response must be confirmed, not guessed.
-func (c *Client) ClassificationCompleted(ctx context.Context, id int64) (bool, error) {
-	response, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/enrichment/classifications/%d", id), nil)
+// Only a successful response to this exact operation/payload confirms it. A
+// bookmark-level completed status or generic already_completed conflict could
+// belong to a different operation and must never trigger successful follow-up.
+func (c *Client) commitClassification(ctx context.Context, id int64, body any) error {
+	response, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/enrichment/classifications/%d/complete", id), body)
 	if err != nil {
-		return false, err
+		return err
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return false, apiError(response)
+		return apiError(response)
 	}
-	var job struct {
+	var acknowledgment struct {
 		ID     int64  `json:"id"`
 		Status string `json:"status"`
 	}
-	if err := decodeJSON(response.Body, &job); err != nil {
-		return false, err
+	if err := decodeJSON(response.Body, &acknowledgment); err != nil {
+		class := enrich.ErrorClassContract
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			class = enrich.ErrorClassTransient
+		}
+		return enrich.Classified(fmt.Errorf("decode classification acknowledgment: %w", err), class)
 	}
-	return job.Status == "completed", nil
+	if acknowledgment.ID != id || acknowledgment.Status != "completed" {
+		return enrich.Classified(errors.New("classification acknowledgment does not match the submitted operation"), enrich.ErrorClassContract)
+	}
+	return nil
 }
 
 // ClassificationOperationKey is deterministic for one input revision and target

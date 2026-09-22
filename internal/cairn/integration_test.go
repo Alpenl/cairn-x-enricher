@@ -70,7 +70,7 @@ func (m *mockWorker) handler() http.Handler {
 			_ = json.NewDecoder(request.Body).Decode(&body)
 			key, _ := body["operation_key"].(string)
 			if existing, ok := m.operations[key]; ok {
-				_ = json.NewEncoder(writer).Encode(map[string]string{"status": existing})
+				_ = json.NewEncoder(writer).Encode(map[string]any{"id": 1, "status": existing})
 				return
 			}
 			if m.nextConflict {
@@ -80,7 +80,7 @@ func (m *mockWorker) handler() http.Handler {
 				return
 			}
 			m.operations[key] = "completed"
-			_ = json.NewEncoder(writer).Encode(map[string]string{"status": "completed"})
+			_ = json.NewEncoder(writer).Encode(map[string]any{"id": 1, "status": "completed"})
 		default:
 			writer.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(writer).Encode(map[string]string{"error": "not_found"})

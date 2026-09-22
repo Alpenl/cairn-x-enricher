@@ -14,12 +14,13 @@ import (
 )
 
 // TestCompleteClassificationRecoversALostResponse is the F10 regression: the
-// commit landed but the response was lost. The client must confirm via the job
-// query and never send a second, differently-keyed commit.
+// commit landed but the response was lost. The exact same operation and result
+// must be replayed; a bookmark-level completed status cannot confirm this commit.
 func TestCompleteClassificationRecoversALostResponse(t *testing.T) {
 	var mu sync.Mutex
 	commits := 0
 	var keys []string
+	var payloads []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/enrichment/classifications/7/complete":
@@ -28,8 +29,15 @@ func TestCompleteClassificationRecoversALostResponse(t *testing.T) {
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			keys = append(keys, body["operation_key"].(string))
+			payload, _ := json.Marshal(body)
+			payloads = append(payloads, string(payload))
+			first := commits == 1
 			mu.Unlock()
-			w.WriteHeader(http.StatusServiceUnavailable)
+			if first {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":7,"status":"completed"}`))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/enrichment/classifications/7":
 			_, _ = w.Write([]byte(`{"id":7,"status":"completed"}`))
 		default:
@@ -44,8 +52,46 @@ func TestCompleteClassificationRecoversALostResponse(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if commits != 1 {
-		t.Fatalf("commit attempts = %d, want exactly 1 (no duplicate paid work)", commits)
+	if commits != 2 || keys[0] != keys[1] || payloads[0] != payloads[1] {
+		t.Fatalf("must confirm identical operation without another inference: commits=%d keys=%v", commits, keys)
+	}
+}
+
+func TestCompletedBookmarkDoesNotConfirmAnotherOperation(t *testing.T) {
+	commits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte(`{"id":7,"status":"completed"}`))
+			return
+		}
+		commits++
+		if commits == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"error":"already_completed"}`))
+	}))
+	defer server.Close()
+	job := &ClassificationJob{ID: 7, Revision: 2, LeaseToken: "different-lease"}
+	err := NewClient(server.URL, "token", server.Client()).CompleteClassification(context.Background(), job, classify.Result{})
+	if err == nil || commits != 2 {
+		t.Fatalf("generic completed must not confirm this operation: err=%v commits=%d", err, commits)
+	}
+}
+
+func TestCompletionRequiresMatchingAcknowledgment(t *testing.T) {
+	for _, response := range []string{`{}`, `{"id":8,"status":"completed"}`, `{"id":7,"status":"processing"}`} {
+		t.Run(response, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(response))
+			}))
+			defer server.Close()
+			err := NewClient(server.URL, "token", server.Client()).CompleteClassification(context.Background(), &ClassificationJob{ID: 7}, classify.Result{})
+			if err == nil || enrich.ClassOf(err) != enrich.ErrorClassContract {
+				t.Fatalf("invalid acknowledgment must fail the contract: %v", err)
+			}
+		})
 	}
 }
 

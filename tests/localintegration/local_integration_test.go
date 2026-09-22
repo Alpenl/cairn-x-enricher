@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -24,6 +26,10 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }
 
 func workerURL(t *testing.T) string {
 	t.Helper()
@@ -111,7 +117,14 @@ func TestLocalWorkerFullLifecycle(t *testing.T) {
 	}
 	provider := providerContractServer(t, mustSpec(t, catalog))
 	defer provider.Close()
-	classifier, err := classify.NewClient(provider.URL, "local-key", "jev-latest", provider.Client(), catalog)
+	var modelCalls atomic.Int64
+	providerHTTP := provider.Client()
+	providerTransport := providerHTTP.Transport
+	providerHTTP.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		modelCalls.Add(1)
+		return providerTransport.RoundTrip(request)
+	})
+	classifier, err := classify.NewClient(provider.URL, "local-key", "jev-latest", providerHTTP, catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,8 +173,44 @@ func TestLocalWorkerFullLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("classify: %v", err)
 	}
-	if err := queue.CompleteClassification(ctx, job, result); err != nil {
+	// R3-01: let the real D1 commit finish, then lose only its HTTP response.
+	// Recovery must repeat the exact serialized operation without evaluating again.
+	var completeCalls int
+	var firstPayload string
+	recoveryHTTP := &http.Client{Timeout: 30 * time.Second, Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.Method != http.MethodPost || !strings.HasSuffix(request.URL.Path, "/complete") {
+			return http.DefaultTransport.RoundTrip(request)
+		}
+		payload, readErr := io.ReadAll(request.Body)
+		if readErr != nil {
+			return nil, readErr
+		}
+		_ = request.Body.Close()
+		request.Body = io.NopCloser(bytes.NewReader(payload))
+		completeCalls++
+		if completeCalls == 1 {
+			firstPayload = string(payload)
+		} else if firstPayload != string(payload) {
+			t.Error("completion recovery changed its operation or result payload")
+		}
+		response, callErr := http.DefaultTransport.RoundTrip(request)
+		if callErr != nil || completeCalls != 1 {
+			return response, callErr
+		}
+		if response.StatusCode != http.StatusOK {
+			t.Errorf("real completion before response loss returned %d", response.StatusCode)
+		}
+		_, _ = io.Copy(io.Discard, response.Body)
+		_ = response.Body.Close()
+		response.StatusCode = http.StatusServiceUnavailable
+		response.Body = io.NopCloser(strings.NewReader(`{"error":"synthetic_lost_response"}`))
+		return response, nil
+	})}
+	if err := cairn.NewClient(base, enricherToken, recoveryHTTP).CompleteClassification(ctx, job, result); err != nil {
 		t.Fatalf("complete: %v", err)
+	}
+	if completeCalls != 2 || modelCalls.Load() != 1 {
+		t.Fatalf("lost-response recovery: completion calls=%d model calls=%d", completeCalls, modelCalls.Load())
 	}
 
 	// 6. The run is stored, replayable, and carries the real usage.
@@ -543,13 +592,13 @@ func TestLocalWorkerDisplayRenameKeepsSemantics(t *testing.T) {
 	}
 	target := before.Topics[0]
 
-	created := postJSON(t, ctx, fmt.Sprintf("%s/api/v2/taxonomy/proposals", base), enricherToken, map[string]any{
+	created := postJSON(ctx, t, fmt.Sprintf("%s/api/v2/taxonomy/proposals", base), enricherToken, map[string]any{
 		"kind": "rename_label", "dimension": "topics", "term_id": target.ID,
 		"payload": map[string]any{"label": "重命名后的显示名"},
 	})
 	proposalID := created["id"].(string)
-	postJSON(t, ctx, fmt.Sprintf("%s/api/v2/taxonomy/proposals/%s/decision", base, proposalID), enricherToken, map[string]any{"decision": "approved"})
-	postJSON(t, ctx, fmt.Sprintf("%s/api/v2/taxonomy/proposals/%s/apply", base, proposalID), enricherToken, map[string]any{})
+	postJSON(ctx, t, fmt.Sprintf("%s/api/v2/taxonomy/proposals/%s/decision", base, proposalID), enricherToken, map[string]any{"decision": "approved"})
+	postJSON(ctx, t, fmt.Sprintf("%s/api/v2/taxonomy/proposals/%s/apply", base, proposalID), enricherToken, map[string]any{})
 
 	after, err := queue.GetV2Catalog(ctx)
 	if err != nil {
@@ -573,7 +622,7 @@ func TestLocalWorkerDisplayRenameKeepsSemantics(t *testing.T) {
 	}
 }
 
-func postJSON(t *testing.T, ctx context.Context, url, token string, body map[string]any) map[string]any {
+func postJSON(ctx context.Context, t *testing.T, url, token string, body map[string]any) map[string]any {
 	t.Helper()
 	payload, _ := json.Marshal(body)
 	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))

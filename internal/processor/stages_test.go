@@ -226,13 +226,65 @@ func TestStaleClassificationIsNotAJobFailure(t *testing.T) {
 	}
 }
 
-func TestAlreadyCompletedCompletionCountsAsSuccess(t *testing.T) {
+func TestAlreadyCompletedDoesNotConfirmThisOperation(t *testing.T) {
 	q := &stageQueue{fakeQueue: newFakeQueue(), job: &cairn.ClassificationJob{ID: 1}}
 	q.completeErr = enrich.Classified(errors.New("already completed"), enrich.ErrorClassCompleted)
 	p := NewStaged(q, nil, stageClassifier{}, "v1", "jev", discardLogger(), 1)
 	done, failed, err := p.RunClassifications(context.Background(), 1)
-	if err != nil || done != 1 || failed != 0 {
-		t.Fatalf("lost completion response should be success: done=%d failed=%d err=%v", done, failed, err)
+	if err == nil || done != 0 || failed != 1 || q.entitySubmissions != 0 || q.evidenceRequests != 0 {
+		t.Fatalf("generic completed is not an operation confirmation: done=%d failed=%d err=%v", done, failed, err)
+	}
+}
+
+func TestHalfOpenProbeAlwaysReleasesWithoutInventingRecovery(t *testing.T) {
+	for _, scenario := range []string{"claim_transient", "model_transient", "cancelled", "zero_jobs", "empty_queue", "model_success"} {
+		t.Run(scenario, func(t *testing.T) {
+			q := &stageQueue{fakeQueue: newFakeQueue()}
+			p := NewStaged(q, nil, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+			now := time.Date(2026, 9, 22, 0, 0, 0, 0, time.UTC)
+			p.stages.pause.now = func() time.Time { return now }
+			p.stages.pause.trip("model authentication failed")
+			now = now.Add(time.Hour)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			maxJobs := 5
+			switch scenario {
+			case "claim_transient":
+				q.claimErr = enrich.Classified(errors.New("claim unavailable"), enrich.ErrorClassTransient)
+			case "model_transient":
+				q.jobPool = 5
+				p.stages.classifier = classifiedClassifier{err: enrich.Classified(errors.New("provider overloaded"), enrich.ErrorClassTransient)}
+			case "cancelled":
+				cancel()
+			case "zero_jobs":
+				maxJobs = 0
+			case "model_success":
+				q.job = &cairn.ClassificationJob{ID: 1}
+			}
+			_, _, _ = p.RunClassifications(ctx, maxJobs)
+			p.stages.pause.mu.Lock()
+			probing := p.stages.pause.probing
+			p.stages.pause.mu.Unlock()
+			if probing {
+				t.Fatal("probe ownership leaked after return")
+			}
+			if p.stages.pause.isHealthy() != (scenario == "model_success") {
+				t.Fatalf("only actual provider success may clear its breaker: scenario=%s", scenario)
+			}
+			if scenario == "model_transient" && q.claims != 1 {
+				t.Fatalf("one half-open probe drained %d jobs", q.claims)
+			}
+			// A later bounded probe can recover, regardless of the earlier exit.
+			q.claimErr = nil
+			q.jobPool = 0
+			q.job = &cairn.ClassificationJob{ID: 99}
+			p.stages.classifier = stageClassifier{}
+			now = now.Add(time.Hour)
+			done, failed, err := p.RunClassifications(context.Background(), 1)
+			if err != nil || done != 1 || failed != 0 || !p.stages.pause.isHealthy() {
+				t.Fatalf("subsequent probe failed to recover: done=%d failed=%d err=%v", done, failed, err)
+			}
+		})
 	}
 }
 

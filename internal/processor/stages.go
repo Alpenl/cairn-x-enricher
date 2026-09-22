@@ -115,39 +115,47 @@ func newComponentPause() *componentPause {
 // half-open probe after its backoff elapsed; concurrent callers are refused so
 // a configuration fault cannot be probed by draining the business queue
 // (R2-09).
-func (p *componentPause) beginProbe() (allowed bool, remaining time.Duration) {
+func (p *componentPause) beginProbe() (allowed, halfOpen bool, remaining time.Duration) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.until.IsZero() {
-		return true, 0
+		return true, false, 0
 	}
 	if remaining := p.until.Sub(p.now()); remaining > 0 {
-		return false, remaining
+		return false, false, remaining
 	}
 	if p.probing {
 		// Another caller owns the single probe for this window.
-		return false, pauseBaseBackoff
+		return false, false, pauseBaseBackoff
 	}
 	p.probing = true
-	return true, 0
+	return true, true, 0
 }
 
 // endProbe records the probe outcome. Only a success clears the breaker; a
 // failure extends it with the next backoff step.
 func (p *componentPause) endProbe(success bool, reason string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if success {
-		p.clear()
+		p.until = time.Time{}
+		p.reason = ""
+		p.failures = 0
+		p.probing = false
 		return
 	}
-	p.mu.Lock()
-	p.probing = false
-	p.mu.Unlock()
-	p.trip(reason)
+	// Release ownership and extend the backoff under the same lock: a second
+	// caller must not acquire the expired window between those two actions.
+	p.tripLocked(reason)
 }
 
 func (p *componentPause) trip(reason string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.tripLocked(reason)
+}
+
+func (p *componentPause) tripLocked(reason string) {
 	p.probing = false
 	p.failures++
 	backoff := pauseBaseBackoff << min(p.failures-1, 8)
@@ -156,15 +164,6 @@ func (p *componentPause) trip(reason string) {
 	}
 	p.until = p.now().Add(backoff)
 	p.reason = reason
-}
-
-func (p *componentPause) clear() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.until = time.Time{}
-	p.reason = ""
-	p.failures = 0
-	p.probing = false
 }
 
 // ClassificationPaused reports the component pause for health reporting.
@@ -380,8 +379,11 @@ func (p *Processor) finishReading(ctx context.Context, job *cairn.Job, source en
 // burning every queued job's attempt budget; a stale job is not a model failure
 // and does not abort the batch.
 func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64, int64, error) {
-	if p.stages == nil {
+	if p.stages == nil || maxJobs <= 0 {
 		return 0, 0, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, 0, err
 	}
 	s := p.stages
 	var completed, failed int64
@@ -389,12 +391,22 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 	// previous poll must not acquire another lease until the backoff elapses:
 	// claiming already increments the Worker's attempt counter (F09). The
 	// recovery attempt is a single atomic half-open probe (R2-09).
-	allowed, remaining := s.pause.beginProbe()
+	allowed, probePending, remaining := s.pause.beginProbe()
 	if !allowed {
 		_, reason, _ := s.pause.state()
 		return completed, failed, fmt.Errorf("%w: %s (probe in %s)", ErrComponentPaused, reason, remaining.Round(time.Second))
 	}
-	probePending := s.pause != nil && !s.pause.isHealthy()
+	if probePending {
+		// One half-open owner may test one leased job, not drain a batch while
+		// its provider is still failing. Every unsettled return releases it.
+		maxJobs = 1
+	}
+	defer func() {
+		if probePending {
+			_, reason, _ := s.pause.state()
+			s.pause.endProbe(false, reason)
+		}
+	}()
 	settleProbe := func(success bool, reason string) {
 		if probePending {
 			s.pause.endProbe(success, reason)
@@ -422,13 +434,8 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		// A reachable Worker says nothing about the provider configuration: a
 		// claim success must not clear a model-side breaker (R2-09).
 		if job == nil {
-			// An empty queue during a probe proves the Worker is reachable and no
-			// job was consumed, so the probe counts as recovered; a healthy
-			// component simply has nothing to do.
-			if probePending {
-				s.pause.endProbe(true, "")
-				probePending = false
-			}
+			// Empty only proves Worker reachability. The deferred settlement
+			// preserves the provider failure and schedules another bounded probe.
 			break
 		}
 		// The evaluation consumes exactly the snapshot the lease was bound to,
@@ -468,14 +475,9 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		settleProbe(true, "")
 		if err := s.queue.CompleteClassification(workCtx, job, result); err != nil {
 			cancel()
-			// Already-completed means the commit succeeded but the response was
-			// lost; that is a success, not a failure, and must not be retried with
-			// another paid inference.
-			if enrich.ClassOf(err) == enrich.ErrorClassCompleted {
-				completed++
-				p.runExtensions(ctx, job)
-				continue
-			}
+			// The client confirms lost responses by replaying this exact operation.
+			// Generic already_completed can refer to unrelated work and is not an
+			// acknowledgment; never run extensions after an unconfirmed commit.
 			failed++
 			return completed, failed, fmt.Errorf("save classification: %w", err)
 		}
