@@ -1,3 +1,5 @@
+> 2026-09-22 update: [R3-05 actual request budget evidence](evidence/R3-20260922-budget.md). Full acceptance remains pending.
+
 > 2026-09-22 update: [R3-02 snapshot identity and real recovery evidence](evidence/R3-20260922-evidence.md). Full acceptance remains pending.
 
 > 2026-09-22 update: [R3-04 single-choice/browser and R3-11 container evidence](evidence/R3-20260922-curation.md). Tested Share `76b1705d764416e95a93fed87e38966e30c21772`, Enricher `e85632028ad70aa5adb64ba6d9fd5c4f4798c94b`; full acceptance remains pending.
