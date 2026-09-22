@@ -1,0 +1,8 @@
+
+> typecheck
+> tsc --noEmit
+
+test/rerank-cache.test.ts(58,43): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ id: number; }'.
+  No index signature with a parameter of type 'string' was found on type '{ id: number; }'.
+test/rerank-cache.test.ts(58,66): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ id: number; }'.
+  No index signature with a parameter of type 'string' was found on type '{ id: number; }'.

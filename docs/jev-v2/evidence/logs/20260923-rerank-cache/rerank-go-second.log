@@ -1,0 +1,8 @@
+# github.com/Alpenl/cairn-x-enricher/tests/localintegration [github.com/Alpenl/cairn-x-enricher/tests/localintegration.test]
+tests/localintegration/rerank_cache_test.go:263:70: unknown field Note in struct literal of type cairn.CurationUpdate
+FAIL	github.com/Alpenl/cairn-x-enricher/tests/localintegration [build failed]
+ok  	github.com/Alpenl/cairn-x-enricher/internal/extension	(cached)
+ok  	github.com/Alpenl/cairn-x-enricher/internal/cairn	(cached)
+ok  	github.com/Alpenl/cairn-x-enricher/internal/dashboard	0.311s
+ok  	github.com/Alpenl/cairn-x-enricher/internal/classify	(cached)
+FAIL
