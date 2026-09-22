@@ -41,13 +41,22 @@ type Input struct {
 // override. It is stored with the decision so the Worker can derive the
 // effective view without trusting a caller-supplied `effective` object.
 type AutomaticView struct {
-	Topics           []string `json:"topics"`
-	ContentFunctions []string `json:"content_functions"`
-	Carriers         []string `json:"carriers"`
-	Affordances      []string `json:"affordances"`
-	Form             string   `json:"form"`
-	Use              string   `json:"use"`
-	Entities         []string `json:"entities"`
+	Topics           []string    `json:"topics"`
+	ContentFunctions []string    `json:"content_functions"`
+	Carriers         []string    `json:"carriers"`
+	Affordances      []string    `json:"affordances"`
+	Form             string      `json:"form"`
+	Use              string      `json:"use"`
+	Entities         []string    `json:"entities"`
+	Assessment       *Assessment `json:"assessment,omitempty"`
+}
+
+// Assessment preserves the policy's actual outcomes for read-only clients.
+// Missing metadata on historical decisions means unknown, never accepted-empty.
+type Assessment struct {
+	Version    int             `json:"version"`
+	Decisions  []FieldDecision `json:"decisions"`
+	Incomplete []string        `json:"incomplete"`
 }
 
 // AutomaticFromProposals is the only place the automatic view is derived, so
@@ -61,6 +70,8 @@ func AutomaticFromProposals(proposals Proposals) AutomaticView {
 		Form:             proposals.Form,
 		Use:              proposals.Use,
 		Entities:         append([]string{}, proposals.Entities...),
+		Assessment: &Assessment{Version: 1, Decisions: append([]FieldDecision{}, proposals.Decisions...),
+			Incomplete: append([]string{}, proposals.Incomplete...)},
 	}
 	return view
 }

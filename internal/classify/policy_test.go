@@ -1,10 +1,52 @@
 package classify
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"testing"
 )
+
+func TestAssessmentRetainsZeroAbstentionAndStableReplayIdentity(t *testing.T) {
+	raw := completeRaw(rawNoul("llm", 0.95), rawNoul("eng", 0), rawNoul("eval", 0.5),
+		rawChoice("form", "method", map[string]float64{"method": 0.5, "case": 0.4, "none": 0.1}),
+		rawChoice("use", "none", map[string]float64{"none": 0.9, "try": 0.1}))
+	var baseline string
+	for range 64 {
+		proposals, err := Decide(raw, DefaultPolicy())
+		if err != nil {
+			t.Fatal(err)
+		}
+		view := AutomaticFromProposals(proposals)
+		if view.Assessment == nil || view.Assessment.Version != 1 {
+			t.Fatal("missing assessment")
+		}
+		if got := decisionFor(proposals, "form", ""); got.Candidate != "method" || got.Verdict != VerdictAbstained || got.Value != "" {
+			t.Fatalf("lost candidate: %+v", got)
+		}
+		encoded, err := json.Marshal(view)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var stored struct {
+			Assessment struct {
+				Decisions []map[string]any `json:"decisions"`
+			} `json:"assessment"`
+		}
+		if err := json.Unmarshal(encoded, &stored); err != nil {
+			t.Fatal(err)
+		}
+		for _, decision := range stored.Assessment.Decisions {
+			if decision["term_id"] == "eng" && decision["probability"] != float64(0) {
+				t.Fatalf("zero probability missing: %s", encoded)
+			}
+		}
+		if baseline != "" && baseline != string(encoded) {
+			t.Fatal("retry identity changed across identical pure decisions")
+		}
+		baseline = string(encoded)
+	}
+}
 
 // rawNoul builds a raw judgment for a topic.
 func rawNoul(term string, p float64) RawJudgment {

@@ -212,6 +212,25 @@ func TestLocalWorkerFullLifecycle(t *testing.T) {
 	if completeCalls != 2 || modelCalls.Load() != 1 {
 		t.Fatalf("lost-response recovery: completion calls=%d model calls=%d", completeCalls, modelCalls.Load())
 	}
+	storedDecision, err := queue.GetLatestDecision(ctx, id)
+	if err != nil || storedDecision == nil {
+		t.Fatalf("read decision: %v", err)
+	}
+	var storedAutomatic classify.AutomaticView
+	if err := json.Unmarshal(storedDecision.Automatic, &storedAutomatic); err != nil {
+		t.Fatal(err)
+	}
+	expectedAssessment, err := json.Marshal(result.Automatic.Assessment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actualAssessment, err := json.Marshal(storedAutomatic.Assessment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Automatic.Assessment == nil || !bytes.Equal(expectedAssessment, actualAssessment) {
+		t.Fatalf("production completion lost or altered policy outcomes: %s", actualAssessment)
+	}
 
 	// 6. The run is stored, replayable, and carries the real usage.
 	runs, err := queue.GetRuns(ctx, id)

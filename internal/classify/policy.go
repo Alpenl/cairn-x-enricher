@@ -154,11 +154,13 @@ type FieldDecision struct {
 	Verdict   Verdict `json:"verdict"`
 	// Value is the accepted value for a single-value dimension.
 	Value string `json:"value,omitempty"`
+	// Candidate retains a Choice winner even when the policy abstains.
+	Candidate string `json:"candidate,omitempty"`
 	// Reason is derived from observable evidence or an explicit judgment, never
 	// guessed from an intermediate probability.
 	Reason string `json:"reason"`
 	// Probability is retained for audit only.
-	Probability float64 `json:"probability,omitempty"`
+	Probability float64 `json:"probability"`
 }
 
 // Proposals is the pure output of Decide. The multidimensional fields are the
@@ -258,7 +260,8 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 			}
 			proposals.Decisions = append(proposals.Decisions, FieldDecision{
 				Dimension: dimension, TermID: judgment.TermID, Verdict: verdict, Value: value,
-				Reason: reason, Probability: feature.MaxProb,
+				Candidate: judgment.Choice,
+				Reason:    reason, Probability: feature.MaxProb,
 			})
 		case QuestionScore:
 			if judgment.Score == nil {
@@ -344,6 +347,30 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 		}
 	}
 	sort.Strings(proposals.Incomplete)
+	// These outcomes now participate in immutable request identities. Go map
+	// iteration must not change an otherwise identical retry/replay payload.
+	sort.Slice(proposals.Decisions, func(i, j int) bool {
+		a, b := proposals.Decisions[i], proposals.Decisions[j]
+		if a.Dimension != b.Dimension {
+			return a.Dimension < b.Dimension
+		}
+		if a.TermID != b.TermID {
+			return a.TermID < b.TermID
+		}
+		if a.Candidate != b.Candidate {
+			return a.Candidate < b.Candidate
+		}
+		if a.Value != b.Value {
+			return a.Value < b.Value
+		}
+		if a.Verdict != b.Verdict {
+			return a.Verdict < b.Verdict
+		}
+		if a.Reason != b.Reason {
+			return a.Reason < b.Reason
+		}
+		return a.Probability < b.Probability
+	})
 	return proposals, nil
 }
 
