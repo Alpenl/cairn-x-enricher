@@ -1,0 +1,22 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+tests/localintegration/entity_cache_test.go:106:45: G704: SSRF via taint analysis (gosec)
+		request, err := http.NewRequestWithContext(r.Context(), r.Method, base+r.URL.RequestURI(), r.Body)
+		                                          ^
+tests/localintegration/entity_cache_test.go:112:41: G704: SSRF via taint analysis (gosec)
+		response, err := http.DefaultClient.Do(request)
+		                                      ^
+tests/localintegration/entity_cache_test.go:114:29: ST1013: should use constant http.StatusBadGateway instead of numeric literal 502 (staticcheck)
+			http.Error(w, "fixture", 502)
+			                         ^
+tests/localintegration/entity_cache_test.go:120:29: ST1013: should use constant http.StatusBadGateway instead of numeric literal 502 (staticcheck)
+			http.Error(w, "fixture", 502)
+			                         ^
+tests/localintegration/entity_cache_test.go:128:54: ST1013: should use constant http.StatusBadGateway instead of numeric literal 502 (staticcheck)
+				http.Error(w, "committed fixture response lost", 502)
+				                                                 ^
+5 issues:
+* gosec: 2
+* staticcheck: 3
+exit status 1
+make: *** [Makefile:44: lint-ci] Error 1
