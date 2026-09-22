@@ -1,0 +1,24 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.alpenl.cairn.share.AccountCacheInstrumentedTest" tests="1" failures="1" errors="0" skipped="0" time="5.735" timestamp="2026-09-22T17:05:12" hostname="localhost">
+  <properties>
+    <property name="device" value="cairn-r307-api26(AVD) - 8.0.0" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="blankKeywordLibraryLoadsServerMembershipBeyondLocalProjection" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="5.097">
+    <failure>java.lang.AssertionError: blank-keyword library must request server membership
+at org.junit.Assert.fail(Assert.java:89)
+at org.junit.Assert.assertTrue(Assert.java:42)
+at com.alpenl.cairn.share.AccountCacheInstrumentedTest$blankKeywordLibraryLoadsServerMembershipBeyondLocalProjection$1.invokeSuspend(AccountCacheInstrumentedTest.kt:132)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:108)
+at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:280)
+at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:85)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:59)
+at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:38)
+at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+at com.alpenl.cairn.share.AccountCacheInstrumentedTest.blankKeywordLibraryLoadsServerMembershipBeyondLocalProjection(AccountCacheInstrumentedTest.kt:102)
+</failure>
+  </testcase>
+</testsuite>

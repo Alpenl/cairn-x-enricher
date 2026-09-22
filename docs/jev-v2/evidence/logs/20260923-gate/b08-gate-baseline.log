@@ -1,0 +1,75 @@
+=== RUN   TestGateRejectsInvalidFrozenThresholds
+=== RUN   TestGateRejectsInvalidFrozenThresholds/negative_sample_floor
+    gate_integrity_test.go:36: invalid gate accepted: {Promote:true Reasons:[] Blockers:[] Inconclusive:false}
+=== RUN   TestGateRejectsInvalidFrozenThresholds/zero_group_floor
+    gate_integrity_test.go:36: invalid gate accepted: {Promote:true Reasons:[] Blockers:[] Inconclusive:false}
+=== RUN   TestGateRejectsInvalidFrozenThresholds/impossible_coverage
+    gate_integrity_test.go:36: invalid gate accepted: {Promote:true Reasons:[] Blockers:[] Inconclusive:false}
+=== RUN   TestGateRejectsInvalidFrozenThresholds/impossible_Brier
+    gate_integrity_test.go:36: invalid gate accepted: {Promote:true Reasons:[] Blockers:[] Inconclusive:false}
+=== RUN   TestGateRejectsInvalidFrozenThresholds/nan_error_limit
+    gate_integrity_test.go:36: invalid gate accepted: {Promote:true Reasons:[] Blockers:[] Inconclusive:false}
+=== RUN   TestGateRejectsInvalidFrozenThresholds/infinite_review_limit
+    gate_integrity_test.go:36: invalid gate accepted: {Promote:true Reasons:[] Blockers:[] Inconclusive:false}
+--- FAIL: TestGateRejectsInvalidFrozenThresholds (0.00s)
+    --- FAIL: TestGateRejectsInvalidFrozenThresholds/negative_sample_floor (0.00s)
+    --- FAIL: TestGateRejectsInvalidFrozenThresholds/zero_group_floor (0.00s)
+    --- FAIL: TestGateRejectsInvalidFrozenThresholds/impossible_coverage (0.00s)
+    --- FAIL: TestGateRejectsInvalidFrozenThresholds/impossible_Brier (0.00s)
+    --- FAIL: TestGateRejectsInvalidFrozenThresholds/nan_error_limit (0.00s)
+    --- FAIL: TestGateRejectsInvalidFrozenThresholds/infinite_review_limit (0.00s)
+=== RUN   TestGateRejectsInvalidReportAndNonHoldout
+=== RUN   TestGateRejectsInvalidReportAndNonHoldout/coverage_above_one
+    gate_integrity_test.go:53: invalid report accepted: {Promote:true Reasons:[] Blockers:[] Inconclusive:false}
+=== RUN   TestGateRejectsInvalidReportAndNonHoldout/recall_above_one
+    gate_integrity_test.go:53: invalid report accepted: {Promote:true Reasons:[] Blockers:[] Inconclusive:false}
+=== RUN   TestGateRejectsInvalidReportAndNonHoldout/inconsistent_counts
+    gate_integrity_test.go:53: invalid report accepted: {Promote:true Reasons:[] Blockers:[] Inconclusive:false}
+=== RUN   TestGateRejectsInvalidReportAndNonHoldout/no_reference_identity
+    gate_integrity_test.go:53: invalid report accepted: {Promote:true Reasons:[] Blockers:[] Inconclusive:false}
+=== RUN   TestGateRejectsInvalidReportAndNonHoldout/training_split
+    gate_integrity_test.go:53: invalid report accepted: {Promote:true Reasons:[] Blockers:[] Inconclusive:false}
+=== RUN   TestGateRejectsInvalidReportAndNonHoldout/development_split
+    gate_integrity_test.go:53: invalid report accepted: {Promote:true Reasons:[] Blockers:[] Inconclusive:false}
+=== RUN   TestGateRejectsInvalidReportAndNonHoldout/negative_missing_count
+    gate_integrity_test.go:53: invalid report accepted: {Promote:true Reasons:[] Blockers:[] Inconclusive:false}
+--- FAIL: TestGateRejectsInvalidReportAndNonHoldout (0.00s)
+    --- FAIL: TestGateRejectsInvalidReportAndNonHoldout/coverage_above_one (0.00s)
+    --- FAIL: TestGateRejectsInvalidReportAndNonHoldout/recall_above_one (0.00s)
+    --- FAIL: TestGateRejectsInvalidReportAndNonHoldout/inconsistent_counts (0.00s)
+    --- FAIL: TestGateRejectsInvalidReportAndNonHoldout/no_reference_identity (0.00s)
+    --- FAIL: TestGateRejectsInvalidReportAndNonHoldout/training_split (0.00s)
+    --- FAIL: TestGateRejectsInvalidReportAndNonHoldout/development_split (0.00s)
+    --- FAIL: TestGateRejectsInvalidReportAndNonHoldout/negative_missing_count (0.00s)
+=== RUN   TestAblationRequiresSameReferenceAndSupportedTask
+=== RUN   TestAblationRequiresSameReferenceAndSupportedTask/unknown_references
+    gate_integrity_test.go:71: invalid comparison accepted: {Dimension:topics Baseline:1 Variant:1 Delta:0 Comparable:true}
+=== RUN   TestAblationRequiresSameReferenceAndSupportedTask/different_split
+    gate_integrity_test.go:71: invalid comparison accepted: {Dimension:topics Baseline:1 Variant:1 Delta:0 Comparable:true}
+=== RUN   TestAblationRequiresSameReferenceAndSupportedTask/different_task_type
+    gate_integrity_test.go:71: invalid comparison accepted: {Dimension:topics Baseline:1 Variant:1 Delta:0 Comparable:true}
+=== RUN   TestAblationRequiresSameReferenceAndSupportedTask/no_support
+    gate_integrity_test.go:71: invalid comparison accepted: {Dimension:topics Baseline:1 Variant:1 Delta:0 Comparable:true}
+=== RUN   TestAblationRequiresSameReferenceAndSupportedTask/invalid_metric
+    gate_integrity_test.go:71: invalid comparison accepted: {Dimension:topics Baseline:1 Variant:2 Delta:1 Comparable:true}
+=== RUN   TestAblationRequiresSameReferenceAndSupportedTask/duplicate_dimension
+    gate_integrity_test.go:71: invalid comparison accepted: {Dimension:topics Baseline:1 Variant:1 Delta:0 Comparable:true}
+=== RUN   TestAblationRequiresSameReferenceAndSupportedTask/different_references
+    gate_integrity_test.go:71: invalid comparison accepted: {Dimension:topics Baseline:1 Variant:1 Delta:0 Comparable:true}
+--- FAIL: TestAblationRequiresSameReferenceAndSupportedTask (0.01s)
+    --- FAIL: TestAblationRequiresSameReferenceAndSupportedTask/unknown_references (0.00s)
+    --- FAIL: TestAblationRequiresSameReferenceAndSupportedTask/different_split (0.00s)
+    --- FAIL: TestAblationRequiresSameReferenceAndSupportedTask/different_task_type (0.00s)
+    --- FAIL: TestAblationRequiresSameReferenceAndSupportedTask/no_support (0.00s)
+    --- FAIL: TestAblationRequiresSameReferenceAndSupportedTask/invalid_metric (0.00s)
+    --- FAIL: TestAblationRequiresSameReferenceAndSupportedTask/duplicate_dimension (0.00s)
+    --- FAIL: TestAblationRequiresSameReferenceAndSupportedTask/different_references (0.00s)
+=== RUN   TestAblationRetainsBaselineOnlyDimension
+    gate_integrity_test.go:86: baseline-only dimension disappeared
+--- FAIL: TestAblationRetainsBaselineOnlyDimension (0.00s)
+=== RUN   TestGateZeroBrierLimitIsEnforced
+    gate_integrity_test.go:91: zero Brier limit silently disabled
+--- FAIL: TestGateZeroBrierLimitIsEnforced (0.00s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/evaluation	0.014s
+FAIL
