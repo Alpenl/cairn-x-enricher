@@ -160,7 +160,9 @@
         ["摘要", item.summary], ["中文全文", item.translated_text], ["原文", item.original_text]]) {
         if (value) lines.push(`### ${label}`, "", escape(value), "");
       }
-      if (classification.entities?.length) lines.push(`实体：${classification.entities.map(line).join(" / ")}`, "");
+      const entityView = await fetchJSON(`/api/bookmarks/${item.id}/entities`);
+      const entities = entityView?.available === false ? classification.entities || [] : entityView?.entities || [];
+      if (entities.length) lines.push(`实体：${entities.map(line).join(" / ")}`, "");
       if (item.related_links?.length) lines.push("### 相关链接", "", ...item.related_links.map((value) => `- ${link(value)}`), "");
       if ((index + 1) % EXPORT_CHUNK_SIZE === 0) await yieldToBrowser();
     }

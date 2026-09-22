@@ -98,6 +98,9 @@ type ClassificationJob struct {
 	ContentRevision    int64  `json:"content_revision,omitempty"`
 	EvidenceSnapshotID int64  `json:"evidence_snapshot_id,omitempty"`
 	EvidenceHash       string `json:"evidence_hash,omitempty"`
+	// BoundSnapshot is populated only after the lease identity and canonical
+	// payload have been verified. Extensions consume these exact archived blocks.
+	BoundSnapshot json.RawMessage `json:"-"`
 	classify.Input
 }
 

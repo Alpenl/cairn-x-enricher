@@ -20,7 +20,7 @@ work_root="$(mktemp -d /tmp/opencode/cairn-local-integration.XXXXXX)"
 worker_pid=""
 cleanup() {
   if [ -n "$worker_pid" ] && kill -0 "$worker_pid" 2>/dev/null; then
-    kill "$worker_pid" 2>/dev/null || true
+    kill -- "-$worker_pid" 2>/dev/null || true
     wait "$worker_pid" 2>/dev/null || true
   fi
   rm -rf "$work_root"
@@ -58,7 +58,7 @@ start_worker() {
 EOF
   (cd "$share_root/worker" && npx wrangler d1 migrations apply "cairn-share-$name" --local --config "$work/wrangler.jsonc" >"$work/migrations.log" 2>&1) \
     || { cat "$work/migrations.log"; exit 1; }
-  (cd "$share_root/worker" && npx wrangler dev --local --port "$port" --ip 127.0.0.1 --config "$work/wrangler.jsonc" >"$work/dev.log" 2>&1) &
+  (cd "$share_root/worker" && exec setsid "$share_root/worker/node_modules/.bin/wrangler" dev --local --port "$port" --ip 127.0.0.1 --config "$work/wrangler.jsonc" >"$work/dev.log" 2>&1) &
   worker_pid=$!
   local ready=""
   for _ in $(seq 1 120); do
@@ -77,7 +77,7 @@ EOF
 
 stop_worker() {
   if [ -n "$worker_pid" ] && kill -0 "$worker_pid" 2>/dev/null; then
-    kill "$worker_pid" 2>/dev/null || true
+    kill -- "-$worker_pid" 2>/dev/null || true
     wait "$worker_pid" 2>/dev/null || true
   fi
   worker_pid=""
@@ -104,3 +104,5 @@ run_case lifecycle TestLocalWorkerFullLifecycle
 run_case competition TestLocalWorkerVersionCompetition
 run_case rename TestLocalWorkerDisplayRenameKeepsSemantics
 run_case evidence TestLocalWorkerEvidenceCheckpointAndBoundRead
+
+run_case entities TestLocalWorkerEntitySnapshotIdentity

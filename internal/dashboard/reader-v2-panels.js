@@ -143,22 +143,7 @@
       return;
     }
     panel.hidden = false;
-    if (Number.isInteger(payload.revision)) entityRevision = payload.revision;
-    const state = payload.state || "not_run";
-    const stale = payload.stale ? "（内容已变化）" : "";
-    ui.byId("v2-entity-state").textContent = `${ENTITY_STATE_LABELS[state] || state}${stale}`;
-    holder.replaceChildren();
-    const human = new Set(Array.isArray(payload.human) ? payload.human : []);
-    for (const entity of Array.isArray(payload.entities) ? payload.entities : []) {
-      const row = ui.element("span", "v2-entity");
-      row.append(document.createTextNode(entity + (human.has(entity) ? "（人工）" : "")));
-      const remove = ui.element("button", "text-btn", "移除");
-      remove.type = "button";
-      remove.addEventListener("click", () => submitEntity("reject", entity));
-      row.append(remove);
-      holder.append(row);
-    }
-    if (!holder.childElementCount) holder.append(ui.element("span", "line-note", "没有有效实体。"));
+    renderEntityPayload(payload);
   }
 
   async function submitEntity(action, term) {
@@ -185,6 +170,12 @@
   function renderEntityPayload(payload) {
     const holder = ui.byId("v2-entity-list");
     if (!holder || !payload) return;
+    const entities = Array.isArray(payload.entities) ? payload.entities : [];
+    window.CairnEntityView = { id: bookmarkID, entities };
+    const summary = ui.byId("read-entities");
+    if (summary) { summary.textContent = entities.join(" / "); summary.hidden = entities.length === 0; }
+    const state = payload.state || "not_run";
+    ui.byId("v2-entity-state").textContent = `${ENTITY_STATE_LABELS[state] || state}${payload.stale ? "（内容已变化）" : ""}`;
     if (Number.isInteger(payload.revision)) entityRevision = payload.revision;
     const human = new Set(Array.isArray(payload.human) ? payload.human : []);
     holder.replaceChildren();

@@ -64,6 +64,7 @@ async function main() {
       TYPESAFE_MODEL: "jev-latest",
       POLL_INTERVAL: "2s",
       MAX_JOBS_PER_RUN: "5",
+      CAIRN_EXTENSION_ENTITIES: "true",
       LOG_LEVEL: "warn"
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -195,6 +196,34 @@ async function main() {
     await otherPage.waitForSelector("#v2-carriers input:checked", { state: "attached", timeout: 30000 });
     check("a second browser page reads the final carrier A", await otherPage.$eval("#v2-carriers input:checked", (node) => node.value) === firstCarrier);
     await otherPage.close();
+
+    // Entity processing uses the actual opt-in extension and model client.
+    await page.waitForFunction(() => document.querySelector("#v2-entity-list")?.textContent.includes("BrowserEntity"));
+    check("the entity panel and reading header show the production entity", (await page.textContent("#read-entities")).includes("BrowserEntity"));
+    await page.click("#v2-entities > summary");
+    await page.locator(".v2-entity", { hasText: "BrowserEntity" }).getByRole("button", { name: "移除" }).click();
+    await page.waitForFunction(() => !document.querySelector("#v2-entity-list")?.textContent.includes("BrowserEntity"));
+    check("rejecting an entity also clears the reading header", !(await page.textContent("#read-entities")).includes("BrowserEntity"));
+    const serverExport = await fetch(`http://127.0.0.1:${goPort}/api/export`).then(response => response.text());
+    check("server export excludes the rejected entity", !serverExport.includes("实体：BrowserEntity"));
+    const downloadPromise = page.waitForEvent("download");
+    await page.click("#read-export");
+    const download = await downloadPromise;
+    let exported = "";
+    for await (const chunk of await download.createReadStream()) exported += chunk;
+    check("the real export button excludes the rejected entity", !exported.includes("实体：BrowserEntity"));
+    const currentEntities = await jsonFetch(`http://127.0.0.1:${goPort}/api/bookmarks/${id}/entities`);
+    const restoredEntities = await jsonFetch(`http://127.0.0.1:${goPort}/api/bookmarks/${id}/entities`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        operation_key: "browser-entity-reset", action: "reset", term: "BrowserEntity", expected_revision: currentEntities.payload.revision
+      })
+    });
+    check("entity reset reaches the real Worker through Go", restoredEntities.status === 200 && restoredEntities.payload.entities?.includes("BrowserEntity"));
+    await page.reload({ waitUntil: "load" });
+    await page.waitForFunction(() => document.querySelector("#read-entities")?.textContent.includes("BrowserEntity"));
+    check("a page reload restores the automatic entity after reset", (await page.textContent("#v2-entity-list")).includes("BrowserEntity"));
+    const restoredExport = await fetch(`http://127.0.0.1:${goPort}/api/export`).then(response => response.text());
+    check("server export includes the restored entity", restoredExport.includes("实体：BrowserEntity"));
 
     check("no page errors during the real browser session", pageErrors.length === 0, pageErrors.join("; "));
     await browser.close();

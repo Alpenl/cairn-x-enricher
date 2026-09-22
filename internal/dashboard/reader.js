@@ -49,7 +49,8 @@
     const why = ui.byId("read-why");
     why.textContent = item.why || "";
     why.hidden = !item.why;
-    const entities = item.classification?.entities || [];
+    const entities = window.CairnEntityView?.id === item.id
+      ? window.CairnEntityView.entities : item.classification?.entities || [];
     ui.byId("read-entities").textContent = entities.join(" / ");
     ui.byId("read-entities").hidden = entities.length === 0;
     if (!catalog || dirty || saving) return;

@@ -574,25 +574,28 @@ func (p *Processor) runExtensions(ctx context.Context, job *cairn.Classification
 	if s.extensions == nil {
 		return
 	}
-	blocks := []extension.Block{}
-	if strings.TrimSpace(job.OriginalText) != "" {
-		blocks = append(blocks, extension.Block{ID: "primary-1", Text: job.OriginalText})
+	var archived struct {
+		Blocks []extension.Block `json:"blocks"`
 	}
-	if strings.TrimSpace(job.ContextText) != "" {
-		blocks = append(blocks, extension.Block{ID: "context-1", Text: job.ContextText})
+	if len(job.BoundSnapshot) == 0 || json.Unmarshal(job.BoundSnapshot, &archived) != nil || len(archived.Blocks) == 0 {
+		p.logger.WarnContext(ctx, "extensions require verified bound evidence", "link_id", job.ID)
+		return
 	}
+	blocks := archived.Blocks
 	// Entities are additive and independently budgeted. A stale or failed run
 	// is recorded explicitly and never clears a newer success.
 	entity := s.extensions.Entities(ctx, blocks, job.RelatedLinks)
 	if entity.State != extension.EntityNotRun {
 		body := map[string]any{
-			"operation_key":    fmt.Sprintf("entity-%d-rev-%d", job.ID, job.Revision),
-			"state":            string(entity.State),
-			"entities":         entity.Entities,
-			"content_revision": job.InputRevision,
-			"reason":           entity.Reason,
-			"calls":            entity.Calls,
-			"tokens":           entity.Tokens,
+			"operation_key":        fmt.Sprintf("entity-%d-rev-%d-lease-%s", job.ID, job.Revision, job.LeaseToken),
+			"state":                string(entity.State),
+			"entities":             entity.Entities,
+			"content_revision":     job.ContentRevision,
+			"content_hash":         job.EvidenceHash,
+			"evidence_snapshot_id": job.EvidenceSnapshotID,
+			"reason":               entity.Reason,
+			"calls":                entity.Calls,
+			"tokens":               entity.Tokens,
 		}
 		if err := s.queue.SubmitEntityState(context.WithoutCancel(ctx), job.ID, body); err != nil {
 			p.logger.WarnContext(ctx, "entity state was not stored", "link_id", job.ID, "error", err)
@@ -718,6 +721,7 @@ func (p *Processor) attachBoundEvidence(ctx context.Context, job *cairn.Classifi
 		return enrich.Classified(fmt.Errorf("bound evidence is unusable: %w", err), enrich.ErrorClassContract)
 	}
 	job.Evidence = evidence
+	job.BoundSnapshot = append(json.RawMessage(nil), identity.Snapshot...)
 	return nil
 }
 

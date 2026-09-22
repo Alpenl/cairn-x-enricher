@@ -387,6 +387,7 @@ func TestExtensionsRunAfterClassificationWithoutFailingIt(t *testing.T) {
 		Input:        classify.Input{URL: "https://x.com/a/status/1", OriginalText: "Acme builds Widgets."},
 	}
 	q := &stageQueue{fakeQueue: newFakeQueue(), job: job}
+	bindExtensionFixture(t, q, job)
 	p := NewStaged(q, nil, stageClassifier{}, "v1", "jev", discardLogger(), 1)
 
 	// Disabled: no entity state, no evidence request.
@@ -799,6 +800,7 @@ func TestEvidenceEscalationSkipsDecidedRequests(t *testing.T) {
 		Input:        classify.Input{OriginalText: "Acme builds Widgets."},
 	}
 	q := &stageQueue{fakeQueue: newFakeQueue(), job: job}
+	bindExtensionFixture(t, q, job)
 	flags := extension.DefaultFlags()
 	flags.Entities = true
 	flags.Evidence = true
@@ -816,5 +818,51 @@ func TestEvidenceEscalationSkipsDecidedRequests(t *testing.T) {
 	}
 	if len(q.evidenceDecisions) != 0 {
 		t.Fatalf("a decided request must not be decided again: %+v", q.evidenceDecisions)
+	}
+}
+
+func bindExtensionFixture(t *testing.T, q *stageQueue, job *cairn.ClassificationJob) {
+	t.Helper()
+	snapshot, err := json.Marshal(map[string]any{"blocks": []map[string]string{
+		{"id": "archived-primary", "role": "primary", "text": job.OriginalText},
+	}, "truncation": map[string]bool{"truncated": false}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job.ContentRevision, job.EvidenceSnapshotID = 9, 27
+	job.EvidenceHash = fmt.Sprintf("%x", sha256.Sum256(snapshot))
+	q.evidenceSnapshot, err = json.Marshal(map[string]any{"id": job.EvidenceSnapshotID,
+		"content_revision": job.ContentRevision, "content_hash": job.EvidenceHash, "snapshot": json.RawMessage(snapshot)})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEntitiesRequireVerifiedSnapshot(t *testing.T) {
+	job := &cairn.ClassificationJob{ID: 1, Revision: 2, InputRevision: 1, Input: classify.Input{OriginalText: "OldSource"}}
+	q := &stageQueue{fakeQueue: newFakeQueue(), job: job}
+	p := NewStaged(q, nil, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+	flags := extension.DefaultFlags()
+	flags.Entities = true
+	p.SetExtensions(extension.NewService(flags, extension.DefaultBudget(), fakeJudge{value: 0.95}), nil, extension.FetchPolicy{})
+	if _, _, err := p.RunClassifications(context.Background(), 1); err != nil {
+		t.Fatal(err)
+	}
+	if q.entitySubmissions != 0 {
+		t.Fatal("unbound legacy source created a bound entity result")
+	}
+	q.job = job
+	job.OriginalText = "ArchivedEntity"
+	bindExtensionFixture(t, q, job)
+	job.OriginalText = "OldSource"
+	if _, _, err := p.RunClassifications(context.Background(), 1); err != nil {
+		t.Fatal(err)
+	}
+	if q.entityState["content_revision"] != int64(9) || q.entityState["evidence_snapshot_id"] != int64(27) || q.entityState["content_hash"] != job.EvidenceHash {
+		t.Fatalf("entity identity: %+v", q.entityState)
+	}
+	got := q.entityState["entities"].([]string)
+	if len(got) != 1 || got[0] != "ArchivedEntity" {
+		t.Fatalf("entities came from stale plain text: %v", got)
 	}
 }

@@ -28,6 +28,7 @@ type SurfaceCandidate struct {
 type Block struct {
 	ID   string
 	Text string
+	Role string `json:",omitempty"`
 }
 
 // MaxCandidates bounds the candidate set so a long article cannot produce an

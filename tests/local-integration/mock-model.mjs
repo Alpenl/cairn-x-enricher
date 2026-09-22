@@ -56,7 +56,7 @@ export function startMockModel() {
         }));
       }
       return send(envelope({
-        original_text: "A practical guide to evaluating large language models. It compares methods, tools and data.",
+        original_text: "BrowserEntity provides a practical guide to evaluating large language models. It compares methods, tools and data.",
         original_language: "en",
         context_text: "A related comment that is not the original post.",
         related_links: [],

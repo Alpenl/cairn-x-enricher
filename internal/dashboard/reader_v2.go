@@ -324,12 +324,14 @@ func (s *Server) exportMarkdown(writer http.ResponseWriter, request *http.Reques
 						Form             string   `json:"form"`
 						Use              string   `json:"use"`
 						Reviewed         bool     `json:"reviewed"`
+						Entities         []string `json:"entities"`
 					} `json:"effective"`
 					Projected bool `json:"projected"`
 					Stale     bool `json:"stale"`
 				}
 				if json.Unmarshal(payload, &view) == nil {
 					fmt.Fprintf(&builder, "- 主题：%s\n", exportList(view.Effective.Topics))
+					fmt.Fprintf(&builder, "- 实体：%s\n", exportList(view.Effective.Entities))
 					fmt.Fprintf(&builder, "- 内容功能：%s\n", exportList(view.Effective.ContentFunctions))
 					fmt.Fprintf(&builder, "- 载体：%s\n", exportList(view.Effective.Carriers))
 					fmt.Fprintf(&builder, "- 潜在用途：%s\n", exportList(view.Effective.Affordances))
