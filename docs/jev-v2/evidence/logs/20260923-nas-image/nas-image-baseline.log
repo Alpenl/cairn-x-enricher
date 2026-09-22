@@ -1,0 +1,39 @@
+=== RUN   TestImageRequiresLiveOwnerBeforeAndAfterRead
+=== RUN   TestImageRequiresLiveOwnerBeforeAndAfterRead/live
+    image_privacy_test.go:53: image or owner checks missing: details=0 images=1
+=== RUN   TestImageRequiresLiveOwnerBeforeAndAfterRead/deleted_before
+    image_privacy_test.go:56: private image escaped after owner rejection: response=true err=<nil>
+=== RUN   TestImageRequiresLiveOwnerBeforeAndAfterRead/deleted_during
+    image_privacy_test.go:56: private image escaped after owner rejection: response=true err=<nil>
+=== RUN   TestImageRequiresLiveOwnerBeforeAndAfterRead/unauthorized_before
+    image_privacy_test.go:56: private image escaped after owner rejection: response=true err=<nil>
+=== RUN   TestImageRequiresLiveOwnerBeforeAndAfterRead/unavailable_after
+    image_privacy_test.go:56: private image escaped after owner rejection: response=true err=<nil>
+=== RUN   TestImageRequiresLiveOwnerBeforeAndAfterRead/wrong_owner
+    image_privacy_test.go:56: private image escaped after owner rejection: response=true err=<nil>
+--- FAIL: TestImageRequiresLiveOwnerBeforeAndAfterRead (0.00s)
+    --- FAIL: TestImageRequiresLiveOwnerBeforeAndAfterRead/live (0.00s)
+    --- FAIL: TestImageRequiresLiveOwnerBeforeAndAfterRead/deleted_before (0.00s)
+    --- FAIL: TestImageRequiresLiveOwnerBeforeAndAfterRead/deleted_during (0.00s)
+    --- FAIL: TestImageRequiresLiveOwnerBeforeAndAfterRead/unauthorized_before (0.00s)
+    --- FAIL: TestImageRequiresLiveOwnerBeforeAndAfterRead/unavailable_after (0.00s)
+    --- FAIL: TestImageRequiresLiveOwnerBeforeAndAfterRead/wrong_owner (0.00s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/cairn	0.005s
+=== RUN   TestImageProxyNeverPersistsPrivateImages
+=== RUN   TestImageProxyNeverPersistsPrivateImages/#00
+    cache_test.go:324: Cache-Control = "private, max-age=604800, immutable", want private, no-store
+=== RUN   TestImageProxyNeverPersistsPrivateImages/public,_max-age=604800,_immutable
+    cache_test.go:324: Cache-Control = "public, max-age=604800, immutable", want private, no-store
+=== RUN   TestImageProxyNeverPersistsPrivateImages/private,_max-age=86400
+    cache_test.go:324: Cache-Control = "private, max-age=86400", want private, no-store
+=== RUN   TestImageProxyNeverPersistsPrivateImages/no-store
+    cache_test.go:324: Cache-Control = "no-store", want private, no-store
+--- FAIL: TestImageProxyNeverPersistsPrivateImages (0.00s)
+    --- FAIL: TestImageProxyNeverPersistsPrivateImages/#00 (0.00s)
+    --- FAIL: TestImageProxyNeverPersistsPrivateImages/public,_max-age=604800,_immutable (0.00s)
+    --- FAIL: TestImageProxyNeverPersistsPrivateImages/private,_max-age=86400 (0.00s)
+    --- FAIL: TestImageProxyNeverPersistsPrivateImages/no-store (0.00s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/dashboard	0.004s
+FAIL

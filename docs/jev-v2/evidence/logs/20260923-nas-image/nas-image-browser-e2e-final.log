@@ -1,0 +1,46 @@
+== applying real migrations to the local D1 ==
+== starting wrangler dev on 127.0.0.1:55869 ==
+== building the real Go service ==
+== driving the real browser against the real stack ==
+ok   the real Go service registered the compiled spec
+ok   the spec carries the multidimensional taxonomy version
+ok   v2 target activated
+ok   new bookmark created
+ok   the scheduler produced a v2 run with the mock model
+ok   the provider usage was preserved
+ok   the classification job completed against the target
+ok   the effective view is derived from the real decision
+ok   the multidimensional topics are present
+ok   AI-only projection rebuild 1 succeeds
+ok   AI-only projection rebuild 2 succeeds
+ok   AI-only rebuilds create no human or legacy overrides
+ok   the old endpoint still reports AI-only as unreviewed
+ok   the current endpoint still reports AI-only as unreviewed
+ok   the v2 panel loads through the real proxy
+ok   the browser shows the same effective topics as the Worker
+ok   the fourth effective topic is folded, not deleted
+ok   real blank-query library finds the fourth effective topic
+ok   real library restores a saved multi-topic filter
+ok   real multidimensional query returns confirmed membership and filtered counts
+ok   real narrow library filters fit the viewport
+ok   real filtered export carries the matching full dimensions
+ok   the human reject is stored by the real Worker
+ok   the effective view no longer contains the rejected topic
+ok   the refreshed UI shows the human decision
+ok   real filtered library removes a confirmed human rejection
+ok   real multi-topic OR includes the remaining accepted topic
+ok   carrier choice 1 is the last selected value
+ok   carrier choice 2 is the last selected value
+ok   carrier choice 3 is the last selected value
+ok   carrier A survives refresh after A-B-A
+ok   a second browser page reads the final carrier A
+ok   the entity panel and reading header show the production entity
+ok   rejecting an entity also clears the reading header
+ok   server export excludes the rejected entity
+ok   the real export button excludes the rejected entity
+ok   entity reset reaches the real Worker through Go
+ok   a page reload restores the automatic entity after reset
+ok   server export includes the restored entity
+ok   no page errors during the real browser session
+
+40/40 real end-to-end checks passed
