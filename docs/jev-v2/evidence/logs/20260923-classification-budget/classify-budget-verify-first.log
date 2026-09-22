@@ -1,0 +1,13 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+tests/localintegration/classification_budget_test.go:134:30: Function `claimEnrichmentJob` should pass the context parameter (contextcheck)
+		lease := claimEnrichmentJob(t, base, token, id)
+		                           ^
+internal/classify/call_budget.go:28:2: redefines-builtin-id: redefinition of the built-in function max (revive)
+	max := DefaultCallBudgetLimits()
+	^
+2 issues:
+* contextcheck: 1
+* revive: 1
+exit status 1
+make: *** [Makefile:44: lint-ci] Error 1

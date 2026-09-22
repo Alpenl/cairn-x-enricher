@@ -1,0 +1,161 @@
+
+> test
+> vitest run test/classification-budget.test.ts
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:2946793) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-classify-budget-next/worker
+
+ ❯ test/classification-budget.test.ts (8 tests | 7 failed) 1828ms
+   × reserves each actual request once and enforces persistent per-item/global ceilings 198ms
+   × concurrent consumers cannot exceed the shared call or token allowance 258ms
+   × binds every lease, target and evidence field before any budget charge 225ms
+   × checks the final SQL transaction window rather than only a preflight 235ms
+   × keeps the charge after a discarded grant response or bookmark deletion 193ms
+   × refuses new claims before consuming an attempt when global admission is exhausted 226ms
+   × skips a per-item exhausted candidate while admitting another without resetting usage 257ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/classification-budget.test.ts > reserves each actual request once and enforces persistent per-item/global ceilings
+AssertionError: expected { error: 'invalid_reservation' } to match object { granted: true }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "granted": true,
++   "error": "invalid_reservation",
+  }
+
+ ❯ test/classification-budget.test.ts:26:63
+     24| it("reserves each actual request once and enforces persistent per-item…
+     25|  const body=await seed();const tight={...limits,max_calls_per_item:2};
+     26|  expect(await (await reserve({...body,limits:tight})).json()).toMatchO…
+       |                                                               ^
+     27|  expect(await (await reserve({...body,limits:tight})).json()).toMatchO…
+     28|  expect(await (await reserve({...body,operation_key:key(2),limits:tigh…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  test/classification-budget.test.ts > concurrent consumers cannot exceed the shared call or token allowance
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ test/classification-budget.test.ts:37:40
+     35|  const responses=await Promise.all(bodies.map(b=>reserve({...b,limits:…
+     36|  const receipts=await Promise.all(responses.map(r=>r.json() as Promise…
+     37|  expect(receipts.filter(r=>r.granted)).toHaveLength(1);expect(await co…
+       |                                        ^
+     38|  expect(await env.DB.prepare("SELECT COUNT(*) n FROM budget_ledger WHE…
+     39| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  test/classification-budget.test.ts > binds every lease, target and evidence field before any budget charge
+AssertionError: expected 400 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 400
+
+ ❯ test/classification-budget.test.ts:43:54
+     41|  const body=await seed();
+     42|  for(const patch of [{lease_token:"wrong"},{revision:99},{input_revisi…
+     43|   expect((await reserve({...body,...patch})).status).toBe(409);
+       |                                                      ^
+     44|  }
+     45|  await env.DB.prepare("UPDATE classification_jobs SET lease_until='200…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  test/classification-budget.test.ts > checks the final SQL transaction window rather than only a preflight
+AssertionError: expected 400 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 400
+
+ ❯ test/classification-budget.test.ts:53:42
+     51|   changed=true;await env.DB.prepare("UPDATE classification_jobs SET in…
+     52|  };const value=Reflect.get(target,property);return typeof value==="fun…
+     53|  expect((await reserve(body,db)).status).toBe(409);expect(changed).toB…
+       |                                          ^
+     54| });
+     55| it("keeps the charge after a discarded grant response or bookmark dele…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  test/classification-budget.test.ts > keeps the charge after a discarded grant response or bookmark deletion
+AssertionError: expected { error: 'invalid_reservation' } to match object { granted: false }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "granted": false,
++   "error": "invalid_reservation",
+  }
+
+ ❯ test/classification-budget.test.ts:57:87
+     55| it("keeps the charge after a discarded grant response or bookmark dele…
+     56|  const body=await seed();await reserve({...body,limits:{...limits,max_…
+     57|  expect(await (await reserve({...body,limits:{...limits,max_calls_tota…
+       |                                                                                       ^
+     58|  await env.DB.prepare("DELETE FROM links WHERE id=1").run();
+     59|  expect(await env.DB.prepare("SELECT COUNT(*) n FROM budget_ledger WHE…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  test/classification-budget.test.ts > refuses new claims before consuming an attempt when global admission is exhausted
+AssertionError: expected 204 to be 429 // Object.is equality
+
+- Expected
++ Received
+
+- 429
++ 204
+
+ ❯ test/classification-budget.test.ts:68:71
+     66|  await env.DB.prepare("UPDATE classification_jobs SET status='pending'…
+     67|  const caps={taxonomy_version:taxonomy.version,policy_version:"fixture…
+     68|  expect((await call("enrichment/classifications/claim",caps)).status).…
+       |                                                                       ^
+     69|  expect(await env.DB.prepare("SELECT attempts FROM classification_jobs…
+     70|  await env.DB.prepare("UPDATE budget_ledger SET created_at='2000-01-01…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  test/classification-budget.test.ts > skips a per-item exhausted candidate while admitting another without resetting usage
+SyntaxError: Unexpected end of JSON input
+ ❯ test/classification-budget.test.ts:77:9
+     75|  await env.DB.prepare("UPDATE classification_jobs SET status='pending'…
+     76|  const result=await call("enrichment/classifications/claim",{taxonomy_…
+     77|  expect(await result.json()).toMatchObject({id:2,attempt:1});
+       |         ^
+     78|  expect(await env.DB.prepare("SELECT attempts FROM classification_jobs…
+     79| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 1 passed (8)
+   Start at  06:48:41
+   Duration  2.51s (transform 114ms, setup 0ms, import 202ms, tests 1.83s, environment 0ms)
+

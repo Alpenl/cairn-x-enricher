@@ -1,0 +1,8 @@
+# github.com/Alpenl/cairn-x-enricher/internal/cairn
+internal/cairn/client.go:228:24: undefined: classify
+ok  	github.com/Alpenl/cairn-x-enricher/internal/classify	0.044s
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/cairn [build failed]
+ok  	github.com/Alpenl/cairn-x-enricher/internal/config	0.003s
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/processor [build failed]
+FAIL	github.com/Alpenl/cairn-x-enricher/cmd/cairn-x-enricher [build failed]
+FAIL
