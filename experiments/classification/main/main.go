@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Alpenl/cairn-x-enricher/experiments/classification"
+	"github.com/Alpenl/cairn-x-enricher/internal/evaluation"
 )
 
 func main() {
@@ -46,7 +46,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-	var dataset classification.Dataset
+	var dataset evaluation.Dataset
 	if err := json.Unmarshal(raw, &dataset); err != nil {
 		fmt.Fprintln(os.Stderr, "error: decode dataset:", err)
 		os.Exit(1)
@@ -56,7 +56,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	gate := classification.DefaultGate()
+	gate := evaluation.DefaultGate()
 	if gatePath != "" {
 		gateRaw, err := os.ReadFile(filepath.Clean(gatePath))
 		if err != nil {
@@ -80,12 +80,12 @@ func main() {
 		return
 	}
 
-	report, err := classification.Score(dataset)
+	report, err := evaluation.Score(dataset)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error: score:", err)
 		os.Exit(1)
 	}
-	decision := classification.EvaluateGate(report, gate)
+	decision := evaluation.EvaluateGate(report, gate)
 	encode(map[string]any{"report": report, "gate": gate, "decision": decision})
 }
 

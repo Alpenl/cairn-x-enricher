@@ -1,9 +1,9 @@
-// Package classification contains the offline evaluation tools. This file is
+// Package evaluation contains the offline evaluation tools. This file is
 // the B08 production export: it turns stored classification runs into a dataset
 // the offline scorer can consume. It reads the Worker only, makes no model call
 // and never fabricates a gold label: a machine prediction is explicitly not
 // human gold, so the scorer reports it as inconclusive until a human labels it.
-package classification
+package evaluation
 
 import (
 	"context"

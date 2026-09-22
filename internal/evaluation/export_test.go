@@ -1,4 +1,4 @@
-package classification
+package evaluation
 
 import (
 	"context"

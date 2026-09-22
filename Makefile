@@ -43,7 +43,7 @@ verify: lint lint-ci test test-frontend build
 # Offline replay of the recorded ablation outcomes. It makes no model calls, so
 # it is safe to run on every change and is what pins the published conclusions.
 test-ablation:
-	go test ./experiments/...
+	go test ./experiments/... ./internal/evaluation/...
 
 # Offline behavior mutations in a disposable working-tree copy. No model calls.
 ablation-architecture:

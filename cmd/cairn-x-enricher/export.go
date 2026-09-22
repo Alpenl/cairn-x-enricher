@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Alpenl/cairn-x-enricher/experiments/classification"
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/config"
+	"github.com/Alpenl/cairn-x-enricher/internal/evaluation"
 	"github.com/spf13/cobra"
 )
 
@@ -39,13 +39,13 @@ func newExportDatasetCommand() *cobra.Command {
 				return err
 			}
 			queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, &http.Client{Timeout: cfg.RequestTimeout})
-			dataset, err := classification.ExportDataset(context.Background(), queue, classification.ExportOptions{
+			dataset, err := evaluation.ExportDataset(context.Background(), queue, evaluation.ExportOptions{
 				LinkIDs: linkIDs, Name: name, Split: split,
 			})
 			if err != nil {
 				return err
 			}
-			payload, err := classification.MarshalDataset(dataset)
+			payload, err := evaluation.MarshalDataset(dataset)
 			if err != nil {
 				return err
 			}

@@ -43,7 +43,8 @@ pending
 | `internal/dashboard` | 中文收藏列表、阅读页、多维字段级整理、v2 代理与有界人工队列 |
 | `internal/extension` | 有界语义扩展：实体候选/受限判断、受控外链抓取、重排、词表提案（默认关闭） |
 | `internal/config` | 按命令角色解析与校验环境变量 |
-| `experiments/classification` | 离线评估、校准、消融与晋升门禁（不进生产包） |
+| `internal/evaluation` | 共享数据集 schema、只读生产导出及离线评分/校准；服务主路径不执行评估 |
+| `experiments/classification/main` | 显式离线评估 CLI，复用内部评估库 |
 
 人工任务先按 ID 在 Worker 原子领取，再进入本机有界队列。定时与人工获取/阅读增强共享 `MAX_CONCURRENCY` 信号量。Jev 使用额外的一个串行分类 worker，与获取队列并行，拥有独立 lease、重试和输入版本。
 

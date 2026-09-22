@@ -78,7 +78,7 @@ go run ./cmd/cairn-x-enricher classify --max-jobs 10
 go run ./cmd/cairn-x-enricher replay --id 12 --topic-accept 0.6  # 零调用重放旧判断
 go run ./cmd/cairn-x-enricher refresh-source --id 12            # 显式重取原文
 go run ./cmd/cairn-x-enricher serve
-go run ./experiments/classification/main -dataset experiments/classification/testdata/synthetic-dataset.json
+go run ./experiments/classification/main -dataset internal/evaluation/testdata/synthetic-dataset.json
 ```
 
 `classify` 只校验 Worker 与 Jev 配置，不要求未使用的 Grok 凭据；`serve` 按已启用组件校验。普通 `--help`、root 命令与所有 `make` 目标都不会产生付费调用。

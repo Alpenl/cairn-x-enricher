@@ -1,11 +1,10 @@
-// Package classification provides the offline evaluation, calibration and
+// Package evaluation provides the offline evaluation, calibration and
 // promotion-gate tooling for the Jev classification policy.
 //
-// It is deliberately separate from the production packages: scoring, ablation
-// and threshold search must never run inside the serving path. Everything here
-// is deterministic and offline. Only the explicitly opted-in live runner may
-// make a network call, and it is not part of make verify or CI.
-package classification
+// Dataset schemas and the read-only Worker exporter are shared with the CLI.
+// Scoring, ablation and threshold search are deterministic and offline; they
+// never run inside the serving path. Explicit experiment commands own evaluation.
+package evaluation
 
 import (
 	"crypto/sha256"
