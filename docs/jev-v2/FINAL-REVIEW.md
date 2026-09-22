@@ -1,3 +1,5 @@
+> 2026-09-22 update: [R3-03 provenance, migration and real browser evidence](evidence/R3-20260922-provenance.md). Full acceptance remains pending.
+
 > 2026-09-22 update: [R3-05 actual request budget evidence](evidence/R3-20260922-budget.md). Full acceptance remains pending.
 
 > 2026-09-22 update: [R3-02 snapshot identity and real recovery evidence](evidence/R3-20260922-evidence.md). Full acceptance remains pending.

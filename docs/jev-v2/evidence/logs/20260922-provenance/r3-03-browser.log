@@ -1,0 +1,34 @@
+WHAT: 运行真实浏览器人工来源验收
+WHY:  正常分类四主题经两次重建后仍未人工确认
+== applying real migrations to the local D1 ==
+== starting wrangler dev on 127.0.0.1:37197 ==
+== building the real Go service ==
+== driving the real browser against the real stack ==
+ok   the real Go service registered the compiled spec
+ok   the spec carries the multidimensional taxonomy version
+ok   v2 target activated
+ok   new bookmark created
+ok   the scheduler produced a v2 run with the mock model
+ok   the provider usage was preserved
+ok   the classification job completed against the target
+ok   the effective view is derived from the real decision
+ok   the multidimensional topics are present
+ok   AI-only projection rebuild 1 succeeds
+ok   AI-only projection rebuild 2 succeeds
+ok   AI-only rebuilds create no human or legacy overrides
+ok   the old endpoint still reports AI-only as unreviewed
+ok   the current endpoint still reports AI-only as unreviewed
+ok   the v2 panel loads through the real proxy
+ok   the browser shows the same effective topics as the Worker
+ok   the fourth effective topic is folded, not deleted
+ok   the human reject is stored by the real Worker
+ok   the effective view no longer contains the rejected topic
+ok   the refreshed UI shows the human decision
+ok   carrier choice 1 is the last selected value
+ok   carrier choice 2 is the last selected value
+ok   carrier choice 3 is the last selected value
+ok   carrier A survives refresh after A-B-A
+ok   a second browser page reads the final carrier A
+ok   no page errors during the real browser session
+
+26/26 real end-to-end checks passed
