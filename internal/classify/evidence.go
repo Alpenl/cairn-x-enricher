@@ -38,11 +38,12 @@ type EvidenceBlock struct {
 // why, no curation status and no user stance: those are personal and are not
 // evidence about the content.
 type Evidence struct {
-	Primary    string          `json:"primary"`
-	Context    []EvidenceBlock `json:"context,omitempty"`
-	Truncated  bool            `json:"truncated"`
-	Coverage   string          `json:"coverage"`
-	TotalRunes int             `json:"total_runes"`
+	Primary   string          `json:"primary"`
+	Context   []EvidenceBlock `json:"context,omitempty"`
+	Truncated bool            `json:"truncated"`
+	Coverage  string          `json:"coverage"`
+	// TotalRunes counts source text before request truncation, excluding metadata.
+	TotalRunes int `json:"total_runes"`
 }
 
 // Budget bounds the serialized evidence. The estimate is explicit and
@@ -52,16 +53,36 @@ type Budget struct {
 	// MaxBlocks bounds how many context blocks are sent so a long thread cannot
 	// crowd out the primary text.
 	MaxBlocks int
+	// Byte limits apply after JSON serialization, including metadata/escaping
+	// and the complete question instructions/criteria. Zero uses defaults.
+	MaxStateBytes   int
+	MaxRequestBytes int
 }
 
-// DefaultBudget is deliberately conservative. A CJK rune is at most about one
-// token, so bounding runes bounds tokens from above without a tokenizer.
-func DefaultBudget() Budget { return Budget{MaxRunes: 12000, MaxBlocks: 12} }
+// DefaultBudget bounds characters and actual HTTP bytes independently. These
+// are application limits, not a claim about a provider tokenizer or context size.
+func DefaultBudget() Budget {
+	return Budget{MaxRunes: 12000, MaxBlocks: 12, MaxStateBytes: 48 << 10, MaxRequestBytes: 128 << 10}
+}
+
+func (b Budget) stateBytes() int {
+	if b.MaxStateBytes > 0 {
+		return b.MaxStateBytes
+	}
+	return DefaultBudget().MaxStateBytes
+}
+
+func (b Budget) requestBytes() int {
+	if b.MaxRequestBytes > 0 {
+		return b.MaxRequestBytes
+	}
+	return DefaultBudget().MaxRequestBytes
+}
 
 // PrepareEvidence builds the objective state. Personal fields are excluded by
 // construction: there is no field on the input for them.
 func PrepareEvidence(primary string, context []EvidenceBlock, budget Budget) (Evidence, error) {
-	if budget.MaxRunes <= 0 {
+	if budget.MaxRunes <= 0 || budget.MaxBlocks <= 0 {
 		return Evidence{}, errors.New("evidence budget must be positive")
 	}
 	trimmedPrimary := strings.TrimSpace(primary)
@@ -69,6 +90,10 @@ func PrepareEvidence(primary string, context []EvidenceBlock, budget Budget) (Ev
 		return Evidence{}, errors.New("evidence requires primary text")
 	}
 	evidence := Evidence{Primary: "", Context: []EvidenceBlock{}, Coverage: "complete"}
+	evidence.TotalRunes = utf8.RuneCountInString(primary)
+	for _, block := range context {
+		evidence.TotalRunes += utf8.RuneCountInString(block.Text)
+	}
 	// The primary text always has priority; only it may be truncated, and the
 	// truncation is recorded rather than silent.
 	primaryRunes := utf8.RuneCountInString(trimmedPrimary)
@@ -76,12 +101,11 @@ func PrepareEvidence(primary string, context []EvidenceBlock, budget Budget) (Ev
 		evidence.Primary = truncateRunes(trimmedPrimary, budget.MaxRunes)
 		evidence.Truncated = true
 		evidence.Coverage = "truncated"
-		evidence.TotalRunes = primaryRunes
-		return evidence, nil
+		return boundSerializedState(evidence, budget.stateBytes())
 	}
 	evidence.Primary = trimmedPrimary
 	remaining := budget.MaxRunes - primaryRunes
-	for _, block := range context {
+	for index, block := range context {
 		if len(evidence.Context) >= budget.MaxBlocks {
 			evidence.Truncated = true
 			evidence.Coverage = "truncated"
@@ -109,14 +133,59 @@ func PrepareEvidence(primary string, context []EvidenceBlock, budget Budget) (Ev
 			block.Role = RoleLegacyUnknown
 		}
 		evidence.Context = append(evidence.Context, block)
-		evidence.TotalRunes += runes
 		remaining -= runes
 		if remaining <= 0 {
+			if index+1 < len(context) {
+				evidence.Truncated = true
+				evidence.Coverage = "truncated"
+			}
 			break
 		}
 	}
-	evidence.TotalRunes += utf8.RuneCountInString(evidence.Primary)
-	return evidence, nil
+	return boundSerializedState(evidence, budget.stateBytes())
+}
+
+// Keep complete block identities/URLs. If metadata pushes JSON over the byte
+// limit, remove trailing context blocks before shortening the primary. Work on
+// the prepared copy, never the archived snapshot supplied by the caller.
+func boundSerializedState(e Evidence, limit int) (Evidence, error) {
+	for {
+		encoded, err := e.stateForModel()
+		if err != nil {
+			return Evidence{}, err
+		}
+		if len(encoded) <= limit {
+			return e, nil
+		}
+		e.Truncated = true
+		e.Coverage = "truncated"
+		if len(e.Context) > 0 {
+			e.Context = e.Context[:len(e.Context)-1]
+			continue
+		}
+		original := []rune(e.Primary)
+		low, high := 1, len(original)
+		best := ""
+		for low <= high {
+			mid := (low + high) / 2
+			e.Primary = string(original[:mid])
+			encoded, err = e.stateForModel()
+			if err != nil {
+				return Evidence{}, err
+			}
+			if len(encoded) <= limit {
+				best = e.Primary
+				low = mid + 1
+			} else {
+				high = mid - 1
+			}
+		}
+		if best == "" {
+			return Evidence{}, errors.New("state byte budget cannot fit primary evidence")
+		}
+		e.Primary = best
+		return e, nil
+	}
 }
 
 // stateForModel serializes only the objective evidence. It is used by tests to

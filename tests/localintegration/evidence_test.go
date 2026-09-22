@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
@@ -24,7 +25,7 @@ type checkpointReader struct{ fetches int }
 
 func (r *checkpointReader) FetchSource(context.Context, enrich.Input) (enrich.Source, error) {
 	r.fetches++
-	return enrich.Source{OriginalText: "Synthetic <LLM> & evaluation 中文\u2028source", OriginalLanguage: "en", Model: "fixture", RelatedLinks: []string{}, ImageURLs: []string{}}, nil
+	return enrich.Source{OriginalText: "Synthetic <LLM> & evaluation 中文\u2028source " + strings.Repeat("长材料", 5000), OriginalLanguage: "en", Model: "fixture", RelatedLinks: []string{}, ImageURLs: []string{}}, nil
 }
 
 func (*checkpointReader) Transform(_ context.Context, input enrich.Input) (enrich.Result, error) {
@@ -43,14 +44,44 @@ func TestLocalWorkerEvidenceCheckpointAndBoundRead(t *testing.T) {
 	provider := providerContractServer(t, mustSpec(t, catalog))
 	defer provider.Close()
 	var calls atomic.Int64
+	budget := classify.Budget{MaxRunes: 200, MaxBlocks: 2, MaxStateBytes: 1000, MaxRequestBytes: 16 << 10}
+	var requestBytes, stateBytes, stateRunes, stateBlocks int
+	var truncated bool
 	providerHTTP := provider.Client()
 	providerTransport := providerHTTP.Transport
 	providerHTTP.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		calls.Add(1)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			return nil, err
+		}
+		_ = r.Body.Close()
+		r.Body = io.NopCloser(strings.NewReader(string(body)))
+		var request struct {
+			State json.RawMessage `json:"state"`
+		}
+		if err := json.Unmarshal(body, &request); err != nil {
+			return nil, err
+		}
+		var evidence classify.Evidence
+		if err := json.Unmarshal(request.State, &evidence); err != nil {
+			return nil, err
+		}
+		requestBytes = len(body)
+		stateBytes = len(request.State)
+		stateRunes = utf8.RuneCountInString(evidence.Primary)
+		stateBlocks = len(evidence.Context)
+		for _, block := range evidence.Context {
+			stateRunes += utf8.RuneCountInString(block.Text)
+		}
+		truncated = evidence.Truncated && evidence.Coverage == "truncated"
 		return providerTransport.RoundTrip(r)
 	})
 	classifier, err := classify.NewClient(provider.URL, "fixture", "jev-latest", providerHTTP, catalog)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := classifier.SetBudget(budget); err != nil {
 		t.Fatal(err)
 	}
 	queue := cairn.NewClient(base, token, &http.Client{Timeout: 10 * time.Second})
@@ -120,6 +151,10 @@ func TestLocalWorkerEvidenceCheckpointAndBoundRead(t *testing.T) {
 		t.Fatal("classification ran before checkpoint repair")
 	}
 	t.Log("source saved, snapshot 503, three empty claims without attempt consumption, retry repairs snapshot with one retrieval")
+	archivedBefore, err := queue.GetEvidence(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for _, fault := range []string{"404", "503", "malformed", "id", "revision", "hash", "body"} {
 		t.Run(fault, func(t *testing.T) {
@@ -207,5 +242,13 @@ func TestLocalWorkerEvidenceCheckpointAndBoundRead(t *testing.T) {
 	if err != nil || len(runs) != 1 {
 		t.Fatalf("successful runs=%d err=%v", len(runs), err)
 	}
+	if requestBytes > budget.MaxRequestBytes || stateBytes > budget.MaxStateBytes || stateRunes > budget.MaxRunes || stateBlocks > budget.MaxBlocks || !truncated {
+		t.Fatalf("real bound snapshot bypassed budget: request=%d state=%d runes=%d blocks=%d truncated=%v", requestBytes, stateBytes, stateRunes, stateBlocks, truncated)
+	}
+	archivedAfter, err := queue.GetEvidence(ctx, id)
+	if err != nil || string(archivedBefore) != string(archivedAfter) {
+		t.Fatalf("archived snapshot changed during bounded inference: %v", err)
+	}
+	t.Logf("real bound snapshot retained %d archive bytes; outbound request=%d state=%d runes=%d blocks=%d, truncation recorded", len(archivedAfter), requestBytes, stateBytes, stateRunes, stateBlocks)
 	t.Logf("seven bound-read failures: zero model calls/commits; recovery: %d model call, %d run", calls.Load(), len(runs))
 }

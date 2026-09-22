@@ -72,6 +72,29 @@ func TestPrepareEvidenceRequiresPrimary(t *testing.T) {
 	}
 }
 
+func TestExactRuneBudgetStillRecordsOmittedContext(t *testing.T) {
+	e, err := PrepareEvidence("main", []EvidenceBlock{{ID: "a", Text: "1234"}, {ID: "b", Text: "omitted"}}, Budget{MaxRunes: 8, MaxBlocks: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !e.Truncated || e.Coverage != "truncated" || len(e.Context) != 1 {
+		t.Fatalf("omission hidden: %+v", e)
+	}
+}
+
+func TestStructuredEvidencePreservesUpstreamCoverage(t *testing.T) {
+	c, _ := NewClient("http://127.0.0.1:1", "fixture", "jev", nil, testCatalog())
+	for _, coverage := range []string{"partial", "truncated"} {
+		e, err := c.evidenceFor(Input{Evidence: &Evidence{Primary: "source", Coverage: coverage, Truncated: coverage == "truncated"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if e.Coverage != coverage || e.Truncated != (coverage == "truncated") {
+			t.Fatalf("upstream coverage lost: %+v", e)
+		}
+	}
+}
+
 func TestCheckNoPersonalFieldsDetectsNestedLeak(t *testing.T) {
 	leaky := []byte(`{"primary":"x","context":[{"note":"personal"}]}`)
 	if err := CheckNoPersonalFields(leaky); err == nil {

@@ -53,6 +53,8 @@ attempt、next retry、独立 lease、输入 revision、词表/策略/请求模�
 两类队列同时运行，互不因批次领取窗口而饥饿；人工获取完成后最迟下个轮询周期分类。
 `once` 在预算内最多各处理 `--max-jobs` 条获取任务和分类任务。
 
+普通文本和绑定的结构化快照使用相同的输入预算：默认正文加上下文最多 12,000 个 Unicode 字符、12 个上下文块，序列化后的 state 最多 48 KiB，包含问题 instructions/criteria 的完整 HTTP 请求最多 128 KiB。这些是应用自身的限制，不是供应商 token 数或上下文窗口的估算。优先保留原帖；超限时缩短请求正文或移除末尾上下文块，并记录 `truncated`/`coverage`。数据库完整快照保持不变。问题定义本身导致整包超限时，发送前返回合同错误，不删改问题含义；复用与扩展请求也受完整请求字节上限约束。
+
 ## 配置与使用
 
 `.env` 使用 `TYPESAFE_API_KEY`、`TYPESAFE_BASE_URL=https://api.typesafe.ai`、

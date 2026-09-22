@@ -151,7 +151,7 @@ func (c *Client) SetPolicy(policy Policy) error {
 
 // SetBudget replaces the evidence budget used to bound the request body.
 func (c *Client) SetBudget(budget Budget) error {
-	if budget.MaxRunes <= 0 || budget.MaxBlocks <= 0 {
+	if budget.MaxRunes <= 0 || budget.MaxBlocks <= 0 || budget.MaxStateBytes < 0 || budget.MaxRequestBytes < 0 {
 		return errors.New("evidence budget must be positive")
 	}
 	c.budget = budget
@@ -210,6 +210,9 @@ func (c *Client) BuildProviderRequest(input Input) ([]byte, Evidence, error) {
 	if err != nil {
 		return nil, Evidence{}, err
 	}
+	if err := c.checkRequestBudget(body); err != nil {
+		return nil, Evidence{}, err
+	}
 	return body, evidence, nil
 }
 
@@ -217,9 +220,21 @@ func (c *Client) BuildProviderRequest(input Input) ([]byte, Evidence, error) {
 // caller has one, otherwise a bounded preparation of the plain text fields.
 func (c *Client) evidenceFor(input Input) (Evidence, error) {
 	if input.Evidence != nil {
-		evidence := *input.Evidence
-		if strings.TrimSpace(evidence.Primary) == "" {
-			return Evidence{}, errors.New("classification requires primary evidence")
+		evidence, err := PrepareEvidence(input.Evidence.Primary, input.Evidence.Context, c.budget)
+		if err != nil {
+			return Evidence{}, err
+		}
+		if input.Evidence.Truncated {
+			evidence.Truncated = true
+			evidence.Coverage = "truncated"
+		}
+		if !evidence.Truncated && input.Evidence.Coverage != "" {
+			evidence.Coverage = input.Evidence.Coverage
+		}
+		// Upstream coverage changes can add serialized bytes at a tight limit.
+		evidence, err = boundSerializedState(evidence, c.budget.stateBytes())
+		if err != nil {
+			return Evidence{}, err
 		}
 		return evidence, nil
 	}
@@ -227,6 +242,13 @@ func (c *Client) evidenceFor(input Input) (Evidence, error) {
 		return Evidence{}, errors.New("classification requires source text")
 	}
 	return PrepareEvidence(input.OriginalText, contextBlocks(input.ContextText), c.budget)
+}
+
+func (c *Client) checkRequestBudget(body []byte) error {
+	if len(body) > c.budget.requestBytes() {
+		return enrich.Classified(fmt.Errorf("TypeSafe request exceeds byte budget: %d > %d", len(body), c.budget.requestBytes()), enrich.ErrorClassContract)
+	}
+	return nil
 }
 
 // contextBlocks labels secondary context. The exact provenance of a stored
@@ -313,6 +335,9 @@ func hashEvidence(evidence Evidence) (string, error) {
 // envelope. It is shared by the full evaluation and the partial re-evaluation so
 // both paths use exactly the same contract handling.
 func (c *Client) callProvider(ctx context.Context, body []byte) (providerResponse, error) {
+	if err := c.checkRequestBudget(body); err != nil {
+		return providerResponse{}, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return providerResponse{}, errors.New("invalid TypeSafe endpoint")
@@ -409,6 +434,9 @@ func (c *Client) Judge(ctx context.Context, state any, questions map[string]Prov
 	}
 	body, err := json.Marshal(providerRequest{Model: c.model, State: stateJSON, Questions: wire})
 	if err != nil {
+		return nil, err
+	}
+	if err := c.checkRequestBudget(body); err != nil {
 		return nil, err
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))

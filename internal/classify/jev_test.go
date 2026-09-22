@@ -3,6 +3,7 @@ package classify
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -464,6 +465,82 @@ func TestEvidenceBudgetBoundsTheActualRequestBody(t *testing.T) {
 	}
 	if len([]rune(body.State.Primary)) > 200 {
 		t.Fatalf("primary evidence exceeded the budget: %d runes", len([]rune(body.State.Primary)))
+	}
+}
+
+func TestStructuredEvidenceBudgetBoundsActualHTTPWithoutMutatingArchive(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		primary  string
+		metadata string
+	}{
+		{"primary", strings.Repeat("长<&", 5000), ""},
+		{"context", "source", ""},
+		{"metadata", "source", strings.Repeat("long-url", 2000)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var seen []byte
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				seen, _ = readAll(r)
+				_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-pinned", "answers": wireAnswers()})
+			}))
+			defer server.Close()
+			c, _ := NewClient(server.URL, "fixture", "jev", server.Client(), testCatalog())
+			budget := Budget{MaxRunes: 200, MaxBlocks: 2, MaxStateBytes: 700, MaxRequestBytes: 16 << 10}
+			if err := c.SetBudget(budget); err != nil {
+				t.Fatal(err)
+			}
+			evidence := Evidence{Primary: tc.primary, Coverage: "complete"}
+			for i := 0; i < 8; i++ {
+				evidence.Context = append(evidence.Context, EvidenceBlock{ID: fmt.Sprintf("b%d", i), Role: RoleQuoted, Text: strings.Repeat("引", 80), URL: tc.metadata})
+			}
+			before, _ := json.Marshal(evidence)
+			raw, err := c.Evaluate(context.Background(), Input{Evidence: &evidence})
+			if err != nil {
+				t.Fatal(err)
+			}
+			after, _ := json.Marshal(evidence)
+			if string(before) != string(after) {
+				t.Fatal("archived input was mutated")
+			}
+			var request struct {
+				State json.RawMessage `json:"state"`
+			}
+			if err := json.Unmarshal(seen, &request); err != nil {
+				t.Fatal(err)
+			}
+			var state Evidence
+			if err := json.Unmarshal(request.State, &state); err != nil {
+				t.Fatal(err)
+			}
+			runes := len([]rune(state.Primary))
+			for _, b := range state.Context {
+				runes += len([]rune(b.Text))
+			}
+			if len(seen) > budget.MaxRequestBytes || len(request.State) > budget.MaxStateBytes || runes > budget.MaxRunes || len(state.Context) > budget.MaxBlocks {
+				t.Fatalf("outbound budget exceeded: request=%d state=%d runes=%d blocks=%d", len(seen), len(request.State), runes, len(state.Context))
+			}
+			if !raw.Truncated || raw.EvidenceCoverage != "truncated" {
+				t.Fatal("request truncation was hidden")
+			}
+		})
+	}
+}
+
+func TestQuestionCriteriaCannotBypassTotalRequestBudget(t *testing.T) {
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { calls++; w.WriteHeader(500) }))
+	defer server.Close()
+	c, _ := NewClient(server.URL, "fixture", "jev", server.Client(), testCatalog())
+	if err := c.SetBudget(Budget{MaxRunes: 200, MaxBlocks: 2, MaxRequestBytes: 1024}); err != nil {
+		t.Fatal(err)
+	}
+	// Question instructions/criteria are immutable configuration, not evidence:
+	// refuse an oversized request instead of silently dropping question meaning.
+	c.spec.Questions[0].Criteria = json.RawMessage(`"` + strings.Repeat("criteria", 2000) + `"`)
+	_, err := c.Evaluate(context.Background(), Input{Evidence: &Evidence{Primary: "short", Coverage: "complete"}})
+	if err == nil || enrich.ClassOf(err) != enrich.ErrorClassContract || calls != 0 {
+		t.Fatalf("oversized criteria reached HTTP: calls=%d err=%v", calls, err)
 	}
 }
 
