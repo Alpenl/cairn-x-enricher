@@ -1,4 +1,6 @@
-> 2026-09-22 最新局部证据：[R3-07 Android 持久动作链、丢响应和真实进程恢复](evidence/R3-20260922-android-recovery.md)。S `3aae256` / E `60e0497`；179 Worker、63 Android unit、11 常规设备测试及 3 个真实 Worker 设备阶段、8 个 Go 跨仓场景通过。B07 账号尾缀绑定等剩余缺口与整体验收继续处理；本批 0 次付费。
+> 2026-09-22 最新局部证据：[B07 完整账号绑定、旧队列恢复与独立自动基线](evidence/B07-20260922-account-baseline.md)，以及 [B07 十条原任务审计](evidence/B07-20260922-scope-audit.md)。受测 S `3a891f1` / E `86b82b5`；180 Worker、64 Android unit、8 个真实跨仓场景通过。最终代码 API26/35 各 13 普通设备 + 7 个独立真实 Worker 进程阶段通过，XML 和日志见该报告。设置入口、旧队列和 reset 的局部修复不代替状态/候选/读取缓存/实体导出/完整兼容的剩余工作。本批 0 次付费，整体验收继续进入 #16。
+
+> 2026-09-22 前批局部证据：[R3-07 Android 持久动作链、丢响应和真实进程恢复](evidence/R3-20260922-android-recovery.md)。S `3aae256` / E `60e0497`；179 Worker、63 Android unit、11 常规设备测试及 3 个真实 Worker 设备阶段、8 个 Go 跨仓场景通过。该批登记的账号尾缀/旧队列/reset 缺口由顶部新报告继续修复；完整范围见新审计。该批 0 次付费。
 
 > 2026-09-22 当前工程进展：[R3-06 补材料执行所有权、持久检查点与原子恢复](evidence/R3-20260922-escalation.md)。受测 S `babe6bb` / E `c470d90`；Worker 177 项、Go 完整检查、8 个真实跨仓场景及补材料真实 race 场景通过。本批 0 次付费调用；扩展仍默认 off，整体验收未完成。
 
@@ -20,7 +22,7 @@ Latest scoped entity evidence: [R3-09 snapshot identity, real processor, UI and 
 
 # FINAL-REVIEW：Cairn Jev v2 跨仓复审证据
 
-## 2026-09-22 当前证据快照
+## 2026-09-22 首批 R3 历史证据快照（当前结果见顶部）
 
 总控 [#10](https://github.com/Alpenl/cairn-x-enricher/issues/10)，最终验收 [#16](https://github.com/Alpenl/cairn-x-enricher/issues/16)。整体仍 `in_progress / acceptance_blocked`；本轮局部修复不等于 126 任务整体验收。
 
