@@ -1,7 +1,9 @@
 package processor
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,6 +43,8 @@ type StageQueue interface {
 	CreateEvidenceRequest(context.Context, int64, map[string]any) (string, string, error)
 	// GetEvidenceAt loads the exact snapshot the lease was bound to.
 	GetEvidenceAt(context.Context, int64, int64) (json.RawMessage, error)
+	// GetEvidence detects a missing checkpoint after a source-only success.
+	GetEvidence(context.Context, int64) (json.RawMessage, error)
 	// AckSourceRefresh consumes the one-shot refresh intent.
 	AckSourceRefresh(context.Context, int64, int64, string, string) error
 	// DecideEvidenceRequest reports the bounded outcome of an escalation.
@@ -295,6 +299,8 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 			return p.reportFailure(ctx, logger, job, failurePathSearch, err)
 		}
 		logger.InfoContext(ctx, "source saved; classification queued")
+	} else if err = p.ensureSourceEvidence(ctx, job.ID, *source); err != nil {
+		return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
 	}
 	return p.finishReading(ctx, job, *source, nil)
 }
@@ -308,10 +314,36 @@ func (p *Processor) saveSourceWithEvidence(ctx context.Context, job *cairn.Job, 
 	if err := s.queue.SaveSource(ctx, job.ID, job.LeaseToken, source); err != nil {
 		return err
 	}
+	return p.persistSourceEvidence(ctx, job.ID, source)
+}
+
+// A source checkpoint can succeed before its snapshot write fails. Retrying
+// reading repairs that checkpoint without fetching again or replacing an
+// existing current snapshot (which may already contain escalated evidence).
+func (p *Processor) ensureSourceEvidence(ctx context.Context, id int64, source enrich.Source) error {
+	payload, err := p.stages.queue.GetEvidence(ctx, id)
+	if err != nil && !cairn.IsUnsupported(err) {
+		return fmt.Errorf("check evidence checkpoint: %w", err)
+	}
+	if err == nil && len(payload) > 0 {
+		var view struct {
+			Current bool `json:"current"`
+		}
+		if err := json.Unmarshal(payload, &view); err != nil {
+			return fmt.Errorf("decode evidence checkpoint: %w", err)
+		}
+		if view.Current {
+			return nil
+		}
+	}
+	return p.persistSourceEvidence(ctx, id, source)
+}
+
+func (p *Processor) persistSourceEvidence(ctx context.Context, id int64, source enrich.Source) error {
 	snapshot := EvidenceSnapshot(source, time.Now())
-	if err := s.queue.SubmitEvidence(ctx, job.ID, snapshot); err != nil {
+	if err := p.stages.queue.SubmitEvidence(ctx, id, snapshot); err != nil {
 		if cairn.IsUnsupported(err) {
-			p.logger.InfoContext(ctx, "evidence snapshots unsupported by backend; continuing in v1 mode", "link_id", job.ID)
+			p.logger.InfoContext(ctx, "evidence snapshots unsupported by backend; continuing in v1 mode", "link_id", id)
 			return nil
 		}
 		return fmt.Errorf("persist evidence snapshot: %w", err)
@@ -440,12 +472,15 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		}
 		// The evaluation consumes exactly the snapshot the lease was bound to,
 		// preserving every stored block and role (R2-07).
-		p.attachBoundEvidence(ctx, job)
 		// An already acquired lease finishes under its own bounded deadline.
 		// WithoutCancel keeps shutdown from tearing down a paid inference that is
 		// about to succeed, but the deadline stops an unbounded drain.
 		workCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.classificationDeadline)
-		result, err := p.classifyJob(workCtx, job)
+		var result classify.Result
+		err = p.attachBoundEvidence(workCtx, job)
+		if err == nil {
+			result, err = p.classifyJob(workCtx, job)
+		}
 		if err != nil {
 			cancel()
 			if enrich.IsStale(err) {
@@ -643,24 +678,47 @@ func firstAllowlisted(links []string, policy extension.FetchPolicy) string {
 }
 
 // attachBoundEvidence loads the snapshot the lease was bound to and builds the
-// structured provider state from it. A missing or unreadable snapshot falls back
-// to the plain text fields; the completion identity check still guards the
-// result (R2-02/R2-07).
-func (p *Processor) attachBoundEvidence(ctx context.Context, job *cairn.ClassificationJob) {
+// structured provider state from it. Bound identity failures stop evaluation;
+// only an explicitly unbound legacy lease may use the plain text fields.
+func (p *Processor) attachBoundEvidence(ctx context.Context, job *cairn.ClassificationJob) error {
 	if job.EvidenceSnapshotID < 1 {
-		return
+		if job.TargetGeneration > 0 || job.EvidenceHash != "" {
+			return enrich.Classified(errors.New("classification lease has no bound evidence"), enrich.ErrorClassContract)
+		}
+		return nil
 	}
-	payload, err := p.stages.queue.GetEvidenceAt(context.WithoutCancel(ctx), job.ID, job.EvidenceSnapshotID)
+	payload, err := p.stages.queue.GetEvidenceAt(ctx, job.ID, job.EvidenceSnapshotID)
 	if err != nil {
-		p.logger.WarnContext(ctx, "bound evidence snapshot could not be loaded", "link_id", job.ID, "error", err)
-		return
+		return fmt.Errorf("load bound evidence: %w", err)
+	}
+	var identity struct {
+		ID              int64           `json:"id"`
+		ContentRevision int64           `json:"content_revision"`
+		ContentHash     string          `json:"content_hash"`
+		Snapshot        json.RawMessage `json:"snapshot"`
+	}
+	if err := json.Unmarshal(payload, &identity); err != nil {
+		return enrich.Classified(fmt.Errorf("decode bound evidence: %w", err), enrich.ErrorClassContract)
+	}
+	if identity.ID != job.EvidenceSnapshotID || identity.ContentRevision != job.ContentRevision || identity.ContentHash != job.EvidenceHash {
+		return enrich.Classified(errors.New("bound evidence identity mismatch"), enrich.ErrorClassContract)
+	}
+	// The Worker returns the canonical objective payload persisted in the
+	// snapshot. Check its bytes too, so a response cannot echo the leased hash
+	// while supplying different material. Whitespace is not part of identity.
+	var canonical bytes.Buffer
+	if err := json.Compact(&canonical, identity.Snapshot); err != nil {
+		return enrich.Classified(fmt.Errorf("decode snapshot payload: %w", err), enrich.ErrorClassContract)
+	}
+	if fmt.Sprintf("%x", sha256.Sum256(canonical.Bytes())) != job.EvidenceHash {
+		return enrich.Classified(errors.New("bound evidence content hash mismatch"), enrich.ErrorClassContract)
 	}
 	evidence, err := evidenceFromSnapshot(payload)
 	if err != nil {
-		p.logger.WarnContext(ctx, "bound evidence snapshot is not usable", "link_id", job.ID, "error", err)
-		return
+		return enrich.Classified(fmt.Errorf("bound evidence is unusable: %w", err), enrich.ErrorClassContract)
 	}
 	job.Evidence = evidence
+	return nil
 }
 
 // evidenceFromSnapshot converts the stored snapshot into the objective evidence
@@ -690,12 +748,22 @@ func evidenceFromSnapshot(payload json.RawMessage) (*classify.Evidence, error) {
 	if evidence.Truncated {
 		evidence.Coverage = "truncated"
 	}
-	for index, block := range view.Snapshot.Blocks {
-		role := classify.BlockRole(block.Role)
-		if role == "" {
-			role = classify.RoleLegacyUnknown
+	seen := make(map[string]bool, len(view.Snapshot.Blocks))
+	for _, block := range view.Snapshot.Blocks {
+		if block.ID == "" || seen[block.ID] || strings.TrimSpace(block.Text) == "" {
+			return nil, errors.New("snapshot has an invalid or duplicate block")
 		}
-		if block.Role == string(classify.RolePrimary) || (index == 0 && evidence.Primary == "") {
+		seen[block.ID] = true
+		role := classify.BlockRole(block.Role)
+		switch role {
+		case classify.RolePrimary, classify.RoleAuthorContinuation, classify.RoleQuoted, classify.RoleExternalArticle, classify.RoleThirdParty, classify.RoleLegacyUnknown:
+		default:
+			return nil, errors.New("snapshot has an invalid block role")
+		}
+		if role == classify.RolePrimary {
+			if evidence.Primary != "" {
+				return nil, errors.New("snapshot has multiple primary blocks")
+			}
 			evidence.Primary = block.Text
 			continue
 		}

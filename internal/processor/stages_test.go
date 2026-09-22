@@ -1,9 +1,12 @@
 package processor
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -39,6 +42,7 @@ type stageQueue struct {
 	latestRun              *cairn.StoredRun
 	storedSpec             cairn.StoredQuestionSpec
 	evidenceSnapshot       json.RawMessage
+	evidenceReadErr        error
 	evidenceRequestStatus  string
 	refreshAcks            int
 }
@@ -95,7 +99,10 @@ func (q *stageQueue) CreateEvidenceRequest(context.Context, int64, map[string]an
 	return "req-1", status, nil
 }
 func (q *stageQueue) GetEvidenceAt(context.Context, int64, int64) (json.RawMessage, error) {
-	return q.evidenceSnapshot, nil
+	return q.evidenceSnapshot, q.evidenceReadErr
+}
+func (q *stageQueue) GetEvidence(context.Context, int64) (json.RawMessage, error) {
+	return q.evidenceSnapshot, q.evidenceReadErr
 }
 func (q *stageQueue) AckSourceRefresh(context.Context, int64, int64, string, string) error {
 	q.refreshAcks++
@@ -634,12 +641,73 @@ func taxonomyCatalogForReuse(t *testing.T) taxonomy.Catalog {
 }
 
 // recordingClassifier captures the input it was asked to evaluate.
-type recordingClassifier struct{ last classify.Input }
+type recordingClassifier struct {
+	last  classify.Input
+	calls int
+}
 
 func (c *recordingClassifier) SpecID() string { return "classify-v1" }
 func (c *recordingClassifier) Classify(_ context.Context, input classify.Input) (classify.Result, error) {
+	c.calls++
 	c.last = input
 	return classify.Result{}, nil
+}
+
+func TestBoundEvidenceFailureNeverFallsBackToPlainText(t *testing.T) {
+	good := `{"blocks":[{"id":"p","role":"primary","text":"bound material"}],"retrieval":"manual","truncation":{"truncated":false}}`
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(good)))
+	valid := fmt.Sprintf(`{"id":7,"content_revision":2,"content_hash":%q,"snapshot":%s}`, hash, good)
+	for _, tc := range []struct {
+		name    string
+		payload string
+		readErr error
+	}{
+		{name: "404", readErr: errors.New("HTTP 404")},
+		{name: "503", readErr: enrich.Classified(errors.New("HTTP 503"), enrich.ErrorClassTransient)},
+		{name: "malformed", payload: `{"snapshot":`},
+		{name: "wrong-id", payload: strings.Replace(valid, `"id":7`, `"id":8`, 1)},
+		{name: "wrong-revision", payload: strings.Replace(valid, `"content_revision":2`, `"content_revision":3`, 1)},
+		{name: "wrong-hash", payload: strings.Replace(valid, hash, strings.Repeat("0", 64), 1)},
+		{name: "altered-body", payload: strings.Replace(valid, "bound material", "other material", 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := &stageQueue{fakeQueue: newFakeQueue(), evidenceReadErr: tc.readErr, evidenceSnapshot: json.RawMessage(tc.payload), job: &cairn.ClassificationJob{ID: 1, ContentRevision: 2, EvidenceSnapshotID: 7, EvidenceHash: hash, Input: classify.Input{OriginalText: "fallback material"}}}
+			classifier := &recordingClassifier{}
+			p := NewStaged(q, nil, classifier, "v1", "jev", discardLogger(), 1)
+			done, failed, err := p.RunClassifications(context.Background(), 1)
+			if done != 0 || classifier.calls != 0 || q.classified != 0 || (err == nil && failed == 0) {
+				t.Fatalf("bad evidence reached inference: done=%d failed=%d calls=%d commits=%d err=%v", done, failed, classifier.calls, q.classified, err)
+			}
+		})
+	}
+}
+
+func TestSourceCheckpointRetryRepairsMissingSnapshotWithoutFetch(t *testing.T) {
+	q := &stageQueue{fakeQueue: newFakeQueue(), evidenceErr: errors.New("snapshot unavailable")}
+	r := &stageReader{q: q}
+	p := NewStaged(q, r, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+	job := &cairn.Job{ID: 1, URL: "https://x.com/synthetic/status/42", Attempt: 1}
+	if err := p.Process(context.Background(), job); err == nil {
+		t.Fatal("expected snapshot write failure")
+	}
+	if q.source == nil || len(q.completions) != 0 {
+		t.Fatal("source checkpoint missing or reading completed early")
+	}
+	q.evidenceErr = nil
+	job.Attempt = 2
+	if err := p.Process(context.Background(), job); err != nil {
+		t.Fatal(err)
+	}
+	if r.fetches != 1 || q.evidence != 2 || len(q.completions) != 1 {
+		t.Fatalf("retry did not repair checkpoint: fetches=%d snapshots=%d completions=%d", r.fetches, q.evidence, len(q.completions))
+	}
+	q.evidenceSnapshot = json.RawMessage(`{"current":true}`)
+	if err := p.Process(context.Background(), job); err != nil {
+		t.Fatal(err)
+	}
+	if q.evidence != 2 {
+		t.Fatal("current snapshot was unnecessarily replaced")
+	}
 }
 
 // TestRefreshIntentBypassesSourceCaches is the R2-06 regression: an explicit
@@ -691,8 +759,18 @@ func TestBoundEvidenceUsesTheStructuredSnapshot(t *testing.T) {
 			"fetched_at": "2026-09-21T00:00:00Z", "retrieval": "x_search", "truncation": {"truncated": false}
 		}
 	}`)
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal(snapshot, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, decoded["snapshot"]); err != nil {
+		t.Fatal(err)
+	}
+	hash := fmt.Sprintf("%x", sha256.Sum256(compact.Bytes()))
+	snapshot = bytes.Replace(snapshot, []byte(`"abc"`), []byte(`"`+hash+`"`), 1)
 	q := &stageQueue{fakeQueue: newFakeQueue(), evidenceSnapshot: snapshot,
-		job: &cairn.ClassificationJob{ID: 1, Revision: 1, EvidenceSnapshotID: 7, Input: classify.Input{OriginalText: "plain text"}}}
+		job: &cairn.ClassificationJob{ID: 1, Revision: 1, ContentRevision: 2, EvidenceHash: hash, EvidenceSnapshotID: 7, Input: classify.Input{OriginalText: "plain text"}}}
 	classifier := &recordingClassifier{}
 	p := NewStaged(q, nil, classifier, "v1", "jev", discardLogger(), 1)
 	if _, _, err := p.RunClassifications(context.Background(), 1); err != nil {
