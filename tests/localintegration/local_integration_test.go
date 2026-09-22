@@ -342,6 +342,42 @@ func TestLocalWorkerFullLifecycle(t *testing.T) {
 	if report.SamplesWithGold != 0 || !report.Inconclusive {
 		t.Fatalf("a gold-free export must be inconclusive: %+v", report)
 	}
+
+	// 9. Delete through the authenticated App endpoint after real classification,
+	// replay and human curation. A repeated deletion confirms the durable receipt.
+	for attempt := 0; attempt < 2; attempt++ {
+		req, requestErr := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("%s/api/links/%d", base, id), nil)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		req.Header.Set("Authorization", "Bearer "+appToken)
+		response, callErr := http.DefaultClient.Do(req)
+		if callErr != nil {
+			t.Fatal(callErr)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusNoContent {
+			t.Fatalf("delete attempt %d: %d", attempt, response.StatusCode)
+		}
+	}
+	if _, err := queue.GetBookmark(ctx, id); err == nil {
+		t.Fatal("deleted bookmark still readable")
+	}
+	remainingRuns, err := queue.GetRuns(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remainingRuns) != 0 {
+		t.Fatal("deleted runs still readable")
+	}
+	remainingSource, err := queue.GetSource(ctx, id)
+	if err != nil || remainingSource != nil {
+		t.Fatalf("deleted source lookup: source=%v error=%v", remainingSource, err)
+	}
+	if modelCalls.Load() != 1 {
+		t.Fatal("deletion caused a model call")
+	}
+	t.Log("HTTP deletion and exact retry removed a real source/classification/replay/human-curation history; actual Go reads cannot recover the deleted source or runs; zero deletion model calls")
 }
 
 // TestLocalWorkerVersionCompetition is the real SC01/SC02 regression: after a
