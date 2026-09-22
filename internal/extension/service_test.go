@@ -116,8 +116,17 @@ func TestDetectGapIsConservative(t *testing.T) {
 	if gap := DetectGap([]Block{{ID: "primary-1", Text: "body"}}, []string{"https://example.com/a"}, false); gap != GapExternalLink {
 		t.Fatalf("a stored external link is a gap: %s", gap)
 	}
-	if gap := DetectGap([]Block{{ID: "external-1", Text: "fetched"}}, []string{"https://example.com/a"}, false); gap != GapNone {
+	if gap := DetectGap([]Block{{ID: "custom-archive-id", Role: "external_article", URL: "https://example.com/a", Text: "fetched"}}, []string{"https://example.com/a"}, false); gap != GapNone {
 		t.Fatalf("an already fetched external block is not a gap: %s", gap)
+	}
+	if gap := DetectGap([]Block{{ID: "external-looking-id", Role: "quote", Text: "not fetched"}}, []string{"https://example.com/a"}, false); gap != GapExternalLink {
+		t.Fatal("ID prefix invented an external source role")
+	}
+	if gap := DetectGap([]Block{{ID: "custom", Role: "external_article", URL: "https://example.com/b", Text: "different URL"}}, []string{"https://example.com/a"}, false); gap != GapExternalLink {
+		t.Fatal("another URL incorrectly satisfied the gap")
+	}
+	if gap := DetectGap([]Block{{ID: "unknown-url", Role: "external_article", Text: "archived"}}, []string{"https://example.com/a"}, false); gap != GapExternalLink {
+		t.Fatal("an unknown URL cannot prove the target link was fetched")
 	}
 	if gap := DetectGap(nil, nil, true); gap != GapTruncation {
 		t.Fatalf("truncation is a gap: %s", gap)

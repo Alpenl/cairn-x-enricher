@@ -148,18 +148,19 @@ func DetectGap(blocks []Block, storedURLs []string, truncated bool) GapKind {
 	if truncated {
 		return GapTruncation
 	}
-	hasExternal := false
-	for _, block := range blocks {
-		if block.ID != "" && strings.HasPrefix(block.ID, "external-") {
-			hasExternal = true
-			break
+	for _, value := range storedURLs {
+		if !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://") {
+			continue
 		}
-	}
-	if !hasExternal {
-		for _, value := range storedURLs {
-			if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
-				return GapExternalLink
+		found := false
+		for _, block := range blocks {
+			if block.Role == "external_article" && block.URL == value {
+				found = true
+				break
 			}
+		}
+		if !found {
+			return GapExternalLink
 		}
 	}
 	return GapNone
@@ -171,7 +172,7 @@ type FetchOutcome struct {
 	Reason    string `json:"reason,omitempty"`
 	URL       string `json:"url,omitempty"`
 	Text      string `json:"text,omitempty"`
-	Truncated bool   `json:"truncated,omitempty"`
+	Truncated bool   `json:"truncated"`
 }
 
 // MaxEscalatedRunes bounds the text appended from one external fetch so a huge

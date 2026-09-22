@@ -40,7 +40,11 @@ type StageQueue interface {
 	// CreateEvidenceRequest records a bounded escalation; the consumer performs
 	// the fetch under its own network policy. The status says whether a fetch is
 	// still needed.
-	CreateEvidenceRequest(context.Context, int64, map[string]any) (string, string, error)
+	CreateEvidenceRequest(context.Context, int64, map[string]any) (cairn.EvidenceRequestAck, error)
+	RecoverableEvidenceRequests(context.Context, int) ([]cairn.EvidenceExecution, error)
+	ClaimEvidenceRequest(context.Context, string, string) (cairn.EvidenceExecution, error)
+	CheckpointEvidenceRequest(context.Context, string, string, any) (string, error)
+	FinalizeEvidenceRequest(context.Context, string, string) (cairn.EvidenceReceipt, error)
 	// GetEvidenceAt loads the exact snapshot the lease was bound to.
 	GetEvidenceAt(context.Context, int64, int64) (json.RawMessage, error)
 	// GetEvidence detects a missing checkpoint after a source-only success.
@@ -406,7 +410,9 @@ func (p *Processor) finishReading(ctx context.Context, job *cairn.Job, source en
 	return nil
 }
 
-// RunClassifications drains only semantic jobs and never invokes retrieval.
+// RunClassifications drains semantic jobs without retrieving the primary source.
+// Explicitly enabled evidence extensions can fetch one bounded external gap
+// under durable ownership and recover a stored outcome before claiming work.
 // A component-level fault (configuration or contract) stops the loop instead of
 // burning every queued job's attempt budget; a stale job is not a model failure
 // and does not abort the batch.
@@ -418,6 +424,11 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		return 0, 0, err
 	}
 	s := p.stages
+	evidenceRemaining := 0
+	if s.extensions != nil && s.extensions.Flags.Evidence && s.fetcher != nil {
+		evidenceRemaining = min(maxJobs, 20, s.extensions.Budget.MaxCallsTotal)
+		p.recoverEvidence(ctx, &evidenceRemaining)
+	}
 	var completed, failed int64
 	// The pause gate runs before any claim. A component that failed on the
 	// previous poll must not acquire another lease until the backoff elapses:
@@ -521,7 +532,7 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		}
 		cancel()
 		completed++
-		p.runExtensions(ctx, job)
+		p.runExtensions(ctx, job, &evidenceRemaining)
 	}
 	return completed, failed, nil
 }
@@ -572,7 +583,7 @@ func (p *Processor) previousJudgments(ctx context.Context, job *cairn.Classifica
 // runExtensions runs the opt-in bounded extensions after a successful
 // classification. Every failure is logged and swallowed: an extension can never
 // fail the bookmark or lose the classification that was already committed.
-func (p *Processor) runExtensions(ctx context.Context, job *cairn.ClassificationJob) {
+func (p *Processor) runExtensions(ctx context.Context, job *cairn.ClassificationJob, remaining *int) {
 	s := p.stages
 	if s.extensions == nil {
 		return
@@ -604,83 +615,33 @@ func (p *Processor) runExtensions(ctx context.Context, job *cairn.Classification
 			p.logger.WarnContext(ctx, "entity state was not stored", "link_id", job.ID, "error", err)
 		}
 	}
-	// Evidence escalation only when there is an observable gap and a real
-	// allowlisted link to fetch. The old readable content is kept on failure.
-	gap := extension.DetectGap(blocks, job.RelatedLinks, false)
-	if gap != extension.GapExternalLink || s.fetcher == nil {
+	if !s.extensions.Flags.Evidence || s.fetcher == nil || *remaining <= 0 {
 		return
 	}
-	requestID, requestStatus, err := s.queue.CreateEvidenceRequest(context.WithoutCancel(ctx), job.ID, map[string]any{
-		"scope":      "external_link",
-		"dedupe_key": fmt.Sprintf("evidence-%d-rev-%d", job.ID, job.InputRevision),
-		"budget":     map[string]any{"max_bytes": s.fetchPolicy.MaxBytes},
+	rawURL := firstMissingAllowlisted(blocks, job.RelatedLinks, s.fetchPolicy)
+	if rawURL == "" {
+		return
+	}
+	createCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	var ack cairn.EvidenceRequestAck
+	err := retryEvidenceWrite(createCtx, func() error {
+		var err error
+		ack, err = s.queue.CreateEvidenceRequest(createCtx, job.ID, map[string]any{
+			"protocol": 1, "scope": "external_link", "dedupe_key": fmt.Sprintf("evidence-%d-%d-%s", job.ID, job.EvidenceSnapshotID, shortURLHash(rawURL)),
+			"evidence_snapshot_id": job.EvidenceSnapshotID, "source_hash": job.EvidenceHash, "content_revision": job.ContentRevision,
+			"target_generation": job.TargetGeneration, "url": rawURL,
+			"budget": map[string]any{"max_bytes": s.fetchPolicy.MaxBytes, "timeout_ms": s.fetchPolicy.Timeout.Milliseconds()},
+		})
+		return err
 	})
-	if err != nil || requestID == "" {
+	if err != nil {
+		p.logger.WarnContext(ctx, "evidence request was not stored", "link_id", job.ID, "error", err)
 		return
 	}
-	// A request that is already pending or decided must not be fetched again:
-	// the same gap would otherwise be re-fetched and re-queued on every poll
-	// (R2-07).
-	if requestStatus != "pending" {
-		p.logger.InfoContext(ctx, "evidence request already decided; skipping fetch", "link_id", job.ID, "status", requestStatus)
-		return
-	}
-	outcome := s.extensions.RequestEvidence(ctx, s.fetcher, s.fetchPolicy, firstAllowlisted(job.RelatedLinks, s.fetchPolicy))
-	report := func(status string, extra map[string]any) {
-		payload := map[string]any{"status": status}
-		if extra != nil {
-			payload["result"] = extra
-		}
-		if err := s.queue.DecideEvidenceRequest(context.WithoutCancel(ctx), requestID, payload); err != nil {
-			p.logger.WarnContext(ctx, "evidence request outcome was not stored", "link_id", job.ID, "error", err)
-		}
-	}
-	switch outcome.State {
-	case "completed":
-		snapshot := escalatedSnapshot(job, outcome)
-		if err := s.queue.SubmitEvidence(context.WithoutCancel(ctx), job.ID, snapshot); err != nil {
-			report("failed", map[string]any{"reason": "snapshot not stored"})
-			return
-		}
-		report("completed", map[string]any{"url": outcome.URL, "truncated": outcome.Truncated})
-		// A new evidence revision is a controlled re-evaluation: re-arm the
-		// classification queue so the next poll re-classifies with the new
-		// material. The old decision is already stale by content revision.
-		if err := s.queue.RetryClassification(context.WithoutCancel(ctx), job.ID); err != nil {
-			p.logger.WarnContext(ctx, "evidence escalation could not re-arm classification", "link_id", job.ID, "error", err)
-		}
-	case "blocked":
-		report("blocked", map[string]any{"reason": outcome.Reason})
-	default:
-		report("failed", map[string]any{"reason": outcome.Reason})
-	}
-}
-
-// escalatedSnapshot rebuilds the objective snapshot with the fetched external
-// block appended. It never modifies the primary or context blocks.
-func escalatedSnapshot(job *cairn.ClassificationJob, outcome extension.FetchOutcome) map[string]any {
-	snapshot := EvidenceSnapshot(enrich.Source{
-		OriginalText: job.OriginalText, ContextText: job.ContextText,
-	}, time.Now())
-	blocks := snapshot["blocks"].([]map[string]any)
-	blocks = append(blocks, map[string]any{
-		"id": "external-1", "role": "external_article", "text": outcome.Text,
-		"url": outcome.URL, "acquired": "controlled_fetch",
-	})
-	snapshot["blocks"] = blocks
-	snapshot["retrieval"] = "x_search+external_fetch"
-	return snapshot
-}
-
-// firstAllowlisted picks the first stored link the fetch policy accepts, so the
-// extension never tries an arbitrary URL from the material.
-func firstAllowlisted(links []string, policy extension.FetchPolicy) string {
-	for _, link := range links {
-		if _, err := extension.ValidateURL(policy, link); err == nil {
-			return link
-		}
-	}
-	return ""
+	// Replayed pending intents also go through the atomic claim; replay is never
+	// interpreted as ownership. Checkpointed results can be finalized without fetch.
+	p.executeEvidence(ctx, ack.ID, remaining)
 }
 
 // attachBoundEvidence loads the snapshot the lease was bound to and builds the

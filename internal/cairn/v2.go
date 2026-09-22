@@ -328,29 +328,109 @@ func (c *Client) SubmitEntityState(ctx context.Context, id int64, body map[strin
 	return c.stageWrite(ctx, fmt.Sprintf("/api/v2/links/%d/entity-state", id), body)
 }
 
-// CreateEvidenceRequest records a bounded, de-duplicated evidence escalation.
-// The returned status tells the caller whether a fetch is still needed: an
-// already pending/completed request must not be fetched again (R2-07).
-func (c *Client) CreateEvidenceRequest(ctx context.Context, id int64, body map[string]any) (string, string, error) {
-	response, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v2/links/%d/evidence-requests", id), body)
+// EvidenceRequestAck distinguishes a new durable intent from a replay. Neither
+// grants permission to fetch: execution requires a separate owned claim.
+type EvidenceRequestAck struct {
+	ID       string `json:"id"`
+	Status   string `json:"status"`
+	Replayed bool   `json:"replayed"`
+}
+
+// EvidenceBudget is the immutable fetch bound recorded with the request.
+type EvidenceBudget struct {
+	MaxBytes  int64 `json:"max_bytes"`
+	TimeoutMS int64 `json:"timeout_ms"`
+}
+
+// EvidenceReceipt confirms one durable application, including honest no-ops.
+type EvidenceReceipt struct {
+	ID              string `json:"id"`
+	Status          string `json:"status"`
+	Changed         bool   `json:"changed"`
+	Requeued        bool   `json:"requeued"`
+	ContentRevision int64  `json:"content_revision,omitempty"`
+	ContentHash     string `json:"content_hash,omitempty"`
+	Reason          string `json:"reason,omitempty"`
+}
+
+// EvidenceExecution exposes ownership without disclosing another owner token.
+type EvidenceExecution struct {
+	ID                 string           `json:"id"`
+	LinkID             int64            `json:"link_id"`
+	Status             string           `json:"status"`
+	Scope              string           `json:"scope"`
+	Budget             EvidenceBudget   `json:"budget"`
+	ContentRevision    int64            `json:"content_revision"`
+	EvidenceSnapshotID int64            `json:"evidence_snapshot_id"`
+	SourceHash         string           `json:"source_hash"`
+	TargetGeneration   int64            `json:"target_generation"`
+	URL                string           `json:"url"`
+	Attempts           int              `json:"attempts"`
+	Owned              bool             `json:"owned"`
+	OwnerToken         *string          `json:"owner_token"`
+	LeaseUntil         *string          `json:"lease_until"`
+	CheckpointHash     *string          `json:"checkpoint_hash"`
+	Receipt            *EvidenceReceipt `json:"receipt"`
+}
+
+func (c *Client) evidenceJSON(ctx context.Context, method, path string, body, result any) error {
+	response, err := c.do(ctx, method, path, body)
 	if err != nil {
-		return "", "", err
+		return err
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return "", "", apiError(response)
+		return apiError(response)
 	}
-	var payload struct {
-		ID     string `json:"id"`
-		Status string `json:"status"`
+	if err := decodeJSON(response.Body, result); err != nil {
+		return fmt.Errorf("decode evidence execution: %w", err)
 	}
-	if err := decodeJSON(response.Body, &payload); err != nil {
-		return "", "", fmt.Errorf("decode evidence request: %w", err)
-	}
-	return payload.ID, payload.Status, nil
+	return nil
 }
 
-// DecideEvidenceRequest reports the bounded outcome of an escalation.
+// CreateEvidenceRequest records or confirms intent; its acknowledgement grants no ownership.
+func (c *Client) CreateEvidenceRequest(ctx context.Context, id int64, body map[string]any) (EvidenceRequestAck, error) {
+	var result EvidenceRequestAck
+	err := c.evidenceJSON(ctx, http.MethodPost, fmt.Sprintf("/api/v2/links/%d/evidence-requests", id), body, &result)
+	return result, err
+}
+
+// RecoverableEvidenceRequests lists a bounded set of owned-protocol work for a new poll.
+func (c *Client) RecoverableEvidenceRequests(ctx context.Context, limit int) ([]EvidenceExecution, error) {
+	var result struct {
+		Requests []EvidenceExecution `json:"requests"`
+	}
+	err := c.evidenceJSON(ctx, http.MethodGet, fmt.Sprintf("/api/v2/evidence-requests/recoverable?limit=%d", limit), nil, &result)
+	return result.Requests, err
+}
+
+// ClaimEvidenceRequest atomically reserves a finite fetch attempt for one owner.
+func (c *Client) ClaimEvidenceRequest(ctx context.Context, id, owner string) (EvidenceExecution, error) {
+	var result EvidenceExecution
+	err := c.evidenceJSON(ctx, http.MethodPost, "/api/v2/evidence-requests/"+url.PathEscape(id)+"/claim", map[string]any{"owner_token": owner}, &result)
+	return result, err
+}
+
+// CheckpointEvidenceRequest durably saves the outcome before any source or queue change.
+func (c *Client) CheckpointEvidenceRequest(ctx context.Context, id, owner string, outcome any) (string, error) {
+	var result struct {
+		ID             string `json:"id"`
+		CheckpointHash string `json:"checkpoint_hash"`
+		Replayed       bool   `json:"replayed"`
+	}
+	err := c.evidenceJSON(ctx, http.MethodPost, "/api/v2/evidence-requests/"+url.PathEscape(id)+"/checkpoint", map[string]any{"owner_token": owner, "outcome": outcome}, &result)
+	return result.CheckpointHash, err
+}
+
+// FinalizeEvidenceRequest atomically applies a checkpoint and confirms its exact receipt.
+func (c *Client) FinalizeEvidenceRequest(ctx context.Context, id, checkpointHash string) (EvidenceReceipt, error) {
+	var result EvidenceReceipt
+	err := c.evidenceJSON(ctx, http.MethodPost, "/api/v2/evidence-requests/"+url.PathEscape(id)+"/finalize", map[string]any{"checkpoint_hash": checkpointHash}, &result)
+	return result, err
+}
+
+// DecideEvidenceRequest is the compatibility metadata-only endpoint. Owned
+// executions cannot bypass checkpoint/finalize through this legacy method.
 func (c *Client) DecideEvidenceRequest(ctx context.Context, requestID string, body map[string]any) error {
 	return c.stageWrite(ctx, "/api/v2/evidence-requests/"+url.PathEscape(requestID), body)
 }

@@ -85,6 +85,7 @@ stop_worker() {
 
 run_case() {
   local name="$1" test_name="$2"
+  if [ -n "${CAIRN_INTEGRATION_CASE:-}" ] && [ "$CAIRN_INTEGRATION_CASE" != "$name" ]; then return; fi
   local port work
   port="$(free_port)"
   work="$work_root/$name"
@@ -110,3 +111,5 @@ run_case entities TestLocalWorkerEntitySnapshotIdentity
 run_case reuse TestLocalWorkerStoredQuestionReuse
 
 run_case decisions TestLocalWorkerDecisionReferences
+
+run_case escalation TestLocalWorkerEvidenceExecutionRecovery

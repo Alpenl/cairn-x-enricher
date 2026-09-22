@@ -91,13 +91,37 @@ func (q *stageQueue) SubmitEntityState(_ context.Context, _ int64, body map[stri
 	q.entitySubmissions++
 	return nil
 }
-func (q *stageQueue) CreateEvidenceRequest(context.Context, int64, map[string]any) (string, string, error) {
+func (q *stageQueue) CreateEvidenceRequest(context.Context, int64, map[string]any) (cairn.EvidenceRequestAck, error) {
 	q.evidenceRequests++
 	status := q.evidenceRequestStatus
 	if status == "" {
 		status = "pending"
 	}
-	return "req-1", status, nil
+	return cairn.EvidenceRequestAck{ID: "req-1", Status: status, Replayed: status != "pending"}, nil
+}
+func (q *stageQueue) RecoverableEvidenceRequests(context.Context, int) ([]cairn.EvidenceExecution, error) {
+	return nil, nil
+}
+func (q *stageQueue) ClaimEvidenceRequest(_ context.Context, id, owner string) (cairn.EvidenceExecution, error) {
+	status := q.evidenceRequestStatus
+	if status != "" && status != "pending" {
+		return cairn.EvidenceExecution{ID: id, Status: status}, nil
+	}
+	return cairn.EvidenceExecution{ID: id, Status: "fetching", Scope: "external_link", Owned: true, OwnerToken: &owner, URL: "https://allowed.example/article", Budget: cairn.EvidenceBudget{MaxBytes: 2 << 20, TimeoutMS: 15000}}, nil
+}
+func (q *stageQueue) CheckpointEvidenceRequest(_ context.Context, _ string, _ string, value any) (string, error) {
+	outcome := value.(extension.FetchOutcome)
+	q.evidenceDecisions = append(q.evidenceDecisions, map[string]any{"status": outcome.State})
+	return "fixture-checkpoint", nil
+}
+func (q *stageQueue) FinalizeEvidenceRequest(context.Context, string, string) (cairn.EvidenceReceipt, error) {
+	// The real Worker integration, not this stage double, proves atomicity.
+	status := q.evidenceDecisions[len(q.evidenceDecisions)-1]["status"].(string)
+	if status == "completed" {
+		q.evidence++
+		q.retries++
+	}
+	return cairn.EvidenceReceipt{Status: status, Changed: status == "completed", Requeued: status == "completed"}, nil
 }
 func (q *stageQueue) GetEvidenceAt(context.Context, int64, int64) (json.RawMessage, error) {
 	return q.evidenceSnapshot, q.evidenceReadErr

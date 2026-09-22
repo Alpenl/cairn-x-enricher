@@ -147,6 +147,10 @@ func ControlledFetcher(policy FetchPolicy, client *http.Client) (*http.Client, e
 		}
 		client = &http.Client{Transport: transport, Timeout: policy.Timeout}
 	}
+	// Clone before installing redirect policy: concurrent executions must not
+	// mutate a shared http.Client.
+	copyClient := *client
+	client = &copyClient
 	// Each redirect hop is re-validated against the policy, so a redirect to a
 	// private or non-allowlisted host is refused.
 	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
