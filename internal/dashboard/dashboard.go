@@ -655,6 +655,8 @@ func (s *Server) getV2Effective(writer http.ResponseWriter, request *http.Reques
 }
 
 func (s *Server) getImage(writer http.ResponseWriter, request *http.Request) {
+	// Apply on successes and errors, independent of old backend cache policy.
+	writer.Header().Set("Cache-Control", "private, no-store")
 	response, err := s.backend.GetImage(request.Context(), request.PathValue("key"))
 	if err != nil {
 		s.writeBackendError(writer, "get image", 0, err)
@@ -668,18 +670,13 @@ func (s *Server) getImage(writer http.ResponseWriter, request *http.Request) {
 		writeError(writer, http.StatusBadGateway, "backend_error")
 		return
 	}
-	for _, header := range []string{"Content-Type", "Content-Length", "ETag", "Cache-Control", "Last-Modified"} {
+	for _, header := range []string{"Content-Type", "Content-Length", "ETag", "Last-Modified"} {
 		if value := response.Header.Get(header); value != "" {
 			writer.Header().Set(header, value)
 		}
 	}
-	// Image keys are content-addressed (enrichment/<id>/<sha256>.<ext>), so a
-	// given key can never change. Without a Cache-Control the browser falls back
-	// to heuristic caching, which revalidates on every scroll. Only apply this
-	// when the backend did not set its own directive.
-	if writer.Header().Get("Cache-Control") == "" {
-		writer.Header().Set("Cache-Control", "private, max-age=604800, immutable")
-	}
+	// Keys hash the source URL, not the image bytes. Private images can change
+	// or be deleted, even when an older backend advertises an immutable cache.
 	writer.Header().Set("X-Content-Type-Options", "nosniff")
 	writer.WriteHeader(http.StatusOK)
 	// When the backend advertises a length, copy exactly that many bytes so a

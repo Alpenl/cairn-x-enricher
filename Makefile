@@ -9,7 +9,7 @@ LDFLAGS := -s -w \
 	-X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Commit=$(COMMIT) \
 	-X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Date=$(BUILD_DATE)
 
-.PHONY: build test test-frontend test-browser lint lint-ci verify docker-build test-ablation ablation ablation-architecture
+.PHONY: build test test-frontend test-browser test-image-browser lint lint-ci verify docker-build test-ablation ablation ablation-architecture
 
 build:
 	mkdir -p bin
@@ -26,6 +26,11 @@ test:
 # Enable with CHROME_PATH when Chrome is not on the default path.
 test-browser:
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/run.mjs
+
+# Real Chrome cache + actual Go proxy/client against a legacy HTTP fixture.
+# No route interception/cache disabling; no model or external source calls.
+test-image-browser:
+	CAIRN_IMAGE_BROWSER=1 CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} go test ./internal/dashboard -run TestBrowserPrivateImageCache -count=1 -v
 
 test-frontend:
 	node internal/dashboard/frontend-check.mjs internal/dashboard

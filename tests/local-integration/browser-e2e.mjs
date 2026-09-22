@@ -12,6 +12,8 @@ const workerURL = process.env.CAIRN_WORKER_URL;
 const goBin = process.env.GO_BIN;
 const enricherToken = process.env.CAIRN_ENRICHER_TOKEN || "internal";
 const appToken = process.env.CAIRN_APP_TOKEN || "app";
+// Explicit current production policy: the personal-use guard changes semantics.
+const policyVersion = "jev-policy-v3";
 if (!workerURL || !goBin) {
   process.stderr.write("CAIRN_WORKER_URL and GO_BIN are required\n");
   process.exit(1);
@@ -98,7 +100,7 @@ async function main() {
       method: "POST", headers: auth(enricherToken),
       body: JSON.stringify({
         spec_id: spec.spec_id, spec_hash: spec.spec_hash, taxonomy_version: taxonomyVersion,
-        policy_version: "jev-policy-v2", requested_model: "jev-latest", protocol: "v2"
+        policy_version: policyVersion, requested_model: "jev-latest", protocol: "v2"
       })
     });
     check("v2 target activated", activated.status === 200, JSON.stringify(activated.payload));
@@ -130,7 +132,7 @@ async function main() {
     for (let pass = 0; pass < 2; pass++) {
       const replay = await jsonFetch(`${workerURL}/api/v2/links/${id}/decisions`, {
         method: "POST", headers: auth(enricherToken), body: JSON.stringify({
-          operation_key: `browser-ai-rebuild-${pass}`, run_ids: [run.id], policy_version: "jev-policy-v2",
+          operation_key: `browser-ai-rebuild-${pass}`, run_ids: [run.id], policy_version: policyVersion,
           spec_id: spec.spec_id, requested_model: "jev-latest", content_revision: run.content_revision,
           automatic: selection.payload.selection
         })

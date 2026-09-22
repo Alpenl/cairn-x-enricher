@@ -57,3 +57,11 @@
 - Android 签名发布：单独授权
 
 以上任一未授权时保持“代码可审查、未部署”状态，不伪称已上线。
+
+## NAS 私有图片缓存兼容（2026-09-23，代码准备，未部署）
+
+- NAS 图片响应统一 `private, no-store`，包括旧 Worker 缺失缓存头或返回 public/immutable 的情况。图片 key 的哈希来自来源 URL，并不保证图片 bytes 永远不变。
+- Go 图片客户端在取图前、取得响应后分别读取收藏详情，检查响应 ID 与图片所属 ID 一致；不存在、鉴权错误、后端故障或畸形详情均拒绝暴露图片，关闭已打开的响应。每次取图额外两次详情请求，不缓存存在性检查，不进行模型推断。旧 Worker 仍需保留原详情端点。
+- 页面生成图片 URL 加 `?privacy=1`，绕开旧版本按原 URL 保存的长期缓存；新 URL 后续使用 no-store。旧版页面、已下载文件或用户手动访问的旧缓存 URL 无法由此次响应远程擦除；读取最终检查之后已开始发送的 bytes 也不可撤回。此项不承诺物理存储即时擦除，Worker 0026 与服务端清理机制仍需按授权部署。
+- 验证：`make test-image-browser` 使用真实 Chrome、实际 Go 客户端/代理和旧 HTTP 合同夹具，验证正常缓存开启、旧 URL 命中、新 URL 避开旧缓存、同 URL 内容更新和删除后拒绝。`CAIRN_INTEGRATION_CASE=imageprivacy bash tests/local-integration/run.sh` 使用实际 Worker/D1/R2 + Go HTTP 生命周期；`CAIRN_SHARE_ROOT` 可指向配套 Share 工作树。两者均无收费模型调用。
+- 语义依据：[RFC 9111 §5.2.2.5 no-store](https://www.rfc-editor.org/rfc/rfc9111.html#section-5.2.2.5)。新响应禁止后续存储，不等于撤回已经保存的副本。

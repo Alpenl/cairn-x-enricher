@@ -261,7 +261,8 @@
   }
 
   function imagePath(key) {
-    return "/api/images/" + String(key).split("/").map(encodeURIComponent).join("/");
+    // A new URL namespace avoids reusing responses cached by older releases.
+    return "/api/images/" + String(key).split("/").map(encodeURIComponent).join("/") + "?privacy=1";
   }
 
   function firstImage(item) {

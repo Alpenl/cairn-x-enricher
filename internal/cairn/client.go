@@ -360,7 +360,7 @@ func (c *Client) GetBookmark(ctx context.Context, id int64) (BookmarkDetail, err
 	if err := decodeJSON(response.Body, &detail); err != nil {
 		return BookmarkDetail{}, fmt.Errorf("decode bookmark detail: %w", err)
 	}
-	if detail.ID < 1 || detail.URL == "" || !validBookmarkStatus(detail.Status) {
+	if detail.ID != id || detail.URL == "" || !validBookmarkStatus(detail.Status) {
 		return BookmarkDetail{}, errors.New("bookmark detail is invalid")
 	}
 	normalizeBookmarkCollections(&detail.Bookmark)
@@ -465,6 +465,16 @@ func (c *Client) GetImage(ctx context.Context, key string) (*http.Response, erro
 		return nil, errors.New("invalid image key")
 	}
 	segments := strings.Split(key, "/")
+	id, err := strconv.ParseInt(segments[1], 10, 64)
+	if err != nil || id < 1 {
+		return nil, errors.New("invalid image owner")
+	}
+	// Older Workers can retain and serve orphan R2 objects. Validate the
+	// authoritative bookmark before fetching and again before exposing the body.
+	// Never cache this check: a prior successful read is not deletion authority.
+	if _, err := c.GetBookmark(ctx, id); err != nil {
+		return nil, err
+	}
 	for index := range segments {
 		segments[index] = url.PathEscape(segments[index])
 	}
@@ -475,6 +485,10 @@ func (c *Client) GetImage(ctx context.Context, key string) (*http.Response, erro
 	if response.StatusCode != http.StatusOK {
 		defer func() { _ = response.Body.Close() }()
 		return nil, apiError(response)
+	}
+	if _, err := c.GetBookmark(ctx, id); err != nil {
+		_ = response.Body.Close()
+		return nil, err
 	}
 	return response, nil
 }

@@ -58,6 +58,13 @@ start_worker() {
 EOF
   (cd "$share_root/worker" && npx wrangler d1 migrations apply "cairn-share-$name" --local --config "$work/wrangler.jsonc" >"$work/migrations.log" 2>&1) \
     || { cat "$work/migrations.log"; exit 1; }
+  if [ "$name" = "imageprivacy" ]; then
+    # A synthetic 1px PNG seeded through the real local R2 CLI. The test
+    # creates/deletes its owner through authenticated Worker HTTP.
+    python3 -c 'import base64,sys; open(sys.argv[1], "wb").write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM7sAAAAASUVORK5CYII="))' "$work/pixel.png"
+    (cd "$share_root/worker" && npx wrangler r2 object put "cairn-x-enrichment-images-$name/enrichment/1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png" --local --config "$work/wrangler.jsonc" --file "$work/pixel.png" --content-type image/png >"$work/seed-image.log" 2>&1) \
+      || { cat "$work/seed-image.log"; exit 1; }
+  fi
   (cd "$share_root/worker" && exec setsid "$share_root/worker/node_modules/.bin/wrangler" dev --local --port "$port" --ip 127.0.0.1 --config "$work/wrangler.jsonc" >"$work/dev.log" 2>&1) &
   worker_pid=$!
   local ready=""
@@ -121,3 +128,5 @@ run_case personal TestLocalWorkerObjectivePersonalBoundary
 run_case cli TestLocalWorkerClassifyCLI
 
 run_case carrier TestLocalWorkerCarrierDefinitionUpgrade
+
+run_case imageprivacy TestLocalWorkerPrivateImageLifecycle
