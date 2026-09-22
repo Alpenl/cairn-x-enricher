@@ -1,0 +1,31 @@
+[36mWHAT[0m: 验收 360dp 小屏和 1.5 倍字体
+[35mWHY[0m:  确保完整词表、候选与状态能在实际设备上触达
+Original: Physical size: 1080x1920
+ Physical density: 420
+ font_scale=null
+Acceptance: 360x640dp; font_scale=1.5; 17 topics; last topic, candidates, form/use/entity/partial status and recreation.
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.alpenl.cairn.share.V2CurationInstrumentedTest:
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=displaysStoredOutcomesAndIndependentEntitiesWithoutAnInferenceRequest
+INSTRUMENTATION_STATUS: class=com.alpenl.cairn.share.V2CurationInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=displaysStoredOutcomesAndIndependentEntitiesWithoutAnInferenceRequest
+INSTRUMENTATION_STATUS: class=com.alpenl.cairn.share.V2CurationInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 1.619
+
+OK (1 test)
+
+
+INSTRUMENTATION_CODE: -1
+
+Restored original display settings.
