@@ -84,7 +84,7 @@ func (c *Client) GetV2Selection(ctx context.Context, id int64) (V2SelectionView,
 	if id < 1 {
 		return V2SelectionView{}, errors.New("bookmark ID must be positive")
 	}
-	response, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v2/links/%d/selection", id), nil)
+	response, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v2/links/%d/selection?include_automatic=1", id), nil)
 	if err != nil {
 		return V2SelectionView{}, err
 	}
