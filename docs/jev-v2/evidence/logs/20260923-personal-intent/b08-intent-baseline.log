@@ -1,0 +1,7 @@
+--- FAIL: TestObjectiveClassificationCannotInferPersonalOpposition (0.00s)
+    personal_intent_test.go:31: objective request without a user statement inferred personal opposition
+--- FAIL: TestObjectiveReplayCannotInferPersonalOpposition (0.00s)
+    personal_intent_test.go:49: objective replay without explicit human input inferred personal opposition
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/classify	0.005s
+FAIL

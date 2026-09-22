@@ -1,0 +1,8 @@
+# github.com/Alpenl/cairn-x-enricher/internal/classify
+internal/classify/policy.go:255:56: undefined: taxonomy
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/classify [build failed]
+ok  	github.com/Alpenl/cairn-x-enricher/internal/taxonomy	0.002s
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/evaluation [build failed]
+FAIL	github.com/Alpenl/cairn-x-enricher/experiments/classification/main [build failed]
+FAIL	github.com/Alpenl/cairn-x-enricher/experiments/classification/referencegen [build failed]
+FAIL
