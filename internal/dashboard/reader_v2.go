@@ -262,6 +262,8 @@ func (s *Server) replayPolicy(writer http.ResponseWriter, request *http.Request)
 				"policy_version":   next.Version,
 				"policy":           next,
 				"spec_id":          run.SpecID,
+				"spec_hash":        run.SpecHash,
+				"resolved_model":   run.ResolvedModel,
 				"requested_model":  run.RequestedModel,
 				"content_revision": run.ContentRevision,
 				"automatic":        classify.AutomaticFromProposals(after),

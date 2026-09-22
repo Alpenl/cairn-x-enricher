@@ -99,6 +99,8 @@ func newReplayCommand() *cobra.Command {
 						"policy_version":   newPolicy.Version,
 						"policy":           newPolicy,
 						"spec_id":          run.SpecID,
+						"spec_hash":        run.SpecHash,
+						"resolved_model":   run.ResolvedModel,
 						"requested_model":  run.RequestedModel,
 						"content_revision": run.ContentRevision,
 						"automatic":        classify.AutomaticFromProposals(after),

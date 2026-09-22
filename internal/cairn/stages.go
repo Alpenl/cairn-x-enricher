@@ -440,6 +440,66 @@ func (c *Client) PutQuestionSpec(ctx context.Context, spec classify.QuestionSpec
 	return c.stageWrite(ctx, "/api/v2/question-specs", body)
 }
 
+// StoredDecision retains every input run of a policy replay. Older Workers only
+// supplied RunID; that known reference remains readable but is not certified as
+// the complete historical set. Personal revision can likewise be unknown.
+type StoredDecision struct {
+	ID                       int64           `json:"id"`
+	RunID                    int64           `json:"run_id"`
+	RunIDs                   []int64         `json:"run_ids"`
+	RunReferencesComplete    bool            `json:"run_references_complete"`
+	ExpectedPersonalRevision *int64          `json:"expected_personal_revision"`
+	ContentRevision          int64           `json:"content_revision"`
+	PolicyVersion            string          `json:"policy_version"`
+	Policy                   json.RawMessage `json:"policy"`
+	Automatic                json.RawMessage `json:"automatic"`
+	CreatedAt                string          `json:"created_at"`
+	SpecID                   string          `json:"spec_id"`
+	SpecHash                 string          `json:"spec_hash"`
+	RequestedModel           string          `json:"requested_model"`
+	ResolvedModel            string          `json:"resolved_model"`
+	Coverage                 string          `json:"coverage"`
+}
+
+// GetLatestDecision reads the durable policy result without model inference.
+func (c *Client) GetLatestDecision(ctx context.Context, id int64) (*StoredDecision, error) {
+	if id < 1 {
+		return nil, errors.New("bookmark ID must be positive")
+	}
+	response, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v2/links/%d/decisions", id), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, apiError(response)
+	}
+	var decision StoredDecision
+	if err := decodeJSON(response.Body, &decision); err != nil {
+		return nil, fmt.Errorf("decode decision: %w", err)
+	}
+	if len(decision.RunIDs) == 0 && !decision.RunReferencesComplete {
+		decision.RunIDs = []int64{decision.RunID}
+	}
+	if decision.ID < 1 || len(decision.RunIDs) == 0 || len(decision.RunIDs) > 64 {
+		return nil, errors.New("invalid stored decision references")
+	}
+	seen := map[int64]bool{}
+	for _, runID := range decision.RunIDs {
+		if runID < 1 || seen[runID] {
+			return nil, errors.New("invalid stored decision references")
+		}
+		seen[runID] = true
+	}
+	if !seen[decision.RunID] {
+		return nil, errors.New("stored decision primary run is not referenced")
+	}
+	return &decision, nil
+}
+
 // SubmitDecision records a pure decision over stored runs. The Worker validates
 // the run references and derives the effective view itself, so this call can
 // never overwrite human curation with a stale or fabricated view.

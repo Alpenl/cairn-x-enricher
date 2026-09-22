@@ -108,3 +108,5 @@ run_case evidence TestLocalWorkerEvidenceCheckpointAndBoundRead
 run_case entities TestLocalWorkerEntitySnapshotIdentity
 
 run_case reuse TestLocalWorkerStoredQuestionReuse
+
+run_case decisions TestLocalWorkerDecisionReferences
