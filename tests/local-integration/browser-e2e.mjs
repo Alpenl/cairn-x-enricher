@@ -123,6 +123,25 @@ async function main() {
     check("the effective view is derived from the real decision", selection.payload.provenance?.source === "decision", JSON.stringify(selection.payload).slice(0, 300));
     check("the multidimensional topics are present", topics.length > 3, JSON.stringify(topics));
 
+    // Rebuild two identical policy projections from the actual production run.
+    // AI-only display values must never become legacy or human source data.
+    for (let pass = 0; pass < 2; pass++) {
+      const replay = await jsonFetch(`${workerURL}/api/v2/links/${id}/decisions`, {
+        method: "POST", headers: auth(enricherToken), body: JSON.stringify({
+          operation_key: `browser-ai-rebuild-${pass}`, run_ids: [run.id], policy_version: "jev-policy-v2",
+          spec_id: spec.spec_id, requested_model: "jev-latest", content_revision: run.content_revision,
+          automatic: selection.payload.selection
+        })
+      });
+      check(`AI-only projection rebuild ${pass + 1} succeeds`, replay.status === 200, JSON.stringify(replay.payload));
+    }
+    const aiOverrides = await jsonFetch(`${workerURL}/api/v2/links/${id}/overrides`, { headers: auth(enricherToken) });
+    check("AI-only rebuilds create no human or legacy overrides", aiOverrides.payload.overrides?.length === 0);
+    const aiLegacy = await jsonFetch(`${workerURL}/api/enrichment/jobs/${id}`, { headers: auth(enricherToken) });
+    check("the old endpoint still reports AI-only as unreviewed", aiLegacy.payload.classification_reviewed === false);
+    const aiView = await jsonFetch(`${workerURL}/api/v2/links/${id}/effective`, { headers: auth(enricherToken) });
+    check("the current endpoint still reports AI-only as unreviewed", aiView.payload.effective?.reviewed === false);
+
     // 4. The real browser loads the real Go proxy over the real Worker.
     const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ["--no-sandbox"] });
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });

@@ -3,6 +3,7 @@ package classify
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -259,7 +260,12 @@ func Resolve(proposals Proposals, overrides []Override) EffectiveView {
 		Form:        states["form"].resolveSingle(proposals.Form),
 		Use:         states["use"].resolveSingle(proposals.Use),
 		Entities:    states["entities"].resolveMulti(proposals.Entities),
-		Reviewed:    len(overrides) > 0,
+	}
+	for _, state := range states {
+		if len(state.action) > 0 || state.clearedAutomatic || state.empty {
+			view.Reviewed = true
+			break
+		}
 	}
 	view.Empty.Topics = states["topics"].resolvedEmpty()
 	view.Empty.ContentFunctions = states["content_functions"].resolvedEmpty()
@@ -339,15 +345,7 @@ func diffProposals(before, after Proposals) []string {
 }
 
 func equalStrings(left, right []string) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for index := range left {
-		if left[index] != right[index] {
-			return false
-		}
-	}
-	return true
+	return slices.Equal(left, right)
 }
 
 // CacheKey identifies the exact inputs that produced a set of raw judgments.

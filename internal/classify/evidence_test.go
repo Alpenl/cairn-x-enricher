@@ -95,6 +95,16 @@ func TestStructuredEvidencePreservesUpstreamCoverage(t *testing.T) {
 	}
 }
 
+func TestResetRemovesActiveReviewWithoutErasingHistory(t *testing.T) {
+	view := Resolve(Proposals{Topics: []string{"llm"}}, []Override{
+		{Field: "topics", Term: "llm", Action: OverrideReject, Revision: 1},
+		{Field: "topics", Action: OverrideReset, Revision: 2},
+	})
+	if view.Reviewed || !equalStrings(view.Topics, []string{"llm"}) {
+		t.Fatalf("reset remains confirmed: %+v", view)
+	}
+}
+
 func TestCheckNoPersonalFieldsDetectsNestedLeak(t *testing.T) {
 	leaky := []byte(`{"primary":"x","context":[{"note":"personal"}]}`)
 	if err := CheckNoPersonalFields(leaky); err == nil {
