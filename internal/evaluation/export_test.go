@@ -155,3 +155,16 @@ func TestExportDatasetRejectsUnboundedOrUnreplayableInput(t *testing.T) {
 		t.Fatalf("a partial trailing run must be skipped: %+v", dataset.Prediction[0])
 	}
 }
+
+func TestTopicCalibrationExcludesOtherNoulDimensions(t *testing.T) {
+	value := 0.9
+	raw := classify.RawJudgments{Judgments: map[string]classify.RawJudgment{
+		"topic_llm":           {Kind: classify.QuestionNoul, Dimension: "topic", TermID: "llm", Noul: &value},
+		"function_method":     {Kind: classify.QuestionNoul, Dimension: "content_functions", TermID: "method", Noul: &value},
+		"affordance_practice": {Kind: classify.QuestionNoul, Dimension: "affordances", TermID: "practice", Noul: &value},
+	}}
+	probabilities := topicProbabilities(raw)
+	if len(probabilities) != 1 || probabilities["llm"] != 0.9 {
+		t.Fatalf("non-topic probabilities contaminated calibration: %v", probabilities)
+	}
+}

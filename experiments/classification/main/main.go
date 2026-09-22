@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/evaluation"
 )
@@ -20,21 +21,28 @@ func main() {
 	var dryRun bool
 	var live bool
 	var maxCalls int
+	var liveConfig liveConfig
 	flag.StringVar(&datasetPath, "dataset", "", "path to a dataset JSON file (samples + predictions)")
 	flag.StringVar(&gatePath, "gate", "", "optional path to a gate threshold JSON file")
 	flag.BoolVar(&dryRun, "dry-run", false, "print the plan without scoring or calling a model")
 	flag.BoolVar(&live, "live", false, "explicitly opt in to a live model run (costs money)")
 	flag.IntVar(&maxCalls, "max-calls", 0, "hard budget for a live run; 0 means no live run is permitted")
+	flag.StringVar(&liveConfig.catalogPath, "catalog", "", "frozen taxonomy JSON for live/dry-run")
+	flag.StringVar(&liveConfig.output, "output", "", "new PRIVATE artifact directory for a live run (never overwritten)")
+	flag.StringVar(&liveConfig.envFile, "env-file", "", "explicit credential file; otherwise use TYPESAFE_API_KEY from environment")
+	flag.StringVar(&liveConfig.model, "model", "jev-1.13.0", "pinned model with reviewed input ceiling")
+	flag.StringVar(&liveConfig.baseURL, "base-url", "https://api.typesafe.ai", "TypeSafe API origin")
+	flag.StringVar(&liveConfig.sampleID, "sample-id", "", "optional explicit single sample for a paid smoke test")
+	flag.IntVar(&liveConfig.maxSamples, "max-samples", 0, "maximum samples in a live run")
+	flag.Int64Var(&liveConfig.maxTokens, "max-tokens", 0, "hard INPUT-token reservation budget, 65536 reserved per attempt")
+	flag.DurationVar(&liveConfig.timeout, "timeout", 60*time.Second, "per-call timeout")
 	flag.Parse()
 
 	if live && maxCalls <= 0 {
 		fmt.Fprintln(os.Stderr, "error: a live run requires an explicit positive -max-calls budget")
 		os.Exit(2)
 	}
-	if live {
-		fmt.Fprintln(os.Stderr, "error: the live runner is not enabled in this build; use the offline dataset path")
-		os.Exit(2)
-	}
+
 	if datasetPath == "" {
 		fmt.Fprintln(os.Stderr, "error: -dataset is required")
 		os.Exit(2)
@@ -67,6 +75,16 @@ func main() {
 			fmt.Fprintln(os.Stderr, "error: decode gate:", err)
 			os.Exit(1)
 		}
+	}
+
+	if live {
+		liveConfig.maxCalls = maxCalls
+		liveConfig.dryRun = dryRun
+		if err := runLiveCommand(dataset, liveConfig, gate); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	if dryRun {

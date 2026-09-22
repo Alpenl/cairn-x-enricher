@@ -3,7 +3,9 @@ package evaluation
 import (
 	"errors"
 	"math"
+	"math/rand/v2"
 	"sort"
+	"strings"
 )
 
 // DimensionMetric reports per-dimension quality. Multi-label dimensions are
@@ -17,6 +19,10 @@ type DimensionMetric struct {
 	FalseNeg     int     `json:"false_negative"`
 	Abstained    int     `json:"abstained"`
 	Support      int     `json:"support"`
+	Unknown      int     `json:"unknown_reference"`
+	Missing      int     `json:"missing_prediction"`
+	Decided      int     `json:"decided"`
+	CorrectEmpty int     `json:"correct_empty"`
 	Precision    float64 `json:"precision"`
 	Recall       float64 `json:"recall"`
 	F1           float64 `json:"f1"`
@@ -24,30 +30,41 @@ type DimensionMetric struct {
 
 // Report is the machine-readable evaluation result.
 type Report struct {
-	DatasetHash      string            `json:"dataset_hash"`
-	DatasetName      string            `json:"dataset_name"`
-	Split            string            `json:"split"`
-	SamplesTotal     int               `json:"samples_total"`
-	SamplesWithGold  int               `json:"samples_with_gold"`
-	SamplesMissing   int               `json:"samples_missing_gold"`
-	Dimensions       []DimensionMetric `json:"dimensions"`
-	MicroPrecision   float64           `json:"micro_precision"`
-	MicroRecall      float64           `json:"micro_recall"`
-	MacroPrecision   float64           `json:"macro_precision"`
-	MacroRecall      float64           `json:"macro_recall"`
-	AcceptedError    float64           `json:"accepted_error_rate"`
-	Coverage         float64           `json:"coverage"`
-	ReviewFields     float64           `json:"review_fields_per_sample"`
-	Brier            float64           `json:"brier,omitempty"`
-	ECE              float64           `json:"ece,omitempty"`
-	CalibrationBins  int               `json:"calibration_bins,omitempty"`
-	HasCalibration   bool              `json:"has_calibration"`
-	Inconclusive     bool              `json:"inconclusive"`
-	InconclusiveWhy  []string          `json:"inconclusive_reasons,omitempty"`
-	ByLanguage       map[string]int    `json:"by_language"`
-	ByLengthBucket   map[string]int    `json:"by_length_bucket"`
-	ByCarrier        map[string]int    `json:"by_carrier"`
-	MissingGoldCount int               `json:"missing_gold_count"`
+	KnownReferenceSamples int                       `json:"known_reference_samples"`
+	IndependentGroups     int                       `json:"independent_groups"`
+	ReferenceHash         string                    `json:"reference_hash"`
+	ReferenceProvenance   map[Provenance]int        `json:"reference_provenance"`
+	KnownFields           int                       `json:"known_fields"`
+	DecidedFields         int                       `json:"decided_fields"`
+	PerLabel              []DimensionMetric         `json:"per_label"`
+	Confusion             map[string]map[string]int `json:"confusion"`
+	Intervals             map[string]Interval       `json:"intervals"`
+	LabelMacroPrecision   float64                   `json:"label_macro_precision"`
+	LabelMacroRecall      float64                   `json:"label_macro_recall"`
+	DatasetHash           string                    `json:"dataset_hash"`
+	DatasetName           string                    `json:"dataset_name"`
+	Split                 string                    `json:"split"`
+	SamplesTotal          int                       `json:"samples_total"`
+	SamplesWithGold       int                       `json:"samples_with_gold"`
+	SamplesMissing        int                       `json:"samples_missing_gold"`
+	Dimensions            []DimensionMetric         `json:"dimensions"`
+	MicroPrecision        float64                   `json:"micro_precision"`
+	MicroRecall           float64                   `json:"micro_recall"`
+	MacroPrecision        float64                   `json:"macro_precision"`
+	MacroRecall           float64                   `json:"macro_recall"`
+	AcceptedError         float64                   `json:"accepted_error_rate"`
+	Coverage              float64                   `json:"coverage"`
+	ReviewFields          float64                   `json:"review_fields_per_sample"`
+	Brier                 float64                   `json:"brier,omitempty"`
+	ECE                   float64                   `json:"ece,omitempty"`
+	CalibrationBins       int                       `json:"calibration_bins,omitempty"`
+	HasCalibration        bool                      `json:"has_calibration"`
+	Inconclusive          bool                      `json:"inconclusive"`
+	InconclusiveWhy       []string                  `json:"inconclusive_reasons,omitempty"`
+	ByLanguage            map[string]int            `json:"by_language"`
+	ByLengthBucket        map[string]int            `json:"by_length_bucket"`
+	ByCarrier             map[string]int            `json:"by_carrier"`
+	MissingGoldCount      int                       `json:"missing_gold_count"`
 }
 
 // minSupportForConclusion is the sample count below which a metric is reported
@@ -68,131 +85,288 @@ func Score(dataset Dataset) (Report, error) {
 	for _, prediction := range dataset.Prediction {
 		predictions[prediction.SampleID] = prediction
 	}
-	report := Report{
-		DatasetHash: hash, DatasetName: dataset.Name, Split: dataset.Split,
-		SamplesTotal: len(dataset.Samples),
-		ByLanguage:   map[string]int{}, ByLengthBucket: map[string]int{}, ByCarrier: map[string]int{},
+	referenceHash, err := HashReference(dataset)
+	if err != nil {
+		return Report{}, err
 	}
-	dimensions := map[string]*DimensionMetric{
-		"topics":            {Dimension: "topics", MultiLabel: true},
-		"content_functions": {Dimension: "content_functions", MultiLabel: true},
-		"carriers":          {Dimension: "carriers", MultiLabel: true},
-		"affordances":       {Dimension: "affordances", MultiLabel: true},
-		"form":              {Dimension: "form"},
-		"use":               {Dimension: "use"},
+	report := Report{DatasetHash: hash, ReferenceHash: referenceHash, DatasetName: dataset.Name, Split: dataset.Split, SamplesTotal: len(dataset.Samples),
+		ByLanguage: map[string]int{}, ByLengthBucket: map[string]int{}, ByCarrier: map[string]int{}, ReferenceProvenance: map[Provenance]int{}, Confusion: map[string]map[string]int{}}
+	order := []string{"topics", "content_functions", "carriers", "affordances", "form", "use"}
+	dimensions, labels := map[string]*DimensionMetric{}, map[string]*DimensionMetric{}
+	for _, name := range order {
+		dimensions[name] = &DimensionMetric{Dimension: name, MultiLabel: name == "topics" || name == "content_functions" || name == "affordances"}
 	}
-	var acceptedTotal, acceptedWrong int
-	var reviewFieldsTotal float64
+	var reviewFields, brierCount int
 	var brierSum float64
-	var brierCount int
-	var calibPoints []calibPoint
-
+	var calibration []calibPoint
+	groups := map[string]counts{}
 	for _, sample := range dataset.Samples {
 		report.ByLanguage[NormalizeLanguage(sample.Language)]++
 		report.ByLengthBucket[sample.LengthBucket]++
 		report.ByCarrier[sample.Carrier]++
+		report.ReferenceProvenance[sample.Provenance]++
 		if sample.Gold == nil {
 			report.SamplesMissing++
 			continue
 		}
 		report.SamplesWithGold++
-		prediction, ok := predictions[sample.SampleID]
-		if !ok {
-			// A gold sample without a prediction is a coverage gap, not a
-			// correct abstention.
+		prediction, present := predictions[sample.SampleID]
+		if !present {
 			report.MissingGoldCount++
-			continue
 		}
-		// Multi-label dimensions.
-		evaluateSet(dimensions["topics"], sample.Gold.Topics.Values, prediction.Topics, dimensionAbstained(prediction, "topic"))
-		evaluateSet(dimensions["content_functions"], sample.Gold.ContentFunctions.Values, prediction.ContentFunctions, dimensionAbstained(prediction, "content_function"))
-		evaluateSet(dimensions["carriers"], sample.Gold.Carriers.Values, prediction.Carriers, dimensionAbstained(prediction, "carrier"))
-		evaluateSet(dimensions["affordances"], sample.Gold.Affordances.Values, prediction.Affordances, dimensionAbstained(prediction, "affordance"))
-		// Single-valued dimensions.
-		evaluateSet(dimensions["form"], sample.Gold.Form.Values, nonEmpty(prediction.Form), dimensionAbstained(prediction, "form"))
-		evaluateSet(dimensions["use"], sample.Gold.Use.Values, nonEmpty(prediction.Use), dimensionAbstained(prediction, "use"))
-
-		for _, accepted := range [][]string{prediction.Topics, prediction.ContentFunctions, prediction.Carriers, prediction.Affordances} {
-			acceptedTotal += len(accepted)
+		beforeKnown := report.KnownFields
+		references := referenceLabels(*sample.Gold)
+		predicted := map[string][]string{"topics": prediction.Topics, "content_functions": prediction.ContentFunctions, "carriers": prediction.Carriers, "affordances": prediction.Affordances, "form": nonEmpty(prediction.Form), "use": nonEmpty(prediction.Use)}
+		group := sample.GroupID
+		if group == "" {
+			group = sample.SampleID
 		}
-		if prediction.Form != "" {
-			acceptedTotal++
-		}
-		if prediction.Use != "" {
-			acceptedTotal++
-		}
-		if !prediction.FormMatches(sample.Gold.Form) && prediction.Form != "" {
-			acceptedWrong++
-		}
-		reviewFieldsTotal += float64(len(prediction.Abstained))
-
-		// Calibration over the topic distribution when present.
-		if len(prediction.TopicProbabilities) > 0 {
-			labels := make([]string, 0, len(prediction.TopicProbabilities))
-			for label := range prediction.TopicProbabilities {
-				labels = append(labels, label)
+		values := groups[group]
+		for _, name := range order {
+			label := references[name]
+			metric := dimensions[name]
+			if !knownLabel(label) {
+				metric.Unknown++
+				continue
 			}
-			sort.Strings(labels)
-			for _, label := range labels {
+			report.KnownFields++
+			values.known++
+			actual := predicted[name]
+			abstained := dimensionAbstained(prediction, name)
+			if !present || abstained {
+				reviewFields++
+			} else {
+				report.DecidedFields++
+				metric.Decided++
+				values.decided++
+			}
+			previousTP, previousFP, previousFN := metric.TruePositive, metric.FalsePos, metric.FalseNeg
+			evaluateReference(metric, label, actual, abstained || !present)
+			if !present {
+				metric.Abstained--
+				metric.Missing++
+			}
+			values.tp += metric.TruePositive - previousTP
+			values.fp += metric.FalsePos - previousFP
+			values.fn += metric.FalseNeg - previousFN
+			// Single-choice acceptable alternatives are one correct outcome, not
+			// several required positives. Ambiguous alternatives are excluded from
+			// per-label confusion while remaining scored at the dimension level.
+			if !metric.MultiLabel {
+				if report.Confusion[name] == nil {
+					report.Confusion[name] = map[string]int{}
+				}
+				expected := append([]string{}, label.Values...)
+				sort.Strings(expected)
+				key := strings.Join(expected, "|") + " -> " + strings.Join(actual, "|")
+				if !present {
+					key = strings.Join(expected, "|") + " -> <missing>"
+				} else if abstained {
+					key = strings.Join(expected, "|") + " -> <abstained>"
+				}
+				report.Confusion[name][key]++
+				if len(label.Values) > 1 {
+					continue
+				}
+			}
+			terms := map[string]bool{}
+			for _, term := range append(append([]string{}, label.Values...), actual...) {
+				terms[term] = true
+			}
+			for term := range terms {
+				key := name + ":" + term
+				item := labels[key]
+				if item == nil {
+					item = &DimensionMetric{Dimension: key, MultiLabel: metric.MultiLabel}
+					labels[key] = item
+				}
+				item.Support++
+				expected, found := contains(label.Values, term), contains(actual, term)
+				if expected && found {
+					item.TruePositive++
+				} else if found {
+					item.FalsePos++
+				} else if expected {
+					item.FalseNeg++
+				}
+			}
+		}
+		groups[group] = values
+		if report.KnownFields > beforeKnown {
+			report.KnownReferenceSamples++
+		}
+		if present && knownLabel(sample.Gold.Topics) {
+			keys := make([]string, 0, len(prediction.TopicProbabilities))
+			for label := range prediction.TopicProbabilities {
+				keys = append(keys, label)
+			}
+			sort.Strings(keys)
+			for _, label := range keys {
 				probability := prediction.TopicProbabilities[label]
 				correct := contains(sample.Gold.Topics.Values, label)
-				brierSum += (probability - boolToFloat(correct)) * (probability - boolToFloat(correct))
+				brierSum += math.Pow(probability-boolToFloat(correct), 2)
 				brierCount++
-				calibPoints = append(calibPoints, calibPoint{p: probability, correct: correct})
+				calibration = append(calibration, calibPoint{p: probability, correct: correct})
 			}
 		}
 	}
-
-	order := []string{"topics", "content_functions", "carriers", "affordances", "form", "use"}
-	var microTP, microFP, microFN int
-	var macroP, macroR float64
-	scored := 0
+	var tp, fp, fn, scored int
 	for _, name := range order {
 		metric := dimensions[name]
 		finalize(metric)
 		report.Dimensions = append(report.Dimensions, *metric)
-		microTP += metric.TruePositive
-		microFP += metric.FalsePos
-		microFN += metric.FalseNeg
-		if metric.Support > 0 {
-			macroP += metric.Precision
-			macroR += metric.Recall
+		tp += metric.TruePositive
+		fp += metric.FalsePos
+		fn += metric.FalseNeg
+		if metric.TruePositive+metric.FalsePos+metric.FalseNeg > 0 {
+			report.MacroPrecision += metric.Precision
+			report.MacroRecall += metric.Recall
 			scored++
 		}
 	}
-	report.MicroPrecision = ratio(microTP, microTP+microFP)
-	report.MicroRecall = ratio(microTP, microTP+microFN)
 	if scored > 0 {
-		report.MacroPrecision = macroP / float64(scored)
-		report.MacroRecall = macroR / float64(scored)
+		report.MacroPrecision /= float64(scored)
+		report.MacroRecall /= float64(scored)
 	}
-	report.AcceptedError = ratio(acceptedWrong, acceptedTotal)
-	report.Coverage = ratio(acceptedTotal, acceptedTotal+totalAbstained(&report))
-	if report.SamplesWithGold+report.SamplesMissing > 0 {
-		report.ReviewFields = reviewFieldsTotal / float64(report.SamplesWithGold)
+	keys := make([]string, 0, len(labels))
+	for key := range labels {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		metric := labels[key]
+		finalize(metric)
+		report.PerLabel = append(report.PerLabel, *metric)
+		report.LabelMacroPrecision += metric.Precision
+		report.LabelMacroRecall += metric.Recall
+	}
+	if len(keys) > 0 {
+		report.LabelMacroPrecision /= float64(len(keys))
+		report.LabelMacroRecall /= float64(len(keys))
+	}
+	report.MicroPrecision = ratio(tp, tp+fp)
+	report.MicroRecall = ratio(tp, tp+fn)
+	report.AcceptedError = ratio(fp, tp+fp)
+	report.Coverage = ratio(report.DecidedFields, report.KnownFields)
+	if report.SamplesWithGold > 0 {
+		report.ReviewFields = float64(reviewFields) / float64(report.SamplesWithGold)
 	}
 	if brierCount > 0 {
-		report.Brier = brierSum / float64(brierCount)
-		ece, bins := expectedCalibrationError(calibPoints, 10)
-		report.ECE = ece
-		report.CalibrationBins = bins
 		report.HasCalibration = true
+		report.Brier = brierSum / float64(brierCount)
+		report.ECE, report.CalibrationBins = expectedCalibrationError(calibration, 10)
 	}
-
-	// A report is inconclusive when support is too small to conclude anything,
-	// or when gold is missing. It is never silently presented as a result.
-	if report.SamplesWithGold < minSupportForConclusion {
-		report.Inconclusive = true
-		report.InconclusiveWhy = append(report.InconclusiveWhy, "insufficient gold samples")
+	for _, count := range groups {
+		if count.known > 0 {
+			report.IndependentGroups++
+		}
+	}
+	if report.KnownReferenceSamples < minSupportForConclusion {
+		report.InconclusiveWhy = append(report.InconclusiveWhy, "insufficient reference samples")
 	}
 	if report.SamplesMissing > 0 {
-		report.InconclusiveWhy = append(report.InconclusiveWhy, "missing gold for some samples")
+		report.InconclusiveWhy = append(report.InconclusiveWhy, "missing reference for some samples")
 	}
 	if report.MissingGoldCount > 0 {
-		report.InconclusiveWhy = append(report.InconclusiveWhy, "gold without a prediction")
+		report.InconclusiveWhy = append(report.InconclusiveWhy, "reference without a prediction")
+	}
+	if report.KnownFields == 0 {
+		report.InconclusiveWhy = append(report.InconclusiveWhy, "no known reference fields")
+	}
+	if report.IndependentGroups < minSupportForConclusion {
+		report.InconclusiveWhy = append(report.InconclusiveWhy, "insufficient independent reference groups")
 	}
 	sort.Strings(report.InconclusiveWhy)
+	report.Inconclusive = len(report.InconclusiveWhy) > 0
+	report.Intervals = bootstrap(groups)
 	return report, nil
+}
+
+// Interval is a deterministic 95% group-bootstrap percentile interval. Groups,
+// not labels or translated variants, are resampled together. It describes the
+// declared benchmark; it cannot quantify reference-label bias.
+type Interval struct {
+	Low        float64 `json:"low"`
+	High       float64 `json:"high"`
+	Groups     int     `json:"groups"`
+	Replicates int     `json:"replicates"`
+	Method     string  `json:"method"`
+}
+type counts struct{ tp, fp, fn, known, decided int }
+
+func bootstrap(groups map[string]counts) map[string]Interval {
+	keys := make([]string, 0, len(groups))
+	for key, c := range groups {
+		if c.known > 0 {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	if len(keys) < 2 {
+		return nil
+	}
+	const replicates = 500
+	metrics := map[string][]float64{"micro_precision": {}, "micro_recall": {}, "accepted_error_rate": {}, "coverage": {}}
+	// #nosec G404 -- fixed-seed statistical resampling, never a security token.
+	rng := rand.New(rand.NewPCG(22, 202609))
+	for range replicates {
+		var sum counts
+		for range len(keys) {
+			value := groups[keys[rng.IntN(len(keys))]]
+			sum.tp += value.tp
+			sum.fp += value.fp
+			sum.fn += value.fn
+			sum.known += value.known
+			sum.decided += value.decided
+		}
+		metrics["micro_precision"] = append(metrics["micro_precision"], ratio(sum.tp, sum.tp+sum.fp))
+		metrics["micro_recall"] = append(metrics["micro_recall"], ratio(sum.tp, sum.tp+sum.fn))
+		metrics["accepted_error_rate"] = append(metrics["accepted_error_rate"], ratio(sum.fp, sum.tp+sum.fp))
+		metrics["coverage"] = append(metrics["coverage"], ratio(sum.decided, sum.known))
+	}
+	out := map[string]Interval{}
+	for name, values := range metrics {
+		sort.Float64s(values)
+		out[name] = Interval{Low: values[12], High: values[487], Groups: len(keys), Replicates: replicates, Method: "group_bootstrap_95_percentile_seed_22_202609"}
+	}
+	return out
+}
+
+func evaluateReference(metric *DimensionMetric, label Label, predicted []string, abstained bool) {
+	metric.Support++
+	if abstained {
+		metric.Abstained++
+	}
+	if len(label.Values) == 0 {
+		metric.FalsePos += len(predicted)
+		if len(predicted) == 0 && !abstained {
+			metric.CorrectEmpty++
+		}
+		return
+	}
+	if !metric.MultiLabel {
+		if len(predicted) > 0 && contains(label.Values, predicted[0]) {
+			metric.TruePositive++
+			return
+		}
+		metric.FalseNeg++
+		if len(predicted) > 0 {
+			metric.FalsePos++
+		}
+		return
+	}
+	for _, value := range predicted {
+		if contains(label.Values, value) {
+			metric.TruePositive++
+		} else {
+			metric.FalsePos++
+		}
+	}
+	for _, value := range label.Values {
+		if !contains(predicted, value) {
+			metric.FalseNeg++
+		}
+	}
 }
 
 // FormMatches reports whether a predicted single value is in the acceptable set.
@@ -201,36 +375,6 @@ func (p Prediction) FormMatches(label Label) bool {
 		return p.Form == ""
 	}
 	return contains(label.Values, p.Form)
-}
-
-func evaluateSet(metric *DimensionMetric, gold, predicted []string, abstained bool) {
-	if len(gold) == 0 {
-		// A not_applicable or empty gold is still counted as support so an
-		// empty prediction is rewarded rather than ignored.
-		metric.Support++
-		if len(predicted) > 0 {
-			metric.FalsePos += len(predicted)
-		}
-		return
-	}
-	metric.Support++
-	if abstained && len(predicted) == 0 {
-		metric.Abstained++
-		metric.FalseNeg += len(gold)
-		return
-	}
-	for _, value := range predicted {
-		if contains(gold, value) {
-			metric.TruePositive++
-		} else {
-			metric.FalsePos++
-		}
-	}
-	for _, value := range gold {
-		if !contains(predicted, value) {
-			metric.FalseNeg++
-		}
-	}
 }
 
 func finalize(metric *DimensionMetric) {
@@ -250,16 +394,9 @@ func ratio(numerator, denominator int) float64 {
 	return float64(numerator) / float64(denominator)
 }
 
-func totalAbstained(report *Report) int {
-	total := 0
-	for _, metric := range report.Dimensions {
-		total += metric.Abstained
-	}
-	return total
-}
-
 func dimensionAbstained(prediction Prediction, dimension string) bool {
-	return contains(prediction.Abstained, dimension)
+	aliases := map[string]string{"topics": "topic", "content_functions": "content_function", "carriers": "carrier", "affordances": "affordance"}
+	return contains(prediction.Abstained, dimension) || (aliases[dimension] != "" && contains(prediction.Abstained, aliases[dimension]))
 }
 
 func contains(values []string, want string) bool {

@@ -3,6 +3,8 @@ package evaluation
 import (
 	"errors"
 	"fmt"
+	"math"
+	"slices"
 	"sort"
 )
 
@@ -37,6 +39,17 @@ func Replay(policy Policy, probabilities map[string]float64) []string {
 // SearchThresholds finds the topic-accept threshold on the training split that
 // maximises F1 subject to a coverage floor. It never reads the holdout.
 func SearchThresholds(train Dataset, candidates []float64, coverageFloor float64) (Policy, error) {
+	if train.Split != "train" && train.Split != "dev" {
+		return Policy{}, errors.New("threshold search requires train or dev, never holdout")
+	}
+	if math.IsNaN(coverageFloor) || coverageFloor < 0 || coverageFloor > 1 {
+		return Policy{}, errors.New("invalid coverage floor")
+	}
+	for _, threshold := range candidates {
+		if math.IsNaN(threshold) || math.IsInf(threshold, 0) || threshold <= 0.2 || threshold > 1 {
+			return Policy{}, errors.New("threshold must exceed reject=0.2 and be at most 1")
+		}
+	}
 	if err := train.Validate(); err != nil {
 		return Policy{}, err
 	}
@@ -56,6 +69,13 @@ func SearchThresholds(train Dataset, candidates []float64, coverageFloor float64
 			accepted := Replay(policy, prediction.TopicProbabilities)
 			updated := prediction
 			updated.Topics = accepted
+			updated.Abstained = slices.DeleteFunc(append([]string{}, prediction.Abstained...), func(name string) bool { return name == "topic" || name == "topics" })
+			for _, probability := range prediction.TopicProbabilities {
+				if probability > policy.TopicReject && probability < policy.TopicAccept {
+					updated.Abstained = append(updated.Abstained, "topic")
+					break
+				}
+			}
 			candidate.Prediction = append(candidate.Prediction, updated)
 		}
 		report, err := Score(candidate)
@@ -65,7 +85,13 @@ func SearchThresholds(train Dataset, candidates []float64, coverageFloor float64
 		if report.Coverage < coverageFloor {
 			continue
 		}
-		score := macroF1(report)
+		score := 0.0
+		for _, metric := range report.Dimensions {
+			if metric.Dimension == "topics" {
+				score = metric.F1
+				break
+			}
+		}
 		if score > bestScore {
 			bestScore = score
 			best = policy
@@ -75,19 +101,6 @@ func SearchThresholds(train Dataset, candidates []float64, coverageFloor float64
 		return Policy{}, errors.New("no threshold met the coverage floor")
 	}
 	return best, nil
-}
-
-func macroF1(report Report) float64 {
-	total := 0.0
-	count := 0
-	for _, metric := range report.Dimensions {
-		total += metric.F1
-		count++
-	}
-	if count == 0 {
-		return 0
-	}
-	return total / float64(count)
 }
 
 // AblationVariant names one controlled change. Exactly one variable differs
@@ -131,13 +144,14 @@ func CompareAblations(baseline Report, variant Report) []AblationDelta {
 // after seeing the holdout invalidates the evaluation, so the config is part of
 // the report.
 type GateThresholds struct {
-	MinMacroRecall     float64 `json:"min_macro_recall"`
-	MinCoverage        float64 `json:"min_coverage"`
-	MaxAcceptedError   float64 `json:"max_accepted_error"`
-	MaxReviewFields    float64 `json:"max_review_fields_per_sample"`
-	MinGoldSamples     int     `json:"min_gold_samples"`
-	RequireCalibration bool    `json:"require_calibration"`
-	MaxBrier           float64 `json:"max_brier"`
+	MinIndependentGroups int     `json:"min_independent_groups"`
+	MinMacroRecall       float64 `json:"min_macro_recall"`
+	MinCoverage          float64 `json:"min_coverage"`
+	MaxAcceptedError     float64 `json:"max_accepted_error"`
+	MaxReviewFields      float64 `json:"max_review_fields_per_sample"`
+	MinGoldSamples       int     `json:"min_gold_samples"`
+	RequireCalibration   bool    `json:"require_calibration"`
+	MaxBrier             float64 `json:"max_brier"`
 }
 
 // DefaultGate is the conservative baseline. It is explicitly not calibrated
@@ -146,7 +160,7 @@ type GateThresholds struct {
 func DefaultGate() GateThresholds {
 	return GateThresholds{
 		MinMacroRecall: 0.6, MinCoverage: 0.5, MaxAcceptedError: 0.1,
-		MaxReviewFields: 3, MinGoldSamples: minSupportForConclusion, MaxBrier: 0.25,
+		MaxReviewFields: 3, MinGoldSamples: minSupportForConclusion, MinIndependentGroups: minSupportForConclusion, MaxBrier: 0.25,
 	}
 }
 
@@ -162,8 +176,19 @@ type PromotionDecision struct {
 // blocks promotion regardless of statistical quality, and a small sample makes
 // the result inconclusive rather than passing.
 func EvaluateGate(report Report, gate GateThresholds) PromotionDecision {
-	decision := PromotionDecision{Promote: true}
-	if report.SamplesWithGold < gate.MinGoldSamples {
+	decision := PromotionDecision{Promote: true, Inconclusive: report.Inconclusive}
+	decision.Reasons = append(decision.Reasons, report.InconclusiveWhy...)
+	if report.SamplesMissing > 0 || report.MissingGoldCount > 0 {
+		decision.Inconclusive = true
+		decision.Reasons = append(decision.Reasons, "reference or predictions missing")
+	}
+	for _, value := range []float64{report.MacroRecall, report.Coverage, report.AcceptedError, report.ReviewFields, report.Brier} {
+		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+			decision.Blockers = append(decision.Blockers, "invalid metric")
+			break
+		}
+	}
+	if report.KnownReferenceSamples < gate.MinGoldSamples || report.IndependentGroups < gate.MinIndependentGroups {
 		decision.Inconclusive = true
 		decision.Reasons = append(decision.Reasons, "insufficient gold samples for a conclusion")
 	}
@@ -197,18 +222,19 @@ func EvaluateGate(report Report, gate GateThresholds) PromotionDecision {
 	return decision
 }
 
-// ModelDrift reports whether a resolved model differs from the requested one.
+// ModelDrift compares two recorded concrete model identities.
 // A drifted alias must be re-evaluated rather than inheriting the old
 // calibration.
 type ModelDrift struct {
-	Requested  string `json:"requested"`
-	Resolved   string `json:"resolved"`
-	Drifted    bool   `json:"drifted"`
-	Reevaluate bool   `json:"reevaluate"`
+	PreviousResolved string `json:"previous_resolved"`
+	Resolved         string `json:"resolved"`
+	Drifted          bool   `json:"drifted"`
+	Reevaluate       bool   `json:"reevaluate"`
 }
 
-// DetectModelDrift reports whether the resolved model differs from the request.
-func DetectModelDrift(requested, resolved string) ModelDrift {
-	drifted := requested != "" && resolved != "" && requested != resolved
-	return ModelDrift{Requested: requested, Resolved: resolved, Drifted: drifted, Reevaluate: drifted}
+// DetectModelDrift compares actual resolutions across runs, never alias spelling.
+// Missing identity is unknown and requires evaluation rather than inferred reuse.
+func DetectModelDrift(previousResolved, resolved string) ModelDrift {
+	drifted := previousResolved != "" && resolved != "" && previousResolved != resolved
+	return ModelDrift{PreviousResolved: previousResolved, Resolved: resolved, Drifted: drifted, Reevaluate: drifted || previousResolved == "" || resolved == ""}
 }

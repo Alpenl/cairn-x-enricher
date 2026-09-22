@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-09-22",
+  "enricher_baseline_sha": "b3b762fed6e8f1099a24b9ff0193770619c1b917",
+  "gate": {
+    "min_independent_groups": 20,
+    "min_macro_recall": 0.6,
+    "min_coverage": 0.5,
+    "max_accepted_error": 0.1,
+    "max_review_fields_per_sample": 3,
+    "min_gold_samples": 20,
+    "require_calibration": false,
+    "max_brier": 0.25
+  },
+  "independent_semantic_reviewer": "not used; owner waived human annotation",
+  "limitations": [
+    "40 authored families; variants and translations are not independent samples",
+    "Repeated paragraphs test input length, not natural long-document diversity",
+    "Reference bias is not captured by statistical intervals",
+    "No private or real-user retrieval preference labels",
+    "Legacy v1 historical outputs missing; any new v1 inference is a new baseline"
+  ],
+  "reference_basis": "automatic_reference / authored synthetic; not human gold or measured user preference",
+  "reference_hashes": {
+    "dev": "a3c24258b2240331a95da45a7b41d7169b60d622480dbe5a2ef07481ca5798bd",
+    "holdout": "31baac5525e362741ad317c28e28d70706ad31f9903d01cfab72e0a46bbe8519",
+    "train": "ea14264cbaabcedd13a328bfef6473cf31a18827ca0285b27c8047150370b414"
+  },
+  "samples": 240,
+  "scenario_groups": 40,
+  "scenario_sha256": "b7efe05dff40a4cb9f1a93a797b7ecc9a092f34213d90968836775d24adce551",
+  "seed": 20260922,
+  "share_baseline_sha": "136faae21a8bddf101fb67977e2c4fabb2b98569",
+  "spec_hash": "2a39cb299aa0bf916bb4ac9642c1e515dd07f35883a61da403b4c53c05ce4d26",
+  "spec_id": "classify-80156c157660",
+  "splits": {
+    "dev": 36,
+    "holdout": 162,
+    "train": 42
+  },
+  "taxonomy_sha256": "2a9a13435ba6995aaadeff9771623051e7ab195c5301edba9d0a9c5f9fdbaa0a",
+  "version": "cairn-auto-reference-v1"
+}

@@ -15,7 +15,7 @@ func sample(id string, gold *Gold) Sample {
 }
 
 func gold(topics []string, form, use string) *Gold {
-	return &Gold{Topics: Label{Values: topics}, Form: Label{Values: nonEmpty(form)}, Use: Label{Values: nonEmpty(use)}}
+	return &Gold{Topics: Label{Values: topics, NotApplicable: len(topics) == 0}, Form: Label{Values: nonEmpty(form), NotApplicable: form == ""}, Use: Label{Values: nonEmpty(use), NotApplicable: use == ""}}
 }
 
 func prediction(id string, topics []string, form, use string, probabilities map[string]float64) Prediction {
@@ -255,7 +255,7 @@ func TestAblationReportsNonComparableDimensions(t *testing.T) {
 
 func TestGateBlocksOnSafetyEvenWithGoodStatistics(t *testing.T) {
 	report := Report{
-		SamplesWithGold: 100, MacroRecall: 0.95, Coverage: 0.95,
+		SamplesWithGold: 100, KnownReferenceSamples: 100, IndependentGroups: 100, MacroRecall: 0.95, Coverage: 0.95,
 		// One accepted error rate above the tolerance blocks promotion.
 		AcceptedError: 0.3, ReviewFields: 1,
 	}
@@ -278,7 +278,7 @@ func TestGateIsInconclusiveWithoutGold(t *testing.T) {
 
 func TestGatePromotesOnlyWhenEveryThresholdPasses(t *testing.T) {
 	report := Report{
-		SamplesWithGold: 100, MacroRecall: 0.8, Coverage: 0.8, AcceptedError: 0.02,
+		SamplesWithGold: 100, KnownReferenceSamples: 100, IndependentGroups: 100, MacroRecall: 0.8, Coverage: 0.8, AcceptedError: 0.02,
 		ReviewFields: 1, HasCalibration: true, Brier: 0.1, ECE: 0.05,
 	}
 	decision := EvaluateGate(report, DefaultGate())
@@ -290,7 +290,7 @@ func TestGatePromotesOnlyWhenEveryThresholdPasses(t *testing.T) {
 func TestMissingCalibrationBlocksWhenRequired(t *testing.T) {
 	gate := DefaultGate()
 	gate.RequireCalibration = true
-	report := Report{SamplesWithGold: 100, MacroRecall: 0.8, Coverage: 0.8, AcceptedError: 0.02, ReviewFields: 1}
+	report := Report{SamplesWithGold: 100, KnownReferenceSamples: 100, IndependentGroups: 100, MacroRecall: 0.8, Coverage: 0.8, AcceptedError: 0.02, ReviewFields: 1}
 	if EvaluateGate(report, gate).Promote {
 		t.Fatal("required calibration must block promotion when absent")
 	}
@@ -299,11 +299,11 @@ func TestMissingCalibrationBlocksWhenRequired(t *testing.T) {
 // --- Model drift (B08-T13) -------------------------------------------------
 
 func TestModelDriftRequiresReevaluation(t *testing.T) {
-	drift := DetectModelDrift("jev-latest", "jev-2026-10")
+	drift := DetectModelDrift("jev-2026-09", "jev-2026-10")
 	if !drift.Drifted || !drift.Reevaluate {
 		t.Fatalf("alias drift must require re-evaluation: %+v", drift)
 	}
-	if DetectModelDrift("jev-latest", "jev-latest").Reevaluate {
+	if DetectModelDrift("jev-2026-10", "jev-2026-10").Reevaluate {
 		t.Fatal("no drift means no forced re-evaluation")
 	}
 }

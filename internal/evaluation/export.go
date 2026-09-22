@@ -165,7 +165,7 @@ func newestCompleteRun(runs []cairn.StoredRun) (cairn.StoredRun, bool) {
 func topicProbabilities(raw classify.RawJudgments) map[string]float64 {
 	probabilities := map[string]float64{}
 	for _, judgment := range raw.Judgments {
-		if judgment.Kind != classify.QuestionNoul || judgment.Noul == nil {
+		if judgment.Kind != classify.QuestionNoul || judgment.Noul == nil || (judgment.Dimension != "topic" && judgment.Dimension != "topics") {
 			continue
 		}
 		id := judgment.TermID

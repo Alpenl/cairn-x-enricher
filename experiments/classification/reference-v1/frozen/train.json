@@ -1,0 +1,2481 @@
+{
+  "name": "cairn-auto-reference-v1",
+  "split": "train",
+  "seed": 20260922,
+  "samples": [
+    {
+      "sample_id": "auto-design-opinion-0",
+      "source_hash": "afc91c7e589517dd2fae78eff9f952d1b83dab6b22b744c5380082d2a9efff14",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "design-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "design"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#design-opinion"
+      },
+      "material": {
+        "primary": "Single post. Consistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 144
+      }
+    },
+    {
+      "sample_id": "auto-design-opinion-1",
+      "source_hash": "785debd764590b63a959ba334972aaca6acd76ec9dab79da61a55e3654d50d2b",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "design-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "design"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#design-opinion"
+      },
+      "material": {
+        "primary": "单条帖子。一致的间距和视觉层级降低理解界面的负担，装饰不能替代清晰的信息结构。",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 39
+      }
+    },
+    {
+      "sample_id": "auto-design-opinion-2",
+      "source_hash": "d49b02b1e757cb6c1fa4ab129b0685ba17382996298b7c63d7d33a5f911f3825",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "design-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "design"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#design-opinion"
+      },
+      "material": {
+        "primary": "单条双语帖子。一致的间距和视觉层级降低理解界面的负担，装饰不能替代清晰的信息结构。 English version: Consistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 190
+      }
+    },
+    {
+      "sample_id": "auto-design-opinion-3",
+      "source_hash": "bf9fa10cd6e6ffa69591549611915aa6e4a933727c8715bcf7e37ee22fd38595",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "external_article",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "design-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "design"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "external_article"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#design-opinion"
+      },
+      "material": {
+        "primary": "一致的间距和视觉层级降低理解界面的负担，装饰不能替代清晰的信息结构。 这条摘要附有外部文章链接 https://example.invalid/article/design-opinion",
+        "context": [
+          {
+            "id": "article",
+            "role": "external_article",
+            "text": "Consistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.",
+            "url": "https://example.invalid/article/design-opinion",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 225
+      }
+    },
+    {
+      "sample_id": "auto-design-opinion-4",
+      "source_hash": "86795a2b802d431fc13b4681b8663fae9cf746b6005045ed40720c008c4bcd46",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "author_continuation",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "design-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "design"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "author_continuation"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#design-opinion"
+      },
+      "material": {
+        "primary": "Author thread, post 1/2. Consistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.",
+        "context": [
+          {
+            "id": "author-post-2",
+            "role": "author_continuation",
+            "text": "同一作者的第二条续帖，用中文重复前文：一致的间距和视觉层级降低理解界面的负担，装饰不能替代清晰的信息结构。",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 209
+      }
+    },
+    {
+      "sample_id": "auto-design-opinion-5",
+      "source_hash": "2817c943c741eeae2196f0310ff28cf55f1c64b49183dd7fea528b2dc5e2ed34",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "long",
+      "completeness": "complete",
+      "group_id": "design-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "design"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#design-opinion"
+      },
+      "material": {
+        "primary": "One long post; the following passage is repeated as a length stress fixture. Consistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\nConsistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.\n\n",
+        "context": [
+          {
+            "id": "unrelated-quote",
+            "role": "quoted",
+            "text": "Unrelated quotation: Software development uses source code. This quoted subject does not replace the primary post.",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 2585
+      }
+    },
+    {
+      "sample_id": "auto-eval-opinion-0",
+      "source_hash": "385e0bf83c1310e7ab3aac4c87fa922512facc5b138c4e3a1701cbf4113df31a",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "eval-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "eval"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#eval-opinion"
+      },
+      "material": {
+        "primary": "Single post. Evaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 138
+      }
+    },
+    {
+      "sample_id": "auto-eval-opinion-1",
+      "source_hash": "757259a755fa7a2d36fb8725295e0ddae2467ae1c045833274ac464137779be9",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "eval-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "eval"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#eval-opinion"
+      },
+      "material": {
+        "primary": "单条帖子。评测结果依赖样本范围和指标定义；只公布一个分数会掩盖不同失败模式。",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 38
+      }
+    },
+    {
+      "sample_id": "auto-eval-opinion-2",
+      "source_hash": "5b73dd30d15523256f5cd9a0a5c561ed87fb01253a0e9dae233db5841db180f7",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "eval-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "eval"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#eval-opinion"
+      },
+      "material": {
+        "primary": "单条双语帖子。评测结果依赖样本范围和指标定义；只公布一个分数会掩盖不同失败模式。 English version: Evaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 183
+      }
+    },
+    {
+      "sample_id": "auto-eval-opinion-3",
+      "source_hash": "e430d4e25fb3913916dae0f116bbbb20f1f0ed351c803d542f814ad9d922332b",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "external_article",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "eval-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "eval"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "external_article"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#eval-opinion"
+      },
+      "material": {
+        "primary": "评测结果依赖样本范围和指标定义；只公布一个分数会掩盖不同失败模式。 这条摘要附有外部文章链接 https://example.invalid/article/eval-opinion",
+        "context": [
+          {
+            "id": "article",
+            "role": "external_article",
+            "text": "Evaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.",
+            "url": "https://example.invalid/article/eval-opinion",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 216
+      }
+    },
+    {
+      "sample_id": "auto-eval-opinion-4",
+      "source_hash": "5d1e6fd79c5ac93d8f8580d60347803dc627bdc168711a5d81a30f2952ed8e9f",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "author_continuation",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "eval-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "eval"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "author_continuation"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#eval-opinion"
+      },
+      "material": {
+        "primary": "Author thread, post 1/2. Evaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.",
+        "context": [
+          {
+            "id": "author-post-2",
+            "role": "author_continuation",
+            "text": "同一作者的第二条续帖，用中文重复前文：评测结果依赖样本范围和指标定义；只公布一个分数会掩盖不同失败模式。",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 202
+      }
+    },
+    {
+      "sample_id": "auto-eval-opinion-5",
+      "source_hash": "0bde8265a26d510c20c4586b0067b053efa7796cd1b05d272a1212cf7d9a9df2",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "long",
+      "completeness": "complete",
+      "group_id": "eval-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "eval"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#eval-opinion"
+      },
+      "material": {
+        "primary": "One long post; the following passage is repeated as a length stress fixture. Evaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\nEvaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.\n\n",
+        "context": [
+          {
+            "id": "unrelated-quote",
+            "role": "quoted",
+            "text": "Unrelated quotation: Software development uses source code. This quoted subject does not replace the primary post.",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 2477
+      }
+    },
+    {
+      "sample_id": "auto-health-method-0",
+      "source_hash": "747dddf44d9e11ff906c2f476eecb2a7e36f9b99766f710e260e9a157a856a93",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "health-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "health"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#health-method"
+      },
+      "material": {
+        "primary": "Single post. Keep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 164
+      }
+    },
+    {
+      "sample_id": "auto-health-method-1",
+      "source_hash": "f49a8a0cccad7b02f393888d34899b98e5f47abc7ba74bd639c5a9310cf84dbf",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "health-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "health"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#health-method"
+      },
+      "material": {
+        "primary": "单条帖子。做一份不含诊断的睡眠观察记录：每天填入上床和起床时间，写下睡前饮食和运动，再整理一周的变化。",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 51
+      }
+    },
+    {
+      "sample_id": "auto-health-method-2",
+      "source_hash": "a7bad585ed4452f52118c82a006c92d1b4415c6d22bf534ea297482d222a44bc",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "health-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "health"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#health-method"
+      },
+      "material": {
+        "primary": "单条双语帖子。做一份不含诊断的睡眠观察记录：每天填入上床和起床时间，写下睡前饮食和运动，再整理一周的变化。 English version: Keep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 222
+      }
+    },
+    {
+      "sample_id": "auto-health-method-3",
+      "source_hash": "e4808fd9ee7775d9fd45f6b10a859dd1f36dca142a50c676c69f7f660d1e7629",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "external_article",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "health-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "health"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "external_article"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#health-method"
+      },
+      "material": {
+        "primary": "做一份不含诊断的睡眠观察记录：每天填入上床和起床时间，写下睡前饮食和运动，再整理一周的变化。 这条摘要附有外部文章链接 https://example.invalid/article/health-method",
+        "context": [
+          {
+            "id": "article",
+            "role": "external_article",
+            "text": "Keep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.",
+            "url": "https://example.invalid/article/health-method",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 256
+      }
+    },
+    {
+      "sample_id": "auto-health-method-4",
+      "source_hash": "eaefecf1c428e3a8f442fd7d867d2dd67c5da6c13629fffb14a852590a899f3e",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "author_continuation",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "health-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "health"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "author_continuation"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#health-method"
+      },
+      "material": {
+        "primary": "Author thread, post 1/2. Keep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.",
+        "context": [
+          {
+            "id": "author-post-2",
+            "role": "author_continuation",
+            "text": "同一作者的第二条续帖，用中文重复前文：做一份不含诊断的睡眠观察记录：每天填入上床和起床时间，写下睡前饮食和运动，再整理一周的变化。",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 241
+      }
+    },
+    {
+      "sample_id": "auto-health-method-5",
+      "source_hash": "d2f812921d214b34f8dcd834f486f570b4e2c91caf50353f5f3ad014b8456993",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "long",
+      "completeness": "complete",
+      "group_id": "health-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "health"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#health-method"
+      },
+      "material": {
+        "primary": "One long post; the following passage is repeated as a length stress fixture. Keep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\nKeep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.\n\n",
+        "context": [
+          {
+            "id": "unrelated-quote",
+            "role": "quoted",
+            "text": "Unrelated quotation: Software development uses source code. This quoted subject does not replace the primary post.",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 2945
+      }
+    },
+    {
+      "sample_id": "auto-incidental-ai-0",
+      "source_hash": "f487db6655abbb715e729451e48b681c81a82937604ddbe9a1ea2667c3c6c5dd",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "incidental-ai",
+      "gold": {
+        "topics": {
+          "values": [
+            "life"
+          ]
+        },
+        "content_functions": {
+          "values": null,
+          "unknown": true
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "case"
+          ]
+        },
+        "use": {
+          "values": null,
+          "unknown": true
+        }
+      },
+      "provenance": "automatic_reference",
+      "ambiguous": true,
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#incidental-ai"
+      },
+      "material": {
+        "primary": "Single post. Today I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 141
+      }
+    },
+    {
+      "sample_id": "auto-incidental-ai-1",
+      "source_hash": "0d9ceeec1386b94fa0448c39c8174fc6da56a3f959a76386112e36d81f40318d",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "incidental-ai",
+      "gold": {
+        "topics": {
+          "values": [
+            "life"
+          ]
+        },
+        "content_functions": {
+          "values": null,
+          "unknown": true
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "case"
+          ]
+        },
+        "use": {
+          "values": null,
+          "unknown": true
+        }
+      },
+      "provenance": "automatic_reference",
+      "ambiguous": true,
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#incidental-ai"
+      },
+      "material": {
+        "primary": "单条帖子。今天把旅行背包的肩带调短了一格，走路舒服多了。照片文件名碰巧叫 AI。",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 40
+      }
+    },
+    {
+      "sample_id": "auto-incidental-ai-2",
+      "source_hash": "d07a920893dad85ef7250f1130a38f1bb0ad02ae9692766e3dd428375b872b11",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "incidental-ai",
+      "gold": {
+        "topics": {
+          "values": [
+            "life"
+          ]
+        },
+        "content_functions": {
+          "values": null,
+          "unknown": true
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "case"
+          ]
+        },
+        "use": {
+          "values": null,
+          "unknown": true
+        }
+      },
+      "provenance": "automatic_reference",
+      "ambiguous": true,
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#incidental-ai"
+      },
+      "material": {
+        "primary": "单条双语帖子。今天把旅行背包的肩带调短了一格，走路舒服多了。照片文件名碰巧叫 AI。 English version: Today I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 188
+      }
+    },
+    {
+      "sample_id": "auto-incidental-ai-3",
+      "source_hash": "492bbd013dfc3637a64ba61857cb3007cdcd2b2822e2f075b728b6e6e738c8eb",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "external_article",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "incidental-ai",
+      "gold": {
+        "topics": {
+          "values": [
+            "life"
+          ]
+        },
+        "content_functions": {
+          "values": null,
+          "unknown": true
+        },
+        "carriers": {
+          "values": [
+            "external_article"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "case"
+          ]
+        },
+        "use": {
+          "values": null,
+          "unknown": true
+        }
+      },
+      "provenance": "automatic_reference",
+      "ambiguous": true,
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#incidental-ai"
+      },
+      "material": {
+        "primary": "今天把旅行背包的肩带调短了一格，走路舒服多了。照片文件名碰巧叫 AI。 这条摘要附有外部文章链接 https://example.invalid/article/incidental-ai",
+        "context": [
+          {
+            "id": "article",
+            "role": "external_article",
+            "text": "Today I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.",
+            "url": "https://example.invalid/article/incidental-ai",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 222
+      }
+    },
+    {
+      "sample_id": "auto-incidental-ai-4",
+      "source_hash": "50ee1ec3e5623c53fcb48d339416ddbb295b0cf9160071f52a7c0b810d8e7cb2",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "author_continuation",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "incidental-ai",
+      "gold": {
+        "topics": {
+          "values": [
+            "life"
+          ]
+        },
+        "content_functions": {
+          "values": null,
+          "unknown": true
+        },
+        "carriers": {
+          "values": [
+            "author_continuation"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "case"
+          ]
+        },
+        "use": {
+          "values": null,
+          "unknown": true
+        }
+      },
+      "provenance": "automatic_reference",
+      "ambiguous": true,
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#incidental-ai"
+      },
+      "material": {
+        "primary": "Author thread, post 1/2. Today I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.",
+        "context": [
+          {
+            "id": "author-post-2",
+            "role": "author_continuation",
+            "text": "同一作者的第二条续帖，用中文重复前文：今天把旅行背包的肩带调短了一格，走路舒服多了。照片文件名碰巧叫 AI。",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 207
+      }
+    },
+    {
+      "sample_id": "auto-incidental-ai-5",
+      "source_hash": "f1d7012312bb6e65f827a585faeb5f33e444cbccf9d83917763ff4f488cf525a",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "long",
+      "completeness": "complete",
+      "group_id": "incidental-ai",
+      "gold": {
+        "topics": {
+          "values": [
+            "life"
+          ]
+        },
+        "content_functions": {
+          "values": null,
+          "unknown": true
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "case"
+          ]
+        },
+        "use": {
+          "values": null,
+          "unknown": true
+        }
+      },
+      "provenance": "automatic_reference",
+      "ambiguous": true,
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#incidental-ai"
+      },
+      "material": {
+        "primary": "One long post; the following passage is repeated as a length stress fixture. Today I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\nToday I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.\n\n",
+        "context": [
+          {
+            "id": "unrelated-quote",
+            "role": "quoted",
+            "text": "Unrelated quotation: Software development uses source code. This quoted subject does not replace the primary post.",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 2531
+      }
+    },
+    {
+      "sample_id": "auto-invest-opinion-0",
+      "source_hash": "453cd959476c0c49a817dffa555e4bfae21db3ff80cbe9254ba2b82e36940f59",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "invest-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "invest"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#invest-opinion"
+      },
+      "material": {
+        "primary": "Single post. Valuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 143
+      }
+    },
+    {
+      "sample_id": "auto-invest-opinion-1",
+      "source_hash": "b3921295a5e9a3aa77510932c4f00980ecee4a25cea5e44f0a0bb7e80c4ca248",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "invest-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "invest"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#invest-opinion"
+      },
+      "material": {
+        "primary": "单条帖子。估值需要同时讨论预期收益与风险，单看短期涨幅无法说明资产是否便宜。",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 38
+      }
+    },
+    {
+      "sample_id": "auto-invest-opinion-2",
+      "source_hash": "75fc8dec8f61ac12579ef8c2ecb677016187c481dbbeaceb0d97f92a6f246116",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "invest-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "invest"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#invest-opinion"
+      },
+      "material": {
+        "primary": "单条双语帖子。估值需要同时讨论预期收益与风险，单看短期涨幅无法说明资产是否便宜。 English version: Valuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 188
+      }
+    },
+    {
+      "sample_id": "auto-invest-opinion-3",
+      "source_hash": "6a8fc39fad214f3dbd62bb8e2774359e39df6edd25faff6842fc1260919d97f4",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "external_article",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "invest-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "invest"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "external_article"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#invest-opinion"
+      },
+      "material": {
+        "primary": "估值需要同时讨论预期收益与风险，单看短期涨幅无法说明资产是否便宜。 这条摘要附有外部文章链接 https://example.invalid/article/invest-opinion",
+        "context": [
+          {
+            "id": "article",
+            "role": "external_article",
+            "text": "Valuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.",
+            "url": "https://example.invalid/article/invest-opinion",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 223
+      }
+    },
+    {
+      "sample_id": "auto-invest-opinion-4",
+      "source_hash": "200dce236f46712bb066054e9ede84db2cd0090d70927987d3cd1010559b5e32",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "author_continuation",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "invest-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "invest"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "author_continuation"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#invest-opinion"
+      },
+      "material": {
+        "primary": "Author thread, post 1/2. Valuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.",
+        "context": [
+          {
+            "id": "author-post-2",
+            "role": "author_continuation",
+            "text": "同一作者的第二条续帖，用中文重复前文：估值需要同时讨论预期收益与风险，单看短期涨幅无法说明资产是否便宜。",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 207
+      }
+    },
+    {
+      "sample_id": "auto-invest-opinion-5",
+      "source_hash": "5b4ad8fe5604a22d0944543c838d7161612694335a69478773a6ffa1acaffeee",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "long",
+      "completeness": "complete",
+      "group_id": "invest-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "invest"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#invest-opinion"
+      },
+      "material": {
+        "primary": "One long post; the following passage is repeated as a length stress fixture. Valuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\nValuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.\n\n",
+        "context": [
+          {
+            "id": "unrelated-quote",
+            "role": "quoted",
+            "text": "Unrelated quotation: Software development uses source code. This quoted subject does not replace the primary post.",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 2567
+      }
+    },
+    {
+      "sample_id": "auto-law-opinion-0",
+      "source_hash": "bddfcca2197a6c785e21e94b7cb4956695d4da8d704c24c36f42fe4a94622ec0",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "law-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "law"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#law-opinion"
+      },
+      "material": {
+        "primary": "Single post. Legal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 153
+      }
+    },
+    {
+      "sample_id": "auto-law-opinion-1",
+      "source_hash": "2836be01ef25303c5e3b99441613c498b986c74e530df7a64c567b85d910e1e1",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "law-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "law"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#law-opinion"
+      },
+      "material": {
+        "primary": "单条帖子。法律解释必须区分条文、证据与论证，不能把对结果的偏好当作权利义务的依据。",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 41
+      }
+    },
+    {
+      "sample_id": "auto-law-opinion-2",
+      "source_hash": "47547f9676597e076f09570d4ddabad7c3e7e646cdd92d2c541deffbdfaa726e",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "law-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "law"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#law-opinion"
+      },
+      "material": {
+        "primary": "单条双语帖子。法律解释必须区分条文、证据与论证，不能把对结果的偏好当作权利义务的依据。 English version: Legal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 201
+      }
+    },
+    {
+      "sample_id": "auto-law-opinion-3",
+      "source_hash": "9f65bea59957a7c3f898540de6334ae8aa4d8fe6bf617b034c27acea655d67a7",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "external_article",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "law-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "law"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "external_article"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#law-opinion"
+      },
+      "material": {
+        "primary": "法律解释必须区分条文、证据与论证，不能把对结果的偏好当作权利义务的依据。 这条摘要附有外部文章链接 https://example.invalid/article/law-opinion",
+        "context": [
+          {
+            "id": "article",
+            "role": "external_article",
+            "text": "Legal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.",
+            "url": "https://example.invalid/article/law-opinion",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 233
+      }
+    },
+    {
+      "sample_id": "auto-law-opinion-4",
+      "source_hash": "1919f08f99f40826676620ce2ceba435c9bb779923ecb6902726747f08d72e6e",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "author_continuation",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "law-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "law"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "author_continuation"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#law-opinion"
+      },
+      "material": {
+        "primary": "Author thread, post 1/2. Legal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.",
+        "context": [
+          {
+            "id": "author-post-2",
+            "role": "author_continuation",
+            "text": "同一作者的第二条续帖，用中文重复前文：法律解释必须区分条文、证据与论证，不能把对结果的偏好当作权利义务的依据。",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 220
+      }
+    },
+    {
+      "sample_id": "auto-law-opinion-5",
+      "source_hash": "6852bc12cd51431ae1c2ef9976b2183cbf57d5412dfbb7cca86c84807425af9c",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "long",
+      "completeness": "complete",
+      "group_id": "law-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "law"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#law-opinion"
+      },
+      "material": {
+        "primary": "One long post; the following passage is repeated as a length stress fixture. Legal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\nLegal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.\n\n",
+        "context": [
+          {
+            "id": "unrelated-quote",
+            "role": "quoted",
+            "text": "Unrelated quotation: Software development uses source code. This quoted subject does not replace the primary post.",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 2747
+      }
+    },
+    {
+      "sample_id": "auto-product-method-0",
+      "source_hash": "ad424919fefa136863466e6916f467d59b5e3168fc4d8acd039b72bd74e332d9",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "product-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "product"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#product-method"
+      },
+      "material": {
+        "primary": "Single post. Interview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 133
+      }
+    },
+    {
+      "sample_id": "auto-product-method-1",
+      "source_hash": "1580286db3c635dc7e9ecf729ca945c93b74705991cc439e16781c1ba1526f9e",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "product-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "product"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#product-method"
+      },
+      "material": {
+        "primary": "单条帖子。先访谈目标用户的未解决任务；给需求按痛点排序；只做能验证需求的最小功能。",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 41
+      }
+    },
+    {
+      "sample_id": "auto-product-method-2",
+      "source_hash": "6fe13bee37e7de2e87e8b9b67b694fd7de87f2f09b0f3c9b341cfcd3fa4a4fe1",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "product-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "product"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#product-method"
+      },
+      "material": {
+        "primary": "单条双语帖子。先访谈目标用户的未解决任务；给需求按痛点排序；只做能验证需求的最小功能。 English version: Interview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 181
+      }
+    },
+    {
+      "sample_id": "auto-product-method-3",
+      "source_hash": "06daab3759048251ab6e676e63715edebc9bb50ac3ec6afed2184a9946d455f5",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "external_article",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "product-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "product"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "external_article"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#product-method"
+      },
+      "material": {
+        "primary": "先访谈目标用户的未解决任务；给需求按痛点排序；只做能验证需求的最小功能。 这条摘要附有外部文章链接 https://example.invalid/article/product-method",
+        "context": [
+          {
+            "id": "article",
+            "role": "external_article",
+            "text": "Interview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.",
+            "url": "https://example.invalid/article/product-method",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 216
+      }
+    },
+    {
+      "sample_id": "auto-product-method-4",
+      "source_hash": "afe4eb1dc4f57da58070a66bd78fd260264760aaae58a093a8f60a44b9051b1a",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "author_continuation",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "product-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "product"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "author_continuation"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#product-method"
+      },
+      "material": {
+        "primary": "Author thread, post 1/2. Interview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.",
+        "context": [
+          {
+            "id": "author-post-2",
+            "role": "author_continuation",
+            "text": "同一作者的第二条续帖，用中文重复前文：先访谈目标用户的未解决任务；给需求按痛点排序；只做能验证需求的最小功能。",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 200
+      }
+    },
+    {
+      "sample_id": "auto-product-method-5",
+      "source_hash": "833929c4605d4a70f27b1fc66f05bfe3141e4f968536f2f19a98652dbf313e1c",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "long",
+      "completeness": "complete",
+      "group_id": "product-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "product"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#product-method"
+      },
+      "material": {
+        "primary": "One long post; the following passage is repeated as a length stress fixture. Interview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\nInterview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.\n\n",
+        "context": [
+          {
+            "id": "unrelated-quote",
+            "role": "quoted",
+            "text": "Unrelated quotation: Software development uses source code. This quoted subject does not replace the primary post.",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 2387
+      }
+    }
+  ],
+  "predictions": null
+}

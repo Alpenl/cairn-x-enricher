@@ -12,8 +12,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
+
+	"github.com/Alpenl/cairn-x-enricher/internal/classify"
 )
 
 // Provenance records where a gold label came from. A model output is never
@@ -22,24 +25,26 @@ type Provenance string
 
 // Provenance values. A model output is never human gold.
 const (
-	ProvenanceHumanSingle   Provenance = "human_single"
-	ProvenanceHumanReviewed Provenance = "human_reviewed"
-	ProvenanceLegacyUnknown Provenance = "legacy_unknown"
-	ProvenanceSynthetic     Provenance = "synthetic"
+	ProvenanceHumanSingle        Provenance = "human_single"
+	ProvenanceHumanReviewed      Provenance = "human_reviewed"
+	ProvenanceLegacyUnknown      Provenance = "legacy_unknown"
+	ProvenanceSynthetic          Provenance = "synthetic"
+	ProvenanceAutomaticReference Provenance = "automatic_reference"
 )
 
 // Label is one gold value with an optional acceptable set. `Unknown` and
 // `NotApplicable` are first-class so an annotator is never forced to invent a
 // label for a dimension that does not apply.
 type Label struct {
-	// Values is the set of acceptable labels. A prediction matches if it is in
-	// the set. An empty set with NotApplicable=true means "none applies".
+	// Values is the required set for a multi-label dimension, or the set of
+	// acceptable alternatives for a single choice. NotApplicable means none.
 	Values        []string `json:"values"`
 	NotApplicable bool     `json:"not_applicable,omitempty"`
 	Unknown       bool     `json:"unknown,omitempty"`
 }
 
-// Gold is the per-dimension human answer for one sample.
+// Gold is the reference answer, whose origin is explicitly recorded in Sample.
+// Nil Values without NotApplicable means unspecified, not a negative label.
 type Gold struct {
 	Topics           Label `json:"topics"`
 	ContentFunctions Label `json:"content_functions"`
@@ -49,24 +54,35 @@ type Gold struct {
 	Use              Label `json:"use"`
 }
 
+// ReferenceMetadata makes constructed/automated reference labels auditable.
+// It must describe a basis fixed before observing the evaluated predictions.
+type ReferenceMetadata struct {
+	Method  string `json:"method"`
+	Version string `json:"version"`
+	Basis   string `json:"basis"`
+	Source  string `json:"source"`
+}
+
 // Sample is one evaluated record. It intentionally carries no private note or
 // why text: the objective evaluation must not depend on personal fields, and a
 // public report must not be able to reconstruct them.
 type Sample struct {
-	SampleID        string     `json:"sample_id"`
-	SourceHash      string     `json:"source_hash"`
-	Revision        int64      `json:"revision"`
-	Language        string     `json:"language"`
-	Carrier         string     `json:"carrier"`
-	LengthBucket    string     `json:"length_bucket"`
-	Completeness    string     `json:"completeness"`
-	GroupID         string     `json:"group_id"`
-	RetrievalQuery  string     `json:"retrieval_query,omitempty"`
-	Relevance       []string   `json:"relevance,omitempty"`
-	Gold            *Gold      `json:"gold,omitempty"`
-	Provenance      Provenance `json:"provenance"`
-	Ambiguous       bool       `json:"ambiguous,omitempty"`
-	SecondAnnotator bool       `json:"second_annotator,omitempty"`
+	SampleID        string             `json:"sample_id"`
+	SourceHash      string             `json:"source_hash"`
+	Revision        int64              `json:"revision"`
+	Language        string             `json:"language"`
+	Carrier         string             `json:"carrier"`
+	LengthBucket    string             `json:"length_bucket"`
+	Completeness    string             `json:"completeness"`
+	GroupID         string             `json:"group_id"`
+	RetrievalQuery  string             `json:"retrieval_query,omitempty"`
+	Relevance       []string           `json:"relevance,omitempty"`
+	Gold            *Gold              `json:"gold,omitempty"`
+	Provenance      Provenance         `json:"provenance"`
+	Ambiguous       bool               `json:"ambiguous,omitempty"`
+	SecondAnnotator bool               `json:"second_annotator,omitempty"`
+	Reference       *ReferenceMetadata `json:"reference,omitempty"`
+	Material        *classify.Evidence `json:"material,omitempty"`
 }
 
 // Prediction is the system output for a sample, in the same dimensions.
@@ -99,14 +115,14 @@ type Dataset struct {
 	Prediction []Prediction `json:"predictions"`
 }
 
-// Validate enforces the data contract. It rejects duplicates, missing gold and
-// a split that leaks a group across sets, rather than silently scoring them.
+// Validate checks one dataset. Missing reference labels are allowed and reported
+// as inconclusive; ValidateSplits checks leakage across multiple datasets.
 func (d Dataset) Validate() error {
 	if d.Name == "" {
 		return errors.New("dataset name is required")
 	}
 	seen := map[string]bool{}
-	groups := map[string]string{}
+
 	for _, sample := range d.Samples {
 		if sample.SampleID == "" {
 			return errors.New("sample_id is required")
@@ -118,18 +134,40 @@ func (d Dataset) Validate() error {
 		if sample.SourceHash == "" {
 			return fmt.Errorf("sample %s is missing source_hash", sample.SampleID)
 		}
-		if sample.Provenance == "" {
-			return fmt.Errorf("sample %s is missing provenance", sample.SampleID)
+		switch sample.Provenance {
+		case ProvenanceHumanSingle, ProvenanceHumanReviewed, ProvenanceLegacyUnknown, ProvenanceSynthetic, ProvenanceAutomaticReference:
+		default:
+			return fmt.Errorf("sample %s has invalid provenance", sample.SampleID)
 		}
 		if sample.Provenance == ProvenanceLegacyUnknown && sample.Gold != nil {
-			// A legacy implicit review must not be scored as human gold.
 			return fmt.Errorf("sample %s is legacy_unknown and cannot carry gold", sample.SampleID)
 		}
-		if sample.GroupID != "" {
-			if existing, ok := groups[sample.GroupID]; ok && existing != d.Split {
-				return fmt.Errorf("group %s leaks across splits", sample.GroupID)
+		if sample.Provenance == ProvenanceAutomaticReference {
+			if sample.Gold == nil || sample.Reference == nil || sample.Reference.Method == "" || sample.Reference.Version == "" || sample.Reference.Source == "" || sample.Reference.Basis == "" {
+				return fmt.Errorf("sample %s lacks automatic reference provenance", sample.SampleID)
 			}
-			groups[sample.GroupID] = d.Split
+			if sample.SecondAnnotator {
+				return fmt.Errorf("sample %s cannot claim a second human annotator for automatic references", sample.SampleID)
+			}
+		}
+		if sample.Gold != nil {
+			for name, label := range referenceLabels(*sample.Gold) {
+				if (label.Unknown && label.NotApplicable) || ((label.Unknown || label.NotApplicable) && len(label.Values) > 0) {
+					return fmt.Errorf("sample %s has contradictory %s reference", sample.SampleID, name)
+				}
+				if err := uniqueValues(label.Values); err != nil {
+					return fmt.Errorf("sample %s %s: %w", sample.SampleID, name, err)
+				}
+			}
+		}
+		if sample.Material != nil {
+			hash, err := HashMaterial(*sample.Material)
+			if err != nil {
+				return err
+			}
+			if hash != sample.SourceHash {
+				return fmt.Errorf("sample %s material hash mismatch", sample.SampleID)
+			}
 		}
 	}
 	predicted := map[string]bool{}
@@ -140,6 +178,19 @@ func (d Dataset) Validate() error {
 		if predicted[prediction.SampleID] {
 			return fmt.Errorf("duplicate prediction for %s", prediction.SampleID)
 		}
+		for _, values := range [][]string{prediction.Topics, prediction.ContentFunctions, prediction.Carriers, prediction.Affordances, prediction.Abstained} {
+			if err := uniqueValues(values); err != nil {
+				return fmt.Errorf("prediction %s: %w", prediction.SampleID, err)
+			}
+		}
+		if len(prediction.Carriers) > 1 {
+			return fmt.Errorf("prediction %s has multiple carriers", prediction.SampleID)
+		}
+		for label, probability := range prediction.TopicProbabilities {
+			if label == "" || math.IsNaN(probability) || math.IsInf(probability, 0) || probability < 0 || probability > 1 {
+				return fmt.Errorf("prediction %s has invalid probability", prediction.SampleID)
+			}
+		}
 		predicted[prediction.SampleID] = true
 	}
 	return nil
@@ -148,7 +199,7 @@ func (d Dataset) Validate() error {
 // SplitByGroup assigns whole groups to train/dev/test deterministically from a
 // seed. Splitting by sample would leak a near-duplicate thread across sets.
 func SplitByGroup(samples []Sample, seed int64, trainRatio, devRatio float64) (map[string][]Sample, error) {
-	if trainRatio <= 0 || devRatio < 0 || trainRatio+devRatio >= 1 {
+	if math.IsNaN(trainRatio) || math.IsNaN(devRatio) || trainRatio <= 0 || devRatio < 0 || trainRatio+devRatio >= 1 {
 		return nil, errors.New("split ratios must leave a non-empty test set")
 	}
 	groups := map[string][]Sample{}
@@ -223,4 +274,73 @@ func NormalizeLanguage(value string) string {
 	default:
 		return "mixed"
 	}
+}
+
+func uniqueValues(values []string) error {
+	seen := map[string]bool{}
+	for _, value := range values {
+		if strings.TrimSpace(value) == "" || seen[value] {
+			return errors.New("empty or duplicate value")
+		}
+		seen[value] = true
+	}
+	return nil
+}
+
+func referenceLabels(g Gold) map[string]Label {
+	return map[string]Label{"topics": g.Topics, "content_functions": g.ContentFunctions, "carriers": g.Carriers, "affordances": g.Affordances, "form": g.Form, "use": g.Use}
+}
+
+func knownLabel(label Label) bool {
+	return !label.Unknown && (label.Values != nil || label.NotApplicable)
+}
+
+// HashMaterial identifies the complete objective evidence, before provider budgets.
+func HashMaterial(material classify.Evidence) (string, error) {
+	encoded, err := json.Marshal(material)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(encoded)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// HashReference excludes predictions, so an evaluation can cite the reference
+// that was frozen before any model call.
+func HashReference(d Dataset) (string, error) { d.Prediction = nil; return HashDataset(d) }
+
+// ValidateSplits checks the whole frozen corpus, including source duplicates
+// disguised by different sample/group IDs. Each source snapshot occurs once.
+func ValidateSplits(datasets []Dataset) error {
+	splits, ids, sources, groups := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]string{}
+	for _, dataset := range datasets {
+		if dataset.Split != "train" && dataset.Split != "dev" && dataset.Split != "holdout" && dataset.Split != "test" {
+			return errors.New("invalid split")
+		}
+		if splits[dataset.Split] {
+			return fmt.Errorf("duplicate split %s", dataset.Split)
+		}
+		splits[dataset.Split] = true
+		if err := dataset.Validate(); err != nil {
+			return err
+		}
+		for _, sample := range dataset.Samples {
+			if ids[sample.SampleID] {
+				return fmt.Errorf("duplicate sample %s across splits", sample.SampleID)
+			}
+			ids[sample.SampleID] = true
+			if sources[sample.SourceHash] {
+				return fmt.Errorf("duplicate source snapshot %s", sample.SourceHash)
+			}
+			sources[sample.SourceHash] = true
+			if sample.GroupID == "" {
+				return fmt.Errorf("sample %s lacks a group", sample.SampleID)
+			}
+			if prior, ok := groups[sample.GroupID]; ok && prior != dataset.Split {
+				return fmt.Errorf("group %s leaks across splits", sample.GroupID)
+			}
+			groups[sample.GroupID] = dataset.Split
+		}
+	}
+	return nil
 }
