@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"sort"
+
+	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
 // RawJudgment is one provider answer retained with its full distribution and
@@ -103,12 +105,16 @@ type Policy struct {
 	// model that differs from the requested one. It is false by default so a
 	// provider alias change cannot inherit old calibration silently.
 	AllowAliasDrift bool `json:"allow_alias_drift"`
+	// BlockPersonalUse prevents objective judgments from proposing reserved
+	// personal uses. Absence preserves historical policy replay; current policy
+	// versions enable it and the Worker independently rejects such new writes.
+	BlockPersonalUse bool `json:"block_personal_use,omitempty"`
 }
 
-// DefaultPolicy is the conservative, explicitly uncalibrated v1 baseline.
+// DefaultPolicy is the conservative, explicitly uncalibrated objective policy.
 func DefaultPolicy() Policy {
 	return Policy{
-		Version: "jev-policy-v2", Calibrated: false,
+		Version: PolicyVersion, Calibrated: false, BlockPersonalUse: true,
 		TopicAccept: 0.8, TopicReject: 0.2,
 		ChoiceAccept: 0.65, ChoiceMargin: 0.15,
 		MaxDisplayTopics: 3, MaxEffectiveTopics: 64,
@@ -117,6 +123,12 @@ func DefaultPolicy() Policy {
 
 // Validate rejects a policy whose bounds cannot describe a decision.
 func (p Policy) Validate() error {
+	if p.Version == "jev-policy-v3" && !p.BlockPersonalUse {
+		return errors.New("jev-policy-v3 requires the personal use guard")
+	}
+	if p.Version == "jev-policy-v2" && p.BlockPersonalUse {
+		return errors.New("personal use guard changes jev-policy-v2 semantics; use a new policy identity")
+	}
 	if p.Version == "" || len(p.Version) > 100 {
 		return errors.New("policy version must contain 1 to 100 bytes")
 	}
@@ -248,7 +260,9 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 			verdict := VerdictAbstained
 			best := judgment.Probabilities[judgment.Choice]
 			// A legitimate none/empty is a completed answer, not an abstention.
-			if judgment.Choice == "none" {
+			if policy.BlockPersonalUse && dimension == "use" && taxonomy.PersonalUse(judgment.Choice) {
+				reason = "personal opposition requires explicit human input; objective evidence cannot establish it"
+			} else if judgment.Choice == "none" {
 				verdict = VerdictAccepted
 				reason = "the model explicitly judged that no option applies"
 			} else if best >= policy.ChoiceAccept {

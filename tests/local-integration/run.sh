@@ -115,3 +115,5 @@ run_case decisions TestLocalWorkerDecisionReferences
 run_case escalation TestLocalWorkerEvidenceExecutionRecovery
 
 run_case filters TestLocalWorkerEffectiveClientFilters
+
+run_case personal TestLocalWorkerObjectivePersonalBoundary

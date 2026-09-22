@@ -28,6 +28,12 @@ type Term struct {
 	Excludes    []string `json:"excludes,omitempty"`
 }
 
+// PersonalUse reports the reserved legacy use that expresses the user's own
+// opposition. It remains available for explicit human curation and historical
+// reading, but objective model requests must never infer it. Its stable ID is
+// part of the legacy compatibility contract, independent of its display label.
+func PersonalUse(id string) bool { return id == "contra" }
+
 // Catalog is supplied by the Worker so generation, storage, and the UI agree.
 // It is a plain immutable value; callers that need the rendered prompt or
 // schema repeatedly should use a Renderer, which caches both.

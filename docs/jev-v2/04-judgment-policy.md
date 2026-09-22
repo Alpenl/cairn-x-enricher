@@ -31,3 +31,14 @@ replay禁网Decide/Resolve并输出decision/diff，CLI分新分类、策略重�
 有界并发、每job deadline和全局预算，typed错误、组件暂停、可恢复提交、无多层重试。场景包括两个强一弱局部弃权、全低合法空、多功能载体并存、四主题、Score分布、0调用重放、同ID换定义失效、个人字段隔离、引用角色、畸形answer和超长输入。
 
 SC06–10/13/17–18/25–27/29–30；R02/R07–R21/R25/R37。表驱动/fuzz/property、共享fixture、禁网测试、make verify/test-ablation，交evidence/B04.md和companion SHA。可拆多个真实PR，回滚policy使用旧run而非再收费；问题回滚显式切target并保审计。
+
+
+## 2026-09-23：客观用途与个人立场边界
+
+`contra` 是保留的旧用户立场 ID，只能由明确人工选择产生。词表和历史读取继续保留它，不能据模型概率推断用户反对。客观 use 问题不读取收藏备注，候选排除 `contra`；缺少任何可用客观用途的词表在创建客户端时明确拒绝，不发送仅含 none 的无效 Choice。
+
+当前默认 policy 为 `jev-policy-v3`，`block_personal_use=true`，阈值仍未校准且数值不变。重放旧 raw 时，个人立场候选保留在审计信息中，但新 policy 将其记为弃权，不产出 use。v3 关闭守卫、v2 加入守卫均拒绝，以免在同一版本下偷换语义。显式载入旧 v2 policy 的离线重放保持历史语义，仅供比较与审计；其不安全自动值不能重新写入 Worker。
+
+Worker 拒绝新分类完成的 legacy projection、v2 automatic 和 accepted assessment 中的自动 `contra`，并在独立 decision/replay 写入口执行相同守卫。历史 stored 读取和人工 curation/override 不受此限制。拒绝在事务前发生，不产生 runs/decisions/projections 或完成任务；合法重新提交仍可成功。
+
+源码升级不自动切换生产 target。部署时须先使用兼容 Worker 守卫，再以审核后的 spec/policy/model 更新目标；新 consumer 不宣称支持旧 policy，新旧目标不匹配走既有配置暂停。Worker 可能拒绝旧 consumer 生成的 contra，这是保留人工边界的预期拒绝。无新增迁移，不清理或改写历史分类/人工事件。本次工程验证不代替新问题 spec 的真实质量评估。

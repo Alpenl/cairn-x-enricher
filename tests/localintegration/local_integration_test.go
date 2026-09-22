@@ -332,7 +332,7 @@ func TestLocalWorkerFullLifecycle(t *testing.T) {
 	if dataset.Samples[0].Gold != nil || dataset.Samples[0].Provenance != evaluation.ProvenanceMachinePrediction {
 		t.Fatalf("a machine prediction must not be exported as gold: %+v", dataset.Samples[0])
 	}
-	if dataset.Prediction[0].Model != "jev-pinned-local" || dataset.Prediction[0].PolicyVersion != "jev-policy-v2" {
+	if dataset.Prediction[0].Model != "jev-pinned-local" || dataset.Prediction[0].PolicyVersion != "jev-policy-v3" {
 		t.Fatalf("export lost the run identity: %+v", dataset.Prediction[0])
 	}
 	report, err := evaluation.Score(dataset)

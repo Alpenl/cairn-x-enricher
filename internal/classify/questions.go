@@ -211,11 +211,11 @@ func CompileSpec(catalog taxonomy.Catalog, scoreEnabled bool) (QuestionSpec, err
 		terms           []taxonomy.Term
 	}{
 		{"form", "原帖最适合归入哪一种内容形态？优先按实际内容功能判断；串推和长文只在其他形态都不贴切时选择。", catalog.Forms},
-		{"use", "依据原帖与明确的收藏备注，这份内容最适合哪一种潜在用途？这是用途建议，不代表用户确认的收藏动机；只有备注明确表达反对时才能选择反对。", catalog.Uses},
+		{"use", "仅依据客观来源材料，这份内容最适合哪一种潜在用途？这是用途建议，不代表用户确认的收藏动机或立场；没有合适的客观用途时选择 none。", catalog.Uses},
 	} {
 		criteria := map[string]any{"none": "证据不足或没有合适选项。"}
 		for _, term := range dimension.terms {
-			if term.Active {
+			if term.Active && (dimension.id != "use" || !taxonomy.PersonalUse(term.ID)) {
 				criteria[term.ID] = semanticDescription(term)
 			}
 		}

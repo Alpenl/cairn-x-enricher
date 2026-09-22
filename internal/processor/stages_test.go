@@ -614,7 +614,7 @@ func TestPartialReuseIsOptInAndFallsBackSafely(t *testing.T) {
 	policy, _ := json.Marshal(classify.DefaultPolicy())
 	run := &cairn.StoredRun{
 		ID: 9, SpecID: spec.SpecID, SpecHash: spec.SemanticHash, RequestedModel: "jev",
-		ResolvedModel: "jev", PolicyVersion: "jev-policy-v2", Policy: policy,
+		ResolvedModel: "jev", PolicyVersion: classify.PolicyVersion, Policy: policy,
 		Answers: encoded, Coverage: "complete", Status: "succeeded",
 	}
 	job := &cairn.ClassificationJob{ID: 1, Revision: 1, SpecID: spec.SpecID,

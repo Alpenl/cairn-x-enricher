@@ -19,7 +19,7 @@ import (
 
 // PolicyVersion changes whenever questions or selection policy change. It is
 // the version announced in the Worker handshake.
-const PolicyVersion = "jev-policy-v2"
+const PolicyVersion = "jev-policy-v3"
 
 // Input separates source evidence, secondary context, and the user's note.
 //
