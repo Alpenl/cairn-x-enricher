@@ -1,0 +1,6 @@
+== TestLocalWorkerFullLifecycle: starting worker on 127.0.0.1:37779 ==
+=== RUN   TestLocalWorkerFullLifecycle
+    local_integration_test.go:380: HTTP deletion and exact retry removed a real source/classification/replay/human-curation history; actual Go reads cannot recover the deleted source or runs; zero deletion model calls
+--- PASS: TestLocalWorkerFullLifecycle (1.57s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.571s

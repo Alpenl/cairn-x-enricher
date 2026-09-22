@@ -1,3 +1,5 @@
+> 2026-09-23 隐私删除修复：[真实 HTTP、D1 全关联表与 R2 恢复](evidence/B10-20260923-privacy.md)。S `7b0aa9b` / E `06e56ad`；0026 持久删除凭据、预算清理与缓存失效，图片读写删除竞争守卫，定时重试和旧孤儿发现。221 Worker、typecheck/dry-run、完整 Go 门禁、12 个实际服务及最终生命周期复验通过。无新付费，累计 211 次；生产未迁移/部署，客户端缓存及完整保留期范围继续。
+
 > 2026-09-23 六维校准诊断：[概率分箱、选择性风险与真实 Score 向量](evidence/B08-20260923-calibration.md)。E `b820461` / S `f7ed68e`；共享 validator 拒绝非法 confidence/非有限 Score。已保存 42 条训练响应离线生成六维 Brier/ECE、逐问题分箱及 probability/margin/confidence 曲线；潜在用途 ECE 0.366、仅 2 个已知组，全部 inconclusive。Score 数学向量通过，实际 Score 观测仍为 0。完整 make verify、12 个实际服务及源码 CI 通过。零新增付费、累计 211 次；未选择阈值或宣称质量验收，完整原范围保留。
 
 > 2026-09-23 载体边界对照：[生产词表与真实两臂训练实验](evidence/B08-20260923-carriers.md)。S `f7ed68e` / E `d4d0e3b`；生产定义 v2，真实 API 与实验词表一致，仅载体问题改变。两臂各 42 次，载体 F1 0.8974 → 1，潜在用途 F1 略降；7 独立组，train-only，未晋升。210 Worker、完整 Go 门禁与 12 个实际服务场景通过。新增 84 次、累计 211 次，完整原范围保留。
