@@ -1,0 +1,110 @@
+{
+  "intervention": "only original_text/context_text instruction names replaced with actual primary/context names",
+  "verified_pairs": 42,
+  "verified_question_replacements": 1218,
+  "all_actual_request_states_identical": true,
+  "reference_hash": "ea14264cbaabcedd13a328bfef6473cf31a18827ca0285b27c8047150370b414",
+  "model": "jev-1.13.0",
+  "policy": "jev-policy-v2",
+  "new_calls": 42,
+  "historical_calls_including_smoke": 43,
+  "cumulative_calls": 85,
+  "baseline_input_tokens": 270731,
+  "variant_input_tokens": 268295,
+  "variant_reserved_input_tokens": 2752512,
+  "variant_p50_latency_ms": 371,
+  "variant_p95_latency_ms": 446,
+  "variant_input_price_estimate_usd": 0.011268390000000001,
+  "price_source": "https://docs.typesafe.ai/models",
+  "price_checked_at": "2026-09-23",
+  "price_is_estimate_not_bill": true,
+  "limitations": [
+    "7 independent authored training groups; translations/variants are not independent",
+    "no repeated run to estimate provider/temporal variation",
+    "reference-scope bias is not included in bootstrap intervals",
+    "reported intervals are within-condition group bootstrap, not a paired delta confidence interval",
+    "no dev/holdout model calls, fitting or quality scoring",
+    "no policy calibration or production promotion"
+  ]
+}
+{
+  "samples": 42,
+  "groups": 7,
+  "baseline": {
+    "micro_precision": 0.9453551912568307,
+    "micro_recall": 0.8238095238095238,
+    "macro_precision": 0.9219574837995891,
+    "macro_recall": 0.7850529100529101,
+    "accepted_error_rate": 0.0546448087431694,
+    "coverage": 0.6142857142857143,
+    "review_fields_per_sample": 1.9285714285714286,
+    "brier": 0.02087044817927182,
+    "ece": 0.057661064425770125
+  },
+  "variant": {
+    "micro_precision": 0.949238578680203,
+    "micro_recall": 0.8904761904761904,
+    "macro_precision": 0.9182008095051573,
+    "macro_recall": 0.8478835978835978,
+    "accepted_error_rate": 0.050761421319796954,
+    "coverage": 0.6,
+    "review_fields_per_sample": 2,
+    "brier": 0.018524509803921674,
+    "ece": 0.055112044817926996
+  },
+  "delta": {
+    "micro_precision": 0.003883387423372353,
+    "micro_recall": 0.06666666666666665,
+    "macro_precision": -0.0037566742944318277,
+    "macro_recall": 0.06283068783068768,
+    "accepted_error_rate": -0.0038833874233724433,
+    "coverage": -0.014285714285714346,
+    "review_fields_per_sample": 0.0714285714285714,
+    "brier": -0.0023459383753501456,
+    "ece": -0.0025490196078431296
+  },
+  "dimensions": {
+    "topics": {
+      "baseline_f1": 0.8,
+      "variant_f1": 0.909090909090909,
+      "delta": 0.1090909090909089,
+      "support": 42,
+      "comparable": true
+    },
+    "content_functions": {
+      "baseline_f1": 0.8787878787878789,
+      "variant_f1": 1,
+      "delta": 0.1212121212121211,
+      "support": 36,
+      "comparable": true
+    },
+    "carriers": {
+      "baseline_f1": 0.975609756097561,
+      "variant_f1": 0.9090909090909091,
+      "delta": -0.0665188470066519,
+      "support": 42,
+      "comparable": true
+    },
+    "affordances": {
+      "baseline_f1": 0.6,
+      "variant_f1": 0.5714285714285715,
+      "delta": -0.02857142857142847,
+      "support": 12,
+      "comparable": true
+    },
+    "form": {
+      "baseline_f1": 0.9113924050632912,
+      "variant_f1": 0.9113924050632912,
+      "delta": 0.0,
+      "support": 42,
+      "comparable": true
+    },
+    "use": {
+      "baseline_f1": 0.9090909090909091,
+      "variant_f1": 0.9714285714285714,
+      "delta": 0.06233766233766236,
+      "support": 36,
+      "comparable": true
+    }
+  }
+}
