@@ -21,6 +21,7 @@ func main() {
 	var dryRun bool
 	var live bool
 	var recoverFrom string
+	var policyFitConfig, replayJournal string
 	var maxCalls int
 	var liveConfig liveConfig
 	flag.StringVar(&datasetPath, "dataset", "", "path to a dataset JSON file (samples + predictions)")
@@ -28,6 +29,8 @@ func main() {
 	flag.BoolVar(&dryRun, "dry-run", false, "print the plan without scoring or calling a model")
 	flag.BoolVar(&live, "live", false, "explicitly opt in to a live model run (costs money)")
 	flag.StringVar(&recoverFrom, "recover-from", "", "comma-separated saved live directories; validate/recover wires OFFLINE, never retry")
+	flag.StringVar(&policyFitConfig, "fit-policy", "", "frozen six-dimension fit config JSON; OFFLINE train/dev only")
+	flag.StringVar(&replayJournal, "replay-journal", "", "verified recovery.json holding original raw evaluations for policy fitting")
 	flag.IntVar(&maxCalls, "max-calls", 0, "hard budget for a live run; 0 means no live run is permitted")
 	flag.StringVar(&liveConfig.catalogPath, "catalog", "", "frozen taxonomy JSON for live/dry-run")
 	flag.StringVar(&liveConfig.output, "output", "", "new PRIVATE artifact directory for a live run (never overwritten)")
@@ -39,6 +42,14 @@ func main() {
 	flag.Int64Var(&liveConfig.maxTokens, "max-tokens", 0, "hard INPUT-token reservation budget, 65536 reserved per attempt")
 	flag.DurationVar(&liveConfig.timeout, "timeout", 60*time.Second, "per-call timeout")
 	flag.Parse()
+	if policyFitConfig != "" && (live || recoverFrom != "" || dryRun || gatePath != "") {
+		fmt.Fprintln(os.Stderr, "error: policy fit is an explicit offline mode with its own frozen constraints; do not combine with live, recovery, dry-run or gate")
+		os.Exit(2)
+	}
+	if replayJournal != "" && policyFitConfig == "" {
+		fmt.Fprintln(os.Stderr, "error: replay-journal requires fit-policy")
+		os.Exit(2)
+	}
 	if recoverFrom != "" && live {
 		fmt.Fprintln(os.Stderr, "error: wire recovery is offline and cannot be combined with -live")
 		os.Exit(2)
@@ -90,6 +101,13 @@ func main() {
 
 	if recoverFrom != "" {
 		if err := runRecoveryCommand(dataset, recoverFrom, liveConfig.output, dryRun, gate); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if policyFitConfig != "" {
+		if err := runPolicyFitCommand(dataset, policyFitConfig, replayJournal, liveConfig.catalogPath, liveConfig.output); err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}

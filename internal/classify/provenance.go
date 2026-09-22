@@ -23,6 +23,36 @@ type ProviderCall struct {
 	LatencyMS      int64           `json:"latency_ms"`
 }
 
+// ValidateReplayMetadata validates an externally loaded evaluation using the
+// same immutable-spec, typed-answer and provenance checks as the store reader.
+// It makes no inference and rejects legacy records without actual wire state.
+func ValidateReplayMetadata(spec QuestionSpec, raw RawJudgments) error {
+	if raw.MetadataVersion != 1 || raw.Coverage != "complete" {
+		return errors.New("offline replay requires complete versioned evaluation metadata")
+	}
+	for _, judgment := range raw.Judgments {
+		if judgment.Kind == QuestionScore && judgment.Score == nil {
+			return errors.New("offline replay score is missing its value")
+		}
+	}
+	answers, err := json.Marshal(answersFromJudgments(raw))
+	if err != nil {
+		return err
+	}
+	metadata, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	restored, err := RestoreStoredJudgments(spec, raw.RequestedModel, raw.ResolvedModel, answers, raw.Coverage, metadata)
+	if err != nil {
+		return err
+	}
+	if restored.TaxonomyVersion != spec.TaxonomyVersion {
+		return errors.New("offline replay taxonomy identity mismatch")
+	}
+	return nil
+}
+
 func callIdentity(body []byte) (ProviderCall, string, error) {
 	var wire providerRequest
 	if err := json.Unmarshal(body, &wire); err != nil {
