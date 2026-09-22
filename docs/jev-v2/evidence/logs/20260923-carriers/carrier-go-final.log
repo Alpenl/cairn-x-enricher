@@ -1,0 +1,4 @@
+[36mWHAT[0m: 重新检查问题语义隔离
+[35mWHY[0m:  区分实际 carrier 变化与 canonical 字节
+ok  	github.com/Alpenl/cairn-x-enricher/internal/classify	0.042s
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	(cached)
