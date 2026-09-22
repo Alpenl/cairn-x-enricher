@@ -164,6 +164,7 @@ func TestCompleteClassificationDoesNotRetryAConflict(t *testing.T) {
 // provenance, revised_at) both decode through the strict client.
 func TestSelectionDecodesBothRealWorkerShapes(t *testing.T) {
 	v2Shape := `{"id":1,"revision":4,
+        "automatic":{"topics":["eval"],"content_functions":[],"carriers":[],"affordances":[],"form":"method","use":"try"},
 		"selection":{"topics":["llm"],"content_functions":["method"],"carriers":["single_post"],"affordances":[],"form":"method","use":"try"},
 		"taxonomy_version":"2026-09-20.1","definition_version":1,
 		"provenance":{"source":"decision","overrides":true,"revision":4},
@@ -186,6 +187,12 @@ func TestSelectionDecodesBothRealWorkerShapes(t *testing.T) {
 			}
 			if !view.Available || view.Selection.Topics[0] != "llm" {
 				t.Fatalf("decoded view is wrong: %+v", view)
+			}
+			if name == "v2" && (view.Automatic == nil || view.Automatic.Topics[0] != "eval") {
+				t.Fatalf("independent automatic baseline lost: %+v", view)
+			}
+			if name == "fallback" && view.Automatic != nil {
+				t.Fatal("old backend missing baseline was fabricated")
 			}
 			if name == "fallback" && (view.V1Only == false || view.Why != "自己的原因") {
 				t.Fatalf("fallback metadata lost: %+v", view)

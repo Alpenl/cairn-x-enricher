@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -16,7 +17,9 @@ import (
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
+	"github.com/Alpenl/cairn-x-enricher/internal/dashboard"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
+	"github.com/Alpenl/cairn-x-enricher/internal/health"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
@@ -171,6 +174,21 @@ func TestLocalWorkerDecisionReferences(t *testing.T) {
 	}
 	if len(view.Selection.Topics) != 0 || view.Revision != 1 {
 		t.Fatalf("policy replay lost human rejection: %+v", view)
+	}
+	if view.Automatic == nil || !reflect.DeepEqual(view.Automatic.Topics, []string{"llm"}) {
+		t.Fatalf("automatic baseline was replaced by effective human rejection: %+v", view)
+	}
+	management := dashboard.New(ctx, health.NewTracker(), queue, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), 1)
+	defer management.Drain(time.Second)
+	response := httptest.NewRecorder()
+	management.Handler().ServeHTTP(response, httptest.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/api/bookmarks/%d/v2-selection", id), nil))
+	var panel struct {
+		Selection cairn.V2Selection  `json:"selection"`
+		Automatic *cairn.V2Selection `json:"automatic"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &panel); err != nil || response.Code != 200 ||
+		panel.Automatic == nil || !reflect.DeepEqual(panel.Automatic.Topics, []string{"llm"}) || len(panel.Selection.Topics) != 0 {
+		t.Fatalf("dashboard failed to forward independent automatic state: %d %s (%v)", response.Code, response.Body, err)
 	}
 	runs, err := queue.GetRuns(ctx, id)
 	if err != nil || len(runs) != 3 || calls.Load() != 3 {

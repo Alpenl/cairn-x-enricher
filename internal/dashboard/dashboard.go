@@ -528,7 +528,7 @@ func (s *Server) getV2Selection(writer http.ResponseWriter, request *http.Reques
 		s.writeBackendError(writer, "get v2 selection", id, err)
 		return
 	}
-	writeJSON(writer, http.StatusOK, map[string]any{"available": true, "selection": view.Selection, "v1_projection": view.V1Projection, "taxonomy_version": view.TaxonomyVersion, "v1_only": view.V1Only, "revision": view.Revision})
+	writeJSON(writer, http.StatusOK, map[string]any{"available": true, "selection": view.Selection, "automatic": view.Automatic, "v1_projection": view.V1Projection, "taxonomy_version": view.TaxonomyVersion, "v1_only": view.V1Only, "revision": view.Revision})
 }
 
 func (s *Server) updateV2Selection(writer http.ResponseWriter, request *http.Request) {

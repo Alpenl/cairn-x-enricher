@@ -31,6 +31,7 @@ type V2Selection struct {
 type V2SelectionView struct {
 	ID                int64           `json:"id"`
 	Selection         V2Selection     `json:"selection"`
+	Automatic         *V2Selection    `json:"automatic,omitempty"`
 	TaxonomyVersion   string          `json:"taxonomy_version,omitempty"`
 	DefinitionVersion int             `json:"definition_version,omitempty"`
 	Provenance        json.RawMessage `json:"provenance,omitempty"`
