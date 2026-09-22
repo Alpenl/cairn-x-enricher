@@ -1,0 +1,14 @@
+[36mWHAT[0m: 运行完整代码门禁
+[35mWHY[0m:  新增诊断及验证不能回归生产或旧拟合
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+experiments/classification/main/calibration_test.go:37:17: G304: Potential file inclusion via variable (gosec)
+	before, err := os.ReadFile(filepath.Join(output, "calibration.json"))
+	               ^
+experiments/classification/main/calibration_test.go:44:16: G304: Potential file inclusion via variable (gosec)
+	after, err := os.ReadFile(filepath.Join(output, "calibration.json"))
+	              ^
+2 issues:
+* gosec: 2
+exit status 1
+make: *** [Makefile:39: lint-ci] Error 1

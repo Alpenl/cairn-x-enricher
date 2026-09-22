@@ -1,0 +1,3 @@
+[36mWHAT[0m: 严格核对离线恢复结果
+[35mWHY[0m:  验证原始调用数与零新增调用的实际字段
+PASS: exact original dataset; 42 metadata-v1 evaluations; zero new calls; frozen references unchanged
