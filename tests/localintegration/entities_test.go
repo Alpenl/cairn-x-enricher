@@ -72,7 +72,7 @@ func TestLocalWorkerEntitySnapshotIdentity(t *testing.T) {
 			answers[id] = map[string]any{"type": "noul", "noul": 0.95}
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-pinned-local", "answers": answers, "usage": map[string]int{"input_tokens": 20, "output_tokens": 2}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-1.13.0", "answers": answers, "usage": map[string]int{"input_tokens": 20, "output_tokens": 2}})
 	}))
 	defer provider.Close()
 	classifier, err := classify.NewClient(provider.URL, "fixture", "jev-latest", provider.Client(), catalog)
@@ -130,7 +130,13 @@ func TestLocalWorkerEntitySnapshotIdentity(t *testing.T) {
 	}
 	switchTarget(t, base, token, classifier)
 	p := processor.NewStaged(queue, nil, classifier, catalog.Version, "jev-latest", slog.New(slog.NewTextHandler(io.Discard, nil)), 1)
-	p.SetExtensions(extension.NewService(extension.Flags{Entities: true}, extension.DefaultBudget(), classifier), nil, extension.FetchPolicy{})
+	extensionJudge, err := classify.NewClient(provider.URL, "fixture", "jev-1.13.0", provider.Client(), catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	extensions := extension.NewService(extension.Flags{Entities: true}, extension.DefaultBudget(), extensionJudge)
+	extensions.SetBudgetStore(queue)
+	p.SetExtensions(extensions, nil, extension.FetchPolicy{})
 	done, failed, err := p.RunClassifications(ctx, 1)
 	if err != nil || done != 1 || failed != 0 {
 		t.Fatalf("processing: %d %d %v", done, failed, err)

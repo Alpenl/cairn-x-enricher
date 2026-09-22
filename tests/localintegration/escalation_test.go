@@ -152,7 +152,9 @@ func TestLocalWorkerEvidenceExecutionRecovery(t *testing.T) {
 	})})
 	makeProcessor := func(q *cairn.Client) *processor.Processor {
 		p := processor.NewStaged(q, nil, classifier, catalog.Version, "jev-latest", slog.New(slog.NewTextHandler(&logs, nil)), 1)
-		p.SetExtensions(extension.NewService(flags, extension.DefaultBudget(), nil), fetcher, policy)
+		extensions := extension.NewService(flags, extension.DefaultBudget(), nil)
+		extensions.SetBudgetStore(queue)
+		p.SetExtensions(extensions, fetcher, policy)
 		return p
 	}
 	type outcome struct {

@@ -396,7 +396,9 @@ func newProcessor(
 	tracker.MarkStarted()
 	worker := processor.NewStaged(queue, model, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
 	fetcher, policy := evidenceFetcher(cfg)
-	worker.SetExtensions(extensionService(cfg, classifier), fetcher, policy)
+	extensions := extensionService(cfg, classifier)
+	extensions.SetBudgetStore(queue)
+	worker.SetExtensions(extensions, fetcher, policy)
 	worker.SetPartialReuse(cfg.PartialReuse)
 	return worker, queue, nil
 }
@@ -409,7 +411,23 @@ func extensionService(cfg config.Config, judge extension.Judge) *extension.Servi
 		Entities: cfg.ExtensionEntities, Evidence: cfg.ExtensionEvidence,
 		Rerank: cfg.ExtensionRerank, Proposal: cfg.ExtensionProposal,
 	}
-	service := extension.NewService(flags, extension.DefaultBudget(), judge)
+	budget := extension.DefaultBudget()
+	if cfg.ExtensionMaxCalls > 0 {
+		budget.MaxCallsTotal = cfg.ExtensionMaxCalls
+	}
+	if cfg.ExtensionMaxCallsPerItem > 0 {
+		budget.MaxCallsPerItem = cfg.ExtensionMaxCallsPerItem
+	}
+	if cfg.ExtensionMaxInputTokens > 0 {
+		budget.MaxTokens = cfg.ExtensionMaxInputTokens
+	}
+	if cfg.ExtensionMaxInputTokensPerItem > 0 {
+		budget.MaxTokensPerItem = cfg.ExtensionMaxInputTokensPerItem
+	}
+	if cfg.ExtensionTimeout > 0 {
+		budget.Timeout = cfg.ExtensionTimeout
+	}
+	service := extension.NewService(flags, budget, judge)
 	return service
 }
 

@@ -130,3 +130,5 @@ run_case cli TestLocalWorkerClassifyCLI
 run_case carrier TestLocalWorkerCarrierDefinitionUpgrade
 
 run_case imageprivacy TestLocalWorkerPrivateImageLifecycle
+
+run_case extensionbudget TestLocalWorkerExtensionBudgetAcrossProcesses

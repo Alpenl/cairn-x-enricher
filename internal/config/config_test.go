@@ -73,6 +73,8 @@ func setRequiredEnv(t *testing.T) {
 		"MAX_JOBS_PER_RUN",
 		"HTTP_ADDR",
 		"LOG_LEVEL",
+		"CAIRN_EXTENSION_MAX_CALLS", "CAIRN_EXTENSION_MAX_CALLS_PER_ITEM",
+		"CAIRN_EXTENSION_MAX_INPUT_TOKENS", "CAIRN_EXTENSION_MAX_INPUT_TOKENS_PER_ITEM", "CAIRN_EXTENSION_TIMEOUT",
 	} {
 		t.Setenv(name, "")
 	}
@@ -82,6 +84,34 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("TYPESAFE_API_KEY", "test-typesafe-key")
 	t.Setenv("TYPESAFE_BASE_URL", "")
 	t.Setenv("TYPESAFE_MODEL", "")
+}
+
+func TestExtensionLimitsCanOnlyTightenTheDeploymentCeiling(t *testing.T) {
+	for name, value := range map[string]string{
+		"CAIRN_EXTENSION_MAX_CALLS": "21", "CAIRN_EXTENSION_MAX_CALLS_PER_ITEM": "3",
+		"CAIRN_EXTENSION_MAX_INPUT_TOKENS": "1310721", "CAIRN_EXTENSION_MAX_INPUT_TOKENS_PER_ITEM": "131073", "CAIRN_EXTENSION_TIMEOUT": "21s",
+	} {
+		t.Run(name, func(t *testing.T) {
+			setRequiredEnv(t)
+			t.Setenv(name, value)
+			if _, err := Load(); err == nil {
+				t.Fatal("widened ceiling accepted")
+			}
+		})
+	}
+	setRequiredEnv(t)
+	t.Setenv("CAIRN_EXTENSION_MAX_CALLS", "4")
+	t.Setenv("CAIRN_EXTENSION_MAX_CALLS_PER_ITEM", "1")
+	t.Setenv("CAIRN_EXTENSION_MAX_INPUT_TOKENS", "65536")
+	t.Setenv("CAIRN_EXTENSION_MAX_INPUT_TOKENS_PER_ITEM", "32768")
+	t.Setenv("CAIRN_EXTENSION_TIMEOUT", "2s")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ExtensionMaxCalls != 4 || cfg.ExtensionMaxCallsPerItem != 1 || cfg.ExtensionMaxInputTokens != 65536 || cfg.ExtensionMaxInputTokensPerItem != 32768 || cfg.ExtensionTimeout != 2*time.Second {
+		t.Fatal("configured limits not retained")
+	}
 }
 
 // TestClassifyRoleDoesNotRequireGrok pins B02-T09: the classify command only

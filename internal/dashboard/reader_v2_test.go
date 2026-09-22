@@ -107,7 +107,8 @@ func TestRerankEndpointIsBoundedAndFallsBackExplicitly(t *testing.T) {
 			t.Fatalf("question %s does not bind its candidate: %s", id, text)
 		}
 	}
-	// Repeat runs are stable and never depend on map order.
+	// The second call is stable; further HTTP requests must fall back once
+	// either candidate reaches the shared per-item allowance (B09-T01/T10).
 	for run := 0; run < 5; run++ {
 		repeat := httptest.NewRecorder()
 		handler.ServeHTTP(repeat, jsonRequest(http.MethodPost, "/api/rerank", `{"query":"llm","limit":5}`))
@@ -115,9 +116,15 @@ func TestRerankEndpointIsBoundedAndFallsBackExplicitly(t *testing.T) {
 		if err := json.Unmarshal(repeat.Body.Bytes(), &again); err != nil {
 			t.Fatal(err)
 		}
-		if again.Candidates[0].ID != "2" {
+		if run == 0 && (!again.Applied || again.Candidates[0].ID != "2") {
 			t.Fatalf("run %d ordered %+v", run, again.Candidates)
 		}
+		if run > 0 && (again.Applied || again.Candidates[0].ID != "1" || !strings.Contains(again.Reason, "budget")) {
+			t.Fatalf("run %d did not preserve original order on exhaustion: %+v", run, again)
+		}
+	}
+	if len(captured) != 2 {
+		t.Fatalf("HTTP retries escaped budget: %d judgments", len(captured))
 	}
 	// A candidate outside the authorized set is never returned.
 	for _, candidate := range ranked.Candidates {

@@ -47,6 +47,10 @@ func newClassifyCommand() *cobra.Command {
 			}
 		}
 		worker := processor.NewStaged(queue, nil, client, catalog.Version, cfg.TypesafeModel, newLogger(cfg.LogLevel), 1)
+		extensions := extensionService(cfg, client)
+		extensions.SetBudgetStore(queue)
+		fetcher, policy := evidenceFetcher(cfg)
+		worker.SetExtensions(extensions, fetcher, policy)
 		completed, failed, err := worker.RunClassifications(ctx, maxJobs)
 		if encodeErr := json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]int64{"classified": completed, "failed": failed}); encodeErr != nil {
 			return encodeErr

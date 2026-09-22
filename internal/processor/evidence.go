@@ -86,7 +86,7 @@ func (p *Processor) executeEvidence(ctx context.Context, requestID string, remai
 		if request.Scope == "external_link" && policy.MaxBytes > 0 && policy.Timeout > 0 {
 			if fetcher, err := extension.ControlledFetcher(policy, s.fetcher); err == nil {
 				fetchCtx, stop := context.WithTimeout(ctx, policy.Timeout)
-				outcome = s.extensions.RequestEvidence(fetchCtx, fetcher, policy, request.URL)
+				outcome = s.extensions.RequestEvidenceForItem(fetchCtx, request.LinkID, fetcher, policy, request.URL)
 				stop()
 			}
 		}

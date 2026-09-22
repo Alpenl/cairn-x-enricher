@@ -598,7 +598,7 @@ func (p *Processor) runExtensions(ctx context.Context, job *cairn.Classification
 	blocks := archived.Blocks
 	// Entities are additive and independently budgeted. A stale or failed run
 	// is recorded explicitly and never clears a newer success.
-	entity := s.extensions.Entities(ctx, blocks, job.RelatedLinks)
+	entity := s.extensions.EntitiesForItem(ctx, job.ID, blocks, job.RelatedLinks)
 	if entity.State != extension.EntityNotRun {
 		body := map[string]any{
 			"operation_key":        fmt.Sprintf("entity-%d-rev-%d-lease-%s", job.ID, job.Revision, job.LeaseToken),

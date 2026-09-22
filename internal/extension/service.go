@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
@@ -41,40 +42,41 @@ type EntityResult struct {
 	Tokens   int         `json:"tokens"`
 }
 
-// Service wires the bounded extensions to a judge and a budget. It holds no
-// global state; one service serves one process.
+// Service shares a process-local ledger and a durable Worker budget across all
+// extension entry points. Configure it before starting concurrent processing.
 type Service struct {
 	Flags  Flags
 	Budget Budget
 	Judge  Judge
+	ledger *Ledger
+	store  BudgetStore
 }
 
 // NewService creates the extension service. A nil judge leaves the model-backed
 // capabilities disabled rather than failing the process.
 func NewService(flags Flags, budget Budget, judge Judge) *Service {
-	return &Service{Flags: flags, Budget: budget, Judge: judge}
+	return &Service{Flags: flags, Budget: budget, Judge: judge, ledger: NewLedger(budget)}
 }
-
-// estimatedEntityTokens is a conservative per-question estimate. The real
-// tokenizer is not available offline, so the ledger over-counts rather than
-// under-counting.
-const estimatedEntityTokens = 220
 
 // Entities runs the entity pipeline over stored blocks. It is purely additive:
 // a disabled flag, an exhausted budget or a provider failure returns an
 // explicit state and never touches the stored classification.
 func (s *Service) Entities(ctx context.Context, blocks []Block, storedURLs []string) EntityResult {
+	return s.entities(ctx, "unscoped", blocks, storedURLs)
+}
+
+// EntitiesForItem binds the production budget to the owning bookmark.
+func (s *Service) EntitiesForItem(ctx context.Context, id int64, blocks []Block, storedURLs []string) EntityResult {
+	return s.entities(ctx, strconv.FormatInt(id, 10), blocks, storedURLs)
+}
+
+func (s *Service) entities(ctx context.Context, item string, blocks []Block, storedURLs []string) EntityResult {
 	if !s.Flags.Entities || s.Judge == nil {
 		return EntityResult{State: EntityNotRun, Entities: []string{}, Reason: "entities disabled"}
 	}
 	candidates := ExtractCandidates(blocks, storedURLs)
 	if len(candidates) == 0 {
 		return EntityResult{State: EntityCompletedEmpty, Entities: []string{}}
-	}
-	ledger := NewLedger(s.Budget)
-	// One batched judgment over all candidates: one call, bounded tokens.
-	if err := ledger.Reserve(estimatedEntityTokens * len(candidates)); err != nil {
-		return EntityResult{State: EntityFailed, Entities: []string{}, Reason: ErrBudgetExhausted.Error()}
 	}
 	questions := make(map[string]classify.ProviderQuestion, len(candidates))
 	byID := make(map[string]SurfaceCandidate, len(candidates))
@@ -92,9 +94,9 @@ func (s *Service) Entities(ctx context.Context, blocks []Block, storedURLs []str
 		}
 	}
 	state := map[string]any{"material": blocks, "stored_links": storedURLs}
-	answers, err := s.Judge.Judge(ctx, state, questions)
+	answers, calls, tokens, err := s.judgeBounded(ctx, "entity", []string{item}, state, questions)
 	if err != nil {
-		return EntityResult{State: EntityFailed, Entities: []string{}, Reason: boundedReason(err), Calls: ledger.Calls(), Tokens: ledger.Tokens()}
+		return EntityResult{State: EntityFailed, Entities: []string{}, Reason: boundedReason(err), Calls: calls, Tokens: tokens}
 	}
 	entities := make([]string, 0, len(candidates))
 	seen := map[string]bool{}
@@ -122,9 +124,9 @@ func (s *Service) Entities(ctx context.Context, blocks []Block, storedURLs []str
 	}
 	sort.Strings(entities)
 	if len(entities) == 0 {
-		return EntityResult{State: EntityCompletedEmpty, Entities: []string{}, Calls: ledger.Calls(), Tokens: ledger.Tokens()}
+		return EntityResult{State: EntityCompletedEmpty, Entities: []string{}, Calls: calls, Tokens: tokens}
 	}
-	return EntityResult{State: EntityCompletedNonempty, Entities: entities, Calls: ledger.Calls(), Tokens: ledger.Tokens()}
+	return EntityResult{State: EntityCompletedNonempty, Entities: entities, Calls: calls, Tokens: tokens}
 }
 
 // GapKind is an observable material gap. A legitimate none or a vocabulary
@@ -183,10 +185,27 @@ const MaxEscalatedRunes = 20000
 // stored source: the caller appends the returned block as a new revision and
 // keeps the old content readable on failure.
 func (s *Service) RequestEvidence(ctx context.Context, client *http.Client, policy FetchPolicy, raw string) FetchOutcome {
+	return s.requestEvidence(ctx, "unscoped", client, policy, raw)
+}
+
+// RequestEvidenceForItem also charges the shared cross-process call limit.
+func (s *Service) RequestEvidenceForItem(ctx context.Context, id int64, client *http.Client, policy FetchPolicy, raw string) FetchOutcome {
+	return s.requestEvidence(ctx, strconv.FormatInt(id, 10), client, policy, raw)
+}
+
+func (s *Service) requestEvidence(ctx context.Context, item string, client *http.Client, policy FetchPolicy, raw string) FetchOutcome {
 	if !s.Flags.Evidence {
 		return FetchOutcome{State: "blocked", Reason: "evidence escalation disabled"}
 	}
-	content, err := Fetch(ctx, client, policy, raw)
+	if s.Budget.Timeout <= 0 {
+		return FetchOutcome{State: "blocked", Reason: "invalid extension timeout"}
+	}
+	callCtx, cancel := context.WithTimeout(ctx, s.Budget.Timeout)
+	defer cancel()
+	if err := s.reserve(callCtx, "evidence", []string{item}, 0); err != nil {
+		return FetchOutcome{State: "blocked", Reason: boundedReason(err)}
+	}
+	content, err := Fetch(callCtx, client, policy, raw)
 	if err != nil {
 		if errors.Is(err, ErrFetchBlocked) {
 			return FetchOutcome{State: "blocked", Reason: boundedReason(err)}
@@ -221,10 +240,6 @@ func (s *Service) RerankCandidates(ctx context.Context, query string, candidates
 	if len(authorized) == 0 || len(authorized) > 20 {
 		return Rerank(candidates, nil, false)
 	}
-	ledger := NewLedger(s.Budget)
-	if err := ledger.Reserve(estimatedEntityTokens * len(authorized)); err != nil {
-		return Rerank(candidates, nil, false)
-	}
 	// Every question names exactly one candidate in its own instructions, so the
 	// model always knows which material it is rating. The shared rubric stays
 	// constant; the evaluation target does not (R2-11).
@@ -243,9 +258,15 @@ func (s *Service) RerankCandidates(ctx context.Context, query string, candidates
 		}
 	}
 	state := map[string]any{"query": query}
-	answers, err := s.Judge.Judge(ctx, state, questions)
+	items := make([]string, 0, len(authorized))
+	for _, candidate := range authorized {
+		items = append(items, candidate.ID)
+	}
+	answers, _, _, err := s.judgeBounded(ctx, "rerank", items, state, questions)
 	if err != nil {
-		return Rerank(candidates, nil, false)
+		result := Rerank(candidates, nil, false)
+		result.Reason = "rerank unavailable: " + boundedReason(err)
+		return result
 	}
 	scores := make([]RerankScore, 0, len(answers))
 	for id, answer := range answers {

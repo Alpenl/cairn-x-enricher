@@ -430,30 +430,40 @@ type ProviderQuestion struct {
 	Criteria     any    `json:"criteria,omitempty"`
 }
 
-// Judge runs a bounded set of ad-hoc questions against one state and returns the
-// typed answers. It is used only by the opt-in extensions (entity validation,
-// reranking); the production classification spec is unaffected, and the caller
-// owns the budget, the validation of the answer set and the fallback.
-func (c *Client) Judge(ctx context.Context, state any, questions map[string]ProviderQuestion) (map[string]RawAnswer, error) {
+// JudgeInputReservation validates the exact request before any budget grant or
+// network access. The 65536 input-token reservation is the documented Jev 1.13
+// request ceiling, not a tokenizer estimate; output is free. Unknown models or
+// moving aliases need a separately verified ceiling before extensions run.
+func (c *Client) JudgeInputReservation(state any, questions map[string]ProviderQuestion) (int, error) {
+	if c.model != "jev-1.13.0" {
+		return 0, errors.New("extension budget requires verified pinned model jev-1.13.0")
+	}
+	if _, _, err := c.buildJudgeRequest(state, questions); err != nil {
+		return 0, err
+	}
+	return 65536, nil
+}
+
+func (c *Client) buildJudgeRequest(state any, questions map[string]ProviderQuestion) ([]byte, map[string]providerQuestion, error) {
 	if len(questions) == 0 || len(questions) > 64 {
-		return nil, errors.New("extension judgment needs 1 to 64 questions")
+		return nil, nil, errors.New("extension judgment needs 1 to 64 questions")
 	}
 	wire := make(map[string]providerQuestion, len(questions))
 	for id, question := range questions {
 		switch question.Type {
 		case TypeNoul, TypeChoice, TypeScore:
 		default:
-			return nil, fmt.Errorf("extension question %s has unknown type %q", id, question.Type)
+			return nil, nil, fmt.Errorf("extension question %s has unknown type %q", id, question.Type)
 		}
 		instructions, err := json.Marshal(question.Instructions)
 		if err != nil {
-			return nil, fmt.Errorf("extension question %s instructions: %w", id, err)
+			return nil, nil, fmt.Errorf("extension question %s instructions: %w", id, err)
 		}
 		entry := providerQuestion{Type: question.Type, Instructions: instructions}
 		if question.Criteria != nil {
 			criteria, err := json.Marshal(question.Criteria)
 			if err != nil {
-				return nil, fmt.Errorf("extension question %s criteria: %w", id, err)
+				return nil, nil, fmt.Errorf("extension question %s criteria: %w", id, err)
 			}
 			entry.Criteria = criteria
 		}
@@ -461,13 +471,24 @@ func (c *Client) Judge(ctx context.Context, state any, questions map[string]Prov
 	}
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
-		return nil, fmt.Errorf("extension state: %w", err)
+		return nil, nil, fmt.Errorf("extension state: %w", err)
 	}
 	body, err := json.Marshal(providerRequest{Model: c.model, State: stateJSON, Questions: wire})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := c.checkRequestBudget(body); err != nil {
+		return nil, nil, err
+	}
+
+	return body, wire, nil
+}
+
+// Judge runs bounded ad-hoc questions for opt-in extensions. The caller owns
+// budget reservation and fallback; this method performs exactly one HTTP call.
+func (c *Client) Judge(ctx context.Context, state any, questions map[string]ProviderQuestion) (map[string]RawAnswer, error) {
+	body, wire, err := c.buildJudgeRequest(state, questions)
+	if err != nil {
 		return nil, err
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
@@ -500,6 +521,9 @@ func (c *Client) Judge(ctx context.Context, state any, questions map[string]Prov
 	}
 	if len(decoded.Answers) != len(wire) {
 		return nil, enrich.Classified(fmt.Errorf("extension answer set has %d entries, want %d", len(decoded.Answers), len(wire)), enrich.ErrorClassContract)
+	}
+	if c.model == "jev-1.13.0" && decoded.Model != c.model {
+		return nil, enrich.Classified(errors.New("extension resolved model differs from verified pinned model"), enrich.ErrorClassContract)
 	}
 	for id := range wire {
 		if _, ok := decoded.Answers[id]; !ok {

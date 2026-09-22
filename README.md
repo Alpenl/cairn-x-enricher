@@ -154,3 +154,5 @@ Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网�
 ## License
 
 [MIT](LICENSE)
+
+Opt-in semantic extensions use a shared, persistent Worker budget. See [limits, failure recovery and rollout](docs/jev-v2/09-semantic-extensions.md) before enabling them.

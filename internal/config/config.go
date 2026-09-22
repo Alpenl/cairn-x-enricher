@@ -44,11 +44,16 @@ type Config struct {
 	// The bounded semantic extensions are independently opt-in and default
 	// off. A disabled extension is reported as unavailable rather than
 	// silently succeeding, and it never blocks the ordinary pipeline.
-	ExtensionEntities  bool
-	ExtensionEvidence  bool
-	ExtensionRerank    bool
-	ExtensionProposal  bool
-	ExtensionAllowlist []string
+	ExtensionEntities              bool
+	ExtensionEvidence              bool
+	ExtensionRerank                bool
+	ExtensionProposal              bool
+	ExtensionAllowlist             []string
+	ExtensionMaxCalls              int
+	ExtensionMaxCallsPerItem       int
+	ExtensionMaxInputTokens        int
+	ExtensionMaxInputTokensPerItem int
+	ExtensionTimeout               time.Duration
 
 	// PartialReuse opts in to reusing unchanged stored answers for a new
 	// classification. It is off by default; the conservative full evaluation is
@@ -137,6 +142,24 @@ func splitCSV(value string) []string {
 
 func (c *Config) readNumbers() error {
 	var err error
+	if c.ExtensionMaxCalls, err = intValue("CAIRN_EXTENSION_MAX_CALLS", 20, 1, 20); err != nil {
+		return err
+	}
+	if c.ExtensionMaxCallsPerItem, err = intValue("CAIRN_EXTENSION_MAX_CALLS_PER_ITEM", 2, 1, 2); err != nil {
+		return err
+	}
+	if c.ExtensionMaxInputTokens, err = intValue("CAIRN_EXTENSION_MAX_INPUT_TOKENS", 20*65536, 1, 20*65536); err != nil {
+		return err
+	}
+	if c.ExtensionMaxInputTokensPerItem, err = intValue("CAIRN_EXTENSION_MAX_INPUT_TOKENS_PER_ITEM", 2*65536, 1, 2*65536); err != nil {
+		return err
+	}
+	if c.ExtensionTimeout, err = durationValue("CAIRN_EXTENSION_TIMEOUT", 20*time.Second); err != nil {
+		return err
+	}
+	if c.ExtensionTimeout > 20*time.Second {
+		return fmt.Errorf("CAIRN_EXTENSION_TIMEOUT must not exceed 20s")
+	}
 	if c.GrokMaxTokens, err = intValue("GROK_MAX_OUTPUT_TOKENS", 8192, 256, 32768); err != nil {
 		return err
 	}

@@ -1,13 +1,14 @@
 // Package extension holds the bounded semantic extensions: entity extraction,
 // evidence escalation, controlled reranking and taxonomy proposals.
 //
-// Every capability is off by default and independently budgeted. A failure or
+// Every capability is off by default and shares bounded deployment limits. A failure or
 // an exhausted budget degrades to the previous behaviour (no entities, the
 // original order, no added evidence) rather than failing the bookmark.
 package extension
 
 import (
 	"errors"
+	"sync"
 	"time"
 )
 
@@ -23,49 +24,91 @@ type Flags struct {
 // DefaultFlags keeps every extension off.
 func DefaultFlags() Flags { return Flags{} }
 
-// Budget bounds calls and tokens per item and in total. User content or a model
+// Budget bounds calls and reserved input tokens per item and UTC day. User content or a model
 // answer can never raise a budget or choose an arbitrary URL to execute.
 type Budget struct {
-	MaxCallsPerItem int           `json:"max_calls_per_item"`
-	MaxCallsTotal   int           `json:"max_calls_total"`
-	MaxTokens       int           `json:"max_tokens"`
-	Timeout         time.Duration `json:"timeout"`
+	MaxCallsPerItem  int           `json:"max_calls_per_item"`
+	MaxCallsTotal    int           `json:"max_calls_total"`
+	MaxTokens        int           `json:"max_tokens"`
+	MaxTokensPerItem int           `json:"max_tokens_per_item"`
+	Timeout          time.Duration `json:"timeout"`
 }
 
 // DefaultBudget is deliberately small.
 func DefaultBudget() Budget {
-	return Budget{MaxCallsPerItem: 2, MaxCallsTotal: 20, MaxTokens: 4000, Timeout: 20 * time.Second}
+	return Budget{MaxCallsPerItem: 2, MaxCallsTotal: 20, MaxTokens: 20 * InputTokenReservation, MaxTokensPerItem: 2 * InputTokenReservation, Timeout: 20 * time.Second}
 }
 
-// Ledger tracks consumption against a budget. It is not safe for concurrent
-// use; the caller serialises per batch.
+// InputTokenReservation reserves the entire documented Jev 1.13 input context
+// per attempted call; output is free. It is not observed usage or a byte/token
+// estimate. Unknown outcomes are never refunded. See docs.typesafe.ai/models.
+const InputTokenReservation = 65536
+
+// Ledger is a concurrency-safe process-local ceiling, shared by all extension
+// requests. Production also reserves in Worker/D1 across processes and restarts.
 type Ledger struct {
+	mu     sync.Mutex
 	budget Budget
 	calls  int
 	tokens int
+	items  map[string][2]int
+	day    string
 }
 
-// NewLedger creates a budget ledger for one bounded batch.
-func NewLedger(budget Budget) *Ledger { return &Ledger{budget: budget} }
+// NewLedger creates a shared process-local ledger with UTC daily windows.
+func NewLedger(budget Budget) *Ledger { return &Ledger{budget: budget, items: make(map[string][2]int)} }
 
 // ErrBudgetExhausted is returned instead of silently making another call.
 var ErrBudgetExhausted = errors.New("extension budget exhausted")
 
-// Reserve books one call with an estimated token cost, or fails.
+// Reserve books one call with a conservative input-token reservation, or fails.
 func (l *Ledger) Reserve(tokens int) error {
-	if l.calls+1 > l.budget.MaxCallsTotal || l.tokens+tokens > l.budget.MaxTokens {
+	return l.ReserveItems(nil, tokens)
+}
+
+// ReserveItems atomically charges one call globally and once per distinct item.
+// Charging each item the whole request is deliberately conservative for rerank.
+func (l *Ledger) ReserveItems(items []string, tokens int) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	day := time.Now().UTC().Format("2006-01-02")
+	if l.day != day {
+		l.day = day
+		l.calls, l.tokens = 0, 0
+		l.items = make(map[string][2]int)
+	}
+	if tokens < 0 || l.calls >= l.budget.MaxCallsTotal || tokens > l.budget.MaxTokens-l.tokens {
 		return ErrBudgetExhausted
+	}
+	seen := make(map[string]bool)
+	itemTokens := l.budget.MaxTokensPerItem
+	if itemTokens == 0 {
+		itemTokens = l.budget.MaxTokens
+	}
+	for _, id := range items {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		used := l.items[id]
+		if used[0] >= l.budget.MaxCallsPerItem || tokens > itemTokens-used[1] {
+			return ErrBudgetExhausted
+		}
 	}
 	l.calls++
 	l.tokens += tokens
+	for id := range seen {
+		used := l.items[id]
+		l.items[id] = [2]int{used[0] + 1, used[1] + tokens}
+	}
 	return nil
 }
 
 // Calls reports the number of reserved calls.
-func (l *Ledger) Calls() int { return l.calls }
+func (l *Ledger) Calls() int { l.mu.Lock(); defer l.mu.Unlock(); return l.calls }
 
 // Tokens reports the number of reserved tokens.
-func (l *Ledger) Tokens() int { return l.tokens }
+func (l *Ledger) Tokens() int { l.mu.Lock(); defer l.mu.Unlock(); return l.tokens }
 
 // DedupeKey identifies one extension operation so a retry replays the stored
 // result instead of paying again.
