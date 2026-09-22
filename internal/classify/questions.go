@@ -197,6 +197,9 @@ func CompileSpec(catalog taxonomy.Catalog, scoreEnabled bool) (QuestionSpec, err
 		for _, term := range catalog.Carriers {
 			if term.Active {
 				criteria[term.ID] = semanticDescription(term)
+				if term.ID == "unknown" {
+					criteria["none"] = "结构可观察，但不属于词表中的任何载体，例如独立视频或书籍。不是证据不足；证据不足时选择 unknown。"
+				}
 			}
 		}
 		questions = append(questions, Question{

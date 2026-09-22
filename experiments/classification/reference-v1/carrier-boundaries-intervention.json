@@ -1,0 +1,13 @@
+{
+  "baseline_spec_id": "classify-736e775b96c2",
+  "baseline_spec_hash": "30a331056f34cd2ad55927fd281fd57cb016f81a7f599bba5ac3a4110577a67e",
+  "variant_spec_id": "classify-ffb0edb18cb5",
+  "variant_spec_hash": "cfe187bd9786171a7636fd31b4a01b6767f4c8fd67d40cfddc261a1ce00a58ee",
+  "baseline_source": "d451e2129305eae41b374cf3c0586bd218431151",
+  "changed_questions": [
+    "carriers"
+  ],
+  "policy_version": "jev-policy-v3",
+  "historical_paid_calls": 127,
+  "maximum_new_calls": 84
+}

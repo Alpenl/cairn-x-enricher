@@ -110,15 +110,23 @@ func TestObjectiveUseSpecAndNoteIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	objectiveBytes, err := os.ReadFile("../../experiments/classification/reference-v1/objective-use-spec.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	objective, err := DecodeSpec(objectiveBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
 	client, err := NewClient("https://offline.invalid", "fixture", "jev-1.13.0", nil, frozenFieldCatalog(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	current := client.Spec()
-	if current.SpecID == previous.SpecID || len(current.Questions) != len(previous.Questions) {
+	if objective.SpecID == previous.SpecID || len(objective.Questions) != len(previous.Questions) {
 		t.Fatal("wrong objective use spec identity/population")
 	}
-	for i, q := range current.Questions {
+	for i, q := range objective.Questions {
 		if q.ID != "use" {
 			if !reflect.DeepEqual(q, previous.Questions[i]) {
 				t.Fatalf("unrelated question changed: %s", q.ID)
@@ -130,6 +138,9 @@ func TestObjectiveUseSpecAndNoteIsolation(t *testing.T) {
 		}
 		if strings.Contains(string(q.Instructions), "收藏备注") {
 			t.Fatal("objective use still requires unavailable note")
+		}
+		if !reflect.DeepEqual(q, current.Questions[i]) {
+			t.Fatal("current use changed from the frozen objective-only question")
 		}
 	}
 	a, _, err := client.BuildProviderRequest(Input{OriginalText: "An objective method."})
