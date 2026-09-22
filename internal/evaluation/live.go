@@ -115,7 +115,7 @@ func PlanLive(dataset Dataset, evaluator LiveEvaluator, options LiveOptions) (Li
 		return LivePlan{}, err
 	}
 	spec := evaluator.Spec()
-	plan := LivePlan{ReferenceHash: hash, Calls: len(dataset.Samples), InputReservation: int64(len(dataset.Samples)) * jev113InputCeiling, PerCallInputReservation: jev113InputCeiling, LimitSource: modelLimitSource, LimitCheckedAt: "2026-09-22", SpecID: spec.SpecID, SpecHash: spec.SemanticHash, Model: options.Model, Options: options}
+	plan := LivePlan{ReferenceHash: hash, Calls: len(dataset.Samples), InputReservation: int64(len(dataset.Samples)) * jev113InputCeiling, PerCallInputReservation: jev113InputCeiling, LimitSource: modelLimitSource, LimitCheckedAt: "2026-09-23", SpecID: spec.SpecID, SpecHash: spec.SemanticHash, Model: options.Model, Options: options}
 	for _, sample := range dataset.Samples {
 		if sample.Material == nil || sample.Gold == nil {
 			return LivePlan{}, fmt.Errorf("sample %s lacks frozen material/reference", sample.SampleID)

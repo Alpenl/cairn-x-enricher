@@ -74,3 +74,11 @@ its extra call belongs in total cost accounting.
 The gate requires at least 20 independent groups as well as 20 reference samples.
 The train (7 groups) and dev (6 groups) splits are therefore tuning/diagnostic
 sets, not sufficient promotion evidence. The 27-group holdout remains separate.
+# Historical question identity
+
+`baseline-spec.json` preserves the exact `classify-80156c157660` question set
+used when this corpus was frozen and first evaluated. The v1 generator validates
+that immutable identity instead of recompiling the latest production questions.
+Question changes belong to separately recorded experimental variants; they must
+not rewrite the original manifest or reference labels. Regeneration still compares
+all four frozen JSON files byte for byte in CI.

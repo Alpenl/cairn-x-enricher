@@ -71,9 +71,18 @@ func generate(root, output string) error {
 	if err := catalog.Validate(); err != nil {
 		return err
 	}
-	spec, err := classify.CompileSpec(catalog, false)
+	// This command regenerates the already frozen v1 reference corpus. Its
+	// original inference identity must not drift when production questions change.
+	specBytes, err := os.ReadFile(filepath.Clean(filepath.Join(root, "baseline-spec.json")))
 	if err != nil {
 		return err
+	}
+	spec, err := classify.DecodeSpec(specBytes)
+	if err != nil {
+		return err
+	}
+	if spec.SpecID != "classify-80156c157660" || spec.SemanticHash != "2a39cb299aa0bf916bb4ac9642c1e515dd07f35883a61da403b4c53c05ce4d26" || spec.TaxonomyVersion != catalog.Version {
+		return fmt.Errorf("frozen v1 baseline spec identity changed")
 	}
 	const seed int64 = 20260922
 	samples := []evaluation.Sample{}
