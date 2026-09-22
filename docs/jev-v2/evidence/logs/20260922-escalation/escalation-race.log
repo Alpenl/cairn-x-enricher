@@ -1,0 +1,6 @@
+== TestLocalWorkerEvidenceExecutionRecovery: starting worker on 127.0.0.1:36543 ==
+=== RUN   TestLocalWorkerEvidenceExecutionRecovery
+    escalation_test.go:247: real production evidence escalation: competing owner denied; 1 external HTTP fetch, checkpoint lost-response replay, 3 bounded finalize failures, new processor recovery, 2 model fixture calls; 3 original blocks retained and third poll unchanged
+--- PASS: TestLocalWorkerEvidenceExecutionRecovery (0.75s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.759s
