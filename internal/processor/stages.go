@@ -601,7 +601,7 @@ func (p *Processor) runExtensions(ctx context.Context, job *cairn.Classification
 	blocks := archived.Blocks
 	// Entities are additive and independently budgeted. A stale or failed run
 	// is recorded explicitly and never clears a newer success.
-	entity := s.extensions.EntitiesForItem(ctx, job.ID, blocks, job.RelatedLinks)
+	entity := s.extensions.EntitiesForSnapshot(ctx, extension.EntityBinding{LinkID: job.ID, ContentRevision: job.ContentRevision, EvidenceSnapshotID: job.EvidenceSnapshotID, ContentHash: job.EvidenceHash}, blocks, job.RelatedLinks)
 	if entity.State != extension.EntityNotRun {
 		body := map[string]any{
 			"operation_key":        fmt.Sprintf("entity-%d-rev-%d-lease-%s", job.ID, job.Revision, job.LeaseToken),
@@ -614,7 +614,17 @@ func (p *Processor) runExtensions(ctx context.Context, job *cairn.Classification
 			"calls":                entity.Calls,
 			"tokens":               entity.Tokens,
 		}
-		if err := s.queue.SubmitEntityState(context.WithoutCancel(ctx), job.ID, body); err != nil {
+		if entity.OperationKey != "" {
+			body["operation_key"] = entity.OperationKey
+			// A cache hit has zero new calls. Keep the durable result receipt identical
+			// to its original submission; actual costs remain in the budget ledger.
+			delete(body, "calls")
+			delete(body, "tokens")
+		}
+		saveCtx, saveCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		err := retryEvidenceWrite(saveCtx, func() error { return s.queue.SubmitEntityState(saveCtx, job.ID, body) })
+		saveCancel()
+		if err != nil {
 			p.logger.WarnContext(ctx, "entity state was not stored", "link_id", job.ID, "error", err)
 		}
 	}

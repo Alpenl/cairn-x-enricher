@@ -35,11 +35,12 @@ const (
 
 // EntityResult is one bounded entity run over stored evidence.
 type EntityResult struct {
-	State    EntityState `json:"state"`
-	Entities []string    `json:"entities"`
-	Reason   string      `json:"reason,omitempty"`
-	Calls    int         `json:"calls"`
-	Tokens   int         `json:"tokens"`
+	State        EntityState `json:"state"`
+	Entities     []string    `json:"entities"`
+	Reason       string      `json:"reason,omitempty"`
+	Calls        int         `json:"calls"`
+	Tokens       int         `json:"tokens"`
+	OperationKey string      `json:"-"`
 }
 
 // Service shares a process-local ledger and a durable Worker budget across all
@@ -51,6 +52,7 @@ type Service struct {
 	ledger      *Ledger
 	store       BudgetStore
 	rerankStore RerankStore
+	entityStore EntityStore
 }
 
 // NewService creates the extension service. A nil judge leaves the model-backed
@@ -63,15 +65,15 @@ func NewService(flags Flags, budget Budget, judge Judge) *Service {
 // a disabled flag, an exhausted budget or a provider failure returns an
 // explicit state and never touches the stored classification.
 func (s *Service) Entities(ctx context.Context, blocks []Block, storedURLs []string) EntityResult {
-	return s.entities(ctx, "unscoped", blocks, storedURLs)
+	return s.entities(ctx, "unscoped", blocks, storedURLs, nil)
 }
 
 // EntitiesForItem binds the production budget to the owning bookmark.
 func (s *Service) EntitiesForItem(ctx context.Context, id int64, blocks []Block, storedURLs []string) EntityResult {
-	return s.entities(ctx, strconv.FormatInt(id, 10), blocks, storedURLs)
+	return s.entities(ctx, strconv.FormatInt(id, 10), blocks, storedURLs, nil)
 }
 
-func (s *Service) entities(ctx context.Context, item string, blocks []Block, storedURLs []string) EntityResult {
+func (s *Service) entities(ctx context.Context, item string, blocks []Block, storedURLs []string, binding *EntityBinding) EntityResult {
 	if !s.Flags.Entities || s.Judge == nil {
 		return EntityResult{State: EntityNotRun, Entities: []string{}, Reason: "entities disabled"}
 	}
@@ -94,8 +96,22 @@ func (s *Service) entities(ctx context.Context, item string, blocks []Block, sto
 			},
 		}
 	}
+	if storedURLs == nil {
+		storedURLs = []string{}
+	}
 	state := map[string]any{"material": blocks, "stored_links": storedURLs}
-	answers, calls, tokens, err := s.judgeBounded(ctx, "entity", []string{item}, state, questions)
+	var answers map[string]classify.RawAnswer
+	var calls, tokens int
+	var operation string
+	var err error
+	if s.entityStore != nil {
+		answers, calls, tokens, operation, err = s.cachedEntities(ctx, binding, candidates, state, questions)
+	} else {
+		answers, calls, tokens, err = s.judgeBounded(ctx, "entity", []string{item}, state, questions)
+	}
+	if err == nil {
+		err = validateEntityAnswers(questions, answers)
+	}
 	if err != nil {
 		return EntityResult{State: EntityFailed, Entities: []string{}, Reason: boundedReason(err), Calls: calls, Tokens: tokens}
 	}
@@ -125,9 +141,9 @@ func (s *Service) entities(ctx context.Context, item string, blocks []Block, sto
 	}
 	sort.Strings(entities)
 	if len(entities) == 0 {
-		return EntityResult{State: EntityCompletedEmpty, Entities: []string{}, Calls: calls, Tokens: tokens}
+		return EntityResult{State: EntityCompletedEmpty, Entities: []string{}, Calls: calls, Tokens: tokens, OperationKey: operation}
 	}
-	return EntityResult{State: EntityCompletedNonempty, Entities: entities, Calls: calls, Tokens: tokens}
+	return EntityResult{State: EntityCompletedNonempty, Entities: entities, Calls: calls, Tokens: tokens, OperationKey: operation}
 }
 
 // GapKind is an observable material gap. A legitimate none or a vocabulary

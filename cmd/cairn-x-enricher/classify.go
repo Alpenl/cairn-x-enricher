@@ -53,6 +53,7 @@ func newClassifyCommand() *cobra.Command {
 		extensions := extensionService(cfg, client)
 		extensions.SetBudgetStore(queue)
 		extensions.SetRerankStore(queue)
+		extensions.SetEntityStore(queue)
 		fetcher, policy := evidenceFetcher(cfg)
 		worker.SetExtensions(extensions, fetcher, policy)
 		completed, failed, err := worker.RunClassifications(ctx, maxJobs)

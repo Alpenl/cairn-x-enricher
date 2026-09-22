@@ -402,6 +402,7 @@ func newProcessor(
 	extensions := extensionService(cfg, classifier)
 	extensions.SetBudgetStore(queue)
 	extensions.SetRerankStore(queue)
+	extensions.SetEntityStore(queue)
 	worker.SetExtensions(extensions, fetcher, policy)
 	worker.SetPartialReuse(cfg.PartialReuse)
 	return worker, queue, nil

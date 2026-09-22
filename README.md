@@ -138,7 +138,7 @@ ghcr.io/alpenl/cairn-x-enricher:<version>
 ```
 
 完整部署顺序和 Cloudflare 前置改造见 [docs/deployment.md](docs/deployment.md) 与 [docs/cloudflare-backend.md](docs/cloudflare-backend.md)。
-当前开发版需要配套 Worker 的全部迁移（截至 0027）和预算握手接口。停止并排空旧分类消费者，先升级 Worker，再运行新版 Enricher；旧消费者不能继续领取分类任务。已有 App 读取协议保持兼容。不会自动回填历史收藏。修改代码不会自动升级 NAS 的固定版本镜像。
+当前开发版需要配套 Worker 的全部迁移（截至 0028）和预算握手接口。停止并排空旧分类消费者，先升级 Worker，再运行新版 Enricher；旧消费者不能继续领取分类任务。已有 App 读取协议保持兼容。不会自动回填历史收藏。修改代码不会自动升级 NAS 的固定版本镜像。
 Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网阅读库映射到 `8088`；页面展示 Cloudflare 中全部收藏，只有 X 链接可以触发模型处理。旧版已完成记录会继续显示原内容，只有手动重新处理后才会生成新版标题、译文和图片。该清单只拉取 GitHub Actions 发布的镜像，不在 NAS 本地构建。
 
 ## 发布
