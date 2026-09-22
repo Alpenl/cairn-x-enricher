@@ -1,0 +1,64 @@
+[36mWHAT[0m: 运行真实 Go Worker 联调
+[35mWHY[0m:  验证独立服务与本地 D1 R2 语义一致
+== TestLocalWorkerFullLifecycle: starting worker on 127.0.0.1:35505 ==
+=== RUN   TestLocalWorkerFullLifecycle
+--- PASS: TestLocalWorkerFullLifecycle (0.70s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.702s
+== TestLocalWorkerVersionCompetition: starting worker on 127.0.0.1:32803 ==
+=== RUN   TestLocalWorkerVersionCompetition
+--- PASS: TestLocalWorkerVersionCompetition (0.63s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.637s
+== TestLocalWorkerDisplayRenameKeepsSemantics: starting worker on 127.0.0.1:51487 ==
+=== RUN   TestLocalWorkerDisplayRenameKeepsSemantics
+--- PASS: TestLocalWorkerDisplayRenameKeepsSemantics (0.07s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.075s
+== TestLocalWorkerEvidenceCheckpointAndBoundRead: starting worker on 127.0.0.1:40793 ==
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead
+    evidence_test.go:153: source saved, snapshot 503, three empty claims without attempt consumption, retry repairs snapshot with one retrieval
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/404
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/503
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/malformed
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/id
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/revision
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/hash
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/body
+=== NAME  TestLocalWorkerEvidenceCheckpointAndBoundRead
+    evidence_test.go:252: real bound snapshot retained 45435 archive bytes; outbound request=2057 state=613 runes=200 blocks=0, truncation recorded
+    evidence_test.go:253: seven bound-read failures: zero model calls/commits; recovery: 1 model call, 1 run
+--- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead (1.28s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/404 (0.13s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/503 (0.12s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/malformed (0.10s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/id (0.10s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/revision (0.11s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/hash (0.09s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/body (0.10s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.285s
+== TestLocalWorkerEntitySnapshotIdentity: starting worker on 127.0.0.1:58399 ==
+=== RUN   TestLocalWorkerEntitySnapshotIdentity
+    entities_test.go:218: actual processor: input_revision=1 content_revision=3 snapshot=2; classification=1 entity=1; 3 archived blocks; reject/reset API+search agree; stale result refused
+--- PASS: TestLocalWorkerEntitySnapshotIdentity (0.85s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.854s
+== TestLocalWorkerStoredQuestionReuse: starting worker on 127.0.0.1:46179 ==
+=== RUN   TestLocalWorkerStoredQuestionReuse
+    reuse_test.go:259: production store/read/reuse: initial=4 changed=1 display=0 policy=0; legacy/partial/alias bounded full; drift=1 and no fallback; total requests=8
+--- PASS: TestLocalWorkerStoredQuestionReuse (1.99s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.988s
+== TestLocalWorkerDecisionReferences: starting worker on 127.0.0.1:54823 ==
+=== RUN   TestLocalWorkerDecisionReferences
+    decision_test.go:197: production multi-run references restored; alias drift rejected; committed response-loss recovery preserved human edit and made zero additional model calls; 3 local calls total
+--- PASS: TestLocalWorkerDecisionReferences (0.83s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.835s
+== TestLocalWorkerEvidenceExecutionRecovery: starting worker on 127.0.0.1:40629 ==
+=== RUN   TestLocalWorkerEvidenceExecutionRecovery
+    escalation_test.go:247: real production evidence escalation: competing owner denied; 1 external HTTP fetch, checkpoint lost-response replay, 3 bounded finalize failures, new processor recovery, 2 model fixture calls; 3 original blocks retained and third poll unchanged
+--- PASS: TestLocalWorkerEvidenceExecutionRecovery (0.89s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.889s
