@@ -290,6 +290,9 @@ func recoverWires(dataset evaluation.Dataset, directories []string) (evaluation.
 }
 
 func runRecoveryCommand(dataset evaluation.Dataset, roots, output string, dryRun bool, gate evaluation.GateThresholds) error {
+	if err := gate.Validate(); err != nil {
+		return fmt.Errorf("invalid gate: %w", err)
+	}
 	recovered, pending, result, err := recoverWires(dataset, strings.Split(roots, ","))
 	if err != nil {
 		return err

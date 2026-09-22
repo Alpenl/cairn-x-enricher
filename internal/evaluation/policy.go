@@ -1,6 +1,7 @@
 package evaluation
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -120,21 +121,65 @@ type AblationDelta struct {
 	Variant    float64 `json:"variant_f1"`
 	Delta      float64 `json:"delta"`
 	Comparable bool    `json:"comparable"`
+	Reason     string  `json:"reason,omitempty"`
 }
 
-// CompareAblations returns each variant dimension's delta against the baseline.
+// CompareAblations compares only supported tasks scored on the same frozen
+// references. DatasetHash includes predictions and is expected to differ.
+// Comparable establishes metric comparability, not single-variable causality;
+// the experiment runner must separately freeze the intervention and inputs.
 func CompareAblations(baseline Report, variant Report) []AblationDelta {
-	base := map[string]float64{}
-	for _, metric := range baseline.Dimensions {
-		base[metric.Dimension] = metric.F1
+	index := func(metrics []DimensionMetric) (map[string]DimensionMetric, map[string]int) {
+		values, counts := map[string]DimensionMetric{}, map[string]int{}
+		for _, metric := range metrics {
+			values[metric.Dimension] = metric
+			counts[metric.Dimension]++
+		}
+		return values, counts
+	}
+	base, baseCounts := index(baseline.Dimensions)
+	other, otherCounts := index(variant.Dimensions)
+	names := map[string]bool{}
+	for name := range base {
+		names[name] = true
+	}
+	for name := range other {
+		names[name] = true
+	}
+	identityReason := ""
+	if !validDigest(baseline.ReferenceHash) || baseline.ReferenceHash != variant.ReferenceHash {
+		identityReason = "missing or different frozen references"
+	} else if baseline.Split == "" || baseline.Split != variant.Split || baseline.SamplesTotal != variant.SamplesTotal ||
+		baseline.KnownReferenceSamples != variant.KnownReferenceSamples || baseline.IndependentGroups != variant.IndependentGroups {
+		identityReason = "different evaluation population or split"
 	}
 	deltas := []AblationDelta{}
-	for _, metric := range variant.Dimensions {
-		baseValue, ok := base[metric.Dimension]
-		deltas = append(deltas, AblationDelta{
-			Dimension: metric.Dimension, Baseline: baseValue, Variant: metric.F1,
-			Delta: metric.F1 - baseValue, Comparable: ok,
-		})
+	for name := range names {
+		b, v := base[name], other[name]
+		delta := AblationDelta{Dimension: name, Baseline: b.F1, Variant: v.F1}
+		switch {
+		case identityReason != "":
+			delta.Reason = identityReason
+		case baseCounts[name] != 1 || otherCounts[name] != 1:
+			delta.Reason = "missing or duplicate dimension"
+		case name == "" || b.MultiLabel != v.MultiLabel:
+			delta.Reason = "different task semantics"
+		case b.Support <= 0 || b.Support != v.Support || b.Unknown != v.Unknown:
+			delta.Reason = "missing or different reference support"
+		case !unitInterval(b.F1) || !unitInterval(v.F1):
+			delta.Reason = "invalid F1"
+		default:
+			delta.Comparable = true
+			delta.Delta = v.F1 - b.F1
+		}
+		// Invalid input must still produce serializable diagnostic output.
+		if !unitInterval(delta.Baseline) {
+			delta.Baseline = 0
+		}
+		if !unitInterval(delta.Variant) {
+			delta.Variant = 0
+		}
+		deltas = append(deltas, delta)
 	}
 	sort.Slice(deltas, func(i, j int) bool { return deltas[i].Dimension < deltas[j].Dimension })
 	return deltas
@@ -164,6 +209,32 @@ func DefaultGate() GateThresholds {
 	}
 }
 
+func unitInterval(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0) && value >= 0 && value <= 1
+}
+
+func validDigest(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == 32
+}
+
+// Validate rejects malformed frozen gates before any live inference can run.
+// Zero error/Brier limits are valid strict limits, never a disabling sentinel.
+func (gate GateThresholds) Validate() error {
+	if gate.MinGoldSamples <= 0 || gate.MinIndependentGroups <= 0 {
+		return errors.New("gate requires positive sample and independent-group floors")
+	}
+	for _, value := range []float64{gate.MinMacroRecall, gate.MinCoverage, gate.MaxAcceptedError, gate.MaxBrier} {
+		if !unitInterval(value) {
+			return errors.New("gate probability thresholds must be finite and in [0,1]")
+		}
+	}
+	if math.IsNaN(gate.MaxReviewFields) || math.IsInf(gate.MaxReviewFields, 0) || gate.MaxReviewFields < 0 || gate.MaxReviewFields > 6 {
+		return errors.New("gate review-field limit must be finite and in [0,6]")
+	}
+	return nil
+}
+
 // PromotionDecision is the result of applying the gate.
 type PromotionDecision struct {
 	Promote      bool     `json:"promote"`
@@ -177,16 +248,38 @@ type PromotionDecision struct {
 // the result inconclusive rather than passing.
 func EvaluateGate(report Report, gate GateThresholds) PromotionDecision {
 	decision := PromotionDecision{Promote: true, Inconclusive: report.Inconclusive}
+	if err := gate.Validate(); err != nil {
+		return PromotionDecision{Promote: false, Inconclusive: true, Blockers: []string{err.Error()}}
+	}
 	decision.Reasons = append(decision.Reasons, report.InconclusiveWhy...)
+	if report.Split != "holdout" {
+		decision.Blockers = append(decision.Blockers, "promotion requires the frozen holdout split")
+	}
+	if !validDigest(report.ReferenceHash) || !validDigest(report.DatasetHash) {
+		decision.Blockers = append(decision.Blockers, "missing or invalid reference/dataset identity")
+	}
+	if report.SamplesTotal <= 0 || report.SamplesWithGold < 0 || report.SamplesWithGold > report.SamplesTotal ||
+		report.SamplesMissing < 0 || report.SamplesMissing != report.SamplesTotal-report.SamplesWithGold ||
+		report.MissingGoldCount < 0 || report.MissingGoldCount > report.SamplesWithGold ||
+		report.KnownReferenceSamples <= 0 || report.KnownReferenceSamples > report.SamplesWithGold ||
+		report.IndependentGroups <= 0 || report.IndependentGroups > report.KnownReferenceSamples ||
+		report.KnownFields < report.KnownReferenceSamples || report.KnownFields > 6*report.KnownReferenceSamples ||
+		report.DecidedFields < 0 || report.DecidedFields > report.KnownFields ||
+		math.Abs(report.Coverage-ratio(report.DecidedFields, report.KnownFields)) > 1e-9 {
+		decision.Blockers = append(decision.Blockers, "inconsistent report counts or coverage")
+	}
 	if report.SamplesMissing > 0 || report.MissingGoldCount > 0 {
 		decision.Inconclusive = true
 		decision.Reasons = append(decision.Reasons, "reference or predictions missing")
 	}
-	for _, value := range []float64{report.MacroRecall, report.Coverage, report.AcceptedError, report.ReviewFields, report.Brier} {
-		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+	for _, value := range []float64{report.MacroRecall, report.Coverage, report.AcceptedError, report.Brier, report.ECE} {
+		if !unitInterval(value) {
 			decision.Blockers = append(decision.Blockers, "invalid metric")
 			break
 		}
+	}
+	if math.IsNaN(report.ReviewFields) || math.IsInf(report.ReviewFields, 0) || report.ReviewFields < 0 || report.ReviewFields > 6 {
+		decision.Blockers = append(decision.Blockers, "invalid review-field metric")
 	}
 	if report.KnownReferenceSamples < gate.MinGoldSamples || report.IndependentGroups < gate.MinIndependentGroups {
 		decision.Inconclusive = true
@@ -209,7 +302,7 @@ func EvaluateGate(report Report, gate GateThresholds) PromotionDecision {
 	if gate.RequireCalibration && !report.HasCalibration {
 		decision.Blockers = append(decision.Blockers, "calibration evidence is required but missing")
 	}
-	if report.HasCalibration && gate.MaxBrier > 0 && report.Brier > gate.MaxBrier {
+	if report.HasCalibration && report.Brier > gate.MaxBrier {
 		decision.Blockers = append(decision.Blockers, fmt.Sprintf("Brier %.3f above %.3f", report.Brier, gate.MaxBrier))
 	}
 	if len(decision.Blockers) > 0 {

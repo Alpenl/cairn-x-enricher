@@ -83,6 +83,11 @@ func main() {
 		}
 	}
 
+	if err := gate.Validate(); err != nil {
+		fmt.Fprintln(os.Stderr, "error: invalid gate:", err)
+		os.Exit(1)
+	}
+
 	if recoverFrom != "" {
 		if err := runRecoveryCommand(dataset, recoverFrom, liveConfig.output, dryRun, gate); err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)

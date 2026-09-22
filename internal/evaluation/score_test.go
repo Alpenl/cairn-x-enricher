@@ -236,8 +236,9 @@ func TestThresholdSearchRespectsCoverageFloor(t *testing.T) {
 // --- Ablation comparability (B08-T09) -------------------------------------
 
 func TestAblationReportsNonComparableDimensions(t *testing.T) {
-	baseline := Report{Dimensions: []DimensionMetric{{Dimension: "topics", F1: 0.8}}}
-	variant := Report{Dimensions: []DimensionMetric{{Dimension: "topics", F1: 0.7}, {Dimension: "importance", F1: 0.9}}}
+	baseline, variant := passingScoredReport(t), passingScoredReport(t)
+	baseline.Dimensions = []DimensionMetric{{Dimension: "topics", MultiLabel: true, Support: 30, F1: 0.8}}
+	variant.Dimensions = []DimensionMetric{{Dimension: "topics", MultiLabel: true, Support: 30, F1: 0.7}, {Dimension: "importance", Support: 30, F1: 0.9}}
 	deltas := CompareAblations(baseline, variant)
 	byName := map[string]AblationDelta{}
 	for _, delta := range deltas {
@@ -254,11 +255,9 @@ func TestAblationReportsNonComparableDimensions(t *testing.T) {
 // --- Promotion gate (B08-T13) ---------------------------------------------
 
 func TestGateBlocksOnSafetyEvenWithGoodStatistics(t *testing.T) {
-	report := Report{
-		SamplesWithGold: 100, KnownReferenceSamples: 100, IndependentGroups: 100, MacroRecall: 0.95, Coverage: 0.95,
-		// One accepted error rate above the tolerance blocks promotion.
-		AcceptedError: 0.3, ReviewFields: 1,
-	}
+	report := passingScoredReport(t)
+	// One accepted error rate above the tolerance blocks promotion.
+	report.AcceptedError = 0.3
 	decision := EvaluateGate(report, DefaultGate())
 	if decision.Promote {
 		t.Fatal("a safety failure must block promotion")
@@ -277,10 +276,7 @@ func TestGateIsInconclusiveWithoutGold(t *testing.T) {
 }
 
 func TestGatePromotesOnlyWhenEveryThresholdPasses(t *testing.T) {
-	report := Report{
-		SamplesWithGold: 100, KnownReferenceSamples: 100, IndependentGroups: 100, MacroRecall: 0.8, Coverage: 0.8, AcceptedError: 0.02,
-		ReviewFields: 1, HasCalibration: true, Brier: 0.1, ECE: 0.05,
-	}
+	report := passingScoredReport(t)
 	decision := EvaluateGate(report, DefaultGate())
 	if !decision.Promote {
 		t.Fatalf("a passing report should promote: %+v", decision)
@@ -290,7 +286,8 @@ func TestGatePromotesOnlyWhenEveryThresholdPasses(t *testing.T) {
 func TestMissingCalibrationBlocksWhenRequired(t *testing.T) {
 	gate := DefaultGate()
 	gate.RequireCalibration = true
-	report := Report{SamplesWithGold: 100, KnownReferenceSamples: 100, IndependentGroups: 100, MacroRecall: 0.8, Coverage: 0.8, AcceptedError: 0.02, ReviewFields: 1}
+	report := passingScoredReport(t)
+	report.HasCalibration = false
 	if EvaluateGate(report, gate).Promote {
 		t.Fatal("required calibration must block promotion when absent")
 	}

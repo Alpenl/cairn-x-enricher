@@ -31,6 +31,9 @@ type liveConfig struct {
 }
 
 func runLiveCommand(dataset evaluation.Dataset, cfg liveConfig, gate evaluation.GateThresholds) error {
+	if err := gate.Validate(); err != nil {
+		return fmt.Errorf("invalid gate: %w", err)
+	}
 	catalogBytes, err := os.ReadFile(filepath.Clean(cfg.catalogPath))
 	if err != nil {
 		return errors.New("cannot read frozen catalog")
