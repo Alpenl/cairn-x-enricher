@@ -1,0 +1,11 @@
+{
+  "artifacts": "/home/alpen/.local/share/cairn/evaluations/20260923-reference-v1-policy-fit-train",
+  "candidates": 336,
+  "independent_groups": 7,
+  "model_calls": 0,
+  "promote": false,
+  "reference_hash": "ea14264cbaabcedd13a328bfef6473cf31a18827ca0285b27c8047150370b414",
+  "samples": 42,
+  "selected_policy": null,
+  "status": "no_eligible_candidate"
+}

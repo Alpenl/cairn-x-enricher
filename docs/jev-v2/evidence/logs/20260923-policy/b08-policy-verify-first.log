@@ -1,0 +1,18 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+experiments/classification/main/policy_fit_test.go:91:4: redefines-builtin-id: redefinition of the built-in function copy (revive)
+			var copy recoveryResult
+			^
+internal/evaluation/production_policy.go:168:1: exported: exported method PolicyFitConfig.Validate should have comment or be unexported (revive)
+func (c PolicyFitConfig) Validate() error {
+^
+internal/evaluation/production_policy.go:211:6: exported: exported type FitCandidate should have comment or be unexported (revive)
+type FitCandidate struct {
+     ^
+internal/evaluation/production_policy_test.go:157:4: redefines-builtin-id: redefinition of the built-in function copy (revive)
+			var copy PolicyFitArtifact
+			^
+4 issues:
+* revive: 4
+exit status 1
+make: *** [Makefile:39: lint-ci] Error 1
