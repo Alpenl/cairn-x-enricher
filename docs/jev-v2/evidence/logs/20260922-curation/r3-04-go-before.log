@@ -1,0 +1,40 @@
+--- FAIL: TestSharedOverrideVectors (0.00s)
+    --- FAIL: TestSharedOverrideVectors/R3-04_form_reaccept_follows_actual_action_time (0.00s)
+        vectors_test.go:83: resolved view mismatch
+             got: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"data","use":"","entities":[]}
+            want: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"case","use":"","entities":[]}
+    --- FAIL: TestSharedOverrideVectors/R3-04_form_reject-active_follows_actual_action_time (0.00s)
+        vectors_test.go:83: resolved view mismatch
+             got: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"case","use":"","entities":[]}
+            want: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"","entities":[]}
+    --- FAIL: TestSharedOverrideVectors/R3-04_form_reject-reaccept_follows_actual_action_time (0.00s)
+        vectors_test.go:83: resolved view mismatch
+             got: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"data","use":"","entities":[]}
+            want: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"case","use":"","entities":[]}
+    --- FAIL: TestSharedOverrideVectors/R3-04_use_reaccept_follows_actual_action_time (0.00s)
+        vectors_test.go:83: resolved view mismatch
+             got: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"background","entities":[]}
+            want: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"quote","entities":[]}
+    --- FAIL: TestSharedOverrideVectors/R3-04_use_reject-active_follows_actual_action_time (0.00s)
+        vectors_test.go:83: resolved view mismatch
+             got: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"quote","entities":[]}
+            want: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"","entities":[]}
+    --- FAIL: TestSharedOverrideVectors/R3-04_use_reject-reaccept_follows_actual_action_time (0.00s)
+        vectors_test.go:83: resolved view mismatch
+             got: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"background","entities":[]}
+            want: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"quote","entities":[]}
+    --- FAIL: TestSharedOverrideVectors/R3-04_carriers_reaccept_follows_actual_action_time (0.00s)
+        vectors_test.go:83: resolved view mismatch
+             got: {"topics":[],"content_functions":[],"carriers":["thread"],"affordances":[],"form":"","use":"","entities":[]}
+            want: {"topics":[],"content_functions":[],"carriers":["external_link"],"affordances":[],"form":"","use":"","entities":[]}
+    --- FAIL: TestSharedOverrideVectors/R3-04_carriers_reject-active_follows_actual_action_time (0.00s)
+        vectors_test.go:83: resolved view mismatch
+             got: {"topics":[],"content_functions":[],"carriers":["external_link"],"affordances":[],"form":"","use":"","entities":[]}
+            want: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"","entities":[]}
+    --- FAIL: TestSharedOverrideVectors/R3-04_carriers_reject-reaccept_follows_actual_action_time (0.00s)
+        vectors_test.go:83: resolved view mismatch
+             got: {"topics":[],"content_functions":[],"carriers":["thread"],"affordances":[],"form":"","use":"","entities":[]}
+            want: {"topics":[],"content_functions":[],"carriers":["external_link"],"affordances":[],"form":"","use":"","entities":[]}
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/classify	0.020s
+FAIL
