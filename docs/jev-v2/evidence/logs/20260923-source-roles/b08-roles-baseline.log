@@ -1,0 +1,180 @@
+--- FAIL: TestQuestionRolesMatchActualProductionEvidence (0.00s)
+    source_roles_test.go:46: question affordances_practice does not describe actual context role author_continuation
+    source_roles_test.go:46: question affordances_practice does not describe actual context role quoted
+    source_roles_test.go:46: question affordances_practice does not describe actual context role external_article
+    source_roles_test.go:46: question affordances_practice does not describe actual context role third_party
+    source_roles_test.go:46: question affordances_practice does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question affordances_practice misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question form does not describe actual context role author_continuation
+    source_roles_test.go:46: question form does not describe actual context role quoted
+    source_roles_test.go:46: question form does not describe actual context role external_article
+    source_roles_test.go:46: question form does not describe actual context role third_party
+    source_roles_test.go:46: question form does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question form misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_edu does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_edu does not describe actual context role quoted
+    source_roles_test.go:46: question topic_edu does not describe actual context role external_article
+    source_roles_test.go:46: question topic_edu does not describe actual context role third_party
+    source_roles_test.go:46: question topic_edu does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_edu misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_product does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_product does not describe actual context role quoted
+    source_roles_test.go:46: question topic_product does not describe actual context role external_article
+    source_roles_test.go:46: question topic_product does not describe actual context role third_party
+    source_roles_test.go:46: question topic_product does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_product misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question affordances_material does not describe actual context role author_continuation
+    source_roles_test.go:46: question affordances_material does not describe actual context role quoted
+    source_roles_test.go:46: question affordances_material does not describe actual context role external_article
+    source_roles_test.go:46: question affordances_material does not describe actual context role third_party
+    source_roles_test.go:46: question affordances_material does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question affordances_material misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question carriers does not describe actual context role author_continuation
+    source_roles_test.go:46: question carriers does not describe actual context role quoted
+    source_roles_test.go:46: question carriers does not describe actual context role external_article
+    source_roles_test.go:46: question carriers does not describe actual context role third_party
+    source_roles_test.go:46: question carriers does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question carriers misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question content_functions_data does not describe actual context role author_continuation
+    source_roles_test.go:46: question content_functions_data does not describe actual context role quoted
+    source_roles_test.go:46: question content_functions_data does not describe actual context role external_article
+    source_roles_test.go:46: question content_functions_data does not describe actual context role third_party
+    source_roles_test.go:46: question content_functions_data does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question content_functions_data misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_history does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_history does not describe actual context role quoted
+    source_roles_test.go:46: question topic_history does not describe actual context role external_article
+    source_roles_test.go:46: question topic_history does not describe actual context role third_party
+    source_roles_test.go:46: question topic_history does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_history misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question content_functions_method does not describe actual context role author_continuation
+    source_roles_test.go:46: question content_functions_method does not describe actual context role quoted
+    source_roles_test.go:46: question content_functions_method does not describe actual context role external_article
+    source_roles_test.go:46: question content_functions_method does not describe actual context role third_party
+    source_roles_test.go:46: question content_functions_method does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question content_functions_method misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_design does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_design does not describe actual context role quoted
+    source_roles_test.go:46: question topic_design does not describe actual context role external_article
+    source_roles_test.go:46: question topic_design does not describe actual context role third_party
+    source_roles_test.go:46: question topic_design does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_design misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_llm does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_llm does not describe actual context role quoted
+    source_roles_test.go:46: question topic_llm does not describe actual context role external_article
+    source_roles_test.go:46: question topic_llm does not describe actual context role third_party
+    source_roles_test.go:46: question topic_llm does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_llm misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_manage does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_manage does not describe actual context role quoted
+    source_roles_test.go:46: question topic_manage does not describe actual context role external_article
+    source_roles_test.go:46: question topic_manage does not describe actual context role third_party
+    source_roles_test.go:46: question topic_manage does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_manage misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_writing does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_writing does not describe actual context role quoted
+    source_roles_test.go:46: question topic_writing does not describe actual context role external_article
+    source_roles_test.go:46: question topic_writing does not describe actual context role third_party
+    source_roles_test.go:46: question topic_writing does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_writing misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question affordances_quote does not describe actual context role author_continuation
+    source_roles_test.go:46: question affordances_quote does not describe actual context role quoted
+    source_roles_test.go:46: question affordances_quote does not describe actual context role external_article
+    source_roles_test.go:46: question affordances_quote does not describe actual context role third_party
+    source_roles_test.go:46: question affordances_quote does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question affordances_quote misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_city does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_city does not describe actual context role quoted
+    source_roles_test.go:46: question topic_city does not describe actual context role external_article
+    source_roles_test.go:46: question topic_city does not describe actual context role third_party
+    source_roles_test.go:46: question topic_city does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_city misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_eng does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_eng does not describe actual context role quoted
+    source_roles_test.go:46: question topic_eng does not describe actual context role external_article
+    source_roles_test.go:46: question topic_eng does not describe actual context role third_party
+    source_roles_test.go:46: question topic_eng does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_eng misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_invest does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_invest does not describe actual context role quoted
+    source_roles_test.go:46: question topic_invest does not describe actual context role external_article
+    source_roles_test.go:46: question topic_invest does not describe actual context role third_party
+    source_roles_test.go:46: question topic_invest does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_invest misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_life does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_life does not describe actual context role quoted
+    source_roles_test.go:46: question topic_life does not describe actual context role external_article
+    source_roles_test.go:46: question topic_life does not describe actual context role third_party
+    source_roles_test.go:46: question topic_life does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_life misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question content_functions_tool does not describe actual context role author_continuation
+    source_roles_test.go:46: question content_functions_tool does not describe actual context role quoted
+    source_roles_test.go:46: question content_functions_tool does not describe actual context role external_article
+    source_roles_test.go:46: question content_functions_tool does not describe actual context role third_party
+    source_roles_test.go:46: question content_functions_tool does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question content_functions_tool misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_eval does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_eval does not describe actual context role quoted
+    source_roles_test.go:46: question topic_eval does not describe actual context role external_article
+    source_roles_test.go:46: question topic_eval does not describe actual context role third_party
+    source_roles_test.go:46: question topic_eval does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_eval misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_health does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_health does not describe actual context role quoted
+    source_roles_test.go:46: question topic_health does not describe actual context role external_article
+    source_roles_test.go:46: question topic_health does not describe actual context role third_party
+    source_roles_test.go:46: question topic_health does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_health misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_media does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_media does not describe actual context role quoted
+    source_roles_test.go:46: question topic_media does not describe actual context role external_article
+    source_roles_test.go:46: question topic_media does not describe actual context role third_party
+    source_roles_test.go:46: question topic_media does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_media misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question affordances_background does not describe actual context role author_continuation
+    source_roles_test.go:46: question affordances_background does not describe actual context role quoted
+    source_roles_test.go:46: question affordances_background does not describe actual context role external_article
+    source_roles_test.go:46: question affordances_background does not describe actual context role third_party
+    source_roles_test.go:46: question affordances_background does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question affordances_background misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question content_functions_case does not describe actual context role author_continuation
+    source_roles_test.go:46: question content_functions_case does not describe actual context role quoted
+    source_roles_test.go:46: question content_functions_case does not describe actual context role external_article
+    source_roles_test.go:46: question content_functions_case does not describe actual context role third_party
+    source_roles_test.go:46: question content_functions_case does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question content_functions_case misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question use does not describe actual context role author_continuation
+    source_roles_test.go:46: question use does not describe actual context role quoted
+    source_roles_test.go:46: question use does not describe actual context role external_article
+    source_roles_test.go:46: question use does not describe actual context role third_party
+    source_roles_test.go:46: question use does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question use misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question content_functions_opinion does not describe actual context role author_continuation
+    source_roles_test.go:46: question content_functions_opinion does not describe actual context role quoted
+    source_roles_test.go:46: question content_functions_opinion does not describe actual context role external_article
+    source_roles_test.go:46: question content_functions_opinion does not describe actual context role third_party
+    source_roles_test.go:46: question content_functions_opinion does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question content_functions_opinion misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_law does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_law does not describe actual context role quoted
+    source_roles_test.go:46: question topic_law does not describe actual context role external_article
+    source_roles_test.go:46: question topic_law does not describe actual context role third_party
+    source_roles_test.go:46: question topic_law does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_law misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_psych does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_psych does not describe actual context role quoted
+    source_roles_test.go:46: question topic_psych does not describe actual context role external_article
+    source_roles_test.go:46: question topic_psych does not describe actual context role third_party
+    source_roles_test.go:46: question topic_psych does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_psych misrepresents all evidence as quotes/comments
+    source_roles_test.go:46: question topic_science does not describe actual context role author_continuation
+    source_roles_test.go:46: question topic_science does not describe actual context role quoted
+    source_roles_test.go:46: question topic_science does not describe actual context role external_article
+    source_roles_test.go:46: question topic_science does not describe actual context role third_party
+    source_roles_test.go:46: question topic_science does not describe actual context role legacy_unknown
+    source_roles_test.go:50: question topic_science misrepresents all evidence as quotes/comments
+--- FAIL: TestSourceRoleAblationChangesOnlyMaterialRule (0.00s)
+    source_roles_test.go:72: role semantics must produce a new immutable spec
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/classify	0.006s
+FAIL
