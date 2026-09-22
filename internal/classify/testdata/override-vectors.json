@@ -1,5 +1,5 @@
 {
-  "note": "Shared human-override behaviour vectors. The Go resolver (internal/classify/resolve_test.go) and the Worker resolver (test/domain.test.ts) must both produce `expected` byte-for-byte for every vector. Fields use the v2 plural vocabulary with legacy singular aliases included where a stored row may still carry them.",
+  "note": "Shared human-override behaviour vectors. The Go resolver (internal/classify/vectors_test.go) and the Worker resolver (test/domain.test.ts) must both produce `expected` byte-for-byte for every vector. Fields use the v2 plural vocabulary with legacy singular aliases included where a stored row may still carry them.",
   "vectors": [
     {
       "name": "single-value accept replaces the automatic value",
@@ -92,6 +92,159 @@
         { "field": "carriers", "term": "external_link", "action": "reset", "revision": 2 }
       ],
       "expected": { "topics": [], "content_functions": [], "carriers": ["single_post"], "affordances": [], "form": "", "use": "", "entities": [] }
+    },
+    {
+      "name": "R3-04 form reaccept follows actual action time",
+      "automatic": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "method", "use": "", "entities": []},
+      "overrides": [
+        {"field": "form", "term": "case", "action": "accept", "revision": 1},
+        {"field": "form", "term": "data", "action": "accept", "revision": 2},
+        {"field": "form", "term": "case", "action": "accept", "revision": 3}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "case", "use": "", "entities": []}
+    },
+    {
+      "name": "R3-04 form reject-active follows actual action time",
+      "automatic": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "method", "use": "", "entities": []},
+      "overrides": [
+        {"field": "form", "term": "case", "action": "accept", "revision": 1},
+        {"field": "form", "term": "data", "action": "accept", "revision": 2},
+        {"field": "form", "term": "data", "action": "reject", "revision": 3}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "", "entities": []}
+    },
+    {
+      "name": "R3-04 form reject-reaccept follows actual action time",
+      "automatic": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "method", "use": "", "entities": []},
+      "overrides": [
+        {"field": "form", "term": "case", "action": "accept", "revision": 1},
+        {"field": "form", "term": "case", "action": "reject", "revision": 2},
+        {"field": "form", "term": "data", "action": "accept", "revision": 3},
+        {"field": "form", "term": "case", "action": "accept", "revision": 4}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "case", "use": "", "entities": []}
+    },
+    {
+      "name": "R3-04 use reaccept follows actual action time",
+      "automatic": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "try", "entities": []},
+      "overrides": [
+        {"field": "use", "term": "quote", "action": "accept", "revision": 1},
+        {"field": "use", "term": "background", "action": "accept", "revision": 2},
+        {"field": "use", "term": "quote", "action": "accept", "revision": 3}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "quote", "entities": []}
+    },
+    {
+      "name": "R3-04 use reject-active follows actual action time",
+      "automatic": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "try", "entities": []},
+      "overrides": [
+        {"field": "use", "term": "quote", "action": "accept", "revision": 1},
+        {"field": "use", "term": "background", "action": "accept", "revision": 2},
+        {"field": "use", "term": "background", "action": "reject", "revision": 3}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "", "entities": []}
+    },
+    {
+      "name": "R3-04 use reject-reaccept follows actual action time",
+      "automatic": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "try", "entities": []},
+      "overrides": [
+        {"field": "use", "term": "quote", "action": "accept", "revision": 1},
+        {"field": "use", "term": "quote", "action": "reject", "revision": 2},
+        {"field": "use", "term": "background", "action": "accept", "revision": 3},
+        {"field": "use", "term": "quote", "action": "accept", "revision": 4}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "quote", "entities": []}
+    },
+    {
+      "name": "R3-04 carriers reaccept follows actual action time",
+      "automatic": {"topics": [], "content_functions": [], "carriers": ["single_post"], "affordances": [], "form": "", "use": "", "entities": []},
+      "overrides": [
+        {"field": "carriers", "term": "external_link", "action": "accept", "revision": 1},
+        {"field": "carriers", "term": "thread", "action": "accept", "revision": 2},
+        {"field": "carriers", "term": "external_link", "action": "accept", "revision": 3}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": ["external_link"], "affordances": [], "form": "", "use": "", "entities": []}
+    },
+    {
+      "name": "R3-04 carriers reject-active follows actual action time",
+      "automatic": {"topics": [], "content_functions": [], "carriers": ["single_post"], "affordances": [], "form": "", "use": "", "entities": []},
+      "overrides": [
+        {"field": "carriers", "term": "external_link", "action": "accept", "revision": 1},
+        {"field": "carriers", "term": "thread", "action": "accept", "revision": 2},
+        {"field": "carriers", "term": "thread", "action": "reject", "revision": 3}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "", "entities": []}
+    },
+    {
+      "name": "R3-04 carriers reject-reaccept follows actual action time",
+      "automatic": {"topics": [], "content_functions": [], "carriers": ["single_post"], "affordances": [], "form": "", "use": "", "entities": []},
+      "overrides": [
+        {"field": "carriers", "term": "external_link", "action": "accept", "revision": 1},
+        {"field": "carriers", "term": "external_link", "action": "reject", "revision": 2},
+        {"field": "carriers", "term": "thread", "action": "accept", "revision": 3},
+        {"field": "carriers", "term": "external_link", "action": "accept", "revision": 4}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": ["external_link"], "affordances": [], "form": "", "use": "", "entities": []}
+    },
+    {
+      "name": "form tag reset after successive accepts",
+      "automatic": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "method", "use": "", "entities": []},
+      "overrides": [
+        {"field": "form", "term": "case", "action": "accept", "revision": 1},
+        {"field": "form", "term": "data", "action": "accept", "revision": 2},
+        {"field": "form", "term": "data", "action": "reset", "revision": 3}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "case", "use": "", "entities": []}
+    },
+    {
+      "name": "form field reset after successive accepts",
+      "automatic": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "method", "use": "", "entities": []},
+      "overrides": [
+        {"field": "form", "term": "case", "action": "accept", "revision": 1},
+        {"field": "form", "term": "data", "action": "accept", "revision": 2},
+        {"field": "form", "term": "", "action": "reset", "revision": 3}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "method", "use": "", "entities": []}
+    },
+    {
+      "name": "use tag reset after successive accepts",
+      "automatic": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "try", "entities": []},
+      "overrides": [
+        {"field": "use", "term": "quote", "action": "accept", "revision": 1},
+        {"field": "use", "term": "background", "action": "accept", "revision": 2},
+        {"field": "use", "term": "background", "action": "reset", "revision": 3}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "quote", "entities": []}
+    },
+    {
+      "name": "use field reset after successive accepts",
+      "automatic": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "try", "entities": []},
+      "overrides": [
+        {"field": "use", "term": "quote", "action": "accept", "revision": 1},
+        {"field": "use", "term": "background", "action": "accept", "revision": 2},
+        {"field": "use", "term": "", "action": "reset", "revision": 3}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": [], "affordances": [], "form": "", "use": "try", "entities": []}
+    },
+    {
+      "name": "carriers tag reset after successive accepts",
+      "automatic": {"topics": [], "content_functions": [], "carriers": ["single_post"], "affordances": [], "form": "", "use": "", "entities": []},
+      "overrides": [
+        {"field": "carriers", "term": "external_link", "action": "accept", "revision": 1},
+        {"field": "carriers", "term": "thread", "action": "accept", "revision": 2},
+        {"field": "carriers", "term": "thread", "action": "reset", "revision": 3}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": ["external_link"], "affordances": [], "form": "", "use": "", "entities": []}
+    },
+    {
+      "name": "carriers field reset after successive accepts",
+      "automatic": {"topics": [], "content_functions": [], "carriers": ["single_post"], "affordances": [], "form": "", "use": "", "entities": []},
+      "overrides": [
+        {"field": "carriers", "term": "external_link", "action": "accept", "revision": 1},
+        {"field": "carriers", "term": "thread", "action": "accept", "revision": 2},
+        {"field": "carriers", "term": "", "action": "reset", "revision": 3}
+      ],
+      "expected": {"topics": [], "content_functions": [], "carriers": ["single_post"], "affordances": [], "form": "", "use": "", "entities": []}
     }
   ]
 }

@@ -32,8 +32,8 @@ type Override struct {
 // EffectiveView is the resolved, user-facing view. It is a pure function of the
 // proposals and the overrides.
 //
-// Multi-valued fields (topics, content_functions, carriers, affordances,
-// entities) accept by accumulation. Single-valued fields (form, use) accept by
+// Multi-valued fields (topics, content_functions, affordances, entities)
+// accept by accumulation. Single-valued fields (carriers, form, use) accept by
 // replacement: accepting a second value does not silently keep the automatic
 // one (F11).
 type EffectiveView struct {
@@ -78,6 +78,9 @@ type fieldState struct {
 	action map[string]OverrideAction
 	// order records accept order so appended multi-values are deterministic.
 	order []string
+	// history preserves single-value replacements in actual action order. A map
+	// of latest actions per term cannot represent A -> B -> A or reject-active.
+	history []OverrideVector
 	// empty records an explicit "nothing applies" decision. It excludes the
 	// automatic values until a per-tag reset re-admits one or a full reset
 	// returns to automatic.
@@ -95,12 +98,14 @@ func newFieldState() *fieldState {
 func (s *fieldState) apply(override Override) {
 	switch override.Action {
 	case OverrideAccept:
+		s.history = append(s.history, OverrideVector{Term: override.Term, Action: override.Action})
 		if _, exists := s.action[override.Term]; !exists {
 			s.order = append(s.order, override.Term)
 		}
 		s.action[override.Term] = OverrideAccept
 		s.empty = false
 	case OverrideReject:
+		s.history = append(s.history, OverrideVector{Term: override.Term, Action: override.Action})
 		if _, exists := s.action[override.Term]; !exists {
 			s.order = append(s.order, override.Term)
 		}
@@ -109,6 +114,7 @@ func (s *fieldState) apply(override Override) {
 	case OverrideSetEmpty:
 		s.action = map[string]OverrideAction{}
 		s.order = nil
+		s.history = nil
 		s.empty = true
 		s.clearedAutomatic = true
 		s.readmit = map[string]bool{}
@@ -116,6 +122,7 @@ func (s *fieldState) apply(override Override) {
 		if override.Term == "" {
 			s.action = map[string]OverrideAction{}
 			s.order = nil
+			s.history = nil
 			s.empty = false
 			s.clearedAutomatic = false
 			s.readmit = map[string]bool{}
@@ -131,6 +138,13 @@ func (s *fieldState) apply(override Override) {
 			}
 		}
 		s.order = filtered
+		remaining := s.history[:0]
+		for _, action := range s.history {
+			if action.Term != override.Term {
+				remaining = append(remaining, action)
+			}
+		}
+		s.history = remaining
 		if s.clearedAutomatic {
 			// The tag this reset names becomes eligible again from automatic.
 			s.readmit[override.Term] = true
@@ -181,8 +195,9 @@ func (s *fieldState) resolveSingle(automatic string) string {
 	if s.clearedAutomatic && !s.readmit[automatic] {
 		current = ""
 	}
-	for _, term := range s.order {
-		switch s.action[term] {
+	for _, action := range s.history {
+		term := action.Term
+		switch action.Action {
 		case OverrideAccept:
 			current = term
 		case OverrideReject:

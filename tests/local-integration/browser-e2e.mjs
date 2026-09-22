@@ -154,6 +154,29 @@ async function main() {
     const afterReload = await page.$eval(`#v2-topics input[value='${rejected}']`, (node) => node.checked);
     check("the refreshed UI shows the human decision", afterReload === false);
 
+    // 6. Re-selecting an earlier radio option must use action order, including
+    // after the next request reconstructs the effective view from D1 rows.
+    const carrierOptions = await page.$$eval("#v2-carriers input", (nodes) => nodes.map((node) => ({ value: node.value, checked: node.checked })));
+    const firstCarrier = carrierOptions.find((option) => !option.checked)?.value;
+    const secondCarrier = carrierOptions.find((option) => option.value !== firstCarrier)?.value;
+    if (!firstCarrier || !secondCarrier) throw new Error("expected two carrier choices in the real UI");
+    for (const [index, term] of [firstCarrier, secondCarrier, firstCarrier].entries()) {
+      await page.click(`#v2-carriers input[value='${term}']`);
+      await waitFor(`carrier choice ${index + 1} to persist`, async () => {
+        const current = await jsonFetch(`${workerURL}/api/v2/links/${id}/selection`, { headers: auth(enricherToken) });
+        return JSON.stringify(current.payload.selection?.carriers) === JSON.stringify([term]);
+      }, 30000);
+      check(`carrier choice ${index + 1} is the last selected value`, true);
+    }
+    await page.reload({ waitUntil: "load" });
+    await page.waitForSelector("#v2-carriers input:checked", { state: "attached", timeout: 30000 });
+    check("carrier A survives refresh after A-B-A", await page.$eval("#v2-carriers input:checked", (node) => node.value) === firstCarrier);
+    const otherPage = await browser.newPage();
+    await otherPage.goto(`http://127.0.0.1:${goPort}/bookmarks/${id}`, { waitUntil: "load" });
+    await otherPage.waitForSelector("#v2-carriers input:checked", { state: "attached", timeout: 30000 });
+    check("a second browser page reads the final carrier A", await otherPage.$eval("#v2-carriers input:checked", (node) => node.value) === firstCarrier);
+    await otherPage.close();
+
     check("no page errors during the real browser session", pageErrors.length === 0, pageErrors.join("; "));
     await browser.close();
   } finally {
