@@ -9,11 +9,12 @@ import (
 // Candidate is one rerankable result. The candidate set is produced and
 // authorized by the caller; reranking may never add, remove or reveal one.
 type Candidate struct {
-	ID      string `json:"id"`
-	Text    string `json:"text"`
-	Rank    int    `json:"rank"`
-	Role    string `json:"role,omitempty"`
-	Allowed bool   `json:"allowed"`
+	ID        string     `json:"id"`
+	Text      string     `json:"text"`
+	Rank      int        `json:"rank"`
+	Role      string     `json:"role,omitempty"`
+	Allowed   bool       `json:"allowed"`
+	CacheItem *CacheItem `json:"-"`
 }
 
 // RerankScore is the model's comparable judgment for one candidate on a shared
@@ -27,9 +28,12 @@ type RerankScore struct {
 // RerankResult reports the outcome and why it happened, so a fallback is
 // visible instead of looking like a real ranking.
 type RerankResult struct {
-	Candidates []Candidate `json:"candidates"`
-	Applied    bool        `json:"applied"`
-	Reason     string      `json:"reason"`
+	Candidates   []Candidate `json:"candidates"`
+	Applied      bool        `json:"applied"`
+	Reason       string      `json:"reason"`
+	CacheStatus  string      `json:"cache_status,omitempty"`
+	Scope        string      `json:"scope,omitempty"`
+	NextBeforeID *int64      `json:"next_before_id"`
 }
 
 // Rerank orders candidates by the model score with a stable tie-break on the

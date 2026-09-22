@@ -132,3 +132,5 @@ run_case carrier TestLocalWorkerCarrierDefinitionUpgrade
 run_case imageprivacy TestLocalWorkerPrivateImageLifecycle
 
 run_case extensionbudget TestLocalWorkerExtensionBudgetAcrossProcesses
+
+run_case rerankcache TestLocalWorkerRerankCacheAcrossProcesses

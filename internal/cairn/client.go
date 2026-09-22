@@ -58,6 +58,7 @@ type ImageRef struct {
 
 // Bookmark is the secret-free enrichment state shown in the management UI.
 type Bookmark struct {
+	CacheIdentity          *BookmarkCacheIdentity   `json:"cache_identity,omitempty"`
 	ID                     int64                    `json:"id"`
 	URL                    string                   `json:"url"`
 	Note                   string                   `json:"note"`
@@ -83,6 +84,16 @@ type Bookmark struct {
 	Classification         *taxonomy.Classification `json:"classification,omitempty"`
 	ClassificationReviewed bool                     `json:"classification_reviewed"`
 	ContentLoaded          *bool                    `json:"content_loaded,omitempty"`
+}
+
+// BookmarkCacheIdentity is opt-in so strict legacy response readers are unchanged.
+type BookmarkCacheIdentity struct {
+	SchemaVersion        int   `json:"schema_version"`
+	ContentRevision      int64 `json:"content_revision"`
+	BodyRevision         int64 `json:"body_revision"`
+	PersonalRevision     int64 `json:"personal_revision"`
+	LatestDecisionID     int64 `json:"latest_decision_id"`
+	LatestEntityRevision int64 `json:"latest_entity_revision"`
 }
 
 // BookmarkDetail preserves the detail endpoint's named response type.
@@ -111,6 +122,7 @@ type BookmarkPage struct {
 
 // BookmarkQuery controls server-side filtering and pagination.
 type BookmarkQuery struct {
+	IncludeCacheIdentity    bool
 	Topics                  []string
 	ContentFunctions        []string
 	Carriers                []string
@@ -271,6 +283,9 @@ func decodeClaimResponse(response *http.Response) (*Job, error) {
 // ListBookmarks returns a filtered newest-first page for the management UI.
 func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (BookmarkPage, error) {
 	values := make(url.Values)
+	if query.IncludeCacheIdentity {
+		values.Set("include_cache_identity", "1")
+	}
 	if query.Limit > 0 {
 		values.Set("limit", strconv.Itoa(query.Limit))
 	}

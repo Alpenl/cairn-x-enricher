@@ -1,12 +1,15 @@
 package dashboard
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -411,40 +414,91 @@ func decodeActionBody(writer http.ResponseWriter, request *http.Request, target 
 // (B09-T09/T10).
 func (s *Server) rerank(writer http.ResponseWriter, request *http.Request) {
 	if s.extensions == nil || !s.extensionFlags.Rerank {
-		writeJSON(writer, http.StatusOK, map[string]any{"applied": false, "reason": "rerank disabled"})
+		writeJSON(writer, http.StatusOK, map[string]any{"applied": false, "reason": "rerank disabled", "scope": "current_candidates"})
 		return
 	}
 	var body struct {
-		Query string `json:"query"`
-		Limit int    `json:"limit"`
+		Query   string `json:"query"`
+		Limit   int    `json:"limit"`
+		Filters string `json:"filters,omitempty"`
 	}
 	if !decodeActionBody(writer, request, &body) {
 		return
 	}
-	if strings.TrimSpace(body.Query) == "" || len(body.Query) > 200 {
+	if strings.TrimSpace(body.Query) == "" || len(body.Query) > 200 || len(body.Filters) > 4096 {
 		writeError(writer, http.StatusBadRequest, "invalid_query")
 		return
 	}
 	if body.Limit < 1 || body.Limit > 20 {
 		body.Limit = 10
 	}
-	page, err := s.backend.ListBookmarks(request.Context(), cairn.BookmarkQuery{
-		Limit: body.Limit, Search: body.Query, SummaryOnly: true,
-	})
+	values, err := url.ParseQuery(body.Filters)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_query")
+		return
+	}
+	allowed := map[string]bool{"before_id": true, "status": true, "curation_status": true, "topic": true, "topics": true, "form": true, "use": true, "source": true, "uncertain": true, "since": true, "content_functions": true, "carriers": true, "affordances": true, "entity_state": true, "filter_contract_version": true}
+	for key := range values {
+		if !allowed[key] {
+			writeError(writer, http.StatusBadRequest, "invalid_query")
+			return
+		}
+	}
+	if versions, present := values["filter_contract_version"]; present && (len(versions) != 1 || versions[0] != "1") {
+		writeError(writer, http.StatusBadRequest, "invalid_query")
+		return
+	}
+	values.Set("q", body.Query)
+	values.Set("limit", strconv.Itoa(body.Limit))
+	values.Set("view", "summary")
+	values.Set("filter_contract_version", "1")
+	filtered := request.Clone(request.Context())
+	filtered.URL.RawQuery = values.Encode()
+	query, err := bookmarkQuery(filtered)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_query")
+		return
+	}
+	query.IncludeCacheIdentity = s.extensions.HasRerankStore()
+	page, err := s.backend.ListBookmarks(request.Context(), query)
 	if err != nil {
 		s.writeBackendError(writer, "rerank candidates", 0, err)
 		return
 	}
-	candidates := make([]extension.Candidate, 0, len(page.Items))
-	for index, item := range page.Items {
+	candidates := rerankCandidates(page.Items)
+	encoded, _ := json.Marshal(query)
+	scope := fmt.Sprintf("%x", sha256.Sum256(encoded))
+	result := s.extensions.RerankCandidatesScoped(request.Context(), body.Query, candidates, scope)
+	// Re-read the actual filtered page even on cache hits. A source/curation
+	// change, deletion or new leading item invalidates this page's result.
+	current, err := s.backend.ListBookmarks(request.Context(), query)
+	if err != nil {
+		s.writeBackendError(writer, "recheck rerank candidates", 0, err)
+		return
+	}
+	latest := rerankCandidates(current.Items)
+	if !reflect.DeepEqual(candidates, latest) {
+		result = extension.Rerank(latest, nil, false)
+		result.Reason = "candidate set changed; showing current original order"
+		result.CacheStatus = "invalidated"
+	}
+	result.Scope = "current_candidates"
+	result.NextBeforeID = current.NextBeforeID
+	writeJSON(writer, http.StatusOK, result)
+}
+
+func rerankCandidates(items []cairn.Bookmark) []extension.Candidate {
+	candidates := make([]extension.Candidate, 0, len(items))
+	for index, item := range items {
 		text := strings.TrimSpace(item.AITitle + " " + item.Summary)
 		if len([]rune(text)) > 400 {
 			text = string([]rune(text)[:400])
 		}
-		candidates = append(candidates, extension.Candidate{
-			ID: strconv.FormatInt(item.ID, 10), Text: text, Rank: index, Allowed: true,
-		})
+		candidate := extension.Candidate{ID: strconv.FormatInt(item.ID, 10), Text: text, Rank: index, Allowed: true, Role: "reading_summary"}
+		if v := item.CacheIdentity; v != nil && v.SchemaVersion == 1 {
+			candidate.CacheItem = &extension.CacheItem{ID: item.ID, ContentRevision: v.ContentRevision, BodyRevision: v.BodyRevision, PersonalRevision: v.PersonalRevision, LatestDecisionID: v.LatestDecisionID, LatestEntityRevision: v.LatestEntityRevision}
+		}
+		candidates = append(candidates, candidate)
 	}
-	result := s.extensions.RerankCandidates(request.Context(), body.Query, candidates)
-	writeJSON(writer, http.StatusOK, result)
+	return candidates
 }

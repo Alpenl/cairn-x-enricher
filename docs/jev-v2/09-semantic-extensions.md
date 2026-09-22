@@ -51,4 +51,16 @@ SC10/17–21/24–26/29–30；R12/R14–R17/R26/R30–R33/R38。恶意URL/注�
 
 先部署具备此端点且已应用 0026 的 Worker，再升级消费者并评估 opt-in。旧 Worker 返回 404、断网、非法确认或额度耗尽时，扩展失败降级且不调用付费接口；不回退到仅内存额度。回滚前关闭所有扩展 flag；回滚到旧消费者的启用路径会重新引入旧预算缺陷，不能称为兼容保证。本轮未执行部署或生产迁移。
 
-当前去重仅保证同一授权 key 不重复授权，以及现有补材料执行/检查点语义；**不是重排结果缓存**。相同查询再次进入生产 API 仍可消费剩余额度。query/filter/candidate/content revision/spec/model 完整缓存、跨进程结果恢复、固定候选质量与逐 flag 收益仍须继续完成，不因预算修复关闭 B09-T01/T10 或 G01。
+## 持久重排缓存（2026-09-23）
+
+`serve` / `classify` 的扩展 Service 使用新增内部 `/api/v2/rerank-cache/claim`、`/:key/complete` 与 `GET /:key`。只有 enricher token 可访问；App token 无权读取或写入。Worker 必须先应用 **0027**，再部署兼容 Worker 和消费者；旧 Worker/缺少候选版本均明确降级，不回退到无持久缓存的付费执行。
+
+首次 claim 原子取得唯一执行权；相同查询的并发请求回原序并报告 pending。已完成结果在新进程中复用，无需预算授权或新模型调用，因此已耗尽预算仍能读取当前有效结果。模型调用前仍执行上一节的逐条和全局持久授权；单纯取得缓存执行权不等于付费授权。失败、超时和未知结果不重跑模型。完成提交可在取消后用独立最多 5 秒的上下文重试同一幂等写入至多两次，每次失败可读取已提交结果；未确认持久化不显示为成功。
+
+缓存 key 包含实际 provider JSON（固定模型、query、逐条材料及同一分级 Score 题目）、规范化筛选/游标/limit 的 hash、rubric/spec hash、候选顺序及每条 content/body/personal/decision/entity revision。只支持 `jev-1.13.0`，其它 model/alias 在调用前拒绝；不能沿用旧结果。0027 为旧的 note/why/curation_status 写入补 personal revision 触发器，为 title/summary/状态/URL 补 reading revision；同值写入不递增。数据库 claim/complete 在事务语句内核对全部版本，读取结果也检查当前版本。
+
+`POST /api/rerank` 接收 `query`、`limit`（最多 20）、可选 URL 编码 `filters`，使用与收藏列表相同的筛选验证。只排列 **当前筛选页**（`scope=current_candidates`），保留原列表的 `next_before_id`；不承诺跨页全局相关性顺序或冻结整个收藏库。候选材料为明确标注 `reading_summary` 的 AI 标题和摘要（最多 400 字符），不是原始来源全文。无 UI 排序控件默认开启。返回前重新读取同一筛选页，即使命中缓存也一样；候选/版本/文本变化时返回最新页原序，读取失败不返回旧候选。
+
+D1 私有缓存保留精确 provider 请求和原始分布，不含凭据；原文/查询不能写入公共日志或报告。每项从首次 claim 起固定 **24 小时**，pending/completed/failed 均不续期；期间失败/未知结果不自动重新授予，过期后可在预算允许时新尝试。部署硬上限 200 项，请求和五分钟隐私 Cron 各清理最多 100 条过期项；claim 另在同一事务删除当前过期 key，避免批量清理未扫到它时误命中。过期立即拒读；物理清理受 Cron/请求执行及故障影响，不声称严格 24 小时物理清除 SLA。任一候选删除时，同一 D1 事务清除整条多候选私有请求、答案和引用，匿名预算不退款。
+
+回滚消费者前关闭扩展 flag，保留迁移和兼容清理 Worker。将全局 `TYPESAFE_MODEL` 从 alias 改为固定版本也会改变普通分类目标，应按 B01 desired target/new generation 受控操作，不自动激活。普通分类全局预算、实体结果去重、固定候选的真实相关性质量和逐 flag 收益仍待其余任务完成；本次工程验证不关闭整个 G01/B09，也不选择上线策略。

@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -138,4 +139,75 @@ func jsonRequest(method, path, body string) *http.Request {
 	request := httptest.NewRequestWithContext(context.Background(), method, path, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	return request
+}
+
+func TestRerankFiltersAndCandidateChangeAreRechecked(t *testing.T) {
+	for _, mode := range []string{"changed", "deleted", "backend_error"} {
+		t.Run(mode, func(t *testing.T) {
+			backend := &changingRerankBackend{fakeBackend: &fakeBackend{}, mode: mode}
+			server := New(context.Background(), nil, backend, nil, testLogger(), 1)
+			server.SetExtensions(extension.NewService(extension.Flags{Rerank: true}, extension.DefaultBudget(), rerankJudge{}))
+			response := httptest.NewRecorder()
+			server.Handler().ServeHTTP(response, jsonRequest(http.MethodPost, "/api/rerank", `{"query":"llm","limit":1,"filters":"topics=eng&carriers=single&source=x&before_id=9"}`))
+			if backend.calls != 2 || backend.seen.BeforeID != 9 || backend.seen.Source != "x" || len(backend.seen.Topics) != 1 || backend.seen.Topics[0] != "eng" || !backend.seen.RequireEffectiveFilters {
+				t.Fatalf("filters/recheck missing: %+v", backend)
+			}
+			if mode == "backend_error" {
+				if response.Code == 200 {
+					t.Fatal("recheck error returned private candidate")
+				}
+				return
+			}
+			var result extension.RerankResult
+			if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+				t.Fatal(err)
+			}
+			if result.Applied || result.CacheStatus != "invalidated" || result.Scope != "current_candidates" {
+				t.Fatalf("stale response %+v", result)
+			}
+			if mode == "deleted" && len(result.Candidates) != 0 {
+				t.Fatal("deleted candidate returned")
+			}
+			if mode == "changed" && (len(result.Candidates) != 1 || result.Candidates[0].Text != "updated" || result.NextBeforeID == nil || *result.NextBeforeID != 2) {
+				t.Fatalf("fresh fallback missing: %+v", result)
+			}
+		})
+	}
+	backend := &fakeBackend{}
+	server := New(context.Background(), nil, backend, nil, testLogger(), 1)
+	server.SetExtensions(extension.NewService(extension.Flags{Rerank: true}, extension.DefaultBudget(), rerankJudge{}))
+	for _, filters := range []string{"filter_contract_version=2", "filter_contract_version=1&filter_contract_version=1", "q=uncontrolled", "unknown=1", "carriers=single&carriers=external_article"} {
+		body, _ := json.Marshal(map[string]any{"query": "llm", "filters": filters})
+		response := httptest.NewRecorder()
+		server.Handler().ServeHTTP(response, jsonRequest(http.MethodPost, "/api/rerank", string(body)))
+		if response.Code != 400 {
+			t.Fatalf("unsupported filters %q status=%d", filters, response.Code)
+		}
+	}
+	if backend.listCalls != 0 {
+		t.Fatal("invalid filters reached backend")
+	}
+}
+
+type changingRerankBackend struct {
+	*fakeBackend
+	calls int
+	mode  string
+	seen  cairn.BookmarkQuery
+}
+
+func (b *changingRerankBackend) ListBookmarks(_ context.Context, q cairn.BookmarkQuery) (cairn.BookmarkPage, error) {
+	b.calls++
+	b.seen = q
+	if b.calls == 1 {
+		return cairn.BookmarkPage{Items: []cairn.Bookmark{{ID: 1, Summary: "initial"}}}, nil
+	}
+	if b.mode == "backend_error" {
+		return cairn.BookmarkPage{}, errors.New("synthetic unavailable")
+	}
+	if b.mode == "deleted" {
+		return cairn.BookmarkPage{Items: []cairn.Bookmark{}}, nil
+	}
+	cursor := int64(2)
+	return cairn.BookmarkPage{Items: []cairn.Bookmark{{ID: 1, Summary: "updated"}}, NextBeforeID: &cursor}, nil
 }

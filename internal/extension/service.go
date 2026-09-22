@@ -45,11 +45,12 @@ type EntityResult struct {
 // Service shares a process-local ledger and a durable Worker budget across all
 // extension entry points. Configure it before starting concurrent processing.
 type Service struct {
-	Flags  Flags
-	Budget Budget
-	Judge  Judge
-	ledger *Ledger
-	store  BudgetStore
+	Flags       Flags
+	Budget      Budget
+	Judge       Judge
+	ledger      *Ledger
+	store       BudgetStore
+	rerankStore RerankStore
 }
 
 // NewService creates the extension service. A nil judge leaves the model-backed
@@ -228,6 +229,16 @@ func (s *Service) requestEvidence(ctx context.Context, item string, client *http
 // candidate on a shared rubric. Any failure or an exhausted budget returns the
 // original order with an explicit reason (B09-T09/T10).
 func (s *Service) RerankCandidates(ctx context.Context, query string, candidates []Candidate) RerankResult {
+	return s.RerankCandidatesScoped(ctx, query, candidates, digestBytes([]byte("unfiltered-current-candidates")))
+}
+
+const rerankInstructionTemplate = "在同一个标准下，材料 `%s` 与查询 `%s` 的相关程度如何？被评价材料：`%s`。只评价这一条材料本身，不因为标题、来源或其他候选而加减分。"
+
+var rerankCriteria = []string{"不相关", "略有关系", "明显相关", "高度相关"}
+
+// RerankCandidatesScoped binds the complete filter/page scope into cache identity.
+// It only ranks supplied candidates, never across pages.
+func (s *Service) RerankCandidatesScoped(ctx context.Context, query string, candidates []Candidate, scopeHash string) RerankResult {
 	if !s.Flags.Rerank || s.Judge == nil {
 		return Rerank(candidates, nil, false)
 	}
@@ -251,10 +262,9 @@ func (s *Service) RerankCandidates(ctx context.Context, query string, candidates
 			text = string(runes[:600])
 		}
 		questions[id] = classify.ProviderQuestion{
-			Type: classify.TypeScore,
-			Instructions: "在同一个标准下，材料 `" + candidate.ID + "` 与查询 `" + query + "` 的相关程度如何？" +
-				"被评价材料：`" + text + "`。只评价这一条材料本身，不因为标题、来源或其他候选而加减分。",
-			Criteria: []string{"不相关", "略有关系", "明显相关", "高度相关"},
+			Type:         classify.TypeScore,
+			Instructions: fmt.Sprintf(rerankInstructionTemplate, candidate.ID, query, text),
+			Criteria:     rerankCriteria,
 		}
 	}
 	state := map[string]any{"query": query}
@@ -262,35 +272,29 @@ func (s *Service) RerankCandidates(ctx context.Context, query string, candidates
 	for _, candidate := range authorized {
 		items = append(items, candidate.ID)
 	}
-	answers, _, _, err := s.judgeBounded(ctx, "rerank", items, state, questions)
+	var answers map[string]classify.RawAnswer
+	var err error
+	cacheStatus := ""
+	if s.rerankStore != nil {
+		answers, cacheStatus, err = s.cachedRerank(ctx, scopeHash, authorized, state, questions)
+	} else {
+		answers, _, _, err = s.judgeBounded(ctx, "rerank", items, state, questions)
+	}
 	if err != nil {
 		result := Rerank(candidates, nil, false)
 		result.Reason = "rerank unavailable: " + boundedReason(err)
+		result.CacheStatus = cacheStatus
 		return result
 	}
-	scores := make([]RerankScore, 0, len(answers))
-	for id, answer := range answers {
-		if answer.Type != classify.TypeScore || answer.Score == nil || !strings.HasPrefix(id, "rerank_") {
-			return Rerank(candidates, nil, false)
-		}
-		candidateID := strings.TrimPrefix(id, "rerank_")
-		if !hasCandidate(authorized, candidateID) {
-			// An answer that does not target an authorized candidate invalidates
-			// the ranking instead of injecting a result.
-			return Rerank(candidates, nil, false)
-		}
-		scores = append(scores, RerankScore{ID: candidateID, Score: int(answer.Score.Score*100 + 0.5)})
+	scores, err := rerankScores(authorized, answers)
+	if err != nil {
+		result := Rerank(candidates, nil, false)
+		result.Reason = "invalid rerank result"
+		return result
 	}
-	return Rerank(candidates, scores, true)
-}
-
-func hasCandidate(candidates []Candidate, id string) bool {
-	for _, candidate := range candidates {
-		if candidate.ID == id {
-			return true
-		}
-	}
-	return false
+	result := Rerank(candidates, scores, true)
+	result.CacheStatus = cacheStatus
+	return result
 }
 
 func boundedReason(err error) string {

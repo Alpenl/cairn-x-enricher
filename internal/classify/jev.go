@@ -444,6 +444,16 @@ func (c *Client) JudgeInputReservation(state any, questions map[string]ProviderQ
 	return 65536, nil
 }
 
+// PreparedJudgeRequest returns the exact Judge body for private cache provenance.
+// The body contains user material, never credentials.
+func (c *Client) PreparedJudgeRequest(state any, questions map[string]ProviderQuestion) ([]byte, error) {
+	if _, err := c.JudgeInputReservation(state, questions); err != nil {
+		return nil, err
+	}
+	body, _, err := c.buildJudgeRequest(state, questions)
+	return body, err
+}
+
 func (c *Client) buildJudgeRequest(state any, questions map[string]ProviderQuestion) ([]byte, map[string]providerQuestion, error) {
 	if len(questions) == 0 || len(questions) > 64 {
 		return nil, nil, errors.New("extension judgment needs 1 to 64 questions")

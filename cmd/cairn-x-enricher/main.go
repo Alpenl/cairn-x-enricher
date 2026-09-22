@@ -398,6 +398,7 @@ func newProcessor(
 	fetcher, policy := evidenceFetcher(cfg)
 	extensions := extensionService(cfg, classifier)
 	extensions.SetBudgetStore(queue)
+	extensions.SetRerankStore(queue)
 	worker.SetExtensions(extensions, fetcher, policy)
 	worker.SetPartialReuse(cfg.PartialReuse)
 	return worker, queue, nil
