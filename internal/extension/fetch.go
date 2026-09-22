@@ -90,37 +90,80 @@ func ValidateURL(policy FetchPolicy, raw string) (*url.URL, error) {
 	return parsed, nil
 }
 
-// DialGuard resolves a host and refuses a connection to a non-public address.
-// It is installed on the transport so the check happens on the address actually
-// dialled, including after a DNS rebind.
+// DialGuard resolves once, validates the complete answer, then dials only
+// numeric addresses from that answer. The HTTP transport retains the original
+// URL host for Host and TLS SNI; the dialer must never resolve the name again.
 func DialGuard(timeout time.Duration) func(ctx context.Context, network, address string) (net.Conn, error) {
 	dialer := &net.Dialer{Timeout: timeout}
+	return dialGuard(timeout, net.DefaultResolver.LookupIPAddr, dialer.DialContext)
+}
+
+func dialGuard(timeout time.Duration,
+	lookup func(context.Context, string) ([]net.IPAddr, error),
+	dial func(context.Context, string, string) (net.Conn, error),
+) func(context.Context, string, string) (net.Conn, error) {
 	return func(ctx context.Context, network, address string) (net.Conn, error) {
-		host, _, err := net.SplitHostPort(address)
+		if timeout > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
+		host, port, err := net.SplitHostPort(address)
 		if err != nil {
 			return nil, err
 		}
+		var ips []net.IPAddr
 		if ip := net.ParseIP(host); ip != nil {
-			if err := blockPrivateIP(ip); err != nil {
+			ips = []net.IPAddr{{IP: ip}}
+		} else {
+			ips, err = lookup(ctx, host)
+			if err != nil {
 				return nil, err
 			}
-			return dialer.DialContext(ctx, network, address)
-		}
-		ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-		if err != nil {
-			return nil, err
 		}
 		if len(ips) == 0 {
 			return nil, fmt.Errorf("%w: no addresses", ErrFetchBlocked)
 		}
-		// Every resolved address must be public: a rebind that returns one
-		// public and one private address must still be refused.
+		// Validate every answer before opening any connection. A mixed public /
+		// private answer is refused even if the public address would work.
 		for _, addr := range ips {
 			if err := blockPrivateIP(addr.IP); err != nil {
 				return nil, err
 			}
+			if addr.Zone != "" {
+				return nil, fmt.Errorf("%w: scoped address", ErrFetchBlocked)
+			}
 		}
-		return dialer.DialContext(ctx, network, address)
+		var targets []string
+		for _, addr := range ips {
+			if (network == "tcp4" && addr.IP.To4() == nil) || (network == "tcp6" && addr.IP.To4() != nil) {
+				continue
+			}
+			targets = append(targets, net.JoinHostPort(addr.IP.String(), port))
+		}
+		if len(targets) == 0 {
+			return nil, fmt.Errorf("%w: no addresses for network %s", ErrFetchBlocked, network)
+		}
+		var failures []error
+		for index, target := range targets {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			// Share the remaining total budget so an unreachable first address
+			// does not prevent a later validated address from being attempted.
+			attemptCtx := ctx
+			cancel := func() {}
+			if deadline, ok := ctx.Deadline(); ok && index+1 < len(targets) {
+				attemptCtx, cancel = context.WithTimeout(ctx, time.Until(deadline)/time.Duration(len(targets)-index))
+			}
+			connection, err := dial(attemptCtx, network, target)
+			cancel()
+			if err == nil {
+				return connection, nil
+			}
+			failures = append(failures, err)
+		}
+		return nil, errors.Join(failures...)
 	}
 }
 
