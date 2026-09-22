@@ -84,6 +84,8 @@ class Node {
   }
   set textContent(value) { this._text = String(value); this.children = []; }
   get childElementCount() { return this.children.length; }
+  get options() { return this.querySelectorAll("option"); }
+  get selectedOptions() { return this.options.filter(option => option.selected); }
   get firstChild() { return this.children[0] || null; }
   append(...nodes) {
     for (const node of nodes) {

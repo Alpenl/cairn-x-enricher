@@ -48,6 +48,7 @@ async function waitFor(description, predicate, timeoutMs = 120000) {
 
 async function main() {
   const mock = await startMockModel();
+  let browser;
   const goPort = 18080 + Math.floor(Math.random() * 1000);
   const go = spawn(goBin, ["serve"], {
     env: {
@@ -144,7 +145,7 @@ async function main() {
     check("the current endpoint still reports AI-only as unreviewed", aiView.payload.effective?.reviewed === false);
 
     // 4. The real browser loads the real Go proxy over the real Worker.
-    const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ["--no-sandbox"] });
+    browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ["--no-sandbox"] });
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(String(error)));
@@ -155,6 +156,44 @@ async function main() {
     check("the browser shows the same effective topics as the Worker", JSON.stringify(checked.sort()) === JSON.stringify([...topics].sort()), JSON.stringify({ checked, topics }));
     const folded = await page.textContent("#v2-folded-note");
     check("the fourth effective topic is folded, not deleted", /另外 [1-9]/.test(folded || ""), folded || "");
+
+    // A blank-keyword library query must use the full effective dimensions,
+    // even when the v1 summary omits the fourth topic. Nothing is intercepted.
+    const library = await browser.newPage({ viewport: { width: 375, height: 812 } });
+    library.on("pageerror", error => pageErrors.push(String(error)));
+    library.on("response", async response => {
+      if (response.url().includes("/api/bookmarks?") && response.status() !== 200) {
+        process.stdout.write(`library HTTP ${response.status()}: ${await response.text()}\n`);
+      }
+    });
+    await library.goto(`http://127.0.0.1:${goPort}/?topics=${encodeURIComponent(topics[3])}`, { waitUntil: "load" });
+    await library.waitForSelector("#filter-topics:not([disabled])");
+    await library.waitForSelector(`#stream a[href^='/bookmarks/${id}?']`).catch(async error => {
+      process.stdout.write(`library diagnostic: ${JSON.stringify({
+        errors: pageErrors, status: await library.locator("#load-error").innerText(),
+        items: await library.locator("#stream").innerText(),
+        direct: await jsonFetch(`http://127.0.0.1:${goPort}/api/bookmarks?topics=${encodeURIComponent(topics[3])}&view=summary&filter_contract_version=1`)
+      })}\n`);
+      throw error;
+    });
+    check("real blank-query library finds the fourth effective topic", await library.locator("#stream a.entry").count() === 1);
+    const selectedTopics = await library.$eval("#filter-topics", node => [...node.selectedOptions].map(option => option.value));
+    check("real library restores a saved multi-topic filter", JSON.stringify(selectedTopics) === JSON.stringify([topics[3]]));
+    for (const dimension of ["content_functions", "carriers", "affordances"]) {
+      const terms = selection.payload.selection[dimension];
+      if (!terms?.length) throw new Error(`fixture has no ${dimension}`);
+      await library.selectOption(`#filter-${dimension}`, terms[0]);
+    }
+    await library.selectOption("#filter-entity_state", "completed_nonempty");
+    await library.waitForFunction(() => document.querySelector("#loading").hidden && document.querySelectorAll("#stream a.entry").length === 1);
+    const filteredURL = new URL(library.url());
+    const filtered = await jsonFetch(`http://127.0.0.1:${goPort}/api/bookmarks?${filteredURL.searchParams}&filter_contract_version=1`);
+    check("real multidimensional query returns confirmed membership and filtered counts", filtered.status === 200 && filtered.payload.filter_contract_version === 1 && filtered.payload.counts?.total === 1 && filtered.payload.items?.[0]?.id === id, JSON.stringify(filtered.payload).slice(0, 200));
+    check("real narrow library filters fit the viewport", await library.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    const filteredExport = await fetch(`http://127.0.0.1:${goPort}/api/export?${filteredURL.searchParams}&filter_contract_version=1`).then(response => response.text());
+    check("real filtered export carries the matching full dimensions", filteredExport.includes(`收藏 ID：${id}`) && filteredExport.includes(topics[3]) && filteredExport.includes("内容功能："));
+    await library.goto(`http://127.0.0.1:${goPort}/?topics=${encodeURIComponent(checked[0])}`, { waitUntil: "load" });
+    await library.waitForSelector(`#stream a[href^='/bookmarks/${id}?']`);
 
     // 5. A human reject reaches the real Worker and survives a refresh.
     const rejected = checked[0];
@@ -173,6 +212,14 @@ async function main() {
     await page.click("#v2-curation > summary");
     const afterReload = await page.$eval(`#v2-topics input[value='${rejected}']`, (node) => node.checked);
     check("the refreshed UI shows the human decision", afterReload === false);
+    await library.reload({ waitUntil: "load" });
+    await library.waitForSelector("#empty:not([hidden])");
+    check("real filtered library removes a confirmed human rejection", await library.locator("#stream a.entry").count() === 0 && !await library.isVisible("#load-error"));
+    await library.waitForSelector("#filter-topics:not([disabled])");
+    await library.selectOption("#filter-topics", [rejected, afterReject.payload.selection.topics[0]]);
+    await library.waitForSelector(`#stream a[href^='/bookmarks/${id}?']`);
+    check("real multi-topic OR includes the remaining accepted topic", await library.locator("#stream a.entry").count() === 1);
+    await library.close();
 
     // 6. Re-selecting an earlier radio option must use action order, including
     // after the next request reconstructs the effective view from D1 rows.
@@ -226,8 +273,8 @@ async function main() {
     check("server export includes the restored entity", restoredExport.includes("实体：BrowserEntity"));
 
     check("no page errors during the real browser session", pageErrors.length === 0, pageErrors.join("; "));
-    await browser.close();
   } finally {
+    await browser?.close();
     await teardown();
   }
   process.stdout.write(`\n${checks - failures}/${checks} real end-to-end checks passed\n`);

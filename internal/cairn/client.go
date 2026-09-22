@@ -103,25 +103,37 @@ type BookmarkCounts struct {
 
 // BookmarkPage is one newest-first page of bookmarks.
 type BookmarkPage struct {
-	Items        []Bookmark     `json:"items"`
-	NextBeforeID *int64         `json:"next_before_id"`
-	Counts       BookmarkCounts `json:"counts"`
+	FilterContractVersion *int           `json:"filter_contract_version,omitempty"`
+	Items                 []Bookmark     `json:"items"`
+	NextBeforeID          *int64         `json:"next_before_id"`
+	Counts                BookmarkCounts `json:"counts"`
 }
 
 // BookmarkQuery controls server-side filtering and pagination.
 type BookmarkQuery struct {
-	Limit          int
-	BeforeID       int64
-	Status         string
-	Search         string
-	CurationStatus string
-	Topic          string
-	Form           string
-	Use            string
-	Source         string
-	Uncertain      bool
-	Since          string
-	SummaryOnly    bool
+	Topics                  []string
+	ContentFunctions        []string
+	Carriers                []string
+	Affordances             []string
+	EntityStates            []string
+	RequireEffectiveFilters bool
+	Limit                   int
+	BeforeID                int64
+	Status                  string
+	Search                  string
+	CurationStatus          string
+	Topic                   string
+	Form                    string
+	Use                     string
+	Source                  string
+	Uncertain               bool
+	Since                   string
+	SummaryOnly             bool
+}
+
+// NeedsFilterContract rejects old backends that silently ignore v2 conditions.
+func (q BookmarkQuery) NeedsFilterContract() bool {
+	return q.RequireEffectiveFilters || len(q.Topics)+len(q.ContentFunctions)+len(q.Carriers)+len(q.Affordances)+len(q.EntityStates) > 0
 }
 
 // CurationUpdate applies explicit human edits; a null classification restores AI suggestions.
@@ -279,6 +291,17 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 			values.Set(key, value)
 		}
 	}
+	for key, terms := range map[string][]string{
+		"topics": query.Topics, "content_functions": query.ContentFunctions, "carriers": query.Carriers,
+		"affordances": query.Affordances, "entity_state": query.EntityStates,
+	} {
+		if len(terms) > 0 {
+			values.Set(key, strings.Join(terms, ","))
+		}
+	}
+	if query.NeedsFilterContract() {
+		values.Set("filter_contract_version", "1")
+	}
 	if query.Uncertain {
 		values.Set("uncertain", "true")
 	}
@@ -301,6 +324,9 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 	var page BookmarkPage
 	if err := decodeJSON(response.Body, &page); err != nil {
 		return BookmarkPage{}, fmt.Errorf("decode bookmark list: %w", err)
+	}
+	if query.NeedsFilterContract() && (page.FilterContractVersion == nil || *page.FilterContractVersion != 1) {
+		return BookmarkPage{}, &APIError{StatusCode: http.StatusConflict, Code: "unsupported_filter_contract"}
 	}
 	if page.Items == nil {
 		page.Items = []Bookmark{}

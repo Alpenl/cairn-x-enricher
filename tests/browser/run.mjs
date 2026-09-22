@@ -114,6 +114,7 @@ function startServer(state) {
     for await (const chunk of req) raw += chunk;
     const body = raw ? JSON.parse(raw) : {};
 
+    if (url.pathname === "/") return serveAsset(res, "index.html", "text/html; charset=utf-8");
     if (url.pathname === "/bookmarks/12") return serveAsset(res, "reader.html", "text/html; charset=utf-8");
     const asset = url.pathname.match(/^\/assets\/(.+)$/);
     if (asset) {
@@ -219,7 +220,10 @@ function startServer(state) {
       state.requests.push({ path: url.pathname, body });
       return send(200, { id: 12, url: "https://x.com/a/status/12", status: "completed", curation_status: "inbox", why: body.why ?? "", classification: body.classification ?? null });
     }
-    if (url.pathname === "/api/bookmarks") return send(200, { items: [], counts: {} });
+    if (url.pathname === "/api/bookmarks") {
+      state.listQueries ??= []; state.listQueries.push(Object.fromEntries(url.searchParams));
+      return send(200, { items: [], counts: {}, ...(state.oldFilterBackend ? {} : { filter_contract_version: 1 }) });
+    }
     if (url.pathname === "/status") return send(200, { state: "ok", build: {} });
     return send(404, { error: "not_found" });
   });
@@ -399,6 +403,35 @@ async function main() {
   // 10. Narrow viewport does not push controls out of the document width.
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   check("no horizontal overflow at 375px", overflow <= 1, `overflow=${overflow}px`);
+
+  // 11. The actual home controls carry all dimensions through requests/URLs.
+  await page.goto(`${base}/?topic=design&content_functions=method,data&carriers=single&affordances=practice&entity_state=failed`, { waitUntil: "networkidle" });
+  await page.waitForSelector("#filter-topics:not([disabled])");
+  const latestQuery = () => state.listQueries.at(-1);
+  equal("legacy topic URL becomes full topic filter", latestQuery().topics, "design");
+  equal("home filter negotiation is explicit", latestQuery().filter_contract_version, "1");
+  equal("URL restores selected function OR values", await page.locator("#filter-content_functions").evaluate(el => [...el.selectedOptions].map(o => o.value)), ["method", "data"]);
+  await page.selectOption("#filter-topics", ["llm", "design"]);
+  await page.selectOption("#filter-content_functions", ["tool", "data"]);
+  await page.selectOption("#filter-carriers", ["single", "author_continuation"]);
+  await page.selectOption("#filter-affordances", ["practice", "background"]);
+  await page.selectOption("#filter-entity_state", ["completed_empty", "stale"]);
+  await waitFor(() => latestQuery().entity_state === "completed_empty,stale");
+  for (const [key,value] of Object.entries({topics:"llm,design",content_functions:"tool,data",carriers:"single,author_continuation",affordances:"practice,background",entity_state:"completed_empty,stale"})) {
+    equal(`home forwards ${key}`,latestQuery()[key],value);
+    equal(`home URL preserves ${key}`,new URL(page.url()).searchParams.get(key),value);
+  }
+  check("filter multi-select fits 375px", await page.evaluate(() => document.documentElement.scrollWidth-document.documentElement.clientWidth <= 1));
+  check("multi-select exposes visible rows", await page.locator("#filter-topics").evaluate(el => el.getBoundingClientRect().height >= 80));
+  state.oldFilterBackend = true;
+  await page.selectOption("#filter-topics", ["design"]);
+  await page.waitForSelector("#load-error:not([hidden])");
+  check("old backend cannot silently accept ignored filters", /不支持完整筛选/.test(await page.textContent("#load-error-text")));
+  await page.click("#clear-filters");
+  await waitFor(() => !latestQuery().filter_contract_version);
+  equal("clearing filters clears all multi-selections",await page.locator("#filter-topics").evaluate(el => el.selectedOptions.length),0);
+  check("ordinary browsing still works with an old backend", await page.isHidden("#load-error"));
+  check("home and detail have no JavaScript exceptions", consoleErrors.length === 0, consoleErrors.join("; "));
 
   await browser.close();
   server.close();

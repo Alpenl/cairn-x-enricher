@@ -9,7 +9,7 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 enricher_root="$(cd "$here/../.." && pwd)"
-share_root="$(cd "$enricher_root/../cairn-share" && pwd)"
+share_root="$(cd "${CAIRN_SHARE_ROOT:-$enricher_root/../cairn-share}" && pwd)"
 
 if [ ! -d "$share_root/worker/node_modules" ]; then
   echo "worker dependencies are not installed; run npm ci in $share_root/worker" >&2
@@ -113,3 +113,5 @@ run_case reuse TestLocalWorkerStoredQuestionReuse
 run_case decisions TestLocalWorkerDecisionReferences
 
 run_case escalation TestLocalWorkerEvidenceExecutionRecovery
+
+run_case filters TestLocalWorkerEffectiveClientFilters

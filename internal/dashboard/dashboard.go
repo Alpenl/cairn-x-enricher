@@ -996,6 +996,19 @@ func writeProcessingResult(writer http.ResponseWriter, status int, accepted []in
 	})
 }
 
+// Validate transport syntax here; the Worker owns known/retired vocabulary IDs.
+func validFilterID(term string) bool {
+	if len(term) == 0 || len(term) > 40 || term[0] < 'a' || term[0] > 'z' {
+		return false
+	}
+	for _, c := range term {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '_' {
+			return false
+		}
+	}
+	return true
+}
+
 func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 	values := request.URL.Query()
 	limit := defaultPageSize
@@ -1028,6 +1041,48 @@ func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 		CurationStatus: values.Get("curation_status"), Topic: values.Get("topic"),
 		Form: values.Get("form"), Use: values.Get("use"), Source: values.Get("source"), Since: values.Get("since"),
 		SummaryOnly: values.Get("view") == "summary",
+	}
+	for _, filter := range []struct {
+		key    string
+		target *[]string
+	}{
+		{"topics", &query.Topics}, {"content_functions", &query.ContentFunctions}, {"carriers", &query.Carriers},
+		{"affordances", &query.Affordances}, {"entity_state", &query.EntityStates},
+	} {
+		entries, present := values[filter.key]
+		if !present {
+			continue
+		}
+		if len(entries) != 1 || len(entries[0]) > 1024 {
+			return cairn.BookmarkQuery{}, errors.New("invalid filter")
+		}
+		terms := strings.Split(entries[0], ",")
+		limit := 64
+		if filter.key == "entity_state" {
+			limit = 5
+		}
+		if len(terms) > limit {
+			return cairn.BookmarkQuery{}, errors.New("too many filter terms")
+		}
+		seen := map[string]bool{}
+		for _, term := range terms {
+			if !validFilterID(term) {
+				return cairn.BookmarkQuery{}, errors.New("invalid filter term")
+			}
+			if filter.key == "entity_state" && term != "not_run" && term != "failed" && term != "completed_empty" && term != "completed_nonempty" && term != "stale" {
+				return cairn.BookmarkQuery{}, errors.New("invalid entity state")
+			}
+			if !seen[term] {
+				*filter.target = append(*filter.target, term)
+				seen[term] = true
+			}
+		}
+	}
+	if entries, present := values["filter_contract_version"]; present {
+		if len(entries) != 1 || entries[0] != "1" {
+			return cairn.BookmarkQuery{}, errors.New("unsupported filter contract")
+		}
+		query.RequireEffectiveFilters = true
 	}
 	if view := values.Get("view"); view != "" && view != "summary" {
 		return cairn.BookmarkQuery{}, errors.New("invalid view")
