@@ -1,0 +1,5 @@
+Command: go run ./tests/acceptance/budget-probe
+configured total calls=1; actual production Service judge calls=2; paid calls=0
+FAIL: total budget resets between calls; B09-T01/B09-T10/SC30 remains incomplete
+exit status 1
+Observed exit code: 1
