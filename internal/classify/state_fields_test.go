@@ -62,11 +62,15 @@ func TestStateFieldAblationChangesOnlyTwoFieldNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	next, err := CompileSpec(frozenFieldCatalog(t), false)
+	nextBytes, err := os.ReadFile("../../experiments/classification/reference-v1/state-fields-spec.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if next.SpecID == old.SpecID || next.SemanticHash == old.SemanticHash {
+	next, err := DecodeSpec(nextBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.SpecID != "classify-0b02fbfce85d" || next.SemanticHash != "c760533cfd880ba0201f97d41c3a1d4d6856bce6c816feb30328d160a7cdead5" {
 		t.Fatal("field-name correction must produce a new immutable spec")
 	}
 	if len(next.Questions) != len(old.Questions) {

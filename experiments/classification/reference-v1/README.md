@@ -82,3 +82,6 @@ that immutable identity instead of recompiling the latest production questions.
 Question changes belong to separately recorded experimental variants; they must
 not rewrite the original manifest or reference labels. Regeneration still compares
 all four frozen JSON files byte for byte in CI.
+
+The separately frozen [source-role experiment](SOURCE-ROLES-ABLATION.md) preserves
+the prior field-name spec in `state-fields-spec.json`; it does not relabel v1.
