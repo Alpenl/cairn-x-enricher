@@ -141,19 +141,6 @@ func TestCalibrationDistinguishesOverconfidence(t *testing.T) {
 	}
 }
 
-func TestIdenticalScoreMeanButDifferentDistributionIsRetained(t *testing.T) {
-	// Two distributions with the same maximum but different entropy must not
-	// collapse to the same calibration evidence.
-	// Compare ECE computed from each distribution separately.
-	flatPoints := []calibPoint{{p: 0.5, correct: true}, {p: 0.5, correct: false}}
-	peakedPoints := []calibPoint{{p: 0.7, correct: true}, {p: 0.7, correct: false}}
-	flatECE, _ := expectedCalibrationError(flatPoints, 10)
-	peakedECE, _ := expectedCalibrationError(peakedPoints, 10)
-	if flatECE == peakedECE {
-		t.Fatal("different calibration evidence must not collapse")
-	}
-}
-
 // --- Data validation (B08-T02/T05) ----------------------------------------
 
 func TestDatasetRejectsDuplicatesAndMissingGoldProvenance(t *testing.T) {

@@ -21,7 +21,7 @@ func main() {
 	var dryRun bool
 	var live bool
 	var recoverFrom string
-	var policyFitConfig, replayJournal string
+	var policyFitConfig, calibrationConfig, replayJournal string
 	var maxCalls int
 	var liveConfig liveConfig
 	flag.StringVar(&datasetPath, "dataset", "", "path to a dataset JSON file (samples + predictions)")
@@ -30,6 +30,7 @@ func main() {
 	flag.BoolVar(&live, "live", false, "explicitly opt in to a live model run (costs money)")
 	flag.StringVar(&recoverFrom, "recover-from", "", "comma-separated saved live directories; validate/recover wires OFFLINE, never retry")
 	flag.StringVar(&policyFitConfig, "fit-policy", "", "frozen six-dimension fit config JSON; OFFLINE train/dev only")
+	flag.StringVar(&calibrationConfig, "calibration", "", "frozen probability diagnostics config JSON; OFFLINE train/dev only")
 	flag.StringVar(&replayJournal, "replay-journal", "", "verified recovery.json holding original raw evaluations for policy fitting")
 	flag.IntVar(&maxCalls, "max-calls", 0, "hard budget for a live run; 0 means no live run is permitted")
 	flag.StringVar(&liveConfig.catalogPath, "catalog", "", "frozen taxonomy JSON for live/dry-run")
@@ -46,8 +47,12 @@ func main() {
 		fmt.Fprintln(os.Stderr, "error: policy fit is an explicit offline mode with its own frozen constraints; do not combine with live, recovery, dry-run or gate")
 		os.Exit(2)
 	}
-	if replayJournal != "" && policyFitConfig == "" {
-		fmt.Fprintln(os.Stderr, "error: replay-journal requires fit-policy")
+	if calibrationConfig != "" && (live || recoverFrom != "" || dryRun || gatePath != "" || policyFitConfig != "") {
+		fmt.Fprintln(os.Stderr, "error: calibration is an explicit offline mode; do not combine it with live, recovery, dry-run, gate or policy fit")
+		os.Exit(2)
+	}
+	if replayJournal != "" && policyFitConfig == "" && calibrationConfig == "" {
+		fmt.Fprintln(os.Stderr, "error: replay-journal requires fit-policy or calibration")
 		os.Exit(2)
 	}
 	if recoverFrom != "" && live {
@@ -101,6 +106,13 @@ func main() {
 
 	if recoverFrom != "" {
 		if err := runRecoveryCommand(dataset, recoverFrom, liveConfig.output, dryRun, gate); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if calibrationConfig != "" {
+		if err := runCalibrationCommand(dataset, calibrationConfig, replayJournal, liveConfig.catalogPath, liveConfig.output); err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}

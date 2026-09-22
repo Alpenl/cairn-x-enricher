@@ -74,28 +74,7 @@ func runPolicyFitCommand(dataset evaluation.Dataset, configPath, journalPath, ca
 	if err := config.Validate(); err != nil {
 		return err
 	}
-	journalRaw, err := os.ReadFile(filepath.Clean(journalPath))
-	if err != nil {
-		return err
-	}
-	var journal recoveryResult
-	if err := json.Unmarshal(journalRaw, &journal); err != nil {
-		return err
-	}
-	dataset, err = attachRecoveredEvaluations(dataset, journal)
-	if err != nil {
-		return err
-	}
-	catalogRaw, err := os.ReadFile(filepath.Clean(catalogPath))
-	if err != nil {
-		return err
-	}
-	var catalog taxonomy.Catalog
-	if err := json.Unmarshal(catalogRaw, &catalog); err != nil {
-		return err
-	}
-	model := dataset.Prediction[0].Model
-	verified, err := evaluation.PreparePolicyReplay(dataset, catalog, model)
+	verified, journalRaw, catalogRaw, err := loadVerifiedReplay(dataset, journalPath, catalogPath)
 	if err != nil {
 		return err
 	}
@@ -127,4 +106,29 @@ func runPolicyFitCommand(dataset evaluation.Dataset, configPath, journalPath, ca
 	}
 	encode(map[string]any{"status": artifact.Status, "model_calls": 0, "promote": false, "candidates": len(artifact.Candidates), "samples": artifact.Samples, "independent_groups": artifact.IndependentGroups, "selected_policy": artifact.Selected, "reference_hash": artifact.ReferenceHash, "artifacts": output})
 	return nil
+}
+
+func loadVerifiedReplay(dataset evaluation.Dataset, journalPath, catalogPath string) (*evaluation.VerifiedReplay, []byte, []byte, error) {
+	journalRaw, err := os.ReadFile(filepath.Clean(journalPath))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	var journal recoveryResult
+	if err := json.Unmarshal(journalRaw, &journal); err != nil {
+		return nil, nil, nil, err
+	}
+	dataset, err = attachRecoveredEvaluations(dataset, journal)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	catalogRaw, err := os.ReadFile(filepath.Clean(catalogPath))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	var catalog taxonomy.Catalog
+	if err := json.Unmarshal(catalogRaw, &catalog); err != nil {
+		return nil, nil, nil, err
+	}
+	verified, err := evaluation.PreparePolicyReplay(dataset, catalog, dataset.Prediction[0].Model)
+	return verified, journalRaw, catalogRaw, err
 }

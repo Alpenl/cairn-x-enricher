@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -421,6 +422,9 @@ func ValidateAnswers(spec QuestionSpec, answers map[string]RawAnswer) error {
 }
 
 func validateAnswer(question Question, answer RawAnswer) error {
+	if answer.Confidence != nil && !validProbability(*answer.Confidence) {
+		return fmt.Errorf("confidence for %s is out of range", question.ID)
+	}
 	switch question.Kind {
 	case QuestionNoul:
 		if answer.Type != TypeNoul || answer.Noul == nil || answer.Noul.Noul == nil {
@@ -457,7 +461,7 @@ func validateAnswer(question Question, answer RawAnswer) error {
 		if err := ValidateProbabilityMap(answer.Score.Probabilities, indices); err != nil {
 			return fmt.Errorf("score %s: %w", question.ID, err)
 		}
-		if answer.Score.Score < 0 || answer.Score.Score > float64(len(indices)-1) {
+		if math.IsNaN(answer.Score.Score) || math.IsInf(answer.Score.Score, 0) || answer.Score.Score < 0 || answer.Score.Score > float64(len(indices)-1) {
 			return fmt.Errorf("score value for %s is outside its levels", question.ID)
 		}
 	}
