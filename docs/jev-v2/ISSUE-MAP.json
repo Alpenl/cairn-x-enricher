@@ -1,0 +1,23 @@
+{
+  "workflow_version": "issues-v1",
+  "tracking_source": "github_issue_bodies",
+  "parent": "Alpenl/cairn-x-enricher#10",
+  "design_pr": "Alpenl/cairn-x-enricher#3",
+  "native_relationships_installed": false,
+  "relationship_representation": "explicit cross-links and dependency requirements; no native Relationships mutation available",
+  "review_count": 39,
+  "task_count": 126,
+  "scenario_count": 30,
+  "batches": [
+    {"batch":"B01","issue":"Alpenl/cairn-share#28","tasks":10,"priority":"P0","legacy_pr":"Alpenl/cairn-share#24","requires":[],"preparation":"baseline and B08-T01, not all B08"},
+    {"batch":"B02","issue":"Alpenl/cairn-x-enricher#11","tasks":11,"priority":"P0","legacy_pr":"Alpenl/cairn-x-enricher#4","requires":["B01"],"partial_start":"UI/ReadingResult independent; B01 needed for handshake"},
+    {"batch":"B03","issue":"Alpenl/cairn-share#29","tasks":14,"priority":"P1","legacy_pr":"Alpenl/cairn-share#25","requires":["B01"],"coordinate_with":["B02"]},
+    {"batch":"B04","issue":"Alpenl/cairn-x-enricher#12","tasks":15,"priority":"P1","legacy_pr":"Alpenl/cairn-x-enricher#5","requires":["B02","B03"]},
+    {"batch":"B05","issue":"Alpenl/cairn-share#30","tasks":14,"priority":"P1","legacy_pr":"Alpenl/cairn-share#26","requires":["B03","B04"]},
+    {"batch":"B06","issue":"Alpenl/cairn-x-enricher#13","tasks":12,"priority":"P1","legacy_pr":"Alpenl/cairn-x-enricher#6","requires":["B04","B05"]},
+    {"batch":"B07","issue":"Alpenl/cairn-share#31","tasks":10,"priority":"P1","legacy_pr":"Alpenl/cairn-share#27","requires":["B05"],"coordinate_with":["B06"]},
+    {"batch":"B08","issue":"Alpenl/cairn-x-enricher#14","tasks":14,"priority":"P1","legacy_pr":"Alpenl/cairn-x-enricher#7","requires":["B03","B04"],"partial_start":"B08-T01 starts immediately; tools need run contract; retrieval needs B05; gold/live authorization gate quality only"},
+    {"batch":"B09","issue":"Alpenl/cairn-x-enricher#15","tasks":14,"priority":"P2","legacy_pr":"Alpenl/cairn-x-enricher#8","requires":["B03","B04","B05","B08"],"dependency_condition":"B08 offline tooling, not completion of externally blocked quality verification"},
+    {"batch":"B10","issue":"Alpenl/cairn-x-enricher#16","tasks":12,"priority":"P1","legacy_pr":"Alpenl/cairn-x-enricher#9","requires":["B01","B02","B03","B04","B05","B06","B07","B08","B09"],"partial_start":"integration harness can start before final acceptance"}
+  ]
+}

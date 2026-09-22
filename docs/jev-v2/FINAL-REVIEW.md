@@ -1,3 +1,36 @@
+# FINAL-REVIEW：Cairn Jev v2 跨仓复审证据
+
+## 2026-09-22 当前证据快照
+
+总控 [#10](https://github.com/Alpenl/cairn-x-enricher/issues/10)，最终验收 [#16](https://github.com/Alpenl/cairn-x-enricher/issues/16)。整体仍 `in_progress / acceptance_blocked`；本轮局部修复不等于 126 任务整体验收。
+
+| 仓库 | 本轮受测代码 SHA | 实现 PR |
+|---|---|---|
+| Share | `3c59f547d0c3a1acf5b5959dd16383709d6cf33d` | [#32](https://github.com/Alpenl/cairn-share/pull/32) |
+| Enricher | `1836179d486bc018ba5c890d507511b7f56bf2d4` | [#17](https://github.com/Alpenl/cairn-x-enricher/pull/17) |
+
+详见 [R3 第一批代码、失败回归、完整日志与限制](evidence/R3-20260922-runtime.md)。本报告是上述代码后的纯文档变更；代码版本与报告版本分别记录。
+
+| 验证范围 | 本轮实际结果 |
+|---|---|
+| Worker 本地真实 D1 / unit / contract | 129/129；包括 R3-01 最后 preflight 后的 target/content/lease 竞争、不同 operation 并发、SQL 回滚与幂等 |
+| Worker typecheck / deploy:dry-run | 通过；未部署 |
+| Enricher make verify | vet、完整 lint、全包 race、前端 73/73、build 通过；原 context 参数顺序 lint 已修 |
+| Go ↔ 真实本地 Worker/D1/R2 | 三个用例通过；真实提交丢响应后 2 次相同 operation 提交、1 次外部模型 fixture 调用、1 个 run |
+| 半开恢复 | 临时错误、取消、零任务、空队列与成功六种路径；并发探测、递增退避和 race 回归通过 |
+| 浏览器 / Android 模拟器 / 真机 | 本轮未运行；旧阶段成绩保留在历史中，不外推为本轮全链验收 |
+| Live / 模型质量 | 本轮未运行；按所有者更新采用自动参考基准，详见 [授权记录](AUTHORIZATION-20260922.md) |
+| GitHub CI | 本地门禁不代替远端结果；推送后按最新 PR HEAD 核对并登记于 #16 |
+
+R3-01/08 已有上述局部修复和回归证据；R3-11 代码部分完成，本轮整体证据仍待后续汇总。R3-02/03/04/05/06/07/09/10/12 仍待修复及验证；原 R/B/SC 不因未列出而取消。工程、自动基准质量、独立复审、合并、部署分别判断。
+
+## 历史记录
+
+下方原文来自报告提交 `1fd1eb72643343dc8601322c98a5b8ee423c6fcd`。其中早期固定 spec、不同阶段 SHA、设备“未运行/已运行”和部分整体 pass 均只作历史交付声明，不代表当前代码已验收。后续 R3 已指出的缺陷及重新验证要求优先；历史日志和真实局部进展继续保留。
+
+<details>
+<summary>展开 2026-09-21 历史报告（非当前验收结论）</summary>
+
 # FINAL-REVIEW：Cairn Jev v2 跨仓库最终复审证据（2026-09-21 修复轮）
 
 日期：2026-09-21
@@ -238,3 +271,6 @@ B09-T04/T05/T06/T09/T10/T11/T12 生命周期/补证据/重排/提案。逐任务
 3. 只有独立复审通过后才讨论合并/部署授权。
 
 **执行者不自行批准、不合并、不部署。**
+
+
+</details>

@@ -1,0 +1,39 @@
+
+> test
+> vitest run
+
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:287246) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 <workspace>/cairn-share/worker
+
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+ ❯ test/integration.test.ts (9 tests | 1 failed) 17605ms
+   × keeps the six legacy fields stable while v2 data exists 7874ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/integration.test.ts > keeps the six legacy fields stable while v2 data exists
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/integration.test.ts:46:1
+     44| });
+     45|
+     46| it("keeps the six legacy fields stable while v2 data exists", async ()…
+       | ^
+     47|   const id = await createLink();
+     48|   // Write a v2 selection with a folded fourth topic and hidden dimens…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 7 passed (8)
+      Tests  1 failed | 124 passed (125)
+   Start at  15:30:58
+   Duration  26.55s (transform 1.11s, setup 0ms, import 3.43s, tests 153.37s, environment 2ms)

@@ -1,0 +1,9 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+tests/localintegration/local_integration_test.go:576:29: context-as-argument: context.Context should be the first parameter of a function (revive)
+func postJSON(t *testing.T, ctx context.Context, url, token string, body map[string]any) map[string]any {
+                            ^
+1 issues:
+* revive: 1
+exit status 1
+make: *** [Makefile:39: lint-ci] Error 1
