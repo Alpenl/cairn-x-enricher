@@ -1,6 +1,6 @@
 # 部署与受控回填 Runbook（仅准备，不执行）
 
-本文件是 B10-T10 的**准备**产物。任何步骤在获得所有者明确授权前都不得执行。
+本文件是 B10-T10 的**准备**产物。所有者已授权推进全部任务；本轮仍处于代码与证据验收阶段，生产发布须满足 #16 的独立最终审查及运行条件，不能把本文件当作已执行记录。
 
 ## 版本兼容表
 
@@ -9,15 +9,16 @@
 | 旧六字段 App | 是 | 是（v1 投影稳定） |
 | 旧 enrichment v1 | 是 | 是（v1 写入保留隐藏 v2） |
 | 新 v2 App/Web | 否（`available:false` 只读降级） | 是 |
-| Go classify | generation 0 legacy target | v2 target（能力握手） |
+| 新 Go classify | 预算协议缺失，握手暂停 | 匹配目标 + 双向预算协议 |
+| 无预算旧 classify | 原历史行为 | claim 拒绝，不消耗 attempt |
 
 ## 部署顺序
 
-1. **先做 Worker + 迁移**（仅在授权后）：
+1. **停止并排空旧分类消费者，再做 Worker + 迁移**：
    - 备份 D1 快照并验证可恢复；
-   - 应用 `0010`、`0011`、`0012`（仅新增，非破坏性）；
-   - 验证 `classification_target_state.generation=0`、`protocol=legacy`；
-   - 验证旧消费者 claim 仍返回任务。
+   - 按当前已应用版本顺序补齐所有迁移（当前截至 0027），先在恢复副本验证；
+   - 记录已有 `classification_target_state`；首次迁移才可能为 generation 0，不重置已有目标；
+   - 验证旧消费者 claim 被拒绝，新预算协议 request/response header 均为 1。
 2. **再上 Go/Web**：部署新 enricher 镜像；确认 `GET /api/extensions` 全 off；`make verify` 通过。
 3. **Android**：仅在获批准后签名发布；不自动推送应用商店。
 4. **最后（单独授权）切换 spec/flags**：
@@ -36,11 +37,11 @@
 | --- | --- |
 | `capability_mismatch` 比例 | >10% 任务 |
 | `target_changed`/`input_changed` 比例 | >20% 任务 |
-| accepted error（人工抽查） | >10% |
+| accepted error（自动参考，报告来源与支持数） | >10% |
 | 单条模型调用 | >预算上限 |
 | `/readyz` 连续 503 | >5 分钟 |
 
-任一超阈值：停止扩大、关闭对应 flag、回滚到旧 generation。
+任一超阈值：停止扩大、关闭对应 flag、以新 generation 指向受支持的旧 spec；不能倒退 generation 或恢复无预算付费路径。
 
 ## 受控回填范围与预算
 
@@ -49,14 +50,11 @@
 - 每批有 ID 上限、调用/token 预算、取消与耗尽行为；
 - 禁止隐式全库任务。
 
-## 明确需要的授权
+## 发布前仍需完成的条件
 
-- 远端 D1 迁移：单独授权
-- 收费模型调用/回填：单独授权
-- NAS 镜像/生产切换：单独授权
-- Android 签名发布：单独授权
-
-以上任一未授权时保持“代码可审查、未部署”状态，不伪称已上线。
+所有者授权已经记录，不重复请求。生产 D1 备份恢复、迁移副本验证、独立最终审查、
+限定回填范围和停止条件仍须有实际证据；Android 签名发布保留发布凭据与制品核验。
+当前未部署，不能伪称上线。普通分类预算细节和旧 lease 边界见[分类运行说明](../jev-classification.md)。
 
 ## NAS 私有图片缓存兼容（2026-09-23，代码准备，未部署）
 

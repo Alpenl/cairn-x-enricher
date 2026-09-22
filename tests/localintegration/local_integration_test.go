@@ -401,6 +401,7 @@ func TestLocalWorkerVersionCompetition(t *testing.T) {
 	body, _ := json.Marshal(legacyTarget)
 	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/enrichment/classifications/target", bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+enricherToken)
+	request.Header.Set("X-Cairn-Classification-Budget", "1")
 	request.Header.Set("Content-Type", "application/json")
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
@@ -432,6 +433,7 @@ func TestLocalWorkerVersionCompetition(t *testing.T) {
 		})
 		request, _ := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/enrichment/classifications/claim", bytes.NewReader(body))
 		request.Header.Set("Authorization", "Bearer "+enricherToken)
+		request.Header.Set("X-Cairn-Classification-Budget", "1")
 		request.Header.Set("Content-Type", "application/json")
 		response, err := http.DefaultClient.Do(request)
 		if err != nil {
@@ -499,6 +501,7 @@ func legacyComplete(t *testing.T, base, token string, id int64, job *cairn.Class
 	request, _ := http.NewRequestWithContext(context.Background(), http.MethodPost,
 		fmt.Sprintf("%s/api/enrichment/classifications/%d/complete", base, id), bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("X-Cairn-Classification-Budget", "1")
 	request.Header.Set("Content-Type", "application/json")
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
@@ -520,6 +523,7 @@ func legacyClaim(t *testing.T, base, token string) *cairn.ClassificationJob {
 	})
 	request, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, base+"/api/enrichment/classifications/claim", bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("X-Cairn-Classification-Budget", "1")
 	request.Header.Set("Content-Type", "application/json")
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
@@ -560,6 +564,7 @@ func createLink(t *testing.T, base, token string) int64 {
 	body, _ := json.Marshal(map[string]any{"url": "https://x.com/local/status/1", "note": ""})
 	request, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, base+"/api/links", bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("X-Cairn-Classification-Budget", "1")
 	request.Header.Set("Content-Type", "application/json")
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
@@ -585,6 +590,7 @@ func claimEnrichmentJob(t *testing.T, base, token string, id int64) string {
 	t.Helper()
 	request, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, fmt.Sprintf("%s/api/enrichment/jobs/%d/claim", base, id), nil)
 	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("X-Cairn-Classification-Budget", "1")
 	request.Header.Set("Content-Type", "application/json")
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
@@ -603,16 +609,21 @@ func claimEnrichmentJob(t *testing.T, base, token string, id int64) string {
 	return payload.LeaseToken
 }
 
-func switchTarget(t *testing.T, base, token string, classifier *classify.Client) {
+func switchTarget(t *testing.T, base, token string, classifier *classify.Client, models ...string) {
+	model := "jev-latest"
+	if len(models) > 0 {
+		model = models[0]
+	}
 	t.Helper()
 	spec := classifier.Spec()
 	body, _ := json.Marshal(map[string]any{
 		"spec_id": spec.SpecID, "spec_hash": spec.SemanticHash,
 		"taxonomy_version": spec.TaxonomyVersion, "policy_version": classify.PolicyVersion,
-		"requested_model": "jev-latest", "protocol": "v2",
+		"requested_model": model, "protocol": "v2",
 	})
 	request, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, base+"/api/enrichment/classifications/target", bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("X-Cairn-Classification-Budget", "1")
 	request.Header.Set("Content-Type", "application/json")
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
@@ -682,6 +693,7 @@ func postJSON(ctx context.Context, t *testing.T, url, token string, body map[str
 	payload, _ := json.Marshal(body)
 	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
 	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("X-Cairn-Classification-Budget", "1")
 	request.Header.Set("Content-Type", "application/json")
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Alpenl/cairn-x-enricher/internal/classify"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
@@ -192,6 +193,8 @@ func (e *APIError) IsConflict() bool {
 // duplicate completion, and each needs different recovery.
 func (e *APIError) Class() enrich.ErrorClass {
 	switch e.Code {
+	case "budget_exhausted":
+		return enrich.ErrorClassBudget
 	case "capability_mismatch", "configuration_error":
 		return enrich.ErrorClassConfiguration
 	case "invalid_classification", "invalid_classification_config", "invalid_source", "invalid_operation_key", "invalid_json":
@@ -220,9 +223,10 @@ func (e *APIError) Class() enrich.ErrorClass {
 
 // Client calls the Cairn Share Worker's internal enrichment endpoints.
 type Client struct {
-	baseURL    string
-	token      string
-	httpClient *http.Client
+	baseURL              string
+	token                string
+	httpClient           *http.Client
+	classificationBudget *classify.CallBudgetLimits
 }
 
 // NewClient creates a client for the Worker's internal enrichment API.
@@ -540,6 +544,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	request.Header.Set("Authorization", "Bearer "+c.token)
+	if strings.HasPrefix(path, "/api/enrichment/classifications/") {
+		request.Header.Set("X-Cairn-Classification-Budget", "1")
+	}
 	request.Header.Set("Accept", "application/json")
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")

@@ -64,7 +64,7 @@ async function main() {
       GROK_MODEL: "grok-mock",
       TYPESAFE_BASE_URL: mock.url,
       TYPESAFE_API_KEY: "local-mock",
-      TYPESAFE_MODEL: "jev-latest",
+      TYPESAFE_MODEL: "jev-1.13.0",
       POLL_INTERVAL: "2s",
       MAX_JOBS_PER_RUN: "5",
       CAIRN_EXTENSION_ENTITIES: "true",
@@ -100,7 +100,7 @@ async function main() {
       method: "POST", headers: auth(enricherToken),
       body: JSON.stringify({
         spec_id: spec.spec_id, spec_hash: spec.spec_hash, taxonomy_version: taxonomyVersion,
-        policy_version: policyVersion, requested_model: "jev-latest", protocol: "v2"
+        policy_version: policyVersion, requested_model: "jev-1.13.0", protocol: "v2"
       })
     });
     check("v2 target activated", activated.status === 200, JSON.stringify(activated.payload));
@@ -117,7 +117,7 @@ async function main() {
       const result = await jsonFetch(`${workerURL}/api/v2/links/${id}/runs`, { headers: auth(enricherToken) });
       return result.status === 200 && result.payload.runs?.length ? result.payload.runs[0] : null;
     }, 180000);
-    check("the scheduler produced a v2 run with the mock model", run.resolved_model === "jev-mock-1.0", JSON.stringify(run).slice(0, 300));
+    check("the scheduler produced a v2 run with the mock model", run.resolved_model === "jev-1.13.0", JSON.stringify(run).slice(0, 300));
     check("the provider usage was preserved", run.usage?.input_tokens === 111, JSON.stringify(run.usage));
     const job = await jsonFetch(`${workerURL}/api/enrichment/classifications/${id}`, { headers: auth(enricherToken) });
     check("the classification job completed against the target", job.payload.status === "completed", JSON.stringify(job.payload).slice(0, 200));
@@ -133,7 +133,7 @@ async function main() {
       const replay = await jsonFetch(`${workerURL}/api/v2/links/${id}/decisions`, {
         method: "POST", headers: auth(enricherToken), body: JSON.stringify({
           operation_key: `browser-ai-rebuild-${pass}`, run_ids: [run.id], policy_version: policyVersion,
-          spec_id: spec.spec_id, requested_model: "jev-latest", content_revision: run.content_revision,
+          spec_id: spec.spec_id, requested_model: "jev-1.13.0", content_revision: run.content_revision,
           automatic: selection.payload.selection
         })
       });

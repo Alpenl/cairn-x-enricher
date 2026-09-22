@@ -37,7 +37,8 @@ func TestClassifyCommandUsesSameMultidimensionalSpecAsService(t *testing.T) {
 		case "/api/v2/question-specs":
 			_ = json.NewEncoder(w).Encode(map[string]any{"spec_id": spec.SpecID, "spec_hash": spec.SemanticHash})
 		case "/api/enrichment/classifications/target":
-			_ = json.NewEncoder(w).Encode(map[string]any{"target": map[string]any{"generation": 1, "protocol": "v2", "spec_id": spec.SpecID, "spec_hash": spec.SemanticHash, "taxonomy_version": full.Version, "policy_version": classify.PolicyVersion, "requested_model": "jev-latest"}, "supported": r.URL.Query().Get("spec_ids") == spec.SpecID})
+			w.Header().Set("X-Cairn-Classification-Budget", "1")
+			_ = json.NewEncoder(w).Encode(map[string]any{"target": map[string]any{"generation": 1, "protocol": "v2", "spec_id": spec.SpecID, "spec_hash": spec.SemanticHash, "taxonomy_version": full.Version, "policy_version": classify.PolicyVersion, "requested_model": "jev-1.13.0"}, "supported": r.URL.Query().Get("spec_ids") == spec.SpecID})
 		case "/api/enrichment/classifications/claim":
 			claims.Add(1)
 			w.WriteHeader(http.StatusNoContent)
@@ -51,7 +52,7 @@ func TestClassifyCommandUsesSameMultidimensionalSpecAsService(t *testing.T) {
 	t.Setenv("CAIRN_ENRICHER_TOKEN", "fixture")
 	t.Setenv("TYPESAFE_BASE_URL", server.URL)
 	t.Setenv("TYPESAFE_API_KEY", "fixture")
-	t.Setenv("TYPESAFE_MODEL", "jev-latest")
+	t.Setenv("TYPESAFE_MODEL", "jev-1.13.0")
 	command := newClassifyCommand()
 	var output bytes.Buffer
 	command.SetOut(&output)
@@ -108,7 +109,8 @@ func TestClassifyCommandCatalogFallbackBoundaries(t *testing.T) {
 					writes.Add(1)
 					_ = json.NewEncoder(w).Encode(map[string]string{"spec_id": spec.SpecID, "spec_hash": spec.SemanticHash})
 				case "/api/enrichment/classifications/target":
-					_ = json.NewEncoder(w).Encode(map[string]any{"target": map[string]any{"generation": 0, "protocol": "v2", "spec_id": spec.SpecID, "spec_hash": spec.SemanticHash, "taxonomy_version": legacy.Version, "policy_version": classify.PolicyVersion, "requested_model": "jev-latest"}, "supported": r.URL.Query().Get("spec_ids") == spec.SpecID})
+					w.Header().Set("X-Cairn-Classification-Budget", "1")
+					_ = json.NewEncoder(w).Encode(map[string]any{"target": map[string]any{"generation": 0, "protocol": "v2", "spec_id": spec.SpecID, "spec_hash": spec.SemanticHash, "taxonomy_version": legacy.Version, "policy_version": classify.PolicyVersion, "requested_model": "jev-1.13.0"}, "supported": r.URL.Query().Get("spec_ids") == spec.SpecID})
 				case "/api/enrichment/classifications/claim":
 					claims.Add(1)
 					w.WriteHeader(204)
@@ -123,7 +125,7 @@ func TestClassifyCommandCatalogFallbackBoundaries(t *testing.T) {
 			t.Setenv("CAIRN_ENRICHER_TOKEN", "fixture")
 			t.Setenv("TYPESAFE_BASE_URL", server.URL)
 			t.Setenv("TYPESAFE_API_KEY", "fixture")
-			t.Setenv("TYPESAFE_MODEL", "jev-latest")
+			t.Setenv("TYPESAFE_MODEL", "jev-1.13.0")
 			cmd := newClassifyCommand()
 			var out, stderr bytes.Buffer
 			cmd.SetOut(&out)

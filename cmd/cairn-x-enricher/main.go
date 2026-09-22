@@ -383,6 +383,9 @@ func newProcessor(
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := configureClassificationBudget(cfg, queue, classifier); err != nil {
+		return nil, nil, err
+	}
 	// Register the immutable question spec so a stored run can be replayed
 	// against the exact definition it was evaluated with. Re-registering the
 	// same bytes is idempotent; a changed definition under the same id is
@@ -542,4 +545,25 @@ func newLogger(level string) *slog.Logger {
 		"error": slog.LevelError,
 	}
 	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: levels[level]}))
+}
+
+// configureClassificationBudget wires persistent admission before workers run.
+func configureClassificationBudget(cfg config.Config, queue *cairn.Client, client *classify.Client) error {
+	limits := classify.DefaultCallBudgetLimits()
+	if cfg.ClassificationMaxCalls > 0 {
+		limits.MaxCallsTotal = cfg.ClassificationMaxCalls
+	}
+	if cfg.ClassificationMaxCallsPerItem > 0 {
+		limits.MaxCallsPerItem = cfg.ClassificationMaxCallsPerItem
+	}
+	if cfg.ClassificationMaxInputTokens > 0 {
+		limits.MaxTokens = cfg.ClassificationMaxInputTokens
+	}
+	if cfg.ClassificationMaxInputTokensPerItem > 0 {
+		limits.MaxTokensPerItem = cfg.ClassificationMaxInputTokensPerItem
+	}
+	if err := queue.SetClassificationBudgetLimits(limits); err != nil {
+		return err
+	}
+	return client.SetCallBudget(queue, limits)
 }

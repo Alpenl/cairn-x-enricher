@@ -55,6 +55,8 @@ chmod 600 .env
 | `XAI_API_KEY` | 模型端点密钥 |
 | `TYPESAFE_API_KEY` | Jev 分类密钥，仅服务端使用 |
 
+普通分类固定 `TYPESAFE_MODEL=jev-1.13.0`，与 Worker 受控目标匹配；默认 UTC 日限全局 20 次、逐条 5 次实际 Jev 请求。可通过四项 `CAIRN_CLASSIFICATION_*` 变量收紧，跨进程持久化，详见[预算与升级边界](docs/jev-classification.md#持久调用预算)。
+
 其余变量及默认值均列在 `.env.example`。进程启动时会验证必填值、URL、数值范围和 duration 格式。
 
 启动时还会做两项前置检查，任何一项失败都会让进程以非零码退出并在日志中给出原因：
@@ -136,7 +138,7 @@ ghcr.io/alpenl/cairn-x-enricher:<version>
 ```
 
 完整部署顺序和 Cloudflare 前置改造见 [docs/deployment.md](docs/deployment.md) 与 [docs/cloudflare-backend.md](docs/cloudflare-backend.md)。
-当前开发版需要配套 Worker 的全部迁移（截至 `0009_independent_classification.sql`）和新接口。迁移 0009 增加原文快照和分类任务表。先升级 Worker，再运行新版 Enricher；已有 App 协议保持兼容。不会自动回填历史收藏。修改代码不会自动升级 NAS 的固定版本镜像。
+当前开发版需要配套 Worker 的全部迁移（截至 0027）和预算握手接口。停止并排空旧分类消费者，先升级 Worker，再运行新版 Enricher；旧消费者不能继续领取分类任务。已有 App 读取协议保持兼容。不会自动回填历史收藏。修改代码不会自动升级 NAS 的固定版本镜像。
 Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网阅读库映射到 `8088`；页面展示 Cloudflare 中全部收藏，只有 X 链接可以触发模型处理。旧版已完成记录会继续显示原内容，只有手动重新处理后才会生成新版标题、译文和图片。该清单只拉取 GitHub Actions 发布的镜像，不在 NAS 本地构建。
 
 ## 发布

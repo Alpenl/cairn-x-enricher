@@ -272,7 +272,7 @@ func (c *Client) evaluateQuestions(ctx context.Context, input Input, questions [
 	}
 	response, err := c.callProvider(ctx, body)
 	if err != nil {
-		return RawJudgments{Calls: []ProviderCall{response.Call}, Usage: response.Usage, UsageMissing: response.UsageMissing}, err
+		return RawJudgments{Calls: attemptedCall(response.Call), Usage: response.Usage, UsageMissing: response.UsageMissing}, err
 	}
 	subsetSpec := QuestionSpec{SpecID: c.spec.SpecID, SpecVersion: c.spec.SpecVersion,
 		TaxonomyVersion: c.spec.TaxonomyVersion, SemanticHash: c.spec.SemanticHash,

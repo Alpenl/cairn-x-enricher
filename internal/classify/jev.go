@@ -108,6 +108,8 @@ type Client struct {
 	spec                 QuestionSpec
 	policy               Policy
 	budget               Budget
+	callBudgetStore      CallBudgetStore
+	callBudgetLimits     CallBudgetLimits
 }
 
 // NewClient validates the catalog and compiles the question set once.
@@ -286,7 +288,7 @@ func (c *Client) Evaluate(ctx context.Context, input Input) (RawJudgments, error
 	}
 	wire, err := c.callProvider(ctx, body)
 	if err != nil {
-		return RawJudgments{Calls: []ProviderCall{wire.Call}, Usage: wire.Usage, UsageMissing: wire.UsageMissing}, err
+		return RawJudgments{Calls: attemptedCall(wire.Call), Usage: wire.Usage, UsageMissing: wire.UsageMissing}, err
 	}
 	if err := ValidateAnswers(c.spec, wire.Answers); err != nil {
 		return RawJudgments{Calls: []ProviderCall{wire.Call}, Usage: wire.Usage, UsageMissing: wire.UsageMissing}, enrich.Classified(err, enrich.ErrorClassContract)
@@ -363,6 +365,9 @@ func (c *Client) callProvider(ctx context.Context, body []byte) (wire providerRe
 	if err != nil {
 		return wire, errors.New("invalid TypeSafe endpoint")
 	}
+	if err := c.reserveProviderCall(ctx, body); err != nil {
+		return wire, err
+	}
 	started := time.Now()
 	defer func() {
 		call.LatencyMS = time.Since(started).Milliseconds()
@@ -396,6 +401,9 @@ func (c *Client) callProvider(ctx context.Context, body []byte) (wire providerRe
 	}
 	if wire.Model == "" || len(wire.Model) > 200 {
 		return wire, enrich.Classified(errors.New("TypeSafe response missing model"), enrich.ErrorClassContract)
+	}
+	if c.callBudgetStore != nil && wire.Model != c.model {
+		return wire, enrich.Classified(errors.New("classification resolved model differs from budgeted pinned model"), enrich.ErrorClassContract)
 	}
 	wire.UsageMissing = len(wire.Usage) == 0
 	return wire, nil

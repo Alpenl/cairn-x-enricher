@@ -46,6 +46,9 @@ func newClassifyCommand() *cobra.Command {
 				return err
 			}
 		}
+		if err := configureClassificationBudget(cfg, queue, client); err != nil {
+			return err
+		}
 		worker := processor.NewStaged(queue, nil, client, catalog.Version, cfg.TypesafeModel, newLogger(cfg.LogLevel), 1)
 		extensions := extensionService(cfg, client)
 		extensions.SetBudgetStore(queue)

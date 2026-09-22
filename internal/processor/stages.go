@@ -542,6 +542,9 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 // Any failure to reconstruct the previous run falls back to the full
 // evaluation; it never fails the job (R2-13).
 func (p *Processor) classifyJob(ctx context.Context, job *cairn.ClassificationJob) (classify.Result, error) {
+	ctx = classify.WithClassificationLease(ctx, classify.ClassificationLease{
+		LinkID: job.ID, LeaseToken: job.LeaseToken, Revision: job.Revision, InputRevision: job.InputRevision, TargetGeneration: job.TargetGeneration, SpecID: job.SpecID, ContentRevision: job.ContentRevision, EvidenceSnapshotID: job.EvidenceSnapshotID, EvidenceHash: job.EvidenceHash,
+	})
 	s := p.stages
 	if s.partialReuse {
 		reuser, ok := s.classifier.(interface {

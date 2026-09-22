@@ -31,6 +31,8 @@ const (
 	// does not confirm the caller's operation; only its exact idempotent replay
 	// may do so. Keep this class for compatibility with older Worker errors.
 	ErrorClassCompleted ErrorClass = "already_completed"
+	// ErrorClassBudget pauses admission without treating exhaustion as a model failure.
+	ErrorClassBudget ErrorClass = "budget"
 	// ErrorClassUnknown is the default when nothing else applies. It is treated
 	// conservatively as a job-level failure, never as a component pause.
 	ErrorClassUnknown ErrorClass = "unknown"
@@ -92,7 +94,7 @@ func ClassOf(err error) ErrorClass {
 // the dependency recovers.
 func PausesComponent(err error) bool {
 	class := ClassOf(err)
-	return class == ErrorClassConfiguration || class == ErrorClassContract
+	return class == ErrorClassConfiguration || class == ErrorClassContract || class == ErrorClassBudget
 }
 
 // IsRetryable reports whether a bounded retry is appropriate.

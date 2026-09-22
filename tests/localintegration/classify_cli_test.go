@@ -81,14 +81,14 @@ func TestLocalWorkerClassifyCLI(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-1.13.0", "answers": answers, "usage": map[string]int{"input_tokens": 123, "output_tokens": 10}})
 	}))
 	defer provider.Close()
-	classifier, err := classify.NewClient(provider.URL, "fixture", "jev-latest", provider.Client(), catalog)
+	classifier, err := classify.NewClient(provider.URL, "fixture", "jev-1.13.0", provider.Client(), catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := queue.PutQuestionSpec(ctx, spec); err != nil {
 		t.Fatal(err)
 	}
-	switchTarget(t, base, token, classifier)
+	switchTarget(t, base, token, classifier, "jev-1.13.0")
 	var ids []int64
 	sources := map[int64]enrich.Source{}
 	for i := 1; i <= 2; i++ {
@@ -123,7 +123,7 @@ func TestLocalWorkerClassifyCLI(t *testing.T) {
 			command.Args = append(command.Args, "--id", strconv.FormatInt(retryID, 10))
 		}
 		command.Dir = work // main loads .env; this directory contains only the test binary.
-		command.Env = []string{"PATH=" + os.Getenv("PATH"), "CAIRN_API_BASE_URL=" + base, "CAIRN_ENRICHER_TOKEN=" + token, "TYPESAFE_BASE_URL=" + provider.URL, "TYPESAFE_API_KEY=fixture", "TYPESAFE_MODEL=jev-latest", "LOG_LEVEL=error"}
+		command.Env = []string{"PATH=" + os.Getenv("PATH"), "CAIRN_API_BASE_URL=" + base, "CAIRN_ENRICHER_TOKEN=" + token, "TYPESAFE_BASE_URL=" + provider.URL, "TYPESAFE_API_KEY=fixture", "TYPESAFE_MODEL=jev-1.13.0", "LOG_LEVEL=error"}
 		var stdout, stderr bytes.Buffer
 		command.Stdout = &stdout
 		command.Stderr = &stderr

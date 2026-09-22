@@ -42,3 +42,11 @@ SC06–10/13/17–18/25–27/29–30；R02/R07–R21/R25/R37。表驱动/fuzz/pr
 Worker 拒绝新分类完成的 legacy projection、v2 automatic 和 accepted assessment 中的自动 `contra`，并在独立 decision/replay 写入口执行相同守卫。历史 stored 读取和人工 curation/override 不受此限制。拒绝在事务前发生，不产生 runs/decisions/projections 或完成任务；合法重新提交仍可成功。
 
 源码升级不自动切换生产 target。部署时须先使用兼容 Worker 守卫，再以审核后的 spec/policy/model 更新目标；新 consumer 不宣称支持旧 policy，新旧目标不匹配走既有配置暂停。Worker 可能拒绝旧 consumer 生成的 contra，这是保留人工边界的预期拒绝。无新增迁移，不清理或改写历史分类/人工事件。本次工程验证不代替新问题 spec 的真实质量评估。
+
+## 2026-09-23：普通分类持久预算
+
+生产 `serve` / `once` / `classify` 在每次实际 provider HTTP 前申请 D1 原子授权。固定模型
+`jev-1.13.0`；UTC 日限全局 20 / 逐条 5 次，每次预留 65536 input tokens。全量、部分复用
+与拆批统一计量；已领取任务完全复用及纯策略重放不收费。耗尽在 claim 前暂停或跳过条目，
+不额外消耗 attempt；丢失授权不推断、不重试、不退款。新旧组件双向握手，旧消费者拒绝领取。
+配置、升级前排空旧 lease、独立扩展池及局限见[运行说明](../jev-classification.md)。

@@ -58,7 +58,11 @@ type Config struct {
 	// PartialReuse opts in to reusing unchanged stored answers for a new
 	// classification. It is off by default; the conservative full evaluation is
 	// the production default (R2-13).
-	PartialReuse bool
+	PartialReuse                        bool
+	ClassificationMaxCalls              int
+	ClassificationMaxCallsPerItem       int
+	ClassificationMaxInputTokens        int
+	ClassificationMaxInputTokensPerItem int
 }
 
 // Role identifies which components a command actually uses. Configuration is
@@ -89,6 +93,9 @@ func LoadFor(role Role) (Config, error) {
 	if err := cfg.readNumbers(); err != nil {
 		return Config{}, err
 	}
+	if (role == RoleServe || role == RoleClassify) && cfg.TypesafeModel != "jev-1.13.0" {
+		return Config{}, fmt.Errorf("classification budget requires pinned TYPESAFE_MODEL=jev-1.13.0 and matching controlled target")
+	}
 	if err := cfg.validateFor(role); err != nil {
 		return Config{}, err
 	}
@@ -100,7 +107,7 @@ func baseConfig() Config {
 	return Config{
 		TypesafeBaseURL: valueOrDefault("TYPESAFE_BASE_URL", "https://api.typesafe.ai"),
 		TypesafeAPIKey:  strings.TrimSpace(os.Getenv("TYPESAFE_API_KEY")),
-		TypesafeModel:   valueOrDefault("TYPESAFE_MODEL", "jev-latest"),
+		TypesafeModel:   valueOrDefault("TYPESAFE_MODEL", "jev-1.13.0"),
 		CairnBaseURL:    valueOrDefault("CAIRN_API_BASE_URL", defaultCairnBaseURL),
 		CairnToken:      strings.TrimSpace(os.Getenv("CAIRN_ENRICHER_TOKEN")),
 		GrokBaseURL:     strings.TrimSpace(os.Getenv("GROK_MODELS_BASE_URL")),
@@ -142,6 +149,18 @@ func splitCSV(value string) []string {
 
 func (c *Config) readNumbers() error {
 	var err error
+	if c.ClassificationMaxCalls, err = intValue("CAIRN_CLASSIFICATION_MAX_CALLS", 20, 1, 20); err != nil {
+		return err
+	}
+	if c.ClassificationMaxCallsPerItem, err = intValue("CAIRN_CLASSIFICATION_MAX_CALLS_PER_ITEM", 5, 1, 5); err != nil {
+		return err
+	}
+	if c.ClassificationMaxInputTokens, err = intValue("CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS", 20*65536, 1, 20*65536); err != nil {
+		return err
+	}
+	if c.ClassificationMaxInputTokensPerItem, err = intValue("CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS_PER_ITEM", 5*65536, 1, 5*65536); err != nil {
+		return err
+	}
 	if c.ExtensionMaxCalls, err = intValue("CAIRN_EXTENSION_MAX_CALLS", 20, 1, 20); err != nil {
 		return err
 	}

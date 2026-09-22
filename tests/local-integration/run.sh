@@ -134,3 +134,5 @@ run_case imageprivacy TestLocalWorkerPrivateImageLifecycle
 run_case extensionbudget TestLocalWorkerExtensionBudgetAcrossProcesses
 
 run_case rerankcache TestLocalWorkerRerankCacheAcrossProcesses
+
+run_case classificationbudget TestLocalWorkerClassificationBudgetAcrossProcesses

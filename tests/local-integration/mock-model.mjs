@@ -71,7 +71,7 @@ export function startMockModel() {
         else if (question.type === "choice") answers[id] = choiceAnswers(question);
         else if (question.type === "score") answers[id] = scoreAnswer(question);
       }
-      return send({ model: "jev-mock-1.0", answers, usage: { input_tokens: 111, output_tokens: 22 } });
+      return send({ model: "jev-1.13.0", answers, usage: { input_tokens: 111, output_tokens: 22 } });
     }
     return send({ error: "not_found" }, 404);
   });

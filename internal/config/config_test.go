@@ -152,3 +152,28 @@ func TestEveryRoleRequiresTheWorkerToken(t *testing.T) {
 		}
 	}
 }
+
+func TestClassificationBudgetConfiguration(t *testing.T) {
+	setRequiredEnv(t)
+	cfg, err := LoadFor(RoleClassify)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TypesafeModel != "jev-1.13.0" || cfg.ClassificationMaxCalls != 20 || cfg.ClassificationMaxCallsPerItem != 5 || cfg.ClassificationMaxInputTokens != 20*65536 || cfg.ClassificationMaxInputTokensPerItem != 5*65536 {
+		t.Fatalf("defaults %+v", cfg)
+	}
+	for _, pair := range [][2]string{{"CAIRN_CLASSIFICATION_MAX_CALLS", "21"}, {"CAIRN_CLASSIFICATION_MAX_CALLS_PER_ITEM", "6"}, {"CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS", "0"}, {"CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS_PER_ITEM", "327681"}, {"TYPESAFE_MODEL", "jev-latest"}} {
+		t.Run(pair[0], func(t *testing.T) {
+			t.Setenv(pair[0], pair[1])
+			if _, err := LoadFor(RoleClassify); err == nil {
+				t.Fatal("unsafe config accepted")
+			}
+		})
+	}
+	t.Setenv("CAIRN_CLASSIFICATION_MAX_CALLS", "1")
+	t.Setenv("CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS", "1")
+	cfg, err = LoadFor(RoleClassify)
+	if err != nil || cfg.ClassificationMaxCalls != 1 || cfg.ClassificationMaxInputTokens != 1 {
+		t.Fatalf("tightening %v %+v", err, cfg)
+	}
+}

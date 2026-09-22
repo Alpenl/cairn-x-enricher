@@ -159,8 +159,19 @@ func (c *Client) EvaluateBatched(ctx context.Context, input Input, maxPerRequest
 		BatchSemantics: fmt.Sprintf("chunks-of-%d", maxPerRequest),
 	}
 	missing := []string{}
+	markIncomplete := func() {
+		merged.Coverage = "partial"
+		merged.Missing = nil
+		for _, question := range c.spec.Questions {
+			if _, ok := merged.Judgments[question.ID]; !ok {
+				merged.Missing = append(merged.Missing, question.ID)
+			}
+		}
+		sort.Strings(merged.Missing)
+	}
 	for _, chunk := range chunks {
 		if ctx.Err() != nil {
+			markIncomplete()
 			return merged, ctx.Err()
 		}
 		fresh, err := c.evaluateQuestions(ctx, input, chunk.Questions, evidenceHash, merged.BatchSemantics)
@@ -168,7 +179,8 @@ func (c *Client) EvaluateBatched(ctx context.Context, input Input, maxPerRequest
 		merged.Usage = mergeUsage(merged.Usage, fresh.Usage)
 		merged.UsageMissing = merged.UsageMissing || fresh.UsageMissing
 		if err != nil {
-			if enrich.PausesComponent(err) {
+			if enrich.PausesComponent(err) || enrich.IsStale(err) || ctx.Err() != nil {
+				markIncomplete()
 				return merged, err
 			}
 			// The failure is contained to this chunk; its questions stay missing

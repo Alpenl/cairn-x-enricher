@@ -2,10 +2,13 @@ package cairn
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/Alpenl/cairn-x-enricher/internal/classify"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 )
 
@@ -101,4 +104,38 @@ func contains(haystack, needle string) bool {
 		}
 		return false
 	})()
+}
+
+func TestBudgetedConsumerRequiresServerProtocolBeforeClaim(t *testing.T) {
+	for _, supported := range []bool{false, true} {
+		t.Run(fmt.Sprint(supported), func(t *testing.T) {
+			claims := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("X-Cairn-Classification-Budget") != "1" {
+					t.Error("consumer capability missing")
+				}
+				if strings.HasSuffix(r.URL.Path, "/claim") {
+					claims++
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+				if supported {
+					w.Header().Set("X-Cairn-Classification-Budget", "1")
+				}
+				_, _ = w.Write([]byte(`{"target":{"generation":1,"spec_id":"fixture","spec_hash":"hash","taxonomy_version":"fixture","policy_version":"jev-policy-v3","requested_model":"jev-1.13.0","protocol":"v2"},"supported":true}`))
+			}))
+			defer server.Close()
+			client := NewClient(server.URL, "fixture", server.Client())
+			if err := client.SetClassificationBudgetLimits(classify.DefaultCallBudgetLimits()); err != nil {
+				t.Fatal(err)
+			}
+			_, err := client.ClaimClassification(context.Background(), "fixture", "fixture", "jev-1.13.0")
+			if supported && (err != nil || claims != 1) {
+				t.Fatalf("new backend refused: %v claims=%d", err, claims)
+			}
+			if !supported && (!enrich.PausesComponent(err) || claims != 0) {
+				t.Fatalf("old backend consumed claim: %v claims=%d", err, claims)
+			}
+		})
+	}
 }

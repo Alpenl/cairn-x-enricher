@@ -69,6 +69,9 @@ func (c *Client) Handshake(ctx context.Context, caps Capabilities) (HandshakeRes
 	if response.StatusCode != http.StatusOK {
 		return HandshakeResult{}, apiError(response)
 	}
+	if c.classificationBudget != nil && response.Header.Get("X-Cairn-Classification-Budget") != "1" {
+		return HandshakeResult{}, enrich.Classified(errors.New("backend lacks classification budget protocol; upgrade Worker before admitting paid classification"), enrich.ErrorClassConfiguration)
+	}
 	var result HandshakeResult
 	if err := decodeJSON(response.Body, &result); err != nil {
 		return HandshakeResult{}, fmt.Errorf("decode handshake: %w", err)
@@ -142,13 +145,17 @@ func (c *Client) ClaimClassification(ctx context.Context, specID, version, model
 	if !handshake.Supported {
 		return nil, enrich.Classified(fmt.Errorf("classification target %q generation %d is not supported by this consumer", handshake.Target.SpecID, handshake.Target.Generation), enrich.ErrorClassConfiguration)
 	}
-	response, err := c.do(ctx, http.MethodPost, "/api/enrichment/classifications/claim", map[string]any{
+	payload := map[string]any{
 		"protocol":          "v2",
 		"spec_ids":          []string{handshake.Target.SpecID},
 		"taxonomy_versions": []string{handshake.Target.TaxonomyVersion},
 		"policy_versions":   []string{handshake.Target.PolicyVersion},
 		"models":            []string{handshake.Target.RequestedModel},
-	})
+	}
+	if c.classificationBudget != nil {
+		payload["budget_limits"] = *c.classificationBudget
+	}
+	response, err := c.do(ctx, http.MethodPost, "/api/enrichment/classifications/claim", payload)
 	if err != nil {
 		return nil, err
 	}
