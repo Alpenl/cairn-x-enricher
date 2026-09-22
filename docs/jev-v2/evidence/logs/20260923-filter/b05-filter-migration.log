@@ -1,0 +1,18 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:1929190) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-b05-filter-next/worker
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  00:24:00
+   Duration  939ms (transform 109ms, setup 0ms, import 179ms, tests 362ms, environment 0ms)
+
+
+> typecheck
+> tsc --noEmit
+

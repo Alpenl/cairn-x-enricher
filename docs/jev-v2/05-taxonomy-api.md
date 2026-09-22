@@ -34,3 +34,17 @@ v1 PATCH仅影响其可表达的旧维度/可见部分，不抹隐藏第四topic
 四topic保留且v1合法；tool+method+data+thread可表达；空use成功；label改名不重评；停用历史可读；旧写不清隐藏值或复活reject；缓存/过滤/导出一致；候选不越权；未批准提案不生效。旧新App/Go shape/PATCH、共享vectors、本地迁移/回滚、安全/性能规模有测试。
 
 SC03/06–08/13–16/19/21/23–25/29–30；R03–R06/R08–R09/R13/R19/R26–R33/R37–R38。Worker门禁及必要EXPLAIN，禁止以小样本假称大库性能。交evidence/B05.md/固定合同SHA，代码PR按功能拆，不自动关闭整个Issue。回退flag保留v2历史，不反向压平。
+
+
+## 2026-09-23 实际列表筛选合同
+
+`GET /api/links`（App token）和 `GET /api/enrichment/jobs`（内部 token）共用有效分类筛选：
+
+- 既有 `topic` / `form` / `use` 各为单个稳定 ID；新增 `topics` / `content_functions` / `carriers` / `affordances` 为逗号分隔的 ID。`topic` 与 `topics` 合并为同一维；同维 OR、跨维 AND。载体本身仍为单值，多个查询载体表示任一匹配。
+- 显式空参数、空分项、未知 ID、同名重复参数及超界值返回 `400 invalid_query`。已知停用 ID 可查历史收藏，不允许把未知条件静默丢弃后扩大结果。参数有界且绑定到 SQL，不插入用户字符串。
+- 筛选读取最新决定、真实 legacy 原始层与按 revision/id 排序的人工事件；不读可变投影缓存，不截断第四主题，也不先截取固定数量候选再过滤。人工 accept/reject/明确清空/单标签或整维 reset 语义与共享向量相同。
+- `entity_state` 可选 `not_run`、`failed`、`completed_empty`、`completed_nonempty`、`stale`；多个值用逗号 OR。实体状态由独立运行及 content revision/snapshot/hash 身份决定，人工实体纠正不冒充自动成功或解除 stale。
+- 内部列表的 `counts` 为当前内容/分类/人工筛选条件下的各任务状态计数，保留所有状态供切换状态页；不受 `status` 页签、`limit`、`before_id` 影响。分页与计数在同一 D1 batch 事务读取。响应字段和类型不增加，旧无筛选请求仍返回全量状态计数。
+- App 缓存键包括全部上述参数，并提升缓存格式版本。迁移 `0025_selection_filter_cache.sql` 在 content revision 变化及新增 evidence snapshot 的同一事务内失效读取缓存，不修改历史人工动作或决定。回退可移除这两个新增触发器而保留全部数据；未执行生产迁移。
+
+此合同不代表 Android 无关键词收藏库已使用完整 v2 筛选：当前该路径仍对旧 v1 载荷本地过滤，须单独修复和设备验收。字段弃权/队列状态组合、新旧/flag-off 全矩阵等原 B05/B07 要求继续有效。

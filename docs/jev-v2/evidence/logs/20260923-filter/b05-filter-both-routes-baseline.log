@@ -1,0 +1,222 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:1681972) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-b05-filter-next/worker
+
+ ❯ test/selection-filter-routes.test.ts (8 tests | 8 failed) 4354ms
+   × links applies topic=design (fourth topic) to the effective selection 550ms
+   × links applies content_functions=method,data&carriers=single&affordances=practice (OR within dimensions and AND across dimensions) to the effective selection 533ms
+   × links distinguishes absent entity runs from failed runs 544ms
+   × links rejects invalid v2 filters instead of broadening a query 551ms
+   × enrichment/jobs applies topic=design (fourth topic) to the effective selection 514ms
+   × enrichment/jobs applies content_functions=method,data&carriers=single&affordances=practice (OR within dimensions and AND across dimensions) to the effective selection 505ms
+   × enrichment/jobs distinguishes absent entity runs from failed runs 652ms
+   × enrichment/jobs rejects invalid v2 filters instead of broadening a query 505ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/selection-filter-routes.test.ts > links applies topic=design (fourth topic) to the effective selection
+ FAIL  test/selection-filter-routes.test.ts > enrichment/jobs applies topic=design (fourth topic) to the effective selection
+AssertionError: expected [] to deeply equal [ 1 ]
+
+- Expected
++ Received
+
+- [
+-   1,
+- ]
++ []
+
+ ❯ test/selection-filter-routes.test.ts:41:45
+     39|     expect(response.status).toBe(200);
+     40|     const result = await response.json() as { items: Array<{ id: numbe…
+     41|     expect(result.items.map(row => row.id)).toEqual([first]);
+       |                                             ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  test/selection-filter-routes.test.ts > links applies content_functions=method,data&carriers=single&affordances=practice (OR within dimensions and AND across dimensions) to the effective selection
+ FAIL  test/selection-filter-routes.test.ts > enrichment/jobs applies content_functions=method,data&carriers=single&affordances=practice (OR within dimensions and AND across dimensions) to the effective selection
+AssertionError: expected [ 2, 1 ] to deeply equal [ 1 ]
+
+- Expected
++ Received
+
+  [
++   2,
+    1,
+  ]
+
+ ❯ test/selection-filter-routes.test.ts:41:45
+     39|     expect(response.status).toBe(200);
+     40|     const result = await response.json() as { items: Array<{ id: numbe…
+     41|     expect(result.items.map(row => row.id)).toEqual([first]);
+       |                                             ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  test/selection-filter-routes.test.ts > links distinguishes absent entity runs from failed runs
+AssertionError: expected [ { id: 2, …(5) }, { id: 1, …(5) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "created_at": "2026-09-22T16:08:25.237Z",
++     "id": 2,
++     "learned": false,
++     "learned_at": null,
++     "note": "",
++     "url": "https://example.com/filter/second",
++   },
++   {
++     "created_at": "2026-09-22T16:08:25.232Z",
++     "id": 1,
++     "learned": false,
++     "learned_at": null,
++     "note": "",
++     "url": "https://example.com/filter/first",
++   },
++ ]
+
+ ❯ test/selection-filter-routes.test.ts:48:67
+     46|     const response = await request(`${route}?entity_state=failed`, und…
+     47|     expect(response.status).toBe(200);
+     48|     expect((await response.json() as { items: unknown[] }).items).toEq…
+       |                                                                   ^
+     49|   });
+     50|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  test/selection-filter-routes.test.ts > links rejects invalid v2 filters instead of broadening a query
+ FAIL  test/selection-filter-routes.test.ts > enrichment/jobs rejects invalid v2 filters instead of broadening a query
+AssertionError: expected 200 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 200
+
+ ❯ test/selection-filter-routes.test.ts:54:29
+     52|     await fixture();
+     53|     const response = await request(`${route}?content_functions=not_a_t…
+     54|     expect(response.status).toBe(400);
+       |                             ^
+     55|   });
+     56| }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  test/selection-filter-routes.test.ts > enrichment/jobs distinguishes absent entity runs from failed runs
+AssertionError: expected [ { id: 2, …(23) }, { id: 1, …(23) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "ai_title": null,
++     "attempts": 0,
++     "classification": {
++       "discarded_tags": [],
++       "entities": [],
++       "form": "",
++       "taxonomy_version": "2026-09-20.1",
++       "topics": [
++         "eng",
++       ],
++       "uncertainty": false,
++       "use": "",
++       "why_suggestion": "",
++     },
++     "classification_reviewed": true,
++     "created_at": "2026-09-22T16:08:27.300Z",
++     "curation_status": "inbox",
++     "enriched_at": null,
++     "error": null,
++     "id": 2,
++     "images": [],
++     "model": null,
++     "next_retry_at": null,
++     "note": "",
++     "original_language": null,
++     "original_text": null,
++     "processable": false,
++     "related_links": [],
++     "source": "other",
++     "status": "unsupported",
++     "summary": null,
++     "translated_text": null,
++     "updated_at": null,
++     "url": "https://example.com/filter/second",
++     "why": "",
++   },
++   {
++     "ai_title": null,
++     "attempts": 0,
++     "classification": {
++       "discarded_tags": [],
++       "entities": [],
++       "form": "",
++       "taxonomy_version": "2026-09-20.1",
++       "topics": [
++         "llm",
++         "eng",
++         "eval",
++       ],
++       "uncertainty": false,
++       "use": "",
++       "why_suggestion": "",
++     },
++     "classification_reviewed": true,
++     "created_at": "2026-09-22T16:08:27.292Z",
++     "curation_status": "inbox",
++     "enriched_at": null,
++     "error": null,
++     "id": 1,
++     "images": [],
++     "model": null,
++     "next_retry_at": null,
++     "note": "",
++     "original_language": null,
++     "original_text": null,
++     "processable": false,
++     "related_links": [],
++     "source": "other",
++     "status": "unsupported",
++     "summary": null,
++     "translated_text": null,
++     "updated_at": null,
++     "url": "https://example.com/filter/first",
++     "why": "",
++   },
++ ]
+
+ ❯ test/selection-filter-routes.test.ts:48:67
+     46|     const response = await request(`${route}?entity_state=failed`, und…
+     47|     expect(response.status).toBe(200);
+     48|     expect((await response.json() as { items: unknown[] }).items).toEq…
+       |                                                                   ^
+     49|   });
+     50|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  8 failed (8)
+   Start at  00:08:23
+   Duration  4.96s (transform 102ms, setup 0ms, import 175ms, tests 4.35s, environment 0ms)
+
