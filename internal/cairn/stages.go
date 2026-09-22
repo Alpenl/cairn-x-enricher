@@ -344,14 +344,17 @@ func (c *Client) RefreshSource(ctx context.Context, id int64) (json.RawMessage, 
 // The answers field is decoded lazily by the caller so this package does not
 // depend on the classify package's internal shapes.
 type StoredRun struct {
-	ID               int64  `json:"id"`
-	ContentRevision  int64  `json:"content_revision"`
-	SpecID           string `json:"spec_id"`
-	SpecHash         string `json:"spec_hash"`
-	TargetGeneration int64  `json:"target_generation"`
-	RequestedModel   string `json:"requested_model"`
-	ResolvedModel    string `json:"resolved_model"`
-	PolicyVersion    string `json:"policy_version"`
+	RawJudgments       json.RawMessage `json:"raw_judgments"`
+	EvidenceSnapshotID int64           `json:"evidence_snapshot_id"`
+	SourceHash         string          `json:"source_hash"`
+	ID                 int64           `json:"id"`
+	ContentRevision    int64           `json:"content_revision"`
+	SpecID             string          `json:"spec_id"`
+	SpecHash           string          `json:"spec_hash"`
+	TargetGeneration   int64           `json:"target_generation"`
+	RequestedModel     string          `json:"requested_model"`
+	ResolvedModel      string          `json:"resolved_model"`
+	PolicyVersion      string          `json:"policy_version"`
 	// Policy is the historical policy payload stored with the run. A replay must
 	// use it rather than substituting a default with the same version name.
 	Policy           json.RawMessage `json:"policy"`
@@ -364,6 +367,20 @@ type StoredRun struct {
 	AliasDrift       bool            `json:"alias_drift"`
 	Status           string          `json:"status"`
 	CreatedAt        string          `json:"created_at"`
+}
+
+// DecodeJudgments restores only recorded evaluation identities. The run row is
+// authoritative for its database id; serialized metadata cannot choose it.
+func (run StoredRun) DecodeJudgments(spec classify.QuestionSpec) (classify.RawJudgments, error) {
+	if spec.SpecID != run.SpecID || spec.SemanticHash != run.SpecHash {
+		return classify.RawJudgments{}, errors.New("stored run/spec identity mismatch")
+	}
+	raw, err := classify.RestoreStoredJudgments(spec, run.RequestedModel, run.ResolvedModel, run.Answers, run.Coverage, run.RawJudgments)
+	if err != nil {
+		return classify.RawJudgments{}, err
+	}
+	raw.SourceRunID = run.ID
+	return raw, nil
 }
 
 // StoredQuestionSpec is the immutable question definition recovered for a
@@ -430,19 +447,17 @@ func (c *Client) SubmitDecision(ctx context.Context, id int64, body map[string]a
 	return c.stageWrite(ctx, fmt.Sprintf("/api/v2/links/%d/decisions", id), body)
 }
 
-// GetLatestRun returns the newest succeeded run for a link, or nil when there
-// is none. It is used by the opt-in partial re-evaluation.
+// GetLatestRun returns the newest recorded run, including a partial/failed one.
+// The reuse caller checks eligibility; it must not silently skip a newer failure.
 func (c *Client) GetLatestRun(ctx context.Context, id int64) (*StoredRun, error) {
 	runs, err := c.GetRuns(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	for index := len(runs) - 1; index >= 0; index-- {
-		if runs[index].Status == "succeeded" && len(runs[index].Answers) > 0 {
-			return &runs[index], nil
-		}
+	if len(runs) == 0 {
+		return nil, nil
 	}
-	return nil, nil
+	return &runs[len(runs)-1], nil
 }
 
 // GetRuns returns the stored runs for a link, oldest first.

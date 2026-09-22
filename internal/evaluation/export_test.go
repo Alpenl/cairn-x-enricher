@@ -80,7 +80,7 @@ func exportFixture(t *testing.T) fakeRunSource {
 	policy, _ := json.Marshal(classify.DefaultPolicy())
 	return fakeRunSource{
 		runs: []cairn.StoredRun{{
-			ID: 5, ContentRevision: 2, SpecID: spec.SpecID, SpecHash: spec.SemanticHash,
+			ID: 5, ContentRevision: 2, SourceHash: "historical-source-hash", EvidenceSnapshotID: 3, SpecID: spec.SpecID, SpecHash: spec.SemanticHash,
 			RequestedModel: "jev-latest", ResolvedModel: "jev-1.13.0", PolicyVersion: "jev-policy-v2",
 			Policy: policy, Answers: encoded, Coverage: "complete", Status: "succeeded",
 		}},
@@ -102,10 +102,10 @@ func TestExportDatasetUsesTheRealRunIdentity(t *testing.T) {
 		t.Fatalf("dataset = %+v", dataset)
 	}
 	sample := dataset.Samples[0]
-	if sample.SourceHash != "evidence-hash" {
+	if sample.SourceHash != "historical-source-hash" {
 		t.Fatalf("source hash = %q, want the stored evidence hash", sample.SourceHash)
 	}
-	if sample.Provenance != ProvenanceSynthetic || sample.Gold != nil {
+	if sample.Provenance != ProvenanceMachinePrediction || sample.Gold != nil {
 		t.Fatalf("a machine prediction must not carry gold: %+v", sample)
 	}
 	prediction := dataset.Prediction[0]
@@ -166,5 +166,21 @@ func TestTopicCalibrationExcludesOtherNoulDimensions(t *testing.T) {
 	probabilities := topicProbabilities(raw)
 	if len(probabilities) != 1 || probabilities["llm"] != 0.9 {
 		t.Fatalf("non-topic probabilities contaminated calibration: %v", probabilities)
+	}
+}
+
+func TestLegacyExportNeverInventsHistoricalSourceIdentity(t *testing.T) {
+	source := exportFixture(t)
+	source.runs[0].SourceHash = ""
+	source.runs[0].EvidenceSnapshotID = 0
+	dataset, err := ExportDataset(context.Background(), source, ExportOptions{LinkIDs: []int64{7}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dataset.Samples[0].SourceHash != "" || !dataset.Samples[0].SourceHashUnknown || dataset.Prediction[0].Evaluation != nil {
+		t.Fatal("legacy identity was fabricated from current evidence or spec")
+	}
+	if err := ValidateSplits([]Dataset{dataset}); err == nil {
+		t.Fatal("unknown source cannot establish split independence")
 	}
 }

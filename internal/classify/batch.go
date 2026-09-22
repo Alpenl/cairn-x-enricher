@@ -146,22 +146,30 @@ func (c *Client) EvaluateBatched(ctx context.Context, input Input, maxPerRequest
 	if err != nil {
 		return RawJudgments{}, err
 	}
+	wireState, err := evidence.stateForModel()
+	if err != nil {
+		return RawJudgments{}, err
+	}
 	merged := RawJudgments{
+		MetadataVersion: 1, WireState: string(wireState),
 		SpecID: c.spec.SpecID, SpecHash: c.spec.SemanticHash, TaxonomyVersion: c.spec.TaxonomyVersion,
-		RequestedModel: c.model, ResolvedModel: c.model,
-		Judgments: map[string]RawJudgment{}, QuestionHashes: map[string]string{},
+		RequestedModel: c.model,
+		Judgments:      map[string]RawJudgment{}, QuestionHashes: map[string]string{},
 		EvidenceHash: evidenceHash, EvidenceCoverage: evidence.Coverage, Truncated: evidence.Truncated,
 		BatchSemantics: fmt.Sprintf("chunks-of-%d", maxPerRequest),
 	}
 	missing := []string{}
 	for _, chunk := range chunks {
 		if ctx.Err() != nil {
-			return RawJudgments{}, ctx.Err()
+			return merged, ctx.Err()
 		}
-		fresh, err := c.evaluateQuestions(ctx, input, chunk.Questions, evidenceHash, "batch")
+		fresh, err := c.evaluateQuestions(ctx, input, chunk.Questions, evidenceHash, merged.BatchSemantics)
+		merged.Calls = append(merged.Calls, fresh.Calls...)
+		merged.Usage = mergeUsage(merged.Usage, fresh.Usage)
+		merged.UsageMissing = merged.UsageMissing || fresh.UsageMissing
 		if err != nil {
 			if enrich.PausesComponent(err) {
-				return RawJudgments{}, err
+				return merged, err
 			}
 			// The failure is contained to this chunk; its questions stay missing
 			// and the coverage reflects that.
@@ -170,9 +178,6 @@ func (c *Client) EvaluateBatched(ctx context.Context, input Input, maxPerRequest
 			}
 			continue
 		}
-		for id, judgment := range fresh.Judgments {
-			merged.Judgments[id] = judgment
-		}
 		// A chunk that resolved to a different model than the first chunk cannot
 		// be merged into a same-model run; its questions stay missing and the
 		// coverage is partial (R2-13).
@@ -180,7 +185,7 @@ func (c *Client) EvaluateBatched(ctx context.Context, input Input, maxPerRequest
 			for _, question := range chunk.Questions {
 				missing = append(missing, question.ID)
 			}
-			merged.Usage = mergeUsage(merged.Usage, fresh.Usage)
+			merged.AliasDrift = true
 			continue
 		}
 		for id, hash := range fresh.QuestionHashes {
@@ -189,17 +194,13 @@ func (c *Client) EvaluateBatched(ctx context.Context, input Input, maxPerRequest
 		for id, judgment := range fresh.Judgments {
 			merged.Judgments[id] = judgment
 		}
-		merged.Usage = mergeUsage(merged.Usage, fresh.Usage)
-		if fresh.UsageMissing {
-			merged.UsageMissing = true
-		}
 		merged.ResolvedModel = fresh.ResolvedModel
 		merged.AliasDrift = merged.AliasDrift || fresh.AliasDrift
 	}
 	sort.Strings(missing)
 	merged.Missing = missing
 	merged.Coverage = "complete"
-	if len(merged.Judgments) != len(c.spec.Questions) {
+	if len(missing) > 0 || len(merged.Judgments) != len(c.spec.Questions) {
 		merged.Coverage = "partial"
 	}
 	return merged, nil

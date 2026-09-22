@@ -30,7 +30,7 @@ type StageQueue interface {
 	// SubmitEvidence persists the immutable evidence snapshot a run references.
 	// A backend without the v2 API reports cairn.IsUnsupported.
 	SubmitEvidence(context.Context, int64, any) error
-	// GetLatestRun returns the newest succeeded run, used only by the opt-in
+	// GetLatestRun returns the newest recorded run, used only by the opt-in
 	// partial re-evaluation.
 	GetLatestRun(context.Context, int64) (*cairn.StoredRun, error)
 	// GetQuestionSpec loads the immutable spec a stored run was evaluated with.
@@ -483,6 +483,9 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		}
 		if err != nil {
 			cancel()
+			if len(result.RawJudgments.Calls) > 0 {
+				p.logger.WarnContext(ctx, "classification inference attempt failed; no inference fallback", "link_id", job.ID, "provider_calls", result.RawJudgments.Calls)
+			}
 			if enrich.IsStale(err) {
 				// Superseded input/target: not a semantic failure, and the Worker
 				// already knows. Do not spend an attempt or abort other jobs.
@@ -548,7 +551,7 @@ func (p *Processor) classifyJob(ctx context.Context, job *cairn.ClassificationJo
 func (p *Processor) previousJudgments(ctx context.Context, job *cairn.ClassificationJob) *classify.RawJudgments {
 	s := p.stages
 	run, err := s.queue.GetLatestRun(ctx, job.ID)
-	if err != nil || run == nil || run.Coverage != "complete" {
+	if err != nil || run == nil || run.Status != "succeeded" || run.Coverage != "complete" {
 		return nil
 	}
 	stored, err := s.queue.GetQuestionSpec(ctx, run.SpecID)
@@ -559,8 +562,8 @@ func (p *Processor) previousJudgments(ctx context.Context, job *cairn.Classifica
 	if err != nil {
 		return nil
 	}
-	raw, err := classify.DecodeStoredJudgments(spec, run.RequestedModel, run.ResolvedModel, run.Answers, run.Coverage)
-	if err != nil {
+	raw, err := run.DecodeJudgments(spec)
+	if err != nil || raw.MetadataVersion != 1 || raw.EvidenceHash == "" || raw.BatchSemantics == "" {
 		return nil
 	}
 	return &raw

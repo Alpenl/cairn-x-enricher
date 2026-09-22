@@ -2,7 +2,8 @@
 // the B08 production export: it turns stored classification runs into a dataset
 // the offline scorer can consume. It reads the Worker only, makes no model call
 // and never fabricates a gold label: a machine prediction is explicitly not
-// human gold, so the scorer reports it as inconclusive until a human labels it.
+// reference evidence, so the scorer remains inconclusive until separately sourced
+// reference labels exist. Automatic references must never copy these predictions.
 package evaluation
 
 import (
@@ -21,7 +22,6 @@ import (
 type PredictionSource interface {
 	GetRuns(context.Context, int64) ([]cairn.StoredRun, error)
 	GetQuestionSpec(context.Context, string) (cairn.StoredQuestionSpec, error)
-	GetEvidence(context.Context, int64) (json.RawMessage, error)
 }
 
 // ExportOptions bounds one export. Link IDs are always explicit: there is no
@@ -99,7 +99,7 @@ func exportLink(ctx context.Context, source PredictionSource, id int64) (*Sample
 	if err != nil {
 		return nil, nil, fmt.Errorf("spec %s is not decodable: %w", run.SpecID, err)
 	}
-	raw, err := classify.DecodeStoredJudgments(spec, run.RequestedModel, run.ResolvedModel, run.Answers, run.Coverage)
+	raw, err := run.DecodeJudgments(spec)
 	if err != nil {
 		return nil, nil, fmt.Errorf("run %d is not replayable: %w", run.ID, err)
 	}
@@ -111,18 +111,9 @@ func exportLink(ctx context.Context, source PredictionSource, id int64) (*Sample
 	if err != nil {
 		return nil, nil, fmt.Errorf("run %d cannot be re-decided: %w", run.ID, err)
 	}
-	contentHash := run.SpecHash
-	if evidence, err := source.GetEvidence(ctx, id); err == nil {
-		var payload struct {
-			ContentHash string `json:"content_hash"`
-		}
-		if json.Unmarshal(evidence, &payload) == nil && payload.ContentHash != "" {
-			contentHash = payload.ContentHash
-		}
-	}
 	sample := Sample{
-		SampleID:     fmt.Sprintf("link-%d-run-%d", id, run.ID),
-		SourceHash:   contentHash,
+		SampleID:   fmt.Sprintf("link-%d-run-%d", id, run.ID),
+		SourceHash: run.SourceHash, SourceHashUnknown: run.SourceHash == "",
 		Revision:     run.ContentRevision,
 		Language:     "",
 		Carrier:      "",
@@ -130,9 +121,10 @@ func exportLink(ctx context.Context, source PredictionSource, id int64) (*Sample
 		Completeness: run.EvidenceCoverage,
 		GroupID:      fmt.Sprintf("link-%d", id),
 		// A production prediction is machine output, never human gold.
-		Provenance: ProvenanceSynthetic,
+		Provenance: ProvenanceMachinePrediction,
 	}
 	prediction := Prediction{
+		EvidenceSnapshotID: run.EvidenceSnapshotID,
 		SampleID:           sample.SampleID,
 		SpecID:             run.SpecID,
 		SpecHash:           run.SpecHash,
@@ -146,6 +138,9 @@ func exportLink(ctx context.Context, source PredictionSource, id int64) (*Sample
 		Use:                proposals.Use,
 		TopicProbabilities: topicProbabilities(raw),
 		Abstained:          abstainedDimensions(proposals),
+	}
+	if raw.MetadataVersion == 1 {
+		prediction.Evaluation = &raw
 	}
 	return &sample, &prediction, nil
 }

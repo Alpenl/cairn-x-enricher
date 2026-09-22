@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -607,6 +608,33 @@ func TestPartialReuseIsOptInAndFallsBackSafely(t *testing.T) {
 		t.Fatalf("default path must not reuse: classify=%d reuse=%d", classifier.classifyCalls, classifier.reuseCalls)
 	}
 
+	// A legacy run without recorded identity must not become reusable just
+	// because its answers and current spec can be decoded.
+	p.SetPartialReuse(true)
+	q.job = job
+	if _, _, err := p.RunClassifications(context.Background(), 1); err != nil {
+		t.Fatal(err)
+	}
+	if classifier.classifyCalls != 2 || classifier.reuseCalls != 0 {
+		t.Fatal("unknown legacy identity reused")
+	}
+	// Produce the compatible metadata through the real HTTP classifier.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev", "answers": answers, "usage": map[string]int{"input_tokens": 10, "output_tokens": 2}})
+	}))
+	defer server.Close()
+	liveClient, err := classify.NewClient(server.URL, "fixture", "jev", server.Client(), catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := liveClient.Classify(context.Background(), job.Input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run.RawJudgments, err = json.Marshal(actual.RawJudgments)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Enabled with a compatible stored run: the reuse path is taken.
 	p.SetPartialReuse(true)
 	q.job = job
@@ -616,7 +644,7 @@ func TestPartialReuseIsOptInAndFallsBackSafely(t *testing.T) {
 	if classifier.reuseCalls != 1 {
 		t.Fatalf("opt-in reuse was not used: classify=%d reuse=%d", classifier.classifyCalls, classifier.reuseCalls)
 	}
-	if classifier.previous == nil || len(classifier.previous.Judgments) != len(spec.Questions) {
+	if classifier.previous == nil || len(classifier.previous.Judgments) != len(spec.Questions) || classifier.previous.SourceRunID != 9 || len(classifier.previous.Calls) != 1 {
 		t.Fatalf("previous judgments were not reconstructed: %+v", classifier.previous)
 	}
 
@@ -626,7 +654,7 @@ func TestPartialReuseIsOptInAndFallsBackSafely(t *testing.T) {
 	if _, _, err := p.RunClassifications(context.Background(), 1); err != nil {
 		t.Fatal(err)
 	}
-	if classifier.classifyCalls != 2 {
+	if classifier.classifyCalls != 3 {
 		t.Fatalf("an incompatible run must fall back: classify=%d reuse=%d", classifier.classifyCalls, classifier.reuseCalls)
 	}
 }

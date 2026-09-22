@@ -194,14 +194,6 @@ func RunLive(ctx context.Context, dataset Dataset, evaluator LiveEvaluator, opti
 		entry.LatencyMS = time.Since(started).Milliseconds()
 		latencies = append(latencies, entry.LatencyMS)
 		entry.Phase = "finished"
-		if callErr != nil {
-			entry.Error = "provider evaluation failed; no automatic retry"
-			result.UsageMissingCalls++
-			if err := record(entry); err != nil {
-				return result, fmt.Errorf("record failed call: %w", err)
-			}
-			return result, errors.New(entry.Error)
-		}
 		entry.Raw = &raw
 		entry.ResolvedModel = raw.ResolvedModel
 		var usage struct {
@@ -217,6 +209,13 @@ func RunLive(ctx context.Context, dataset Dataset, evaluator LiveEvaluator, opti
 		} else {
 			result.UsageMissingCalls++
 			entry.Error = "provider usage missing or invalid"
+		}
+		if callErr != nil {
+			entry.Error = "provider evaluation failed; no automatic retry"
+			if err := record(entry); err != nil {
+				return result, fmt.Errorf("record failed call: %w", err)
+			}
+			return result, errors.New(entry.Error)
 		}
 		if raw.ResolvedModel != options.Model || raw.SpecHash != plan.SpecHash || raw.EvidenceHash != entry.WireStateHash || raw.Coverage != "complete" {
 			entry.Error = "model/spec/answer coverage identity mismatch"

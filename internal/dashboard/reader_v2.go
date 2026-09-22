@@ -220,7 +220,7 @@ func (s *Server) replayPolicy(writer http.ResponseWriter, request *http.Request)
 		writeError(writer, http.StatusConflict, "spec_not_decodable")
 		return
 	}
-	raw, err := classify.DecodeStoredJudgments(spec, run.RequestedModel, run.ResolvedModel, run.Answers, run.Coverage)
+	raw, err := run.DecodeJudgments(spec)
 	if err != nil {
 		writeError(writer, http.StatusConflict, "run_not_replayable")
 		return

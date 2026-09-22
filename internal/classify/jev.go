@@ -181,6 +181,7 @@ type providerRequest struct {
 // providerResponse is the official TypeSafe response body. `usage` and
 // `answers` are kept as raw JSON so nothing is dropped or invented.
 type providerResponse struct {
+	Call    ProviderCall         `json:"-"`
 	Model   string               `json:"model"`
 	Answers map[string]RawAnswer `json:"answers"`
 	Usage   json.RawMessage      `json:"usage"`
@@ -274,16 +275,21 @@ func (c *Client) Evaluate(ctx context.Context, input Input) (RawJudgments, error
 	}
 	wire, err := c.callProvider(ctx, body)
 	if err != nil {
-		return RawJudgments{}, err
+		return RawJudgments{Calls: []ProviderCall{wire.Call}, Usage: wire.Usage, UsageMissing: wire.UsageMissing}, err
 	}
 	if err := ValidateAnswers(c.spec, wire.Answers); err != nil {
-		return RawJudgments{}, enrich.Classified(err, enrich.ErrorClassContract)
+		return RawJudgments{Calls: []ProviderCall{wire.Call}, Usage: wire.Usage, UsageMissing: wire.UsageMissing}, enrich.Classified(err, enrich.ErrorClassContract)
 	}
 	evidenceHash, err := hashEvidence(evidence)
 	if err != nil {
 		return RawJudgments{}, err
 	}
+	_, wireState, identityErr := callIdentity(body)
+	if identityErr != nil {
+		return RawJudgments{}, identityErr
+	}
 	judgments := RawJudgments{
+		MetadataVersion: 1, WireState: wireState, Calls: []ProviderCall{wire.Call},
 		SpecID: c.spec.SpecID, SpecHash: c.spec.SemanticHash, TaxonomyVersion: c.spec.TaxonomyVersion,
 		RequestedModel: c.model, ResolvedModel: wire.Model,
 		AliasDrift: wire.Model != c.model,
@@ -334,37 +340,51 @@ func hashEvidence(evidence Evidence) (string, error) {
 // callProvider performs one bounded provider request and validates the response
 // envelope. It is shared by the full evaluation and the partial re-evaluation so
 // both paths use exactly the same contract handling.
-func (c *Client) callProvider(ctx context.Context, body []byte) (providerResponse, error) {
+func (c *Client) callProvider(ctx context.Context, body []byte) (wire providerResponse, err error) {
 	if err := c.checkRequestBudget(body); err != nil {
-		return providerResponse{}, err
+		return wire, err
+	}
+	call, _, err := callIdentity(body)
+	if err != nil {
+		return wire, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return providerResponse{}, errors.New("invalid TypeSafe endpoint")
+		return wire, errors.New("invalid TypeSafe endpoint")
 	}
+	started := time.Now()
+	defer func() {
+		call.LatencyMS = time.Since(started).Milliseconds()
+		call.ResolvedModel = wire.Model
+		call.Usage = wire.Usage
+		_, _, usageOK := tokenUsage(wire.Usage)
+		call.UsageMissing = !usageOK
+		wire.Call = call
+		wire.UsageMissing = call.UsageMissing
+	}()
 	req.Header.Set("Authorization", "Bearer "+c.key)
 	req.Header.Set("Content-Type", "application/json")
 	response, err := c.http.Do(req)
 	if err != nil {
-		return providerResponse{}, enrich.ClassifyModelError(fmt.Errorf("call TypeSafe: %w", err))
+		return wire, enrich.ClassifyModelError(fmt.Errorf("call TypeSafe: %w", err))
 	}
 	defer func() { _ = response.Body.Close() }()
+	call.HTTPStatus = response.StatusCode
 	if response.StatusCode != http.StatusOK {
-		return providerResponse{}, enrich.ClassifyModelError(&enrich.ModelHTTPError{StatusCode: response.StatusCode})
+		return wire, enrich.ClassifyModelError(&enrich.ModelHTTPError{StatusCode: response.StatusCode})
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
 	if err != nil {
-		return providerResponse{}, enrich.Classified(fmt.Errorf("read TypeSafe response: %w", err), enrich.ErrorClassTransient)
+		return wire, enrich.Classified(fmt.Errorf("read TypeSafe response: %w", err), enrich.ErrorClassTransient)
 	}
 	if err := rejectDuplicateKeys(raw); err != nil {
-		return providerResponse{}, enrich.Classified(err, enrich.ErrorClassContract)
+		return wire, enrich.Classified(err, enrich.ErrorClassContract)
 	}
-	var wire providerResponse
 	if err := strictDecode(raw, &wire); err != nil {
-		return providerResponse{}, enrich.Classified(fmt.Errorf("invalid TypeSafe response JSON: %w", err), enrich.ErrorClassContract)
+		return wire, enrich.Classified(fmt.Errorf("invalid TypeSafe response JSON: %w", err), enrich.ErrorClassContract)
 	}
 	if wire.Model == "" || len(wire.Model) > 200 {
-		return providerResponse{}, enrich.Classified(errors.New("TypeSafe response missing model"), enrich.ErrorClassContract)
+		return wire, enrich.Classified(errors.New("TypeSafe response missing model"), enrich.ErrorClassContract)
 	}
 	wire.UsageMissing = len(wire.Usage) == 0
 	return wire, nil
@@ -492,7 +512,7 @@ func (c *Client) Classify(ctx context.Context, input Input) (Result, error) {
 		raw, err = c.Evaluate(ctx, input)
 	}
 	if err != nil {
-		return Result{}, err
+		return Result{RawJudgments: raw}, err
 	}
 	return c.resultFromRaw(raw)
 }
@@ -502,9 +522,15 @@ func (c *Client) Classify(ctx context.Context, input Input) (Result, error) {
 // infers the rest (R2-13). The caller owns the opt-in; the default production
 // path is a full evaluation.
 func (c *Client) ClassifyReusing(ctx context.Context, input Input, previous *RawJudgments, batchSemantics string) (Result, error) {
+	// This preflight happens before any provider call. Unknown historical state,
+	// incomplete batches and aliases get exactly one bounded full evaluation.
+	// An error AFTER EvaluateReusing is never retried as a full request.
+	if previous == nil || previous.MetadataVersion != 1 || previous.EvidenceHash == "" || previous.WireState == "" || previous.Coverage != "complete" || previous.BatchSemantics != batchSemantics || previous.ResolvedModel != c.model || c.model == "jev-latest" || c.model == "jev-preview" || len(c.spec.Questions) > DefaultMaxQuestionsPerRequest {
+		return c.Classify(ctx, input)
+	}
 	raw, err := c.EvaluateReusing(ctx, input, previous, batchSemantics)
 	if err != nil {
-		return Result{}, err
+		return Result{RawJudgments: raw}, err
 	}
 	return c.resultFromRaw(raw)
 }
@@ -512,7 +538,7 @@ func (c *Client) ClassifyReusing(ctx context.Context, input Input, previous *Raw
 func (c *Client) resultFromRaw(raw RawJudgments) (Result, error) {
 	proposals, err := Decide(raw, c.policy)
 	if err != nil {
-		return Result{}, enrich.Classified(err, enrich.ErrorClassContract)
+		return Result{RawJudgments: raw}, enrich.Classified(err, enrich.ErrorClassContract)
 	}
 	classification := c.project(proposals, raw)
 	return Result{

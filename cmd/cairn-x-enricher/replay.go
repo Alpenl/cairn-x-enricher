@@ -55,7 +55,7 @@ func newReplayCommand() *cobra.Command {
 			if spec.SpecID != run.SpecID || (run.SpecHash != "" && spec.SemanticHash != run.SpecHash) {
 				return fmt.Errorf("stored question spec %s does not match the run's recorded identity", run.SpecID)
 			}
-			raw, err := classify.DecodeStoredJudgments(spec, run.RequestedModel, run.ResolvedModel, run.Answers, run.Coverage)
+			raw, err := run.DecodeJudgments(spec)
 			if err != nil {
 				return fmt.Errorf("stored run cannot be replayed: %w", err)
 			}

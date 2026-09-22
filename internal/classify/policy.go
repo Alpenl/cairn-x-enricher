@@ -32,6 +32,14 @@ type RawJudgment struct {
 // separate so a truncated input is never confused with an incomplete answer
 // set, and both are stored with the run (F14).
 type RawJudgments struct {
+	// Version 1 binds persisted answers to the actual bounded provider state,
+	// calls made by this run and the stored runs supplying reused questions.
+	MetadataVersion int              `json:"metadata_version,omitempty"`
+	WireState       string           `json:"wire_state,omitempty"`
+	Calls           []ProviderCall   `json:"calls,omitempty"`
+	ReusedFrom      map[string]int64 `json:"reused_from,omitempty"`
+	// Assigned by the store reader, never trusted from serialized metadata.
+	SourceRunID     int64  `json:"-"`
 	SpecID          string `json:"spec_id"`
 	SpecHash        string `json:"spec_hash"`
 	TaxonomyVersion string `json:"taxonomy_version"`

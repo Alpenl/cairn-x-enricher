@@ -248,6 +248,10 @@ func recoverWires(dataset evaluation.Dataset, directories []string) (evaluation.
 				result.UsageMissingCalls++
 			}
 			raw, decodeErr := client.Evaluate(context.Background(), input)
+			// Offline decoding is not a new inference; retain original provider latency.
+			for i := range raw.Calls {
+				raw.Calls[i].LatencyMS = finished.LatencyMS
+			}
 			switch {
 			case decodeErr != nil:
 				call.RecoveryError = "saved response rejected by production decoder"

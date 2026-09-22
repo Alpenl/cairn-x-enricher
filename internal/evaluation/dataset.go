@@ -29,6 +29,7 @@ const (
 	ProvenanceHumanReviewed      Provenance = "human_reviewed"
 	ProvenanceLegacyUnknown      Provenance = "legacy_unknown"
 	ProvenanceSynthetic          Provenance = "synthetic"
+	ProvenanceMachinePrediction  Provenance = "machine_prediction"
 	ProvenanceAutomaticReference Provenance = "automatic_reference"
 )
 
@@ -67,37 +68,40 @@ type ReferenceMetadata struct {
 // why text: the objective evaluation must not depend on personal fields, and a
 // public report must not be able to reconstruct them.
 type Sample struct {
-	SampleID        string             `json:"sample_id"`
-	SourceHash      string             `json:"source_hash"`
-	Revision        int64              `json:"revision"`
-	Language        string             `json:"language"`
-	Carrier         string             `json:"carrier"`
-	LengthBucket    string             `json:"length_bucket"`
-	Completeness    string             `json:"completeness"`
-	GroupID         string             `json:"group_id"`
-	RetrievalQuery  string             `json:"retrieval_query,omitempty"`
-	Relevance       []string           `json:"relevance,omitempty"`
-	Gold            *Gold              `json:"gold,omitempty"`
-	Provenance      Provenance         `json:"provenance"`
-	Ambiguous       bool               `json:"ambiguous,omitempty"`
-	SecondAnnotator bool               `json:"second_annotator,omitempty"`
-	Reference       *ReferenceMetadata `json:"reference,omitempty"`
-	Material        *classify.Evidence `json:"material,omitempty"`
+	SourceHashUnknown bool               `json:"source_hash_unknown,omitempty"`
+	SampleID          string             `json:"sample_id"`
+	SourceHash        string             `json:"source_hash"`
+	Revision          int64              `json:"revision"`
+	Language          string             `json:"language"`
+	Carrier           string             `json:"carrier"`
+	LengthBucket      string             `json:"length_bucket"`
+	Completeness      string             `json:"completeness"`
+	GroupID           string             `json:"group_id"`
+	RetrievalQuery    string             `json:"retrieval_query,omitempty"`
+	Relevance         []string           `json:"relevance,omitempty"`
+	Gold              *Gold              `json:"gold,omitempty"`
+	Provenance        Provenance         `json:"provenance"`
+	Ambiguous         bool               `json:"ambiguous,omitempty"`
+	SecondAnnotator   bool               `json:"second_annotator,omitempty"`
+	Reference         *ReferenceMetadata `json:"reference,omitempty"`
+	Material          *classify.Evidence `json:"material,omitempty"`
 }
 
 // Prediction is the system output for a sample, in the same dimensions.
 type Prediction struct {
-	SampleID         string   `json:"sample_id"`
-	SpecID           string   `json:"spec_id"`
-	SpecHash         string   `json:"spec_hash"`
-	Model            string   `json:"model"`
-	PolicyVersion    string   `json:"policy_version"`
-	Topics           []string `json:"topics"`
-	ContentFunctions []string `json:"content_functions"`
-	Carriers         []string `json:"carriers"`
-	Affordances      []string `json:"affordances"`
-	Form             string   `json:"form"`
-	Use              string   `json:"use"`
+	Evaluation         *classify.RawJudgments `json:"evaluation,omitempty"`
+	EvidenceSnapshotID int64                  `json:"evidence_snapshot_id,omitempty"`
+	SampleID           string                 `json:"sample_id"`
+	SpecID             string                 `json:"spec_id"`
+	SpecHash           string                 `json:"spec_hash"`
+	Model              string                 `json:"model"`
+	PolicyVersion      string                 `json:"policy_version"`
+	Topics             []string               `json:"topics"`
+	ContentFunctions   []string               `json:"content_functions"`
+	Carriers           []string               `json:"carriers"`
+	Affordances        []string               `json:"affordances"`
+	Form               string                 `json:"form"`
+	Use                string                 `json:"use"`
 	// TopicProbabilities retains the distribution so a calibration metric can
 	// be computed without re-running the model.
 	TopicProbabilities map[string]float64 `json:"topic_probabilities,omitempty"`
@@ -131,15 +135,18 @@ func (d Dataset) Validate() error {
 			return fmt.Errorf("duplicate sample_id %q", sample.SampleID)
 		}
 		seen[sample.SampleID] = true
-		if sample.SourceHash == "" {
+		if sample.SourceHashUnknown && (sample.SourceHash != "" || sample.Material != nil || sample.Gold != nil) {
+			return fmt.Errorf("sample %s claims both unknown and known source identity", sample.SampleID)
+		}
+		if sample.SourceHash == "" && !sample.SourceHashUnknown {
 			return fmt.Errorf("sample %s is missing source_hash", sample.SampleID)
 		}
 		switch sample.Provenance {
-		case ProvenanceHumanSingle, ProvenanceHumanReviewed, ProvenanceLegacyUnknown, ProvenanceSynthetic, ProvenanceAutomaticReference:
+		case ProvenanceHumanSingle, ProvenanceHumanReviewed, ProvenanceLegacyUnknown, ProvenanceSynthetic, ProvenanceAutomaticReference, ProvenanceMachinePrediction:
 		default:
 			return fmt.Errorf("sample %s has invalid provenance", sample.SampleID)
 		}
-		if sample.Provenance == ProvenanceLegacyUnknown && sample.Gold != nil {
+		if (sample.Provenance == ProvenanceLegacyUnknown || sample.Provenance == ProvenanceMachinePrediction) && sample.Gold != nil {
 			return fmt.Errorf("sample %s is legacy_unknown and cannot carry gold", sample.SampleID)
 		}
 		if sample.Provenance == ProvenanceAutomaticReference {
@@ -329,6 +336,9 @@ func ValidateSplits(datasets []Dataset) error {
 				return fmt.Errorf("duplicate sample %s across splits", sample.SampleID)
 			}
 			ids[sample.SampleID] = true
+			if sample.SourceHashUnknown || sample.SourceHash == "" {
+				return fmt.Errorf("sample %s lacks source identity for leakage checks", sample.SampleID)
+			}
 			if sources[sample.SourceHash] {
 				return fmt.Errorf("duplicate source snapshot %s", sample.SourceHash)
 			}

@@ -163,3 +163,24 @@ func TestLiveCancellationBeforeReservationIsFree(t *testing.T) {
 		t.Fatal("cancellation ignored")
 	}
 }
+
+func TestLiveContractFailurePreservesReportedUsage(t *testing.T) {
+	var calls atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-1.13.0", "answers": map[string]any{}, "usage": map[string]int{"input_tokens": 123, "output_tokens": 7}})
+	}))
+	defer server.Close()
+	client, err := classify.NewClient(server.URL, "fixture", "jev-1.13.0", server.Client(), exportCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var records []CallRecord
+	result, err := RunLive(context.Background(), liveDataset(t), client, liveOptions(), func(entry CallRecord) error { records = append(records, entry); return nil })
+	if err == nil || result.Completed || calls.Load() != 1 || result.InputTokens != 123 || result.OutputTokens != 7 || result.UsageMissingCalls != 0 || len(result.Dataset.Prediction) != 0 {
+		t.Fatalf("failed attempt usage lost or retried: %+v", result)
+	}
+	if len(records) != 2 || !records[1].UsageKnown || records[1].Error == "" || len(records[1].Raw.Calls) != 1 {
+		t.Fatal("failed attempt provenance lost")
+	}
+}

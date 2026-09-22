@@ -106,3 +106,5 @@ run_case rename TestLocalWorkerDisplayRenameKeepsSemantics
 run_case evidence TestLocalWorkerEvidenceCheckpointAndBoundRead
 
 run_case entities TestLocalWorkerEntitySnapshotIdentity
+
+run_case reuse TestLocalWorkerStoredQuestionReuse

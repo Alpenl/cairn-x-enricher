@@ -74,7 +74,7 @@ func PlanReuse(previous *RawJudgments, next QuestionSpec, evidenceHash, model, b
 			decision.Reason = "evidence changed"
 		case previous.ResolvedModel != model:
 			decision.Reason = "model changed"
-		case previous.BatchSemantics != "" && previous.BatchSemantics != batchSemantics:
+		case previous.BatchSemantics == "" || previous.BatchSemantics != batchSemantics:
 			// A different batching shape means the answers were produced under a
 			// different request semantics; reuse would mix them (R2-13).
 			decision.Reason = "batch semantics changed"
@@ -140,7 +140,14 @@ func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *Raw
 	}
 	if len(plan.ToInfer) == 0 {
 		// Nothing changed: reuse every answer with zero model calls.
+		wireState, stateErr := evidence.stateForModel()
+		if stateErr != nil {
+			return RawJudgments{}, stateErr
+		}
 		merged := RawJudgments{
+			MetadataVersion: 1, WireState: string(wireState), ReusedFrom: map[string]int64{},
+			Usage:            json.RawMessage(`{"input_tokens":0,"output_tokens":0}`),
+			EvidenceCoverage: evidence.Coverage, Truncated: evidence.Truncated,
 			SpecID: c.spec.SpecID, SpecHash: c.spec.SemanticHash, TaxonomyVersion: c.spec.TaxonomyVersion,
 			RequestedModel: c.model, ResolvedModel: c.model,
 			Judgments: map[string]RawJudgment{}, Coverage: "complete",
@@ -153,6 +160,7 @@ func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *Raw
 				return RawJudgments{}, fmt.Errorf("%w: missing stored answer for %s", ErrReuseUnsafe, question.ID)
 			}
 			merged.Judgments[question.ID] = judgment
+			merged.ReusedFrom[question.ID] = previous.SourceRunID
 			hash, _ := QuestionHash(question)
 			merged.QuestionHashes[question.ID] = hash
 		}
@@ -169,9 +177,10 @@ func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *Raw
 	}
 	fresh, err := c.evaluateQuestions(ctx, input, subset, evidenceHash, batchSemantics)
 	if err != nil {
-		return RawJudgments{}, err
+		return fresh, err
 	}
 	merged := fresh
+	merged.ReusedFrom = map[string]int64{}
 	merged.Reused = plan.Reusable
 	merged.BatchSemantics = batchSemantics
 	// A reused answer came from a run with the same resolved model (PlanReuse
@@ -179,7 +188,7 @@ func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *Raw
 	// sets are not comparable, so the run is partial instead of looking like a
 	// complete same-model run (R2-13).
 	drift := previous != nil && previous.ResolvedModel != "" && fresh.ResolvedModel != "" &&
-		previous.ResolvedModel != fresh.ResolvedModel
+		previous.ResolvedModel != fresh.ResolvedModel && len(plan.Reusable) > 0
 	if previous != nil && !drift {
 		for _, id := range plan.Reusable {
 			stored, ok := previous.Judgments[id]
@@ -187,12 +196,15 @@ func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *Raw
 				return RawJudgments{}, fmt.Errorf("%w: missing stored answer for %s", ErrReuseUnsafe, id)
 			}
 			merged.Judgments[id] = stored
+			merged.ReusedFrom[id] = previous.SourceRunID
 			merged.QuestionHashes[id] = previous.QuestionHashes[id]
 		}
 	} else if drift {
 		merged.Missing = append(merged.Missing, plan.Reusable...)
 		sort.Strings(merged.Missing)
 		merged.Coverage = "partial"
+		merged.Reused = nil
+		return merged, enrich.Classified(fmt.Errorf("%w: provider model changed after the partial call", ErrReuseUnsafe), enrich.ErrorClassContract)
 	}
 	// Coverage is honest: every question must have an answer for "complete".
 	if len(merged.Judgments) != len(c.spec.Questions) {
@@ -260,15 +272,16 @@ func (c *Client) evaluateQuestions(ctx context.Context, input Input, questions [
 	}
 	response, err := c.callProvider(ctx, body)
 	if err != nil {
-		return RawJudgments{}, err
+		return RawJudgments{Calls: []ProviderCall{response.Call}, Usage: response.Usage, UsageMissing: response.UsageMissing}, err
 	}
 	subsetSpec := QuestionSpec{SpecID: c.spec.SpecID, SpecVersion: c.spec.SpecVersion,
 		TaxonomyVersion: c.spec.TaxonomyVersion, SemanticHash: c.spec.SemanticHash,
 		Questions: questions, ScoreEnabled: c.spec.ScoreEnabled}
 	if err := ValidateAnswers(subsetSpec, response.Answers); err != nil {
-		return RawJudgments{}, enrich.Classified(err, enrich.ErrorClassContract)
+		return RawJudgments{Calls: []ProviderCall{response.Call}, Usage: response.Usage, UsageMissing: response.UsageMissing}, enrich.Classified(err, enrich.ErrorClassContract)
 	}
 	judgments := RawJudgments{
+		MetadataVersion: 1, WireState: string(state), Calls: []ProviderCall{response.Call},
 		SpecID: c.spec.SpecID, SpecHash: c.spec.SemanticHash, TaxonomyVersion: c.spec.TaxonomyVersion,
 		RequestedModel: c.model, ResolvedModel: response.Model,
 		AliasDrift: response.Model != c.model, Judgments: map[string]RawJudgment{}, Coverage: "complete",

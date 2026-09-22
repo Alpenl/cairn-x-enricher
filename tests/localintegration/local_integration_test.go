@@ -233,7 +233,7 @@ func TestLocalWorkerFullLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode stored spec: %v", err)
 	}
-	raw, err := classify.DecodeStoredJudgments(spec, runs[0].RequestedModel, runs[0].ResolvedModel, runs[0].Answers, runs[0].Coverage)
+	raw, err := runs[0].DecodeJudgments(spec)
 	if err != nil {
 		t.Fatalf("decode stored judgments: %v", err)
 	}
@@ -310,7 +310,7 @@ func TestLocalWorkerFullLifecycle(t *testing.T) {
 	if len(dataset.Samples) != 1 || len(dataset.Prediction) != 1 {
 		t.Fatalf("dataset = %+v", dataset)
 	}
-	if dataset.Samples[0].Gold != nil || dataset.Samples[0].Provenance != evaluation.ProvenanceSynthetic {
+	if dataset.Samples[0].Gold != nil || dataset.Samples[0].Provenance != evaluation.ProvenanceMachinePrediction {
 		t.Fatalf("a machine prediction must not be exported as gold: %+v", dataset.Samples[0])
 	}
 	if dataset.Prediction[0].Model != "jev-pinned-local" || dataset.Prediction[0].PolicyVersion != "jev-policy-v2" {
