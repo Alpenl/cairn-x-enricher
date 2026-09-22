@@ -147,6 +147,7 @@ func (s *fieldState) apply(override Override) {
 		}
 		s.history = remaining
 		if s.clearedAutomatic {
+			s.empty = false
 			// The tag this reset names becomes eligible again from automatic.
 			s.readmit[override.Term] = true
 		}

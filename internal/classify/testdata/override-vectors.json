@@ -245,6 +245,275 @@
         {"field": "carriers", "term": "", "action": "reset", "revision": 3}
       ],
       "expected": {"topics": [], "content_functions": [], "carriers": ["single_post"], "affordances": [], "form": "", "use": "", "entities": []}
+    },
+    {
+      "name": "empty then reset one topics",
+      "automatic": {
+        "topics": [
+          "llm",
+          "eng"
+        ],
+        "content_functions": [],
+        "carriers": [],
+        "affordances": [],
+        "form": "",
+        "use": "",
+        "entities": []
+      },
+      "overrides": [
+        {
+          "field": "topics",
+          "term": "",
+          "action": "set_empty",
+          "revision": 1
+        },
+        {
+          "field": "topics",
+          "term": "llm",
+          "action": "reset",
+          "revision": 2
+        }
+      ],
+      "expected": {
+        "topics": [
+          "llm"
+        ],
+        "content_functions": [],
+        "carriers": [],
+        "affordances": [],
+        "form": "",
+        "use": "",
+        "entities": []
+      }
+    },
+    {
+      "name": "empty then reset one content_functions",
+      "automatic": {
+        "topics": [],
+        "content_functions": [
+          "method",
+          "tool"
+        ],
+        "carriers": [],
+        "affordances": [],
+        "form": "",
+        "use": "",
+        "entities": []
+      },
+      "overrides": [
+        {
+          "field": "content_functions",
+          "term": "",
+          "action": "set_empty",
+          "revision": 1
+        },
+        {
+          "field": "content_functions",
+          "term": "method",
+          "action": "reset",
+          "revision": 2
+        }
+      ],
+      "expected": {
+        "topics": [],
+        "content_functions": [
+          "method"
+        ],
+        "carriers": [],
+        "affordances": [],
+        "form": "",
+        "use": "",
+        "entities": []
+      }
+    },
+    {
+      "name": "empty then reset one carriers",
+      "automatic": {
+        "topics": [],
+        "content_functions": [],
+        "carriers": [
+          "single"
+        ],
+        "affordances": [],
+        "form": "",
+        "use": "",
+        "entities": []
+      },
+      "overrides": [
+        {
+          "field": "carriers",
+          "term": "",
+          "action": "set_empty",
+          "revision": 1
+        },
+        {
+          "field": "carriers",
+          "term": "single",
+          "action": "reset",
+          "revision": 2
+        }
+      ],
+      "expected": {
+        "topics": [],
+        "content_functions": [],
+        "carriers": [
+          "single"
+        ],
+        "affordances": [],
+        "form": "",
+        "use": "",
+        "entities": []
+      }
+    },
+    {
+      "name": "empty then reset one affordances",
+      "automatic": {
+        "topics": [],
+        "content_functions": [],
+        "carriers": [],
+        "affordances": [
+          "practice",
+          "quote"
+        ],
+        "form": "",
+        "use": "",
+        "entities": []
+      },
+      "overrides": [
+        {
+          "field": "affordances",
+          "term": "",
+          "action": "set_empty",
+          "revision": 1
+        },
+        {
+          "field": "affordances",
+          "term": "practice",
+          "action": "reset",
+          "revision": 2
+        }
+      ],
+      "expected": {
+        "topics": [],
+        "content_functions": [],
+        "carriers": [],
+        "affordances": [
+          "practice"
+        ],
+        "form": "",
+        "use": "",
+        "entities": []
+      }
+    },
+    {
+      "name": "empty then reset one form",
+      "automatic": {
+        "topics": [],
+        "content_functions": [],
+        "carriers": [],
+        "affordances": [],
+        "form": "method",
+        "use": "",
+        "entities": []
+      },
+      "overrides": [
+        {
+          "field": "form",
+          "term": "",
+          "action": "set_empty",
+          "revision": 1
+        },
+        {
+          "field": "form",
+          "term": "method",
+          "action": "reset",
+          "revision": 2
+        }
+      ],
+      "expected": {
+        "topics": [],
+        "content_functions": [],
+        "carriers": [],
+        "affordances": [],
+        "form": "method",
+        "use": "",
+        "entities": []
+      }
+    },
+    {
+      "name": "empty then reset one use",
+      "automatic": {
+        "topics": [],
+        "content_functions": [],
+        "carriers": [],
+        "affordances": [],
+        "form": "",
+        "use": "try",
+        "entities": []
+      },
+      "overrides": [
+        {
+          "field": "use",
+          "term": "",
+          "action": "set_empty",
+          "revision": 1
+        },
+        {
+          "field": "use",
+          "term": "try",
+          "action": "reset",
+          "revision": 2
+        }
+      ],
+      "expected": {
+        "topics": [],
+        "content_functions": [],
+        "carriers": [],
+        "affordances": [],
+        "form": "",
+        "use": "try",
+        "entities": []
+      }
+    },
+    {
+      "name": "empty then reset one entities",
+      "automatic": {
+        "topics": [],
+        "content_functions": [],
+        "carriers": [],
+        "affordances": [],
+        "form": "",
+        "use": "",
+        "entities": [
+          "Jev",
+          "Cairn"
+        ]
+      },
+      "overrides": [
+        {
+          "field": "entities",
+          "term": "",
+          "action": "set_empty",
+          "revision": 1
+        },
+        {
+          "field": "entities",
+          "term": "Jev",
+          "action": "reset",
+          "revision": 2
+        }
+      ],
+      "expected": {
+        "topics": [],
+        "content_functions": [],
+        "carriers": [],
+        "affordances": [],
+        "form": "",
+        "use": "",
+        "entities": [
+          "Jev"
+        ]
+      }
     }
   ]
 }

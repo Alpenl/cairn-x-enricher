@@ -3,6 +3,7 @@ package localintegration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -162,13 +163,20 @@ func TestLocalWorkerEntitySnapshotIdentity(t *testing.T) {
 	if !slices.Equal(get(), []string{"ExternalEntity", "QuotedEntity"}) {
 		t.Fatalf("entities not stored: %v", get())
 	}
-	for _, action := range []string{"reject", "reset"} {
-		if err := queue.CorrectEntity(ctx, id, map[string]any{"operation_key": "entity-human-" + action, "term": "ExternalEntity", "action": action}); err != nil {
+	for index, action := range []string{"reject", "reset", "set_empty", "reset"} {
+		term := "ExternalEntity"
+		if action == "set_empty" {
+			term = ""
+		}
+		if err := queue.CorrectEntity(ctx, id, map[string]any{"operation_key": fmt.Sprintf("entity-human-%d-%s", index, action), "term": term, "action": action}); err != nil {
 			t.Fatal(err)
 		}
 		want := action == "reset"
 		if slices.Contains(get(), "ExternalEntity") != want {
 			t.Fatalf("%s not reflected: %v", action, get())
+		}
+		if index == 3 && !slices.Equal(get(), []string{"ExternalEntity"}) {
+			t.Fatalf("term reset revived an unrelated entity: %v", get())
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/enrichment/jobs?q=ExternalEntity", nil)
 		if err != nil {
