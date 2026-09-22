@@ -1,3 +1,5 @@
+> 2026-09-22 最新 B08 局部证据：[240 条冻结自动参考、42 条真实训练与零网络恢复](evidence/B08-20260922-automatic-reference.md)。E 受测代码 `ac60d9a34968e3e2fc2087305f6332f038116f92`；43 次调用含烟雾重复，训练 gate 因仅 7 组而 inconclusive，dev/holdout 未调用。全目标仍待完成。
+
 > 2026-09-22 update: [R3-03 provenance, migration and real browser evidence](evidence/R3-20260922-provenance.md). Full acceptance remains pending.
 
 Latest scoped entity evidence: [R3-09 snapshot identity, real processor, UI and export](evidence/R3-20260922-entities.md). Worker 145 tests, five real integration scenarios and 33 browser checks pass; complete acceptance remains pending.
