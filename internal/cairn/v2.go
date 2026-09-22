@@ -127,6 +127,25 @@ func (c *Client) UpdateV2Selection(ctx context.Context, id int64, selection V2Se
 	return view, nil
 }
 
+// GetClassificationCatalog selects the same objective vocabulary for every
+// classification entry point. Legacy fallback is permitted only when the v2
+// endpoint is unsupported; authorization, transport and contract errors retain
+// their cause and must not silently select a different spec.
+func (c *Client) GetClassificationCatalog(ctx context.Context) (taxonomy.Catalog, bool, error) {
+	catalog, err := c.GetV2Catalog(ctx)
+	if err == nil {
+		return catalog, false, nil
+	}
+	if !IsUnsupported(err) {
+		return taxonomy.Catalog{}, false, fmt.Errorf("load Worker v2 taxonomy: %w", err)
+	}
+	catalog, err = c.GetTaxonomy(ctx)
+	if err != nil {
+		return taxonomy.Catalog{}, true, fmt.Errorf("load Worker legacy taxonomy: %w", err)
+	}
+	return catalog, true, nil
+}
+
 // GetV2Catalog loads the multidimensional vocabulary and converts it into the
 // shared taxonomy catalog. Production classification uses this so the compiled
 // questions cover topics, content functions, carriers and affordances instead

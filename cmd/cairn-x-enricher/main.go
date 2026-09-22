@@ -357,18 +357,11 @@ func newProcessor(
 		},
 	}
 	queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, httpClient)
-	// Prefer the multidimensional v2 vocabulary so the compiled questions cover
-	// topics, content functions, carriers and affordances. A backend without the
-	// v2 API falls back to the legacy vocabulary instead of failing to start.
-	catalog, err := queue.GetV2Catalog(ctx)
+	catalog, legacyCatalog, err := queue.GetClassificationCatalog(ctx)
 	if err != nil {
-		if !cairn.IsUnsupported(err) {
-			return nil, nil, fmt.Errorf("load Worker v2 taxonomy (requires curation backend migration): %w", err)
-		}
-		catalog, err = queue.GetTaxonomy(ctx)
-		if err != nil {
-			return nil, nil, fmt.Errorf("load Worker taxonomy (requires curation backend migration): %w", err)
-		}
+		return nil, nil, err
+	}
+	if legacyCatalog {
 		logger.Warn("backend has no v2 taxonomy; running the legacy single-dimension vocabulary")
 	}
 	userAgent := "cairn-x-enricher/" + buildinfo.Version

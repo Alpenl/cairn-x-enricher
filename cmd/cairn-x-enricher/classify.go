@@ -30,9 +30,12 @@ func newClassifyCommand() *cobra.Command {
 		defer stop()
 		httpClient := &http.Client{Timeout: cfg.RequestTimeout, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 		queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, httpClient)
-		catalog, err := queue.GetTaxonomy(ctx)
+		catalog, legacyCatalog, err := queue.GetClassificationCatalog(ctx)
 		if err != nil {
 			return err
+		}
+		if legacyCatalog {
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "backend has no v2 taxonomy; using the legacy classification vocabulary")
 		}
 		client, err := classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel, httpClient, catalog)
 		if err != nil {

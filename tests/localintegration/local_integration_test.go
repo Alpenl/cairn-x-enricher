@@ -652,7 +652,7 @@ func postJSON(ctx context.Context, t *testing.T, url, token string, body map[str
 		t.Fatalf("POST %s: %v", url, err)
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusOK {
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated {
 		raw, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 		t.Fatalf("POST %s status = %d: %s", url, response.StatusCode, raw)
 	}
