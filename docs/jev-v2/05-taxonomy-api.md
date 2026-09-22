@@ -48,3 +48,9 @@ SC03/06–08/13–16/19/21/23–25/29–30；R03–R06/R08–R09/R13/R19/R26–R
 - App 缓存键包括全部上述参数，并提升缓存格式版本。迁移 `0025_selection_filter_cache.sql` 在 content revision 变化及新增 evidence snapshot 的同一事务内失效读取缓存，不修改历史人工动作或决定。回退可移除这两个新增触发器而保留全部数据；未执行生产迁移。
 
 此合同不代表 Android 无关键词收藏库已使用完整 v2 筛选：当前该路径仍对旧 v1 载荷本地过滤，须单独修复和设备验收。字段弃权/队列状态组合、新旧/flag-off 全矩阵等原 B05/B07 要求继续有效。
+
+### 客户端显式确认
+
+需要完整有效值筛选的客户端发送 `filter_contract_version=1`，上述两个列表仅在请求时返回数值字段 `filter_contract_version: 1`。未请求时维持旧响应字段；重复、空或其他版本返回 400。该参数参与 App 缓存键。
+
+Go 新维度查询自动要求确认；旧 topic/form/use 可显式启用确认。无字段、null 或未知版本不当作成功，dashboard 以 `409 unsupported_filter_contract` 提示。Web 多维筛选及旧形态/用途控件均要求确认，清空后可继续旧服务普通浏览。词表不可用不静默删除保存条件。完整实际链及边界证据见 [Go/Web 报告](evidence/B05-20260923-client.md)。

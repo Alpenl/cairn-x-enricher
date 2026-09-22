@@ -1,0 +1,60 @@
+CHROME_PATH=${CHROME_PATH:-$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/run.mjs
+ok   v2 curation panel is available
+ok   fourth topic is folded, not deleted
+ok   all four effective topics are rendered as checked
+ok   content functions are independently checked
+ok   carrier is independent
+ok   reject sends a reject override
+ok   reject override carries an operation key
+ok   reject override carries expected_revision
+ok   set_empty sends its own action
+ok   reset sends a distinct action
+ok   set_empty and reset payloads differ
+ok   replaying the same operation key is accepted
+ok   malicious original is escaped, not executed
+ok   no page error from malicious content
+ok   why-only save reaches the v1 curation endpoint
+ok   why-only save omits classification
+ok   why-only save produces no override event
+ok   the draft reflects the server state before the rapid actions
+ok   both rapid actions reached the server
+ok   each new logical action has a distinct operation id
+ok   rapid actions preserve both intents
+ok   a post-reload action uses a fresh operation id
+ok   conflict is explained to the user
+ok   conflict does not discard the unsaved draft
+ok   re-apply submits the preserved action
+ok   no model calls occurred
+ok   no X Search calls occurred
+ok   evidence blocks render their real roles
+ok   classification status is shown independently
+ok   the entity list renders the stored entities
+ok   a human entity correction is submitted and shown
+ok   classification retry is a separate action
+ok   refresh-source is a separate, confirmed action
+ok   policy replay reports zero model calls
+ok   an unauthorized write-back explains itself instead of silently failing
+ok   no model call was made by any of the three actions
+ok   v2 controls are keyboard focusable
+ok   no horizontal overflow at 375px
+ok   legacy topic URL becomes full topic filter
+ok   home filter negotiation is explicit
+ok   URL restores selected function OR values
+ok   home forwards topics
+ok   home URL preserves topics
+ok   home forwards content_functions
+ok   home URL preserves content_functions
+ok   home forwards carriers
+ok   home URL preserves carriers
+ok   home forwards affordances
+ok   home URL preserves affordances
+ok   home forwards entity_state
+ok   home URL preserves entity_state
+ok   filter multi-select fits 375px
+ok   multi-select exposes visible rows
+ok   old backend cannot silently accept ignored filters
+ok   clearing filters clears all multi-selections
+ok   ordinary browsing still works with an old backend
+ok   home and detail have no JavaScript exceptions
+
+57/57 browser checks passed

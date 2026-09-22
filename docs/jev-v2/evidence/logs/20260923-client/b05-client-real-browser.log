@@ -1,0 +1,26 @@
+== applying real migrations to the local D1 ==
+== starting wrangler dev on 127.0.0.1:56739 ==
+== building the real Go service ==
+== driving the real browser against the real stack ==
+ok   the real Go service registered the compiled spec
+ok   the spec carries the multidimensional taxonomy version
+ok   v2 target activated
+ok   new bookmark created
+ok   the scheduler produced a v2 run with the mock model
+ok   the provider usage was preserved
+ok   the classification job completed against the target
+ok   the effective view is derived from the real decision
+ok   the multidimensional topics are present
+ok   AI-only projection rebuild 1 succeeds
+ok   AI-only projection rebuild 2 succeeds
+ok   AI-only rebuilds create no human or legacy overrides
+ok   the old endpoint still reports AI-only as unreviewed
+ok   the current endpoint still reports AI-only as unreviewed
+ok   the v2 panel loads through the real proxy
+ok   the browser shows the same effective topics as the Worker
+ok   the fourth effective topic is folded, not deleted
+real end-to-end harness failed: page.waitForSelector: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('#stream a[href=\'/bookmarks/1\']') to be visible[22m
+
+    at main (/tmp/cairn-b05-client-next/tests/local-integration/browser-e2e.mjs:166:19)

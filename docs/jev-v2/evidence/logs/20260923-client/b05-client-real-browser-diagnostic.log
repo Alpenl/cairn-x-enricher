@@ -1,0 +1,27 @@
+== applying real migrations to the local D1 ==
+== starting wrangler dev on 127.0.0.1:43927 ==
+== building the real Go service ==
+== driving the real browser against the real stack ==
+ok   the real Go service registered the compiled spec
+ok   the spec carries the multidimensional taxonomy version
+ok   v2 target activated
+ok   new bookmark created
+ok   the scheduler produced a v2 run with the mock model
+ok   the provider usage was preserved
+ok   the classification job completed against the target
+ok   the effective view is derived from the real decision
+ok   the multidimensional topics are present
+ok   AI-only projection rebuild 1 succeeds
+ok   AI-only projection rebuild 2 succeeds
+ok   AI-only rebuilds create no human or legacy overrides
+ok   the old endpoint still reports AI-only as unreviewed
+ok   the current endpoint still reports AI-only as unreviewed
+ok   the v2 panel loads through the real proxy
+ok   the browser shows the same effective topics as the Worker
+ok   the fourth effective topic is folded, not deleted
+library diagnostic: {"errors":[],"status":"读取收藏失败 重试","items":"本地集成测试用的中文标题\n收件箱\nX\n城市\n设计\n教育\n案例\n背景\n\n本地集成的摘要。","direct":{"status":200,"payload":{"filter_contract_version":1,"items":[{"id":1,"url":"https://x.com/local/status/42","note":"","created_at":"2026-09-22T16:54:17.177Z","status":"completed","processable":true,"attempts":1,"ai_title":"本地集成测试用的中文标题","original_language":"en","summary":"本地集成的摘要。","related_links":[],"images":[],"model":"grok-mock","updated_at":"2026-09-22T16:54:18.786Z","enriched_at":"2026-09-22T16:54:18.786Z","source":"x","why":"","curation_status":"inbox","classification":{"topics":["city","design","edu"],"form":"case","use":"background","why_suggestion":"潜在用途建议：背景。","entities":[],"uncertainty":false,"taxonomy_version":"2026-09-20.1","discarded_tags":[]},"classification_reviewed":false,"content_loaded":false}],"next_before_id":null,"counts":{"total":1,"pending":0,"processing":0,"completed":1,"failed":0,"exhausted":0,"unsupported":0}}}}
+real end-to-end harness failed: page.waitForSelector: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('#stream a[href=\'/bookmarks/1\']') to be visible[22m
+
+    at main (/tmp/cairn-b05-client-next/tests/local-integration/browser-e2e.mjs:171:19)
