@@ -385,8 +385,17 @@ type fakeJudge struct{ value float64 }
 
 func (f fakeJudge) Judge(_ context.Context, _ any, questions map[string]classify.ProviderQuestion) (map[string]classify.RawAnswer, error) {
 	answers := make(map[string]classify.RawAnswer, len(questions))
-	for id := range questions {
+	for id, q := range questions {
 		value := f.value
+		if q.Type == classify.TypeChoice {
+			selected := "relevant"
+			if value < .5 {
+				selected = "none"
+			}
+			confidence := 1.0
+			answers[id] = classify.RawAnswer{Type: classify.TypeChoice, Choice: &classify.ChoiceAnswer{Choice: selected, Probabilities: map[string]float64{"relevant": value, "none": 1 - value, "unknown": 0, "incidental": 0}}, Confidence: &confidence}
+			continue
+		}
 		answers[id] = classify.RawAnswer{Type: classify.TypeNoul, Noul: &classify.NoulAnswer{Noul: &value}}
 	}
 	return answers, nil

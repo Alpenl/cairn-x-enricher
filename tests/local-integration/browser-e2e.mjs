@@ -250,9 +250,12 @@ async function main() {
     await page.waitForFunction(() => document.querySelector("#v2-entity-list")?.textContent.includes("BrowserEntity"));
     check("the entity panel and reading header show the production entity", (await page.textContent("#read-entities")).includes("BrowserEntity"));
     await page.click("#v2-entities > summary");
+    await page.click("#v2-entity-provenance > summary");
+    check("real entity observations expose source occurrences and explicit unknown identity", (await page.textContent("#v2-entity-observations")).includes("原文「BrowserEntity」") && (await page.textContent("#v2-entity-observations")).includes("身份未确认"));
     await page.locator(".v2-entity", { hasText: "BrowserEntity" }).getByRole("button", { name: "移除" }).click();
     await page.waitForFunction(() => !document.querySelector("#v2-entity-list")?.textContent.includes("BrowserEntity"));
     check("rejecting an entity also clears the reading header", !(await page.textContent("#read-entities")).includes("BrowserEntity"));
+    check("rejected entity provenance remains an explicit historical judgment", (await page.locator("#v2-entity-observations li", { hasText: "BrowserEntity" }).first().textContent()).includes("非当前有效结果"));
     const serverExport = await fetch(`http://127.0.0.1:${goPort}/api/export`).then(response => response.text());
     check("server export excludes the rejected entity", !serverExport.includes("实体：BrowserEntity"));
     const downloadPromise = page.waitForEvent("download");

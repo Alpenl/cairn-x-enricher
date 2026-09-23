@@ -15,7 +15,7 @@ function envelope(payload, { xSearch = false, model = "grok-mock" } = {}) {
 
 function choiceAnswers(question) {
   const options = Object.keys(question.criteria || {});
-  const pick = options.find((option) => option !== "none") ?? options[0];
+  const pick = options.includes("relevant") ? "relevant" : (options.find((option) => option !== "none") ?? options[0]);
   const rest = options.filter((option) => option !== pick);
   const probabilities = {};
   for (const option of options) {

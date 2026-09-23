@@ -33,9 +33,12 @@ func (j *budgetJudge) Judge(ctx context.Context, _ any, questions map[string]cla
 	}
 	answers := make(map[string]classify.RawAnswer)
 	for id, q := range questions {
-		if q.Type == classify.TypeScore {
+		switch q.Type {
+		case classify.TypeScore:
 			answers[id] = classify.RawAnswer{Type: classify.TypeScore, Score: &classify.ScoreAnswer{Score: 2}}
-		} else {
+		case classify.TypeChoice:
+			answers[id] = entityRelevance(.95)
+		default:
 			v := 0.95
 			answers[id] = classify.RawAnswer{Type: classify.TypeNoul, Noul: &classify.NoulAnswer{Noul: &v}}
 		}

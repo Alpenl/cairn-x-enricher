@@ -46,7 +46,7 @@ func (f *entityStoreFixture) GetEntity(_ context.Context, _ string) (EntityRecei
 }
 func entityFixture(t *testing.T) (*Service, *entityJudgeFixture, *entityStoreFixture, EntityBinding) {
 	t.Helper()
-	j := &entityJudgeFixture{fakeJudge: fakeJudge{answers: map[string]classify.RawAnswer{"entity_0": noul(.9)}}}
+	j := &entityJudgeFixture{fakeJudge: fakeJudge{answers: map[string]classify.RawAnswer{"entity_0": entityRelevance(.9)}}}
 	store := &entityStoreFixture{receipt: EntityReceipt{Key: strings.Repeat("a", 64), Status: "pending", Owned: true, Answers: map[string]classify.RawAnswer{}}}
 	s := NewService(Flags{Entities: true}, DefaultBudget(), j)
 	s.SetEntityStore(store)
@@ -79,7 +79,7 @@ func TestEntityCacheDoesNotInferForUnavailablePendingFailedOrMalformedHits(t *te
 }
 func TestEntityCacheRecoversLostCompletionAndReusesEmptyWithoutBudget(t *testing.T) {
 	s, j, store, b := entityFixture(t)
-	j.answers = map[string]classify.RawAnswer{"entity_0": noul(.1)}
+	j.answers = map[string]classify.RawAnswer{"entity_0": entityRelevance(.1)}
 	store.completeErr = true
 	first := s.EntitiesForSnapshot(context.Background(), b, []Block{{ID: "source", Text: "Acme"}}, nil)
 	if first.State != EntityCompletedEmpty || first.OperationKey == "" || j.calls != 1 || store.reads != 1 {

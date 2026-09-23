@@ -16,7 +16,7 @@
 
 1. **停止并排空旧分类消费者，再做 Worker + 迁移**：
    - 备份 D1 快照并验证可恢复；
-   - 按当前已应用版本顺序补齐所有迁移（当前截至 0029），先在恢复副本验证；
+   - 按当前已应用版本顺序补齐所有迁移（当前截至 0030），先在恢复副本验证；
    - 记录已有 `classification_target_state`；首次迁移才可能为 generation 0，不重置已有目标；
    - 验证旧消费者 claim 被拒绝，新预算协议 request/response header 均为 1。
 2. **再上 Go/Web**：部署新 enricher 镜像；确认 `GET /api/extensions` 全 off；`make verify` 通过。

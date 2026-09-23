@@ -2,6 +2,7 @@ package extension
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"unicode"
@@ -60,10 +61,10 @@ func ExtractCandidates(blocks []Block, storedURLs []string) []SurfaceCandidate {
 			}
 			trimmedStart, trimmedEnd := trimSpan(runes, start, index)
 			surface := string(runes[trimmedStart:trimmedEnd])
-			if len([]rune(surface)) < MinSurfaceRunes {
+			if len([]rune(surface)) < MinSurfaceRunes || !entitySurfaceFits(surface) {
 				continue
 			}
-			key := strings.ToLower(surface)
+			key := fmt.Sprintf("%s:%d:%d", block.ID, trimmedStart, trimmedEnd)
 			if seen[key] {
 				continue
 			}
@@ -79,7 +80,7 @@ func ExtractCandidates(blocks []Block, storedURLs []string) []SurfaceCandidate {
 	// Stored links are surfaced verbatim so the model may only choose among
 	// URLs that already exist in the record.
 	for _, value := range storedURLs {
-		if !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://") {
+		if (!strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://")) || !entitySurfaceFits(value) {
 			continue
 		}
 		key := "url:" + strings.ToLower(value)
@@ -99,6 +100,22 @@ func ExtractCandidates(blocks []Block, storedURLs []string) []SurfaceCandidate {
 		return candidates[i].BlockID < candidates[j].BlockID
 	})
 	return candidates
+}
+
+// The existing stored entity term contract allows 120 UTF-16 units. Skip an
+// overlong run rather than truncating it into a name absent from the source.
+func entitySurfaceFits(value string) bool {
+	units := 0
+	for _, r := range value {
+		units++
+		if r > 0xffff {
+			units++
+		}
+		if units > 120 {
+			return false
+		}
+	}
+	return true
 }
 
 // EntityVerdict is the narrow judgment the model is allowed to make about one

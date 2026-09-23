@@ -2,10 +2,10 @@ package extension
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -35,12 +35,13 @@ const (
 
 // EntityResult is one bounded entity run over stored evidence.
 type EntityResult struct {
-	State        EntityState `json:"state"`
-	Entities     []string    `json:"entities"`
-	Reason       string      `json:"reason,omitempty"`
-	Calls        int         `json:"calls"`
-	Tokens       int         `json:"tokens"`
-	OperationKey string      `json:"-"`
+	State        EntityState         `json:"state"`
+	Entities     []string            `json:"entities"`
+	Reason       string              `json:"reason,omitempty"`
+	Calls        int                 `json:"calls"`
+	Tokens       int                 `json:"tokens"`
+	OperationKey string              `json:"-"`
+	Observations []EntityObservation `json:"observations"`
 }
 
 // Service shares a process-local ledger and a durable Worker budget across all
@@ -53,12 +54,27 @@ type Service struct {
 	store       BudgetStore
 	rerankStore RerankStore
 	entityStore EntityStore
+	catalog     EntityCatalog
 }
 
 // NewService creates the extension service. A nil judge leaves the model-backed
 // capabilities disabled rather than failing the process.
 func NewService(flags Flags, budget Budget, judge Judge) *Service {
-	return &Service{Flags: flags, Budget: budget, Judge: judge, ledger: NewLedger(budget)}
+	return &Service{Flags: flags, Budget: budget, Judge: judge, ledger: NewLedger(budget), catalog: EntityCatalog{Version: "empty-v1", Entities: []CanonicalEntity{}}}
+}
+
+// SetEntityCatalog validates and copies the operator catalog at startup.
+func (s *Service) SetEntityCatalog(catalog EntityCatalog) error {
+	raw, err := json.Marshal(catalog)
+	if err != nil {
+		return err
+	}
+	copied, err := DecodeEntityCatalog(raw)
+	if err != nil {
+		return err
+	}
+	s.catalog = copied
+	return nil
 }
 
 // Entities runs the entity pipeline over stored blocks. It is purely additive:
@@ -81,25 +97,15 @@ func (s *Service) entities(ctx context.Context, item string, blocks []Block, sto
 	if len(candidates) == 0 {
 		return EntityResult{State: EntityCompletedEmpty, Entities: []string{}}
 	}
-	questions := make(map[string]classify.ProviderQuestion, len(candidates))
-	byID := make(map[string]SurfaceCandidate, len(candidates))
-	for index, candidate := range candidates {
-		id := fmt.Sprintf("entity_%d", index)
-		byID[id] = candidate
-		questions[id] = classify.ProviderQuestion{
-			Type: classify.TypeNoul,
-			Instructions: "材料是否把 `" + candidate.Surface + "` 作为实质讨论的实体（人名、组织、产品、项目、地点等）？" +
-				"只是偶然提及、作为普通词出现或无法确认时判否。",
-			Criteria: map[string]string{
-				"true":  "该名称是材料中实质讨论的实体之一。",
-				"false": "未讨论、仅偶然提及或无法确认。",
-			},
-		}
+	options := make([][]CanonicalOption, len(candidates))
+	for i, candidate := range candidates {
+		options[i] = s.catalog.options(candidate, blocks)
 	}
+	questions := entityQuestions(candidates, options)
 	if storedURLs == nil {
 		storedURLs = []string{}
 	}
-	state := map[string]any{"material": blocks, "stored_links": storedURLs}
+	state := map[string]any{"material": blocks, "stored_links": storedURLs, "entity_protocol": 2, "entity_candidates": candidates, "canonical_options": options, "catalog_version": s.catalog.Version}
 	var answers map[string]classify.RawAnswer
 	var calls, tokens int
 	var operation string
@@ -115,35 +121,11 @@ func (s *Service) entities(ctx context.Context, item string, blocks []Block, sto
 	if err != nil {
 		return EntityResult{State: EntityFailed, Entities: []string{}, Reason: boundedReason(err), Calls: calls, Tokens: tokens}
 	}
-	entities := make([]string, 0, len(candidates))
-	seen := map[string]bool{}
-	for id, answer := range answers {
-		candidate, ok := byID[id]
-		if !ok {
-			// A model answer for an unknown question is a contract error, not a
-			// new entity.
-			return EntityResult{State: EntityFailed, Entities: []string{}, Reason: "verdict for an unknown candidate"}
-		}
-		if answer.Type != classify.TypeNoul || answer.Noul == nil || answer.Noul.Noul == nil {
-			return EntityResult{State: EntityFailed, Entities: []string{}, Reason: "verdict is not a noul judgment"}
-		}
-		if *answer.Noul.Noul < 0.8 {
-			continue
-		}
-		// Same normalized surface is one entity; a different name is never
-		// merged into it.
-		key := strings.ToLower(strings.TrimSpace(candidate.Surface))
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		entities = append(entities, candidate.Surface)
-	}
-	sort.Strings(entities)
+	entities, observations := resolveEntityObservations(candidates, options, answers, s.catalog.Version)
 	if len(entities) == 0 {
-		return EntityResult{State: EntityCompletedEmpty, Entities: []string{}, Calls: calls, Tokens: tokens, OperationKey: operation}
+		return EntityResult{State: EntityCompletedEmpty, Entities: []string{}, Calls: calls, Tokens: tokens, OperationKey: operation, Observations: observations}
 	}
-	return EntityResult{State: EntityCompletedNonempty, Entities: entities, Calls: calls, Tokens: tokens, OperationKey: operation}
+	return EntityResult{State: EntityCompletedNonempty, Entities: entities, Calls: calls, Tokens: tokens, OperationKey: operation, Observations: observations}
 }
 
 // GapKind is an observable material gap. A legitimate none or a vocabulary

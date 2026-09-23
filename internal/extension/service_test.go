@@ -29,6 +29,15 @@ func noul(value float64) classify.RawAnswer {
 	return classify.RawAnswer{Type: classify.TypeNoul, Noul: &classify.NoulAnswer{Noul: &value}}
 }
 
+func entityRelevance(value float64) classify.RawAnswer {
+	selected := "relevant"
+	if value < 0.5 {
+		selected = "none"
+	}
+	confidence := 1.0
+	return classify.RawAnswer{Type: classify.TypeChoice, Choice: &classify.ChoiceAnswer{Choice: selected, Probabilities: map[string]float64{"relevant": value, "none": 1 - value, "unknown": 0, "incidental": 0}}, Confidence: &confidence}
+}
+
 func score(value float64) classify.RawAnswer {
 	return classify.RawAnswer{Type: classify.TypeScore, Score: &classify.ScoreAnswer{Score: value}}
 }
@@ -46,7 +55,7 @@ func TestEntitiesDisabledIsNotRun(t *testing.T) {
 
 func TestEntitiesValidatesCandidatesAndKeepsDistinctNames(t *testing.T) {
 	judge := &fakeJudge{answers: map[string]classify.RawAnswer{
-		"entity_0": noul(0.95), "entity_1": noul(0.9),
+		"entity_0": entityRelevance(0.95), "entity_1": entityRelevance(0.9), "entity_2": entityRelevance(0.95),
 	}}
 	flags := DefaultFlags()
 	flags.Entities = true
@@ -61,13 +70,13 @@ func TestEntitiesValidatesCandidatesAndKeepsDistinctNames(t *testing.T) {
 	if len(result.Entities) != 2 || result.Entities[0] != "Acme" || result.Entities[1] != "Widgets" {
 		t.Fatalf("entities = %v", result.Entities)
 	}
-	if len(judge.lastQ) != 2 {
+	if len(judge.lastQ) != 3 || len(result.Observations) != 3 {
 		t.Fatalf("expected one question per candidate, got %d", len(judge.lastQ))
 	}
 }
 
 func TestEntitiesCompletedEmptyIsASuccess(t *testing.T) {
-	judge := &fakeJudge{answers: map[string]classify.RawAnswer{"entity_0": noul(0.1)}}
+	judge := &fakeJudge{answers: map[string]classify.RawAnswer{"entity_0": entityRelevance(0.1)}}
 	flags := DefaultFlags()
 	flags.Entities = true
 	service := NewService(flags, DefaultBudget(), judge)

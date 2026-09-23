@@ -50,7 +50,10 @@ func newClassifyCommand() *cobra.Command {
 			return err
 		}
 		worker := processor.NewStaged(queue, nil, client, catalog.Version, cfg.TypesafeModel, newLogger(cfg.LogLevel), 1)
-		extensions := extensionService(cfg, client)
+		extensions, err := extensionService(cfg, client)
+		if err != nil {
+			return err
+		}
 		extensions.SetBudgetStore(queue)
 		extensions.SetRerankStore(queue)
 		extensions.SetEntityStore(queue)

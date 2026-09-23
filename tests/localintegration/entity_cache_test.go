@@ -73,6 +73,9 @@ func TestLocalWorkerEntityCacheCLI(t *testing.T) {
 					pick = option
 				}
 			}
+			if entity {
+				pick = "relevant"
+			}
 			prob[pick] = 1
 			answers[id] = map[string]any{"type": "choice", "choice": pick, "probabilities": prob, "confidence": 1}
 		}

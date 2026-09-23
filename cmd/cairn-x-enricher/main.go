@@ -399,7 +399,10 @@ func newProcessor(
 	tracker.MarkStarted()
 	worker := processor.NewStaged(queue, model, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
 	fetcher, policy := evidenceFetcher(cfg)
-	extensions := extensionService(cfg, classifier)
+	extensions, err := extensionService(cfg, classifier)
+	if err != nil {
+		return nil, nil, err
+	}
 	extensions.SetBudgetStore(queue)
 	extensions.SetRerankStore(queue)
 	extensions.SetEntityStore(queue)
@@ -411,7 +414,7 @@ func newProcessor(
 // extensionService builds the bounded extension service from configuration.
 // Every flag defaults off; the evidence fetcher is only constructed when the
 // allowlist is non-empty, so an unconfigured process cannot fetch anything.
-func extensionService(cfg config.Config, judge extension.Judge) *extension.Service {
+func extensionService(cfg config.Config, judge extension.Judge) (*extension.Service, error) {
 	flags := extension.Flags{
 		Entities: cfg.ExtensionEntities, Evidence: cfg.ExtensionEvidence,
 		Rerank: cfg.ExtensionRerank, Proposal: cfg.ExtensionProposal,
@@ -433,7 +436,12 @@ func extensionService(cfg config.Config, judge extension.Judge) *extension.Servi
 		budget.Timeout = cfg.ExtensionTimeout
 	}
 	service := extension.NewService(flags, budget, judge)
-	return service
+	if cfg.EntityCatalog.Version != "" {
+		if err := service.SetEntityCatalog(cfg.EntityCatalog); err != nil {
+			return nil, err
+		}
+	}
+	return service, nil
 }
 
 // evidenceFetcher returns a controlled HTTP client for the evidence extension,

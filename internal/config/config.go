@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Alpenl/cairn-x-enricher/internal/extension"
 )
 
 const (
@@ -54,6 +56,7 @@ type Config struct {
 	ExtensionMaxInputTokens        int
 	ExtensionMaxInputTokensPerItem int
 	ExtensionTimeout               time.Duration
+	EntityCatalog                  extension.EntityCatalog
 
 	// PartialReuse opts in to reusing unchanged stored answers for a new
 	// classification. It is off by default; the conservative full evaluation is
@@ -98,6 +101,13 @@ func LoadFor(role Role) (Config, error) {
 	}
 	if err := cfg.validateFor(role); err != nil {
 		return Config{}, err
+	}
+	if (role == RoleServe || role == RoleClassify) && cfg.ExtensionEntities {
+		var err error
+		cfg.EntityCatalog, err = extension.LoadEntityCatalog(strings.TrimSpace(os.Getenv("CAIRN_ENTITY_CATALOG_PATH")))
+		if err != nil {
+			return Config{}, err
+		}
 	}
 	return cfg, nil
 }

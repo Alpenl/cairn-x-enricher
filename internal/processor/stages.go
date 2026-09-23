@@ -607,6 +607,7 @@ func (p *Processor) runExtensions(ctx context.Context, job *cairn.Classification
 			"operation_key":        fmt.Sprintf("entity-%d-rev-%d-lease-%s", job.ID, job.Revision, job.LeaseToken),
 			"state":                string(entity.State),
 			"entities":             entity.Entities,
+			"observations":         entity.Observations,
 			"content_revision":     job.ContentRevision,
 			"content_hash":         job.EvidenceHash,
 			"evidence_snapshot_id": job.EvidenceSnapshotID,

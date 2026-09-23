@@ -1,6 +1,6 @@
 # B09 / 实体、补证据、重排与词表提案：设计规格
 
-任务进度：[E #15](https://github.com/Alpenl/cairn-x-enricher/issues/15)，B09-T01–T14全文在Issue。依赖B03/B05后端、B04判断与B08离线工具。无gold可继续实现，但不默认启用。四项能力应按可审查改动分多个代码PR，不因原批次号塞成一个巨大PR。
+任务进度：[E #15](https://github.com/Alpenl/cairn-x-enricher/issues/15)，B09-T01–T14全文在Issue。依赖B03/B05后端、B04判断与B08离线工具。质量使用有来源的 automatic_reference，不等待人工标注；不默认启用。四项能力应按可审查改动分多个代码PR，不因原批次号塞成一个巨大PR。
 
 ## 实体
 
@@ -24,7 +24,7 @@
 
 ## 预算与验收
 
-每扩展独立flag默认off，单条/整体token和调用预算、timeout/取消/恢复/去重；用户材料和模型不能加额度。普通分类不因扩展未开失败。用B08分别off/on评估实体precision/span/canonical误合并、补材料收益/成本/重复、候选召回与rerank、p95和预算耗尽，无gold只报工程。
+每扩展独立flag默认off，单条/整体token和调用预算、timeout/取消/恢复/去重；用户材料和模型不能加额度。普通分类不因扩展未开失败。用B08分别off/on评估实体precision/span/canonical误合并、补材料收益/成本/重复、候选召回与rerank、p95和预算耗尽，没有可追溯参考时只报工程；允许 automatic_reference 质量评估，须报告来源和局限。
 
 SC10/17–21/24–26/29–30；R12/R14–R17/R26/R30–R33/R38。恶意URL/注入/超预算/幂等/分页/实体状态/未审批词表均有断言，make verify与合同集成；交evidence/B09.md、flag/provider/unsupported范围/调用数和实现PR。关flag不清历史或人工提案，重排回原序，补材料仍可人工。未授权不收费/merge/部署。
 
@@ -100,3 +100,44 @@ span 精确匹配原文、URL 候选属于当前来源链接。固定模型沿�
 回滚消费者前关闭实体 flag，保留迁移和兼容清理 Worker。无预算/无缓存旧消费者的启用
 路径不具备这里的保证。此项解决重复推断和持久恢复，不声称完成有限 canonical 匹配、
 实体类型/来源的全部产品展示、真实实体 precision、误合并率或整个 B09/G01 验收。
+
+
+## 有限实体身份与逐处来源（0030，代码准备）
+
+实体开启后使用明确 Choice 区分实质讨论、偶然提及、非实体和未知；同名的每个来源位置
+分别判断并保留 block/rune 位置，旧显示名称列表仍去重，不据此合并身份。目录使用本地
+`CAIRN_ENTITY_CATALOG_PATH` JSON，由运营者控制，不接受正文或模型生成的目录或路径。
+未配置目录时仍运行实体相关性，身份明确 unknown，不伪造 canonical；四个扩展开关仍默认 off。
+
+目录格式：`{"version":"team-1","entities":[{"id":"project-a","label":"Example","kind":"project",
+"aliases":[],"identifiers":["https://example.com/project-a"]}]}`。kind 支持 person / organization /
+product / project / place。最多 1 MiB、200 个实体、每项 16 个别名和 8 个 HTTP(S) 身份 URL；
+ID 唯一且稳定，非法/重复身份、未知字段、额外 JSON、无身份 URL 会在开启实体的消费者启动
+时拒绝。目录文件从其父目录的受限文件句柄读取，不能以符号链接逃逸；不要在日志公开私有目录。
+实体关闭的流程忽略该配置，普通分类不因无目录而失败。
+
+每个原文候选只得到同名/别名且有本来源块身份 URL 支持的有限选项；其它块的 URL 或仅同名
+不能生成匹配候选。链接候选只匹配其本身 URL。候选表面名须符合既有存储的 120 个 UTF-16 单元限制；超长片段直接跳过，不截断造名。
+每处最多 8 个身份；超出时整组为 unknown，
+不截断后误选。URL 仅用于身份比较，不发抓取。Jev 在允许身份、none、unknown 中判断，
+仍须确认 URL 与该出现的实际关系；真实误合并率须用自动参考评估，类型安全不等于语义正确。
+身份问题与相关性问题在同一请求中独立提问，不能读取彼此答案。结果接受阈值暂保持 0.8，
+低于阈值为 unknown；未据本批合成夹具选择阈值或启用线上策略。
+
+请求保存实际材料、候选、有限目录定义/身份依据和目录版本；完整 Choice 分布和 confidence
+进入私有持久缓存。目录内容/版本、候选、问题或策略变化改变缓存身份。每个结果的 observation
+还保存原文候选、相关性判断、允许身份定义、完整 raw、选中身份和独立身份依据，0030 将
+其与 entity_states/操作记录保存，缓存过期后仍可解释；删除收藏时一起清除。历史记录迁移
+为 observations=[]，不补造旧身份依据。未知/非实体/偶然提及可组成 completed_empty，
+不与 failed/not_run 混淆；旧消费者不能用无逐项来源的同材料结果覆盖已有逐项成功结果。
+
+Worker `/api/v2/links/:id/entities` 增加 observations（归档判断）及 effective_observations
+（当前有效且未经人工拒绝的相关候选）。人工结果优先，来源变 stale 后有效 observation
+为空，归档仍在。Web 的“自动判断依据”区分原文、受控名称/类型、身份链接和当前/历史状态；
+Android 逐项来源展示尚需后续接入，不把 Web 通过当作 Android 完成。
+
+先应用 0030，再部署新版 Worker 和 Go；旧 Noul 缓存合同仍读取历史结果，新协议含
+entity_protocol=2。新消费者遇不支持协议的旧 Worker 在缓存 claim 阶段拒绝，不回退到
+未经持久化的付费路径。回滚保留迁移及数据，关闭实体 flag。仍沿用固定模型与逐条/全局
+持久预算、实际请求字节上限和总超时，无新增付费回退。目录编辑目前是受控运维配置，
+不是已完成的词表提案审批、影响 dry-run 或生产发布系统。

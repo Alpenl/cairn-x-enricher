@@ -60,8 +60,25 @@ func validateEntityAnswers(questions map[string]classify.ProviderQuestion, answe
 	if len(answers) != len(questions) {
 		return errors.New("incomplete entity answer set")
 	}
-	for id := range questions {
+	for id, question := range questions {
 		a, ok := answers[id]
+		if question.Type == classify.TypeChoice {
+			criteria, valid := question.Criteria.(map[string]string)
+			if !ok || !valid || a.Type != classify.TypeChoice || a.Choice == nil || a.Noul != nil || a.Score != nil || a.Confidence == nil || math.IsNaN(*a.Confidence) || math.IsInf(*a.Confidence, 0) || *a.Confidence < 0 || *a.Confidence > 1 {
+				return errors.New("invalid entity choice")
+			}
+			if _, exists := criteria[a.Choice.Choice]; !exists {
+				return errors.New("entity choice outside controlled options")
+			}
+			options := make([]string, 0, len(criteria))
+			for option := range criteria {
+				options = append(options, option)
+			}
+			if err := classify.ValidateProbabilityMap(a.Choice.Probabilities, options); err != nil {
+				return err
+			}
+			continue
+		}
 		if !ok || a.Type != classify.TypeNoul || a.Noul == nil || a.Noul.Noul == nil {
 			return errors.New("invalid entity answer")
 		}
@@ -92,7 +109,7 @@ func (s *Service) cachedEntities(ctx context.Context, binding *EntityBinding, ca
 	owner := hex.EncodeToString(nonce)
 	// The full questions and candidates are in identity too. Version the local
 	// selection semantics explicitly; changing thresholds cannot reuse a receipt.
-	spec, _ := json.Marshal(map[string]any{"extractor": "surface-spans-v1", "accept": 0.8, "normalization": "lowercase-trim-v1", "questions": questions})
+	spec, _ := json.Marshal(map[string]any{"extractor": "source-occurrences-v2", "accept": 0.8, "selection": "controlled-identities-v2", "questions": questions})
 	ctx, stop := context.WithTimeout(ctx, s.Budget.Timeout)
 	defer stop()
 	receipt, err := s.entityStore.ClaimEntity(ctx, EntityClaim{EntityBinding: *binding, OwnerToken: owner, RequestJSON: string(wire), Candidates: candidates, SpecHash: digestBytes(spec)})

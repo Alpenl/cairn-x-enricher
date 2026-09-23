@@ -189,6 +189,35 @@
       holder.append(row);
     }
     if (!holder.childElementCount) holder.append(ui.element("span", "line-note", "没有有效实体。"));
+    const provenance = ui.byId("v2-entity-provenance");
+    const records = ui.byId("v2-entity-observations");
+    if (provenance && records) {
+      const observations = Array.isArray(payload.observations) ? payload.observations : [];
+      provenance.hidden = observations.length === 0;
+      records.replaceChildren();
+      const decisions = { relevant: "实质讨论", incidental: "偶然提及", none: "非实体", unknown: "无法确认" };
+      const kinds = { person: "人物", organization: "组织", product: "产品", project: "项目", place: "地点" };
+      for (const observation of observations) {
+        const candidate = observation.candidate || {};
+        const row = ui.element("li", "line-note");
+        const current = !payload.stale && entities.includes(candidate.surface) && observation.decision === "relevant";
+        const identity = observation.canonical_state === "matched"
+          ? `归一化：${observation.canonical_label}（${kinds[observation.canonical_kind] || observation.canonical_kind}）`
+          : (observation.canonical_state === "none" ? "无匹配身份" : "身份未确认");
+        row.append(document.createTextNode(`原文「${candidate.surface || ""}」 · ${decisions[observation.decision] || "未知"} · ${identity}${current ? "" : " · 非当前有效结果"}`));
+        if (candidate.block_id) row.append(document.createTextNode(` · 来源片段 ${candidate.block_id}，字符 ${candidate.start + 1}–${candidate.end}`));
+        for (const evidence of Array.isArray(observation.canonical_evidence) ? observation.canonical_evidence : []) {
+          try {
+            const url = new URL(evidence.identifier);
+            if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) continue;
+            const link = ui.element("a", "", "身份依据");
+            link.href = url.href; link.target = "_blank"; link.rel = "noopener noreferrer";
+            row.append(document.createTextNode(" · "), link);
+          } catch { /* malformed legacy evidence is not made executable */ }
+        }
+        records.append(row);
+      }
+    }
   }
 
   // A per-action identity: only a retry of the same action reuses it.

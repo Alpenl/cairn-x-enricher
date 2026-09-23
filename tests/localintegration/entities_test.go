@@ -69,7 +69,7 @@ func TestLocalWorkerEntitySnapshotIdentity(t *testing.T) {
 		analyzed = state.Material
 		answers := map[string]any{}
 		for id := range payload.Questions {
-			answers[id] = map[string]any{"type": "noul", "noul": 0.95}
+			answers[id] = map[string]any{"type": "choice", "choice": "relevant", "probabilities": map[string]float64{"relevant": .95, "incidental": .02, "none": .01, "unknown": .02}, "confidence": .8}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-1.13.0", "answers": answers, "usage": map[string]int{"input_tokens": 20, "output_tokens": 2}})

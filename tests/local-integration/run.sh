@@ -140,3 +140,5 @@ run_case classificationbudget TestLocalWorkerClassificationBudgetAcrossProcesses
 run_case entitycache TestLocalWorkerEntityCacheCLI
 
 run_case sourcerevision TestLocalWorkerSourceRevisionOnce
+
+run_case canonicalentities TestLocalWorkerCanonicalEntitiesCLI

@@ -1,9 +1,31 @@
 package config
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestEntityCatalogOnlyLoadsForEnabledConsumer(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("CAIRN_ENTITY_CATALOG_PATH", filepath.Join(t.TempDir(), "missing.json"))
+	t.Setenv("CAIRN_EXTENSION_ENTITIES", "false")
+	if _, err := LoadFor(RoleClassify); err != nil {
+		t.Fatalf("disabled entity catalog blocked classification: %v", err)
+	}
+	t.Setenv("CAIRN_EXTENSION_ENTITIES", "true")
+	if _, err := LoadFor(RoleClassify); err == nil {
+		t.Fatal("enabled consumer silently ignored missing catalog")
+	}
+	if _, err := LoadFor(RoleEnrich); err != nil {
+		t.Fatalf("reading-only role consumed entity catalog: %v", err)
+	}
+	t.Setenv("CAIRN_ENTITY_CATALOG_PATH", "")
+	cfg, err := LoadFor(RoleClassify)
+	if err != nil || cfg.EntityCatalog.Version != "empty-v1" || len(cfg.EntityCatalog.Entities) != 0 {
+		t.Fatalf("unconfigured directory must be explicitly empty: %v", err)
+	}
+}
 
 func TestLoadDefaults(t *testing.T) {
 	setRequiredEnv(t)
