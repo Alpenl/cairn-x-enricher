@@ -1,3 +1,5 @@
+> 2026-09-23 Android 实体依据：[逐处身份、来源与人工优先展示](evidence/B07-20260923-entity-provenance.md)。S `6e22cda`；同一权威 selection 快照承载已存判断，Android 区分同名身份/unknown/历史，导出仅当前有效依据。277 Worker、76 unit、19 跨仓场景与本地 14 个实际 Android/Worker 阶段通过；固定设备矩阵结果见报告。新增付费 0，完整 235 项及真实质量/治理/历史/独立复审继续。
+
 # B07 / Android 多维整理与兼容：设计规格
 
 任务进度：[S #31](https://github.com/Alpenl/cairn-share/issues/31)，B07-T01–T10全文在Issue。依赖B05后端合同，与B06共享交互但不等待整套Web结束。先搜索实际android/app/src文件，不凭名字猜路径，不升级无关依赖。
