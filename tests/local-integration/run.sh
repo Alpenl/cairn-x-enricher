@@ -138,3 +138,5 @@ run_case rerankcache TestLocalWorkerRerankCacheAcrossProcesses
 run_case classificationbudget TestLocalWorkerClassificationBudgetAcrossProcesses
 
 run_case entitycache TestLocalWorkerEntityCacheCLI
+
+run_case sourcerevision TestLocalWorkerSourceRevisionOnce

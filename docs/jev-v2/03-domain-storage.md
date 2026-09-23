@@ -28,6 +28,19 @@ run/decision/job/projection/cache提交要原子，检查lease/input/target/spec
 
 删除和保留期覆盖snapshot/run/event/entity/cache；仍被当前decision引用的输入不能清掉后假称可重现。核实D1上限，必要时引用现有授权存储。只新增迁移，不改0009，不破坏性down，不公开私有fixture。
 
+### 来源复合版本（0029，代码准备）
+
+来源 POST 在同一个 links UPDATE 中保存正文、上下文比较值和来源链接，统一触发器
+对 URL/正文/上下文/规范化链接判定变化，一次保存最多递增一次；不同保存各自递增，
+不依赖是否已建立新快照。相同值重试不递增。来源 payload upsert 在同一 D1 batch，
+租约失败不写入、后续写入失败整批回滚。旧直接 links/source payload 写入仍有失效保护。
+
+新增 `links.source_context_text` 是私有版本比较副本，不替代不可变 EvidenceSnapshot
+或 `enrichment_sources.payload`；provider 仍读取原有快照路径。只回填 URL/正文匹配的
+历史 source，非法 JSON/非文本/过期记录按空值处理，不重写已有 revision。App DTO 不
+暴露此字段，删除收藏时随 links 行删除。此改动不扩大到 image URL 版本语义，也不宣称
+旧 Worker 分步复合写入只增加一次。部署顺序见 [runbook](runbook-deploy.md)。
+
 ## 验收与交付
 
 并发重复complete仅一个run；source变更与complete交错安全；replay的source/run计数不增；CAS/empty/reset/reject正确；旧写不清v2；错spec/model/coverage拒绝；删除完整；空库/历史库迁移和应用回滚；大小与非法JSON边界。实际Worker/D1测试不能全由mock替代。

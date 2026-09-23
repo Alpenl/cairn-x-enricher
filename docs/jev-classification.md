@@ -94,7 +94,7 @@ go run ./cmd/cairn-x-enricher classify --id 123 --max-jobs 20
 ## 升级与回退边界
 
 1. 停止并排空旧分类消费者，避免升级前已经取得的 lease 继续走旧付费路径。
-2. 先准备含全部迁移（当前截至 0028）和预算端点的 Worker；检查备份与恢复。
+2. 先准备含全部迁移（当前截至 0029）和预算端点的 Worker；检查备份与恢复。
 3. 新消费者请求和 Worker 响应均声明 `X-Cairn-Classification-Budget: 1`。
    旧消费者面对新 Worker 不能领取任务；新消费者面对旧 Worker 在握手阶段停止，不能领取任务。
 4. 配置固定模型并通过既有受控接口建立匹配的目标 generation，再限定 ID 小批验证。

@@ -16,7 +16,7 @@
 
 1. **停止并排空旧分类消费者，再做 Worker + 迁移**：
    - 备份 D1 快照并验证可恢复；
-   - 按当前已应用版本顺序补齐所有迁移（当前截至 0028），先在恢复副本验证；
+   - 按当前已应用版本顺序补齐所有迁移（当前截至 0029），先在恢复副本验证；
    - 记录已有 `classification_target_state`；首次迁移才可能为 generation 0，不重置已有目标；
    - 验证旧消费者 claim 被拒绝，新预算协议 request/response header 均为 1。
 2. **再上 Go/Web**：部署新 enricher 镜像；确认 `GET /api/extensions` 全 off；`make verify` 通过。
@@ -27,6 +27,12 @@
    - 观察指标达标后再扩大。
 
 ## 目标 generation 回滚
+
+来源写入的新 Worker 依赖 0029 的私有 `links.source_context_text` 字段，必须先迁移再部署。
+迁移只从匹配当前 URL/正文的源记录回填上下文，不增加已有 content revision，不触发历史重评。
+上线切换期间暂停来源写入，避免旧 Worker 的分步写入仍产生两次版本递增。回滚应用时保留
+新增字段和触发器，不做破坏性 down；旧 Worker 可继续写入并触发失效保护，但复合保存
+“只增加一次”的保证属于新 Worker，不适用于回滚后的旧写法。App 响应不暴露此字段。
 
 - 使用**新 generation** 指向旧 spec（`spec_hash` 相同则视为 unchanged）。
 - 永不倒退 generation；旧 run 保留为审计。
