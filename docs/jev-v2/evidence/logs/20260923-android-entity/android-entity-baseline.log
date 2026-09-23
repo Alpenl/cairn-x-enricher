@@ -1,0 +1,116 @@
+
+> test
+> vitest run --run test/entity-judgments.test.ts -t serves Android provenance
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:3378928) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-android-entity-baseline/worker
+
+ ❯ test/entity-judgments.test.ts (6 tests | 1 failed | 5 skipped) 296ms
+   × serves Android provenance with the same authoritative source and human selection snapshot 294ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/entity-judgments.test.ts > serves Android provenance with the same authoritative source and human selection snapshot
+AssertionError: expected { …(10) } to deeply equal { …(12) }
+
+- Expected
++ Received
+
+@@ -5,76 +5,10 @@
+    ],
+    "cleared_automatic": null,
+    "content_revision": 1,
+    "empty": null,
+    "evidence_snapshot_id": 1,
+-   "observations": [
+-     {
+-       "candidate": {
+-         "block_id": "a",
+-         "end": 4,
+-         "kind": "surface",
+-         "start": 0,
+-         "surface": "Acme",
+-       },
+-       "canonical_evidence": [
+-         {
+-           "block_id": "a",
+-           "identifier": "https://example.com/a",
+-           "source": "block_url",
+-         },
+-       ],
+-       "canonical_id": "acme-a",
+-       "canonical_kind": "project",
+-       "canonical_label": "Acme",
+-       "canonical_state": "matched",
+-       "catalog_version": "fixture-1",
+-       "decision": "relevant",
+-       "effective": true,
+-     },
+-     {
+-       "candidate": {
+-         "block_id": "b",
+-         "end": 4,
+-         "kind": "surface",
+-         "start": 0,
+-         "surface": "Acme",
+-       },
+-       "canonical_evidence": [
+-         {
+-           "block_id": "b",
+-           "identifier": "https://example.com/b",
+-           "source": "block_url",
+-         },
+-       ],
+-       "canonical_id": "acme-b",
+-       "canonical_kind": "project",
+-       "canonical_label": "Acme",
+-       "canonical_state": "matched",
+-       "catalog_version": "fixture-1",
+-       "decision": "relevant",
+-       "effective": true,
+-     },
+-     {
+-       "candidate": {
+-         "block_id": "c",
+-         "end": 4,
+-         "kind": "surface",
+-         "start": 0,
+-         "surface": "Acme",
+-       },
+-       "canonical_evidence": [],
+-       "canonical_id": null,
+-       "canonical_kind": null,
+-       "canonical_label": null,
+-       "canonical_state": "unknown",
+-       "catalog_version": "fixture-1",
+-       "decision": "relevant",
+-       "effective": true,
+-     },
+-   ],
+-   "observations_version": 1,
+    "recorded_state": "completed_nonempty",
+    "revision": 1,
+    "status": "completed_nonempty",
+    "values": [
+      {
+
+ ❯ test/entity-judgments.test.ts:107:31
+    105|  };
+    106|  let value=await read();
+    107|  expect(value.state.entities).toEqual(displayFixture.state.entities);
+       |                               ^
+    108|  expect(value.state.personal_revision).toBe(value.revision);
+    109|  expect(value.state.content_revision).toBe(value.state.entities.conten…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  08:58:24
+   Duration  1.03s (transform 131ms, setup 0ms, import 244ms, tests 296ms, environment 0ms)

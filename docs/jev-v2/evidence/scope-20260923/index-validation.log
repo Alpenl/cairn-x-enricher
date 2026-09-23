@@ -1,0 +1,2 @@
+PASS: 126 tasks + 109 controls = 235 IDs; exact requirements, bidirectional mappings, 112 pinned files; git objects checked=True
+Index integrity only; no functional, quality or final acceptance is asserted.

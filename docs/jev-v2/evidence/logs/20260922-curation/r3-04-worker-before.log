@@ -1,0 +1,46 @@
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:312792) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 <workspace>/Cairn/cairn-share/worker
+
+ ❯ test/domain.test.ts (27 tests | 1 failed) 6389ms
+   × matches the shared Go/TS override vectors exactly 135ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/domain.test.ts > matches the shared Go/TS override vectors exactly
+AssertionError: R3-04 form reaccept follows actual action time: expected { topics: [], …(6) } to deeply equal { topics: [], …(6) }
+
+- Expected
++ Received
+
+  {
+    "affordances": [],
+    "carriers": [],
+    "content_functions": [],
+    "entities": [],
+-   "form": "case",
++   "form": "data",
+    "topics": [],
+    "use": "",
+  }
+
+ ❯ test/domain.test.ts:69:37
+     67|     const canonical = overrides.map((entry) => ({ ...entry, field: nor…
+     68|     const view = effectiveView(vector.automatic as AutomaticView, cano…
+     69|     expect(pick(view), vector.name).toEqual(vector.expected);
+       |                                     ^
+     70|   }
+     71| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 26 passed (27)
+   Start at  15:46:24
+   Duration  7.03s (transform 119ms, setup 0ms, import 190ms, tests 6.39s, environment 0ms)
+

@@ -184,6 +184,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .filters > label { display: grid; gap: 4px; min-width: 110px; color: var(--ink-2); font-size: 12px; }
 .filters select, .filters input[type="date"], .curation select, .curation textarea { min-width: 0; width: 100%; border: 1px solid #3a4042; border-radius: 5px; background: var(--sunk); color: var(--ink); padding: 6px 9px; font: inherit; }
 .filters select { width: 120px; height: 34px; }
+.filters select[multiple] { width: 160px; height: 92px; }
 .filters input[type="date"] { width: 154px; height: 34px; }
 .filters > .filter-check { display: flex; align-items: center; gap: 6px; height: 34px; }
 input[type="checkbox"] { accent-color: var(--sage); width: 16px; height: 16px; flex: 0 0 auto; }
@@ -568,7 +569,54 @@ mark { background: rgba(211, 160, 74, .22); color: var(--ink); border-radius: 2p
   .retry-btn { align-self: flex-start; }
   .filters { gap: 10px; }
   .filters > label:not(.filter-check) { flex: 1 1 calc(50% - 10px); min-width: 0; }
-  .filters select, .filters input[type="date"] { width: 100%; }
+  .filters select, .filters select[multiple], .filters input[type="date"] { width: 100%; }
   .topic-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .curation-selects { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* B06: multidimensional field-level curation. */
+.v2-dimension {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+}
+.v2-dimension .v2-term {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* Long labels wrap instead of pushing controls off a narrow viewport. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.v2-empty-row {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+#v2-status.error {
+  color: var(--danger, #ff6b6b);
+}
+#v2-dirty {
+  color: var(--warn, #f0b429);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v2-dimension *,
+  #v2-status {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+@media (max-width: 375px) {
+  .v2-dimension {
+    gap: 4px 8px;
+  }
+  .v2-empty-row {
+    margin-left: 0;
+    width: 100%;
+  }
 }

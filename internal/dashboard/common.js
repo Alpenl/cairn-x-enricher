@@ -160,7 +160,9 @@
         ["摘要", item.summary], ["中文全文", item.translated_text], ["原文", item.original_text]]) {
         if (value) lines.push(`### ${label}`, "", escape(value), "");
       }
-      if (classification.entities?.length) lines.push(`实体：${classification.entities.map(line).join(" / ")}`, "");
+      const entityView = await fetchJSON(`/api/bookmarks/${item.id}/entities`);
+      const entities = entityView?.available === false ? classification.entities || [] : entityView?.entities || [];
+      if (entities.length) lines.push(`实体：${entities.map(line).join(" / ")}`, "");
       if (item.related_links?.length) lines.push("### 相关链接", "", ...item.related_links.map((value) => `- ${link(value)}`), "");
       if ((index + 1) % EXPORT_CHUNK_SIZE === 0) await yieldToBrowser();
     }
@@ -259,7 +261,8 @@
   }
 
   function imagePath(key) {
-    return "/api/images/" + String(key).split("/").map(encodeURIComponent).join("/");
+    // A new URL namespace avoids reusing responses cached by older releases.
+    return "/api/images/" + String(key).split("/").map(encodeURIComponent).join("/") + "?privacy=1";
   }
 
   function firstImage(item) {
@@ -295,9 +298,34 @@
     const response = await fetch(path, { cache: "no-store", ...options });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
-      throw new Error(payload.error || `HTTP ${response.status}`);
+      const error = new Error(payload.error || `HTTP ${response.status}`);
+      // The server's current revision travels with a CAS conflict so the UI can
+      // explain it and let the user re-apply instead of showing a generic error.
+      error.status = response.status;
+      if (typeof payload.revision === "number") error.revision = payload.revision;
+      throw error;
     }
     return response.json();
+  }
+
+  // exportServerMarkdown downloads the server-rendered export so the file
+  // carries every effective v2 dimension, the human origin and partial counts.
+  async function exportServerMarkdown(params) {
+    const response = await fetch(`/api/export?${params}`, { cache: "no-store" });
+    if (response.status === 404 || response.status === 405) {
+      const error = new Error("export_unsupported");
+      throw error;
+    }
+    if (!response.ok) throw new Error("export_failed");
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `cairn-${new Date().toISOString().slice(0, 10)}.md`;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   async function fetchStatus() {
@@ -350,6 +378,7 @@
     bookmarkPath,
     curationLabels,
     exportMarkdown,
+    exportServerMarkdown,
     fillTerms,
     loadTaxonomy,
     metadata,

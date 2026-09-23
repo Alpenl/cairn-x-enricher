@@ -31,7 +31,11 @@
   <main class="stage">
     <div class="filters" aria-label="收藏筛选">
       <label>整理状态<select id="filter-curation_status"><option value="">全部</option><option value="inbox">收件箱</option><option value="kept">精选</option><option value="compiled">已编入笔记</option><option value="drop">搁置</option></select></label>
-      <label>主题<select id="filter-topic" disabled><option value="">全部主题</option></select></label>
+      <label>主题（可多选）<select id="filter-topics" multiple size="3" disabled aria-describedby="filter-help"></select></label>
+      <label>内容功能（可多选）<select id="filter-content_functions" multiple size="3" disabled aria-describedby="filter-help"></select></label>
+      <label>载体（任一）<select id="filter-carriers" multiple size="3" disabled aria-describedby="filter-help"></select></label>
+      <label>潜在用途（可多选）<select id="filter-affordances" multiple size="3" disabled aria-describedby="filter-help"></select></label>
+      <label>实体状态（任一）<select id="filter-entity_state" multiple size="3" aria-describedby="filter-help"><option value="not_run">未运行</option><option value="failed">失败</option><option value="completed_empty">已完成，无实体</option><option value="completed_nonempty">已完成，有实体</option><option value="stale">来源已变化</option></select></label>
       <label>形态<select id="filter-form" disabled><option value="">全部形态</option></select></label>
       <label>用途<select id="filter-use" disabled><option value="">全部用途</option></select></label>
       <label>来源<select id="filter-source"><option value="">全部来源</option><option value="x">X</option><option value="wechat">公众号</option><option value="other">其他</option></select></label>
@@ -40,7 +44,9 @@
       <button id="clear-filters" class="text-btn" type="button" hidden>清除筛选</button>
       <button id="export-markdown" class="icon-btn" type="button" title="导出已加载的收藏" aria-label="导出 Markdown" disabled><img src="/assets/download.svg" width="18" height="18" alt=""></button>
     </div>
-    <div id="load-error" class="load-error" role="alert" hidden>读取收藏失败 <button id="retry-load" class="text-btn" type="button">重试</button></div>
+    <p id="filter-help" class="line-note">同一维度匹配任一所选项，不同维度需同时满足。未选择表示不限；电脑上按住 Ctrl 或 Command 可多选。</p>
+    <p id="filter-capability" class="line-note" hidden></p>
+    <div id="load-error" class="load-error" role="alert" hidden><span id="load-error-text">读取收藏失败</span> <button id="retry-load" class="text-btn" type="button">重试</button></div>
     <p id="result-count" class="result-count" hidden></p>
     <div id="feature-band" class="band" hidden>今天<i></i><em id="feature-band-count"></em></div>
     <div id="feature" class="feature"></div>

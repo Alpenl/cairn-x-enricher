@@ -7,6 +7,8 @@
   <title>阅读 · Cairn 收藏</title>
   <link rel="stylesheet" href="/assets/dashboard.css">
   <script src="/assets/common.js" defer></script>
+  <script src="/assets/curation-v2.js" defer></script>
+  <script src="/assets/reader-v2-panels.js" defer></script>
   <script src="/assets/reader.js" defer></script>
 </head>
 <body>
@@ -52,11 +54,47 @@
               <label>用途<select id="curation-use"></select></label>
               <label>整理状态<select id="curation-status"><option value="inbox">收件箱</option><option value="kept">精选</option><option value="compiled">已编入笔记</option><option value="drop">搁置</option></select></label>
             </div>
-            <div class="curation-actions"><button id="reset-classification" class="text-btn" type="button" hidden>恢复自动分类</button><span id="curation-dirty" hidden>未保存</span><button id="save-curation" class="text-btn" type="submit">保存整理</button></div>
+            <div class="curation-actions"><button id="confirm-classification" class="text-btn" type="button" hidden>确认这些标签</button><button id="reset-classification" class="text-btn" type="button" hidden>恢复自动分类</button><span id="curation-dirty" hidden>未保存</span><button id="save-curation" class="text-btn" type="submit">保存整理</button></div>
           </fieldset>
         </form>
       </details>
       <p id="read-entities" class="read-entities" hidden></p>
+      <details id="v2-curation" class="curation" hidden>
+        <summary>多维整理（v2）</summary>
+        <p id="v2-status" class="line-note" role="status" aria-live="polite" hidden></p>
+        <div id="v2-conflict" class="curation-actions" hidden></div>
+        <div id="v2-topics" class="v2-dimension"></div>
+        <div id="v2-content_functions" class="v2-dimension"></div>
+        <div id="v2-carriers" class="v2-dimension"></div>
+        <div id="v2-affordances" class="v2-dimension"></div>
+        <p id="v2-folded-note" class="line-note" hidden></p>
+        <span id="v2-dirty" hidden>未保存</span>
+      </details>
+      <p id="v2-classification-status" class="line-note" hidden></p>
+      <div id="v2-actions" class="curation-actions" hidden>
+        <button id="v2-retry-classification" class="text-btn" type="button">只重试分类（0 次模型调用）</button>
+        <button id="v2-replay-policy" class="text-btn" type="button">按当前策略重算（0 次模型调用）</button>
+        <button id="v2-refresh-source" class="text-btn" type="button">重新抓取原文（会重新读取来源）</button>
+      </div>
+      <div id="v2-replay-result" class="line-note" hidden></div>
+      <details id="v2-evidence" class="curation" hidden>
+        <summary>依据（真实来源块）</summary>
+        <p id="v2-evidence-status" class="line-note" hidden></p>
+        <div id="v2-evidence-blocks"></div>
+      </details>
+      <details id="v2-entities" class="curation" hidden>
+        <summary>实体</summary>
+        <p id="v2-entity-state" class="line-note"></p>
+        <div id="v2-entity-list" class="v2-entity-list"></div>
+        <details id="v2-entity-provenance" hidden>
+          <summary>自动判断依据（人工整理优先）</summary>
+          <ul id="v2-entity-observations"></ul>
+        </details>
+        <div class="curation-actions">
+          <input id="v2-entity-input" type="text" maxlength="80" placeholder="人工添加实体" aria-label="人工添加实体">
+          <button id="v2-entity-add" class="text-btn" type="button">添加</button>
+        </div>
+      </details>
       <p id="read-lede" class="read-lede"></p>
       <div id="read-figures"></div>
       <div id="read-body" class="read-body"></div>

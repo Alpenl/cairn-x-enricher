@@ -1,0 +1,14 @@
+--- FAIL: TestHalfOpenProbeAlwaysReleasesWithoutInventingRecovery (0.00s)
+    --- FAIL: TestHalfOpenProbeAlwaysReleasesWithoutInventingRecovery/claim_transient (0.00s)
+        stages_test.go:269: probe ownership leaked after return
+    --- FAIL: TestHalfOpenProbeAlwaysReleasesWithoutInventingRecovery/model_transient (0.00s)
+        stages_test.go:269: probe ownership leaked after return
+    --- FAIL: TestHalfOpenProbeAlwaysReleasesWithoutInventingRecovery/cancelled (0.00s)
+        stages_test.go:269: probe ownership leaked after return
+    --- FAIL: TestHalfOpenProbeAlwaysReleasesWithoutInventingRecovery/zero_jobs (0.00s)
+        stages_test.go:269: probe ownership leaked after return
+    --- FAIL: TestHalfOpenProbeAlwaysReleasesWithoutInventingRecovery/empty_queue (0.00s)
+        stages_test.go:272: only actual provider success may clear its breaker: scenario=empty_queue
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/processor	0.003s
+FAIL

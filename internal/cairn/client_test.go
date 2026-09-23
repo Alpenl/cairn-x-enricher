@@ -47,6 +47,9 @@ func TestClientClaimCompleteAndFail(t *testing.T) {
 			_ = json.NewEncoder(writer).Encode(map[string]any{
 				"images": []ImageRef{{Key: imageKey, ContentType: "image/jpeg"}},
 			})
+		case "/api/enrichment/jobs/7":
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = writer.Write([]byte(`{"id":7,"url":"https://x.com/a/status/1","status":"completed","images":[]}`))
 		case "/api/enrichment/images/" + imageKey:
 			writer.Header().Set("Content-Type", "image/jpeg")
 			writer.Header().Set("ETag", `"test-image"`)

@@ -1,0 +1,15 @@
+== TestLocalWorkerFullLifecycle: starting worker on 127.0.0.1:53183 ==
+=== RUN   TestLocalWorkerFullLifecycle
+--- PASS: TestLocalWorkerFullLifecycle (0.93s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.932s
+== TestLocalWorkerVersionCompetition: starting worker on 127.0.0.1:60713 ==
+=== RUN   TestLocalWorkerVersionCompetition
+--- PASS: TestLocalWorkerVersionCompetition (0.72s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.723s
+== TestLocalWorkerDisplayRenameKeepsSemantics: starting worker on 127.0.0.1:58861 ==
+=== RUN   TestLocalWorkerDisplayRenameKeepsSemantics
+--- PASS: TestLocalWorkerDisplayRenameKeepsSemantics (0.08s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.082s

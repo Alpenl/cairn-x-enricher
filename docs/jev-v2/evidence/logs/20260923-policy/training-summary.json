@@ -1,0 +1,44 @@
+{
+  "artifact_sha256": "890b0101752a8255fe04021a1a8c8125d56a00cc4ac78d071d673462bff00074",
+  "reference_hash": "ea14264cbaabcedd13a328bfef6473cf31a18827ca0285b27c8047150370b414",
+  "baseline_exactly_matches_revalidated_report": true,
+  "samples": 42,
+  "groups": 7,
+  "candidates": 336,
+  "eligible": 0,
+  "reason_counts": {
+    "topics: missing support or insufficient coverage": 240,
+    "content_functions: missing support or insufficient coverage": 272,
+    "affordances: missing support or insufficient coverage": 336,
+    "accepted error exceeds frozen limit": 96
+  },
+  "coverage_ranges": {
+    "affordances": [
+      0,
+      0.08333333333333333
+    ],
+    "carriers": [
+      0.8333333333333334,
+      1
+    ],
+    "content_functions": [
+      0,
+      0.5555555555555556
+    ],
+    "form": [
+      0.7857142857142857,
+      0.9523809523809523
+    ],
+    "topics": [
+      0,
+      0.5952380952380952
+    ],
+    "use": [
+      0.5833333333333334,
+      0.9444444444444444
+    ]
+  },
+  "new_model_calls": 0,
+  "calibrated": false,
+  "promote": false
+}

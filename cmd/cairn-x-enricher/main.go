@@ -25,6 +25,7 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/config"
 	"github.com/Alpenl/cairn-x-enricher/internal/dashboard"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
+	"github.com/Alpenl/cairn-x-enricher/internal/extension"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 )
@@ -101,6 +102,9 @@ func newRootCommand() *cobra.Command {
 	once.Flags().IntVar(&maxJobs, "max-jobs", 0, "maximum jobs to claim (default MAX_JOBS_PER_RUN)")
 	root.AddCommand(once)
 	root.AddCommand(newClassifyCommand())
+	root.AddCommand(newReplayCommand())
+	root.AddCommand(newRefreshSourceCommand())
+	root.AddCommand(newExportDatasetCommand())
 
 	var healthURL string
 	var healthTimeout time.Duration
@@ -165,6 +169,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 		return err
 	}
 	management := dashboard.New(ctx, tracker, queue, worker, logger, cfg.MaxConcurrency)
+	management.SetExtensions(worker.Extensions())
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           management.Handler(),
@@ -352,9 +357,12 @@ func newProcessor(
 		},
 	}
 	queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, httpClient)
-	catalog, err := queue.GetTaxonomy(ctx)
+	catalog, legacyCatalog, err := queue.GetClassificationCatalog(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("load Worker taxonomy (requires curation backend migration): %w", err)
+		return nil, nil, err
+	}
+	if legacyCatalog {
+		logger.Warn("backend has no v2 taxonomy; running the legacy single-dimension vocabulary")
 	}
 	userAgent := "cairn-x-enricher/" + buildinfo.Version
 	model := enrich.NewResponsesClient(
@@ -375,8 +383,79 @@ func newProcessor(
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := configureClassificationBudget(cfg, queue, classifier); err != nil {
+		return nil, nil, err
+	}
+	// Register the immutable question spec so a stored run can be replayed
+	// against the exact definition it was evaluated with. Re-registering the
+	// same bytes is idempotent; a changed definition under the same id is
+	// rejected by the Worker, which is why the spec id changes with semantics.
+	if err := queue.PutQuestionSpec(ctx, classifier.Spec()); err != nil {
+		if !cairn.IsUnsupported(err) {
+			return nil, nil, fmt.Errorf("register classification question spec: %w", err)
+		}
+		logger.Warn("backend has no v2 question-spec endpoint; stored runs will not be replayable")
+	}
 	tracker.MarkStarted()
-	return processor.NewStaged(queue, model, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency), queue, nil
+	worker := processor.NewStaged(queue, model, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
+	fetcher, policy := evidenceFetcher(cfg)
+	extensions, err := extensionService(cfg, classifier)
+	if err != nil {
+		return nil, nil, err
+	}
+	extensions.SetBudgetStore(queue)
+	extensions.SetRerankStore(queue)
+	extensions.SetEntityStore(queue)
+	worker.SetExtensions(extensions, fetcher, policy)
+	worker.SetPartialReuse(cfg.PartialReuse)
+	return worker, queue, nil
+}
+
+// extensionService builds the bounded extension service from configuration.
+// Every flag defaults off; the evidence fetcher is only constructed when the
+// allowlist is non-empty, so an unconfigured process cannot fetch anything.
+func extensionService(cfg config.Config, judge extension.Judge) (*extension.Service, error) {
+	flags := extension.Flags{
+		Entities: cfg.ExtensionEntities, Evidence: cfg.ExtensionEvidence,
+		Rerank: cfg.ExtensionRerank, Proposal: cfg.ExtensionProposal,
+	}
+	budget := extension.DefaultBudget()
+	if cfg.ExtensionMaxCalls > 0 {
+		budget.MaxCallsTotal = cfg.ExtensionMaxCalls
+	}
+	if cfg.ExtensionMaxCallsPerItem > 0 {
+		budget.MaxCallsPerItem = cfg.ExtensionMaxCallsPerItem
+	}
+	if cfg.ExtensionMaxInputTokens > 0 {
+		budget.MaxTokens = cfg.ExtensionMaxInputTokens
+	}
+	if cfg.ExtensionMaxInputTokensPerItem > 0 {
+		budget.MaxTokensPerItem = cfg.ExtensionMaxInputTokensPerItem
+	}
+	if cfg.ExtensionTimeout > 0 {
+		budget.Timeout = cfg.ExtensionTimeout
+	}
+	service := extension.NewService(flags, budget, judge)
+	if cfg.EntityCatalog.Version != "" {
+		if err := service.SetEntityCatalog(cfg.EntityCatalog); err != nil {
+			return nil, err
+		}
+	}
+	return service, nil
+}
+
+// evidenceFetcher returns a controlled HTTP client for the evidence extension,
+// or nil when no host is allowlisted.
+func evidenceFetcher(cfg config.Config) (*http.Client, extension.FetchPolicy) {
+	policy := extension.DefaultFetchPolicy(cfg.ExtensionAllowlist)
+	if len(policy.AllowedHosts) == 0 {
+		return nil, policy
+	}
+	client, err := extension.ControlledFetcher(policy, nil)
+	if err != nil {
+		return nil, policy
+	}
+	return client, policy
 }
 
 // waitForSignal reports whether done was closed within timeout.
@@ -430,15 +509,38 @@ func readinessReason(body io.Reader) string {
 
 // isContractFailure reports whether an error is a configuration or upstream
 // contract fault that retrying cannot repair.
+// isContractFailure reports whether a batch failure means the service cannot
+// make progress until an operator changes configuration or the provider fixes
+// its contract. Transient network/rate-limit faults and stale/conflict
+// responses are excluded: those are handled by bounded retry and must not drop
+// readiness for every future batch.
 func isContractFailure(err error) bool {
 	if err == nil {
 		return false
+	}
+	// The typed classification is authoritative when present.
+	class := enrich.ClassOf(enrich.ClassifyModelError(err))
+	if class == enrich.ErrorClassConfiguration || class == enrich.ErrorClassContract {
+		return true
 	}
 	var modelErr *enrich.ModelHTTPError
 	if errors.As(err, &modelErr) {
 		switch modelErr.StatusCode {
 		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusBadRequest:
 			return true
+		}
+	}
+	var apiErr *cairn.APIError
+	if errors.As(err, &apiErr) {
+		// The Worker's typed code is authoritative: capability_mismatch and
+		// configuration_error are component faults, while target_changed,
+		// input_changed and lease_expired are stale jobs that must not drop
+		// readiness.
+		switch apiErr.Class() {
+		case enrich.ErrorClassConfiguration, enrich.ErrorClassContract:
+			return true
+		default:
+			return false
 		}
 	}
 	return false
@@ -452,4 +554,25 @@ func newLogger(level string) *slog.Logger {
 		"error": slog.LevelError,
 	}
 	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: levels[level]}))
+}
+
+// configureClassificationBudget wires persistent admission before workers run.
+func configureClassificationBudget(cfg config.Config, queue *cairn.Client, client *classify.Client) error {
+	limits := classify.DefaultCallBudgetLimits()
+	if cfg.ClassificationMaxCalls > 0 {
+		limits.MaxCallsTotal = cfg.ClassificationMaxCalls
+	}
+	if cfg.ClassificationMaxCallsPerItem > 0 {
+		limits.MaxCallsPerItem = cfg.ClassificationMaxCallsPerItem
+	}
+	if cfg.ClassificationMaxInputTokens > 0 {
+		limits.MaxTokens = cfg.ClassificationMaxInputTokens
+	}
+	if cfg.ClassificationMaxInputTokensPerItem > 0 {
+		limits.MaxTokensPerItem = cfg.ClassificationMaxInputTokensPerItem
+	}
+	if err := queue.SetClassificationBudgetLimits(limits); err != nil {
+		return err
+	}
+	return client.SetCallBudget(queue, limits)
 }

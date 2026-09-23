@@ -1,0 +1,7 @@
+== TestLocalWorkerEntityCacheCLI: starting worker on 127.0.0.1:57355 ==
+=== RUN   TestLocalWorkerEntityCacheCLI
+    entity_cache_test.go:196: unchanged material charged again across CLI restart: entity HTTP=2 want1
+--- FAIL: TestLocalWorkerEntityCacheCLI (0.98s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.987s
+FAIL

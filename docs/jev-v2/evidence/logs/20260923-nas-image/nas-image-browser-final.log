@@ -1,0 +1,18 @@
+=== RUN   TestBrowserPrivateImageCache
+    image_browser_test.go:94: ok 1 prewarm old release URL
+        ok 2 browser actually reuses old response
+        ok 3 old cached response avoided a second HTTP request
+        ok 4 production URL escapes old cache
+        ok 5 current image comes from actual Go proxy
+        ok 6 private cache policy
+        ok 7 same current URL sees changed bytes
+        ok 8 all current reads reached upstream
+        ok 9 deleted owner rejects cached or orphan image
+        ok 10 no image bytes on deletion
+        ok 11 deletion checked before orphan image fetch
+        ok 12 page recreation still rejects deleted image
+        PASS: 12 real-browser cache checks; zero paid calls
+
+--- PASS: TestBrowserPrivateImageCache (0.60s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/internal/dashboard	0.600s

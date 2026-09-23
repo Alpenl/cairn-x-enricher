@@ -22,7 +22,7 @@ func newClassifyCommand() *cobra.Command {
 		if maxJobs < 1 || maxJobs > 1000 || id < 0 {
 			return fmt.Errorf("--max-jobs must be 1..1000 and --id must be nonnegative")
 		}
-		cfg, err := config.Load()
+		cfg, err := config.LoadFor(config.RoleClassify)
 		if err != nil {
 			return err
 		}
@@ -30,9 +30,12 @@ func newClassifyCommand() *cobra.Command {
 		defer stop()
 		httpClient := &http.Client{Timeout: cfg.RequestTimeout, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 		queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, httpClient)
-		catalog, err := queue.GetTaxonomy(ctx)
+		catalog, legacyCatalog, err := queue.GetClassificationCatalog(ctx)
 		if err != nil {
 			return err
+		}
+		if legacyCatalog {
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "backend has no v2 taxonomy; using the legacy classification vocabulary")
 		}
 		client, err := classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel, httpClient, catalog)
 		if err != nil {
@@ -43,7 +46,19 @@ func newClassifyCommand() *cobra.Command {
 				return err
 			}
 		}
+		if err := configureClassificationBudget(cfg, queue, client); err != nil {
+			return err
+		}
 		worker := processor.NewStaged(queue, nil, client, catalog.Version, cfg.TypesafeModel, newLogger(cfg.LogLevel), 1)
+		extensions, err := extensionService(cfg, client)
+		if err != nil {
+			return err
+		}
+		extensions.SetBudgetStore(queue)
+		extensions.SetRerankStore(queue)
+		extensions.SetEntityStore(queue)
+		fetcher, policy := evidenceFetcher(cfg)
+		worker.SetExtensions(extensions, fetcher, policy)
 		completed, failed, err := worker.RunClassifications(ctx, maxJobs)
 		if encodeErr := json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]int64{"classified": completed, "failed": failed}); encodeErr != nil {
 			return encodeErr

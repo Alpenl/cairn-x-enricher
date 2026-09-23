@@ -1,0 +1,48 @@
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:280102) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 <workspace>/cairn-share/worker
+
+stdout | test/completion-atomicity.test.ts > R3-01 legacy: target change after preflight cannot complete the job
+R2DEBUG [{"len":0,"changes":0},{"len":1,"changes":1},{"len":1,"changes":1}]
+
+stdout | test/completion-atomicity.test.ts > R3-01 legacy: content change after preflight cannot complete the job
+R2DEBUG [{"len":0,"changes":0},{"len":1,"changes":1},{"len":1,"changes":1}]
+
+stdout | test/completion-atomicity.test.ts > R3-01 v2: target change after preflight cannot complete the job
+R2DEBUG [{"len":0,"changes":0},{"len":0,"changes":0},{"len":0,"changes":0},{"len":1,"changes":1},{"len":0,"changes":0}]
+
+stdout | test/completion-atomicity.test.ts > R3-01 v2: content change after preflight cannot complete the job
+R2DEBUG [{"len":0,"changes":0},{"len":0,"changes":0},{"len":0,"changes":0},{"len":1,"changes":1},{"len":0,"changes":0}]
+
+ ❯ test/completion-atomicity.test.ts (8 tests | 4 failed) 2331ms
+   × R3-01 legacy: target change after preflight cannot complete the job 220ms
+   × R3-01 legacy: content change after preflight cannot complete the job 248ms
+   × R3-01 v2: target change after preflight cannot complete the job 241ms
+   × R3-01 v2: content change after preflight cannot complete the job 258ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/completion-atomicity.test.ts > R3-01 legacy: target change after preflight cannot complete the job
+ FAIL  test/completion-atomicity.test.ts > R3-01 legacy: content change after preflight cannot complete the job
+ FAIL  test/completion-atomicity.test.ts > R3-01 v2: target change after preflight cannot complete the job
+ FAIL  test/completion-atomicity.test.ts > R3-01 v2: content change after preflight cannot complete the job
+AssertionError: expected 'completed' not to be 'completed' // Object.is equality
+ ❯ test/completion-atomicity.test.ts:81:29
+     79|     const row = await env.DB.prepare("SELECT status,lease_token FROM c…
+     80|       .bind(id).first<{ status: string; lease_token: string | null }>(…
+     81|     expect(row!.status).not.toBe("completed");
+       |                             ^
+     82|     const replay = await request(`enrichment/classifications/${id}/com…
+     83|     expect(replay.status).toBe(409);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 4 passed (8)
+   Start at  15:24:39
+   Duration  2.90s (transform 89ms, setup 0ms, import 154ms, tests 2.33s, environment 0ms)

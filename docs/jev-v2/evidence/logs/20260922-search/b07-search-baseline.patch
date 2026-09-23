@@ -1,0 +1,45 @@
+diff --git a/android/app/src/androidTest/java/com/alpenl/cairn/share/AccountCacheInstrumentedTest.kt b/android/app/src/androidTest/java/com/alpenl/cairn/share/AccountCacheInstrumentedTest.kt
+index f1b045d..752f4eb 100644
+--- a/android/app/src/androidTest/java/com/alpenl/cairn/share/AccountCacheInstrumentedTest.kt
++++ b/android/app/src/androidTest/java/com/alpenl/cairn/share/AccountCacheInstrumentedTest.kt
+@@ -217,6 +217,40 @@ class AccountCacheInstrumentedTest {
+         }
+     }
+ 
++    @Test fun lateSearchCannotUndoAnEditInTheSameAccount() = runBlocking<Unit> {
++        val entered = CountDownLatch(1)
++        val searches = AtomicInteger()
++        server.dispatcher = object : Dispatcher() {
++            override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {
++                "/api/links" -> if (request.requestUrl!!.queryParameter("q") == "match" && searches.incrementAndGet() == 2) {
++                    entered.countDown()
++                    if (!release.await(20, TimeUnit.SECONDS)) MockResponse().setResponseCode(503) else page("before edit")
++                } else page("before edit")
++                "/api/taxonomy" -> taxonomy("v1")
++                "/api/links/1" -> json(link(1, "confirmed edit", true))
++                else -> MockResponse().setResponseCode(404)
++            }
++        }
++        val model = start()
++        awaitState(model) { it.links.size == 4 && !it.loading }
++        withContext(Dispatchers.Main) { model.setSearchQuery("match") }
++        awaitState(model) { it.searchResults.size == 4 && !it.searchLoading }
++        withContext(Dispatchers.Main) { model.setSearchQuery("match") }
++        assertTrue(entered.await(10, TimeUnit.SECONDS))
++        withContext(Dispatchers.Main) {
++            model.beginEdit(model.uiState.links.first { it.id == 1 })
++            model.setEditNote("confirmed edit")
++            model.saveEdit {}
++        }
++        awaitState(model) { it.links.first { l -> l.id == 1 }.note == "confirmed edit" }
++        release.countDown()
++        awaitState(model) { !it.searchLoading }
++        withContext(Dispatchers.Main) {
++            assertEquals("confirmed edit", model.uiState.links.first { it.id == 1 }.note)
++            assertEquals("confirmed edit", model.uiState.searchResults.first { it.id == 1 }.note)
++        }
++    }
++
+     @Test fun lateDetailCannotUndoAnEditInTheSameAccount() = runBlocking<Unit> {
+         val entered = CountDownLatch(1)
+         val returned = CountDownLatch(1)

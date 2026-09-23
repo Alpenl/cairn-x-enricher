@@ -322,6 +322,14 @@ func (c *ResponsesClient) newGenerateRequest(ctx context.Context, body []byte, i
 }
 
 func modelIdempotencyKey(input Input, promptName string, requestAttempt int) string {
+	// Reading is a pure function of the persisted source, which is already
+	// fingerprinted into promptName. Keying the provider request on that
+	// fingerprint rather than the job attempt makes a retry after a lost
+	// completion response reuse the same server-side result instead of paying
+	// for the same reading twice.
+	if strings.HasPrefix(promptName, "reading-") {
+		return "cairn-reading-" + strings.TrimPrefix(promptName, "reading-") + fmt.Sprintf("-%d", requestAttempt)
+	}
 	base := fmt.Sprintf("cairn-link-%d-attempt-%d", input.ID, input.Attempt)
 	if promptName == "thread" && requestAttempt == 1 {
 		return base
@@ -340,8 +348,10 @@ func shouldRetryModelRequest(status, requestAttempt int, elapsed time.Duration) 
 }
 
 func retryableModelError(err error) bool {
-	var modelErr *ModelHTTPError
-	return errors.As(err, &modelErr) && retryableModelStatus(modelErr.StatusCode)
+	// Only transient faults are retried in place. Configuration and contract
+	// faults are deterministic and would otherwise consume the attempt budget of
+	// every queued job; stale/conflict responses are superseded, not retried.
+	return IsRetryable(ClassifyModelError(err))
 }
 
 func retryableModelStatus(status int) bool {
@@ -443,6 +453,36 @@ func (c *ResponsesClient) responseSchema() map[string]any {
 		c.schema = enrichmentSchema(c.catalog)
 	})
 	return c.schema
+}
+
+// readingSchema is the independent ReadingResult contract. It deliberately
+// contains no source echo and no classification: the reading pass may only
+// generate the reading aids, while the original text, links and images are
+// injected from the persisted source snapshot by the caller. It is defined on
+// its own rather than derived by deleting fields from the enrichment schema so
+// the two contracts can evolve separately.
+func readingSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"ai_title":          map[string]any{"type": "string"},
+			"original_language": map[string]any{"type": "string"},
+			"translated_text":   map[string]any{"type": "string"},
+			"summary":           map[string]any{"type": "string"},
+		},
+		"required":             []string{"ai_title", "original_language", "translated_text", "summary"},
+		"additionalProperties": false,
+	}
+}
+
+// ReadingResult is the validated output of the reading pass. Source fields are
+// never model-generated here; they are attached from the persisted snapshot.
+type ReadingResult struct {
+	AITitle          string
+	OriginalLanguage string
+	TranslatedText   string
+	Summary          string
+	Model            string
 }
 
 func enrichmentSchema(catalog taxonomy.Catalog) map[string]any {

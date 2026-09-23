@@ -1,0 +1,64 @@
+
+> test
+> vitest run test/source-revision.test.ts
+
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:3162894) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-source-revision-next/worker
+
+ ❯ test/source-revision.test.ts (14 tests | 14 failed) 2804ms
+   × one actual source save changing context and links increments content revision exactly once 180ms
+   × coalesces source field combination 1 and keeps replay stable 202ms
+   × coalesces source field combination 2 and keeps replay stable 208ms
+   × coalesces source field combination 3 and keeps replay stable 203ms
+   × coalesces source field combination 4 and keeps replay stable 188ms
+   × coalesces source field combination 5 and keeps replay stable 209ms
+   × coalesces source field combination 6 and keeps replay stable 210ms
+   × coalesces source field combination 7 and keeps replay stable 187ms
+   × keeps independent changes distinct even before a new snapshot is written 207ms
+   × old direct context writes synchronize once, stale source rows cannot change current context 208ms
+   × direct source-links writes followed by a combined save still version the new context 191ms
+   × invalid leases cannot change either source representation and transaction failure rolls back both 192ms
+   × backfills only current source context without advancing existing content revisions 202ms
+   × does not expose the context mirror in App representations; deletion removes it 216ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 14 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/source-revision.test.ts > one actual source save changing context and links increments content revision exactly once
+ FAIL  test/source-revision.test.ts > coalesces source field combination 1 and keeps replay stable
+ FAIL  test/source-revision.test.ts > coalesces source field combination 2 and keeps replay stable
+ FAIL  test/source-revision.test.ts > coalesces source field combination 3 and keeps replay stable
+ FAIL  test/source-revision.test.ts > coalesces source field combination 4 and keeps replay stable
+ FAIL  test/source-revision.test.ts > coalesces source field combination 5 and keeps replay stable
+ FAIL  test/source-revision.test.ts > coalesces source field combination 6 and keeps replay stable
+ FAIL  test/source-revision.test.ts > coalesces source field combination 7 and keeps replay stable
+ FAIL  test/source-revision.test.ts > keeps independent changes distinct even before a new snapshot is written
+ FAIL  test/source-revision.test.ts > old direct context writes synchronize once, stale source rows cannot change current context
+ FAIL  test/source-revision.test.ts > direct source-links writes followed by a combined save still version the new context
+ FAIL  test/source-revision.test.ts > invalid leases cannot change either source representation and transaction failure rolls back both
+ FAIL  test/source-revision.test.ts > backfills only current source context without advancing existing content revisions
+ FAIL  test/source-revision.test.ts > does not expose the context mirror in App representations; deletion removes it
+Error: D1_ERROR: incomplete input: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:137:19
+ ❯ applyD1Migrations home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/vitest-plugin/dist/worker/lib/cloudflare/test-internal.mjs:34:3
+ ❯ test/source-revision.test.ts:5:36
+
+
+Caused by: Error: incomplete input: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:137:19
+ ❯ applyD1Migrations home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/vitest-plugin/dist/worker/lib/cloudflare/test-internal.mjs:34:3
+ ❯ test/source-revision.test.ts:5:36
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  14 failed (14)
+   Start at  07:51:15
+   Duration  3.41s (transform 121ms, setup 0ms, import 206ms, tests 2.80s, environment 0ms)

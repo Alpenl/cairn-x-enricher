@@ -1,0 +1,23 @@
+WHAT: 检查受控目录冲突反例
+WHY:  相同标识不得属于两个不同受控身份
+
+> typecheck
+> tsc --noEmit
+
+
+> test
+> vitest run test/entity-judgments.test.ts
+
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:3331414) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-canonical-next/worker
+
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  08:38:27
+   Duration  2.83s (transform 117ms, setup 0ms, import 211ms, tests 2.17s, environment 0ms)

@@ -15,14 +15,24 @@ import (
 
 var idPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 
-// Term is one stable identifier, display label, and explicitly accepted aliases.
+// Term is one stable identifier, display label, and explicitly accepted
+// aliases. Includes/Excludes are boundary examples that carry semantics: they
+// are part of the compiled question and its hash, unlike the display label.
 type Term struct {
 	Description string   `json:"description,omitempty"`
 	ID          string   `json:"id"`
 	Label       string   `json:"label"`
 	Aliases     []string `json:"aliases"`
 	Active      bool     `json:"active"`
+	Includes    []string `json:"includes,omitempty"`
+	Excludes    []string `json:"excludes,omitempty"`
 }
+
+// PersonalUse reports the reserved legacy use that expresses the user's own
+// opposition. It remains available for explicit human curation and historical
+// reading, but objective model requests must never infer it. Its stable ID is
+// part of the legacy compatibility contract, independent of its display label.
+func PersonalUse(id string) bool { return id == "contra" }
 
 // Catalog is supplied by the Worker so generation, storage, and the UI agree.
 // It is a plain immutable value; callers that need the rendered prompt or
@@ -32,6 +42,12 @@ type Catalog struct {
 	Topics  []Term `json:"topics"`
 	Forms   []Term `json:"forms"`
 	Uses    []Term `json:"uses"`
+	// The multidimensional vocabulary is optional so the legacy taxonomy
+	// endpoint keeps working; when present it is compiled into its own
+	// questions and carried through the v2 effective view.
+	ContentFunctions []Term `json:"content_functions,omitempty"`
+	Carriers         []Term `json:"carriers,omitempty"`
+	Affordances      []Term `json:"affordances,omitempty"`
 }
 
 // Renderer caches the prompt fragment and JSON Schema derived from one
@@ -73,7 +89,14 @@ func (c Catalog) Validate() error {
 	if strings.TrimSpace(c.Version) == "" || len(c.Version) > 64 {
 		return errors.New("taxonomy version must contain 1 to 64 bytes")
 	}
-	for name, terms := range map[string][]Term{"topics": c.Topics, "forms": c.Forms, "uses": c.Uses} {
+	dimensions := map[string][]Term{"topics": c.Topics, "forms": c.Forms, "uses": c.Uses}
+	optional := map[string][]Term{"content_functions": c.ContentFunctions, "carriers": c.Carriers, "affordances": c.Affordances}
+	for name, terms := range optional {
+		if len(terms) > 0 {
+			dimensions[name] = terms
+		}
+	}
+	for name, terms := range dimensions {
 		if len(terms) == 0 || len(terms) > 40 {
 			return fmt.Errorf("taxonomy %s must contain 1 to 40 terms", name)
 		}

@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Alpenl/cairn-x-enricher/internal/classify"
+	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
@@ -29,6 +31,10 @@ type Job struct {
 	Attempt    int    `json:"attempt"`
 	LeaseToken string `json:"lease_token"`
 	LeaseUntil string `json:"lease_until"`
+	// RefreshEpoch is non-zero when the operator explicitly requested a source
+	// refresh. The processor must then fetch the source instead of reusing the
+	// stored snapshot (R2-06).
+	RefreshEpoch int64 `json:"refresh_epoch,omitempty"`
 }
 
 // Completion is the validated enrichment payload written back to Cairn Share.
@@ -53,6 +59,7 @@ type ImageRef struct {
 
 // Bookmark is the secret-free enrichment state shown in the management UI.
 type Bookmark struct {
+	CacheIdentity          *BookmarkCacheIdentity   `json:"cache_identity,omitempty"`
 	ID                     int64                    `json:"id"`
 	URL                    string                   `json:"url"`
 	Note                   string                   `json:"note"`
@@ -80,6 +87,16 @@ type Bookmark struct {
 	ContentLoaded          *bool                    `json:"content_loaded,omitempty"`
 }
 
+// BookmarkCacheIdentity is opt-in so strict legacy response readers are unchanged.
+type BookmarkCacheIdentity struct {
+	SchemaVersion        int   `json:"schema_version"`
+	ContentRevision      int64 `json:"content_revision"`
+	BodyRevision         int64 `json:"body_revision"`
+	PersonalRevision     int64 `json:"personal_revision"`
+	LatestDecisionID     int64 `json:"latest_decision_id"`
+	LatestEntityRevision int64 `json:"latest_entity_revision"`
+}
+
 // BookmarkDetail preserves the detail endpoint's named response type.
 type BookmarkDetail struct {
 	Bookmark
@@ -98,25 +115,38 @@ type BookmarkCounts struct {
 
 // BookmarkPage is one newest-first page of bookmarks.
 type BookmarkPage struct {
-	Items        []Bookmark     `json:"items"`
-	NextBeforeID *int64         `json:"next_before_id"`
-	Counts       BookmarkCounts `json:"counts"`
+	FilterContractVersion *int           `json:"filter_contract_version,omitempty"`
+	Items                 []Bookmark     `json:"items"`
+	NextBeforeID          *int64         `json:"next_before_id"`
+	Counts                BookmarkCounts `json:"counts"`
 }
 
 // BookmarkQuery controls server-side filtering and pagination.
 type BookmarkQuery struct {
-	Limit          int
-	BeforeID       int64
-	Status         string
-	Search         string
-	CurationStatus string
-	Topic          string
-	Form           string
-	Use            string
-	Source         string
-	Uncertain      bool
-	Since          string
-	SummaryOnly    bool
+	IncludeCacheIdentity    bool
+	Topics                  []string
+	ContentFunctions        []string
+	Carriers                []string
+	Affordances             []string
+	EntityStates            []string
+	RequireEffectiveFilters bool
+	Limit                   int
+	BeforeID                int64
+	Status                  string
+	Search                  string
+	CurationStatus          string
+	Topic                   string
+	Form                    string
+	Use                     string
+	Source                  string
+	Uncertain               bool
+	Since                   string
+	SummaryOnly             bool
+}
+
+// NeedsFilterContract rejects old backends that silently ignore v2 conditions.
+func (q BookmarkQuery) NeedsFilterContract() bool {
+	return q.RequireEffectiveFilters || len(q.Topics)+len(q.ContentFunctions)+len(q.Carriers)+len(q.Affordances)+len(q.EntityStates) > 0
 }
 
 // CurationUpdate applies explicit human edits; a null classification restores AI suggestions.
@@ -126,24 +156,77 @@ type CurationUpdate struct {
 	Classification json.RawMessage `json:"classification,omitempty"`
 }
 
-// APIError reports a stable error returned by the Cairn Share Worker.
+// APIError reports a stable error returned by the Cairn Share Worker. Revision
+// carries the server's current revision for the conflict codes that expose one,
+// so a UI can explain a CAS conflict instead of showing a generic backend error
+// (F04).
 type APIError struct {
 	StatusCode int
 	Code       string
+	Revision   *int64
 }
 
 func (e *APIError) Error() string {
+	base := fmt.Sprintf("cairn API returned HTTP %d", e.StatusCode)
 	if e.Code == "" {
-		return fmt.Sprintf("cairn API returned HTTP %d", e.StatusCode)
+		return base
 	}
-	return fmt.Sprintf("cairn API returned HTTP %d (%s)", e.StatusCode, e.Code)
+	if e.Revision != nil {
+		return fmt.Sprintf("%s (%s, revision %d)", base, e.Code, *e.Revision)
+	}
+	return fmt.Sprintf("%s (%s)", base, e.Code)
+}
+
+// IsConflict reports whether the error is an actionable optimistic-concurrency
+// conflict rather than an internal failure.
+func (e *APIError) IsConflict() bool {
+	switch e.Code {
+	case "revision_conflict", "snapshot_conflict", "hidden_value_conflict", "spec_conflict", "operation_conflict":
+		return true
+	}
+	return false
+}
+
+// Class maps a Worker error to the shared runtime class. The Worker returns a
+// typed code rather than a bare status precisely so the consumer does not have
+// to guess: a 409 may be a lost lease, a changed target, changed input or a
+// duplicate completion, and each needs different recovery.
+func (e *APIError) Class() enrich.ErrorClass {
+	switch e.Code {
+	case "budget_exhausted":
+		return enrich.ErrorClassBudget
+	case "capability_mismatch", "configuration_error":
+		return enrich.ErrorClassConfiguration
+	case "invalid_classification", "invalid_classification_config", "invalid_source", "invalid_operation_key", "invalid_json":
+		return enrich.ErrorClassContract
+	case "target_changed", "input_changed", "lease_expired", "revision_conflict", "snapshot_conflict", "hidden_value_conflict", "run_stale":
+		return enrich.ErrorClassStale
+	case "already_completed":
+		return enrich.ErrorClassCompleted
+	case "operation_conflict", "spec_conflict", "spec_hash_mismatch", "invalid_override", "invalid_automatic", "run_spec_mismatch", "run_model_mismatch", "run_not_succeeded", "unknown_run":
+		return enrich.ErrorClassContract
+	}
+	switch e.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusPaymentRequired:
+		return enrich.ErrorClassConfiguration
+	case http.StatusBadRequest, http.StatusUnprocessableEntity, http.StatusUnsupportedMediaType:
+		return enrich.ErrorClassContract
+	case http.StatusConflict:
+		return enrich.ErrorClassStale
+	case http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusInternalServerError,
+		http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return enrich.ErrorClassTransient
+	default:
+		return enrich.ErrorClassUnknown
+	}
 }
 
 // Client calls the Cairn Share Worker's internal enrichment endpoints.
 type Client struct {
-	baseURL    string
-	token      string
-	httpClient *http.Client
+	baseURL              string
+	token                string
+	httpClient           *http.Client
+	classificationBudget *classify.CallBudgetLimits
 }
 
 // NewClient creates a client for the Worker's internal enrichment API.
@@ -204,6 +287,9 @@ func decodeClaimResponse(response *http.Response) (*Job, error) {
 // ListBookmarks returns a filtered newest-first page for the management UI.
 func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (BookmarkPage, error) {
 	values := make(url.Values)
+	if query.IncludeCacheIdentity {
+		values.Set("include_cache_identity", "1")
+	}
 	if query.Limit > 0 {
 		values.Set("limit", strconv.Itoa(query.Limit))
 	}
@@ -223,6 +309,17 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 		if value != "" {
 			values.Set(key, value)
 		}
+	}
+	for key, terms := range map[string][]string{
+		"topics": query.Topics, "content_functions": query.ContentFunctions, "carriers": query.Carriers,
+		"affordances": query.Affordances, "entity_state": query.EntityStates,
+	} {
+		if len(terms) > 0 {
+			values.Set(key, strings.Join(terms, ","))
+		}
+	}
+	if query.NeedsFilterContract() {
+		values.Set("filter_contract_version", "1")
 	}
 	if query.Uncertain {
 		values.Set("uncertain", "true")
@@ -246,6 +343,9 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 	var page BookmarkPage
 	if err := decodeJSON(response.Body, &page); err != nil {
 		return BookmarkPage{}, fmt.Errorf("decode bookmark list: %w", err)
+	}
+	if query.NeedsFilterContract() && (page.FilterContractVersion == nil || *page.FilterContractVersion != 1) {
+		return BookmarkPage{}, &APIError{StatusCode: http.StatusConflict, Code: "unsupported_filter_contract"}
 	}
 	if page.Items == nil {
 		page.Items = []Bookmark{}
@@ -279,7 +379,7 @@ func (c *Client) GetBookmark(ctx context.Context, id int64) (BookmarkDetail, err
 	if err := decodeJSON(response.Body, &detail); err != nil {
 		return BookmarkDetail{}, fmt.Errorf("decode bookmark detail: %w", err)
 	}
-	if detail.ID < 1 || detail.URL == "" || !validBookmarkStatus(detail.Status) {
+	if detail.ID != id || detail.URL == "" || !validBookmarkStatus(detail.Status) {
 		return BookmarkDetail{}, errors.New("bookmark detail is invalid")
 	}
 	normalizeBookmarkCollections(&detail.Bookmark)
@@ -384,6 +484,16 @@ func (c *Client) GetImage(ctx context.Context, key string) (*http.Response, erro
 		return nil, errors.New("invalid image key")
 	}
 	segments := strings.Split(key, "/")
+	id, err := strconv.ParseInt(segments[1], 10, 64)
+	if err != nil || id < 1 {
+		return nil, errors.New("invalid image owner")
+	}
+	// Older Workers can retain and serve orphan R2 objects. Validate the
+	// authoritative bookmark before fetching and again before exposing the body.
+	// Never cache this check: a prior successful read is not deletion authority.
+	if _, err := c.GetBookmark(ctx, id); err != nil {
+		return nil, err
+	}
 	for index := range segments {
 		segments[index] = url.PathEscape(segments[index])
 	}
@@ -394,6 +504,10 @@ func (c *Client) GetImage(ctx context.Context, key string) (*http.Response, erro
 	if response.StatusCode != http.StatusOK {
 		defer func() { _ = response.Body.Close() }()
 		return nil, apiError(response)
+	}
+	if _, err := c.GetBookmark(ctx, id); err != nil {
+		_ = response.Body.Close()
+		return nil, err
 	}
 	return response, nil
 }
@@ -430,6 +544,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	request.Header.Set("Authorization", "Bearer "+c.token)
+	if strings.HasPrefix(path, "/api/enrichment/classifications/") {
+		request.Header.Set("X-Cairn-Classification-Budget", "1")
+	}
 	request.Header.Set("Accept", "application/json")
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
@@ -456,10 +573,11 @@ func decodeJSON(reader io.Reader, target any) error {
 
 func apiError(response *http.Response) error {
 	var payload struct {
-		Code string `json:"error"`
+		Code     string `json:"error"`
+		Revision *int64 `json:"revision"`
 	}
 	_ = json.NewDecoder(io.LimitReader(response.Body, 8<<10)).Decode(&payload)
-	return &APIError{StatusCode: response.StatusCode, Code: payload.Code}
+	return &APIError{StatusCode: response.StatusCode, Code: payload.Code, Revision: payload.Revision}
 }
 
 func validBookmarkStatus(status string) bool {

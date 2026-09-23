@@ -1,0 +1,198 @@
+{
+  "conclusion": "success",
+  "headSha": "47662e34155bb44f1c07616daba1f45dec416c22",
+  "jobs": [
+    {
+      "completedAt": "2026-09-22T22:36:38Z",
+      "conclusion": "success",
+      "databaseId": 106965815254,
+      "name": "android",
+      "startedAt": "2026-09-22T22:33:51Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-09-22T22:33:54Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-09-22T22:33:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:33:55Z",
+          "conclusion": "success",
+          "name": "Checkout",
+          "number": 2,
+          "startedAt": "2026-09-22T22:33:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:34:04Z",
+          "conclusion": "success",
+          "name": "Setup JDK",
+          "number": 3,
+          "startedAt": "2026-09-22T22:33:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:34:15Z",
+          "conclusion": "success",
+          "name": "Install Android SDK packages",
+          "number": 4,
+          "startedAt": "2026-09-22T22:34:04Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:34:27Z",
+          "conclusion": "success",
+          "name": "Verify dependency metadata",
+          "number": 5,
+          "startedAt": "2026-09-22T22:34:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:36:33Z",
+          "conclusion": "success",
+          "name": "Run Android gates",
+          "number": 6,
+          "startedAt": "2026-09-22T22:34:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:36:33Z",
+          "conclusion": "success",
+          "name": "Check debug APK exists",
+          "number": 7,
+          "startedAt": "2026-09-22T22:36:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:36:35Z",
+          "conclusion": "success",
+          "name": "Upload debug APK",
+          "number": 8,
+          "startedAt": "2026-09-22T22:36:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:36:35Z",
+          "conclusion": "success",
+          "name": "Post Setup JDK",
+          "number": 15,
+          "startedAt": "2026-09-22T22:36:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:36:36Z",
+          "conclusion": "success",
+          "name": "Post Checkout",
+          "number": 16,
+          "startedAt": "2026-09-22T22:36:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:36:36Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 17,
+          "startedAt": "2026-09-22T22:36:36Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/Alpenl/cairn-share/actions/runs/35793040980/job/106965815254"
+    },
+    {
+      "completedAt": "2026-09-22T22:34:43Z",
+      "conclusion": "success",
+      "databaseId": 106965815617,
+      "name": "worker",
+      "startedAt": "2026-09-22T22:33:50Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-09-22T22:33:52Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-09-22T22:33:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:33:53Z",
+          "conclusion": "success",
+          "name": "Checkout",
+          "number": 2,
+          "startedAt": "2026-09-22T22:33:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:33:56Z",
+          "conclusion": "success",
+          "name": "Setup Node",
+          "number": 3,
+          "startedAt": "2026-09-22T22:33:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:34:03Z",
+          "conclusion": "success",
+          "name": "Install dependencies",
+          "number": 4,
+          "startedAt": "2026-09-22T22:33:56Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:34:06Z",
+          "conclusion": "success",
+          "name": "Typecheck",
+          "number": 5,
+          "startedAt": "2026-09-22T22:34:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:34:39Z",
+          "conclusion": "success",
+          "name": "Test",
+          "number": 6,
+          "startedAt": "2026-09-22T22:34:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:34:41Z",
+          "conclusion": "success",
+          "name": "Build deploy bundle",
+          "number": 7,
+          "startedAt": "2026-09-22T22:34:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:34:41Z",
+          "conclusion": "success",
+          "name": "Post Setup Node",
+          "number": 13,
+          "startedAt": "2026-09-22T22:34:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:34:41Z",
+          "conclusion": "success",
+          "name": "Post Checkout",
+          "number": 14,
+          "startedAt": "2026-09-22T22:34:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-22T22:34:41Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 15,
+          "startedAt": "2026-09-22T22:34:41Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/Alpenl/cairn-share/actions/runs/35793040980/job/106965815617"
+    }
+  ],
+  "status": "completed",
+  "url": "https://github.com/Alpenl/cairn-share/actions/runs/35793040980"
+}

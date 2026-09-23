@@ -1,0 +1,17 @@
+
+> test
+> vitest run test/entity-judgments.test.ts
+
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:3249994) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-canonical-next/worker
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  08:23:44
+   Duration  2.11s (transform 126ms, setup 0ms, import 214ms, tests 1.49s, environment 0ms)

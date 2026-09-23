@@ -1,0 +1,6 @@
+--- FAIL: TestClassificationBudgetCountsActualBatchesWithoutInventingDeniedCalls (0.00s)
+    call_budget_test.go:76: err=budget: classification budget not granted: budget_exhausted coverage= calls=2 HTTP=2 granted=2 requests=3
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/classify	0.045s
+ok  	github.com/Alpenl/cairn-x-enricher/internal/config	0.003s
+FAIL

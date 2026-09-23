@@ -1,0 +1,7 @@
+== TestLocalWorkerEntityCacheCLI: starting worker on 127.0.0.1:49559 ==
+=== RUN   TestLocalWorkerEntityCacheCLI
+    entity_cache_test.go:201: POST http://127.0.0.1:49559/api/v2/links/1/entities/overrides status = 404: {"error":"not_found"}
+--- FAIL: TestLocalWorkerEntityCacheCLI (1.08s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.086s
+FAIL

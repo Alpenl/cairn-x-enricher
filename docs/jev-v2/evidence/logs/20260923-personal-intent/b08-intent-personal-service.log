@@ -1,0 +1,7 @@
+== TestLocalWorkerObjectivePersonalBoundary: starting worker on 127.0.0.1:47441 ==
+=== RUN   TestLocalWorkerObjectivePersonalBoundary
+    personal_intent_test.go:66: claim: configuration: classification target "classify-1de757ba3726" generation 1 is not supported by this consumer
+--- FAIL: TestLocalWorkerObjectivePersonalBoundary (0.35s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.354s
+FAIL

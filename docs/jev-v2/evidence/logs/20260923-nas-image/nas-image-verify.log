@@ -1,0 +1,9 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+internal/dashboard/image_browser_test.go:91:13: G204: Subprocess launched with a potential tainted input or cmd arguments (gosec)
+	command := exec.CommandContext(ctx, "node", "../../tests/browser/image-cache.mjs", server.URL)
+	           ^
+1 issues:
+* gosec: 1
+exit status 1
+make: *** [Makefile:39: lint-ci] Error 1

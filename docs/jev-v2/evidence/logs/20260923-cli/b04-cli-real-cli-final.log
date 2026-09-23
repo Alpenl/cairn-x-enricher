@@ -1,0 +1,8 @@
+[36mWHAT[0m: 验证真实 CLI
+[35mWHY[0m:  执行本地 Worker 端到端分类
+== TestLocalWorkerClassifyCLI: starting worker on 127.0.0.1:42603 ==
+=== RUN   TestLocalWorkerClassifyCLI
+    classify_cli_test.go:201: actual compiled classify CLI: same service v2 spec; two bounded one-job drains, empty drain zero calls, explicit --id retry; full dimensional raw/decisions persisted; saved source and human choice unchanged; 3 local model fixture calls, no source retrieval
+--- PASS: TestLocalWorkerClassifyCLI (1.16s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.159s

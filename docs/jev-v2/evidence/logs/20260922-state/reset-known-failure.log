@@ -1,0 +1,94 @@
+[36mWHAT[0m: 执行旧版本 reset 对照
+[35mWHY[0m:  保存修复前的真实失败证据
+=== RUN   TestSharedOverrideVectors
+=== RUN   TestSharedOverrideVectors/single-value_accept_replaces_the_automatic_value
+=== RUN   TestSharedOverrideVectors/second_single-value_accept_still_replaces_the_first
+=== RUN   TestSharedOverrideVectors/per-tag_reset_restores_the_automatic_value_for_that_tag_only
+=== RUN   TestSharedOverrideVectors/whole-field_reset_removes_every_override_in_the_field
+=== RUN   TestSharedOverrideVectors/reject_then_per-tag_reset_restores_the_automatic_tag
+=== RUN   TestSharedOverrideVectors/multi-value_accept_accumulates_and_reject_removes_one_tag
+=== RUN   TestSharedOverrideVectors/set_empty_is_distinct_from_reset
+=== RUN   TestSharedOverrideVectors/accept_after_set_empty_re-adds_a_tag
+=== RUN   TestSharedOverrideVectors/legacy_singular_field_names_still_resolve
+=== RUN   TestSharedOverrideVectors/carrier_is_single-valued:_accept_replaces_the_automatic_carrier
+=== RUN   TestSharedOverrideVectors/carrier_per-tag_reset_restores_the_automatic_carrier
+=== RUN   TestSharedOverrideVectors/R3-04_form_reaccept_follows_actual_action_time
+=== RUN   TestSharedOverrideVectors/R3-04_form_reject-active_follows_actual_action_time
+=== RUN   TestSharedOverrideVectors/R3-04_form_reject-reaccept_follows_actual_action_time
+=== RUN   TestSharedOverrideVectors/R3-04_use_reaccept_follows_actual_action_time
+=== RUN   TestSharedOverrideVectors/R3-04_use_reject-active_follows_actual_action_time
+=== RUN   TestSharedOverrideVectors/R3-04_use_reject-reaccept_follows_actual_action_time
+=== RUN   TestSharedOverrideVectors/R3-04_carriers_reaccept_follows_actual_action_time
+=== RUN   TestSharedOverrideVectors/R3-04_carriers_reject-active_follows_actual_action_time
+=== RUN   TestSharedOverrideVectors/R3-04_carriers_reject-reaccept_follows_actual_action_time
+=== RUN   TestSharedOverrideVectors/form_tag_reset_after_successive_accepts
+=== RUN   TestSharedOverrideVectors/form_field_reset_after_successive_accepts
+=== RUN   TestSharedOverrideVectors/use_tag_reset_after_successive_accepts
+=== RUN   TestSharedOverrideVectors/use_field_reset_after_successive_accepts
+=== RUN   TestSharedOverrideVectors/carriers_tag_reset_after_successive_accepts
+=== RUN   TestSharedOverrideVectors/carriers_field_reset_after_successive_accepts
+=== RUN   TestSharedOverrideVectors/empty_then_reset_one_topics
+    vectors_test.go:83: resolved view mismatch
+         got: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"","entities":[]}
+        want: {"topics":["llm"],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"","entities":[]}
+=== RUN   TestSharedOverrideVectors/empty_then_reset_one_content_functions
+    vectors_test.go:83: resolved view mismatch
+         got: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"","entities":[]}
+        want: {"topics":[],"content_functions":["method"],"carriers":[],"affordances":[],"form":"","use":"","entities":[]}
+=== RUN   TestSharedOverrideVectors/empty_then_reset_one_carriers
+    vectors_test.go:83: resolved view mismatch
+         got: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"","entities":[]}
+        want: {"topics":[],"content_functions":[],"carriers":["single"],"affordances":[],"form":"","use":"","entities":[]}
+=== RUN   TestSharedOverrideVectors/empty_then_reset_one_affordances
+    vectors_test.go:83: resolved view mismatch
+         got: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"","entities":[]}
+        want: {"topics":[],"content_functions":[],"carriers":[],"affordances":["practice"],"form":"","use":"","entities":[]}
+=== RUN   TestSharedOverrideVectors/empty_then_reset_one_form
+    vectors_test.go:83: resolved view mismatch
+         got: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"","entities":[]}
+        want: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"method","use":"","entities":[]}
+=== RUN   TestSharedOverrideVectors/empty_then_reset_one_use
+    vectors_test.go:83: resolved view mismatch
+         got: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"","entities":[]}
+        want: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"try","entities":[]}
+=== RUN   TestSharedOverrideVectors/empty_then_reset_one_entities
+    vectors_test.go:83: resolved view mismatch
+         got: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"","entities":[]}
+        want: {"topics":[],"content_functions":[],"carriers":[],"affordances":[],"form":"","use":"","entities":["Jev"]}
+--- FAIL: TestSharedOverrideVectors (0.00s)
+    --- PASS: TestSharedOverrideVectors/single-value_accept_replaces_the_automatic_value (0.00s)
+    --- PASS: TestSharedOverrideVectors/second_single-value_accept_still_replaces_the_first (0.00s)
+    --- PASS: TestSharedOverrideVectors/per-tag_reset_restores_the_automatic_value_for_that_tag_only (0.00s)
+    --- PASS: TestSharedOverrideVectors/whole-field_reset_removes_every_override_in_the_field (0.00s)
+    --- PASS: TestSharedOverrideVectors/reject_then_per-tag_reset_restores_the_automatic_tag (0.00s)
+    --- PASS: TestSharedOverrideVectors/multi-value_accept_accumulates_and_reject_removes_one_tag (0.00s)
+    --- PASS: TestSharedOverrideVectors/set_empty_is_distinct_from_reset (0.00s)
+    --- PASS: TestSharedOverrideVectors/accept_after_set_empty_re-adds_a_tag (0.00s)
+    --- PASS: TestSharedOverrideVectors/legacy_singular_field_names_still_resolve (0.00s)
+    --- PASS: TestSharedOverrideVectors/carrier_is_single-valued:_accept_replaces_the_automatic_carrier (0.00s)
+    --- PASS: TestSharedOverrideVectors/carrier_per-tag_reset_restores_the_automatic_carrier (0.00s)
+    --- PASS: TestSharedOverrideVectors/R3-04_form_reaccept_follows_actual_action_time (0.00s)
+    --- PASS: TestSharedOverrideVectors/R3-04_form_reject-active_follows_actual_action_time (0.00s)
+    --- PASS: TestSharedOverrideVectors/R3-04_form_reject-reaccept_follows_actual_action_time (0.00s)
+    --- PASS: TestSharedOverrideVectors/R3-04_use_reaccept_follows_actual_action_time (0.00s)
+    --- PASS: TestSharedOverrideVectors/R3-04_use_reject-active_follows_actual_action_time (0.00s)
+    --- PASS: TestSharedOverrideVectors/R3-04_use_reject-reaccept_follows_actual_action_time (0.00s)
+    --- PASS: TestSharedOverrideVectors/R3-04_carriers_reaccept_follows_actual_action_time (0.00s)
+    --- PASS: TestSharedOverrideVectors/R3-04_carriers_reject-active_follows_actual_action_time (0.00s)
+    --- PASS: TestSharedOverrideVectors/R3-04_carriers_reject-reaccept_follows_actual_action_time (0.00s)
+    --- PASS: TestSharedOverrideVectors/form_tag_reset_after_successive_accepts (0.00s)
+    --- PASS: TestSharedOverrideVectors/form_field_reset_after_successive_accepts (0.00s)
+    --- PASS: TestSharedOverrideVectors/use_tag_reset_after_successive_accepts (0.00s)
+    --- PASS: TestSharedOverrideVectors/use_field_reset_after_successive_accepts (0.00s)
+    --- PASS: TestSharedOverrideVectors/carriers_tag_reset_after_successive_accepts (0.00s)
+    --- PASS: TestSharedOverrideVectors/carriers_field_reset_after_successive_accepts (0.00s)
+    --- FAIL: TestSharedOverrideVectors/empty_then_reset_one_topics (0.00s)
+    --- FAIL: TestSharedOverrideVectors/empty_then_reset_one_content_functions (0.00s)
+    --- FAIL: TestSharedOverrideVectors/empty_then_reset_one_carriers (0.00s)
+    --- FAIL: TestSharedOverrideVectors/empty_then_reset_one_affordances (0.00s)
+    --- FAIL: TestSharedOverrideVectors/empty_then_reset_one_form (0.00s)
+    --- FAIL: TestSharedOverrideVectors/empty_then_reset_one_use (0.00s)
+    --- FAIL: TestSharedOverrideVectors/empty_then_reset_one_entities (0.00s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/classify	0.004s
+FAIL

@@ -1,0 +1,3 @@
+[36mWHAT[0m: 验证离线命令模式互斥
+[35mWHY[0m:  确保 calibration 与 live 组合在读样本前拒绝
+PASS: calibration+live rejected before dataset/credentials/network

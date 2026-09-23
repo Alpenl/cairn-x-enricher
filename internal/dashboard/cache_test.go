@@ -307,36 +307,23 @@ const testImageKey = "0000000000000000000000000000000000000000000000000000000000
 
 func stringReader(value string) *strings.Reader { return strings.NewReader(value) }
 
-func TestImageProxySetsImmutableCacheControlWhenBackendOmitsIt(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	backend := &fakeBackend{imageBody: "jpeg-data"}
-	backend.omitImageCacheControl = true
-	server := New(ctx, startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
-
-	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/images/enrichment/1/"+testImageKey, nil)
-	response := httptest.NewRecorder()
-	server.Handler().ServeHTTP(response, request)
-
-	if got := response.Header().Get("Cache-Control"); !strings.Contains(got, "immutable") {
-		t.Fatalf("Cache-Control = %q, want an immutable directive for content-addressed images", got)
-	}
-}
-
-func TestImageProxyKeepsTheBackendCacheControl(t *testing.T) {
-	// The backend's directive must win: this service cannot know better than
-	// the component that owns the object.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	backend := &fakeBackend{imageBody: "jpeg-data", imageCacheControl: "no-store"}
-	server := New(ctx, startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
-
-	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/images/enrichment/1/"+testImageKey, nil)
-	response := httptest.NewRecorder()
-	server.Handler().ServeHTTP(response, request)
-
-	if got := response.Header().Get("Cache-Control"); got != "no-store" {
-		t.Fatalf("Cache-Control = %q, want the backend value preserved", got)
+func TestImageProxyNeverPersistsPrivateImages(t *testing.T) {
+	for _, upstream := range []string{"", "public, max-age=604800, immutable", "private, max-age=86400", "no-store"} {
+		t.Run(upstream, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			backend := &fakeBackend{imageBody: "jpeg-data", imageCacheControl: upstream, omitImageCacheControl: upstream == ""}
+			server := New(ctx, startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+			request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/images/enrichment/1/"+testImageKey, nil)
+			response := httptest.NewRecorder()
+			server.Handler().ServeHTTP(response, request)
+			if response.Code != http.StatusOK || response.Body.String() != "jpeg-data" {
+				t.Fatalf("image = %d %q", response.Code, response.Body.String())
+			}
+			if got := response.Header().Get("Cache-Control"); got != "private, no-store" {
+				t.Fatalf("Cache-Control = %q, want private, no-store", got)
+			}
+		})
 	}
 }
 

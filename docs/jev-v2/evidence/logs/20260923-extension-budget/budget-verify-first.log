@@ -1,0 +1,16 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+internal/extension/budget.go:123:1: File is not properly formatted (gofmt)
+	if err == nil { err = callCtx.Err() }
+^
+internal/classify/jev.go:433:1: exported: comment on exported method Client.JudgeInputReservation should be of the form "JudgeInputReservation ..." (revive)
+// Judge runs a bounded set of ad-hoc questions against one state and returns the
+^
+internal/classify/jev.go:491:1: exported: exported method Client.Judge should have comment or be unexported (revive)
+func (c *Client) Judge(ctx context.Context, state any, questions map[string]ProviderQuestion) (map[string]RawAnswer, error) {
+^
+3 issues:
+* gofmt: 1
+* revive: 2
+exit status 1
+make: *** [Makefile:44: lint-ci] Error 1

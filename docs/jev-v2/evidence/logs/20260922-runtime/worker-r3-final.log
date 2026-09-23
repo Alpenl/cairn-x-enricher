@@ -1,0 +1,43 @@
+
+> test
+> vitest run
+
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:296622) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 <workspace>/cairn-share/worker
+
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb <workspace>/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+
+ Test Files  8 passed (8)
+      Tests  129 passed (129)
+   Start at  15:34:09
+   Duration  13.77s (transform 762ms, setup 0ms, import 2.59s, tests 61.75s, environment 0ms)
+
+
+> typecheck
+> tsc --noEmit
+
+
+> deploy:dry-run
+> wrangler deploy --dry-run
+
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+ ⛅️ wrangler 4.126.0 (update available 4.136.1)
+───────────────────────────────────────────────
+Total Upload: 189.01 KiB / gzip: 41.04 KiB
+Your Worker has access to the following bindings:
+Binding                                                Resource
+env.DB (cairn-share)                                   D1 Database
+env.ENRICHMENT_IMAGES (cairn-x-enrichment-images)      R2 Bucket
+
+--dry-run: exiting now.

@@ -1,0 +1,15 @@
+{
+  "share_source": "9571445910a5426a0a74654bdd59a9223fb158bc",
+  "enricher_source": "8dced002f1f6a96e0b98d7f17c5907d64a4711b8",
+  "spec_id": "classify-736e775b96c2",
+  "spec_hash": "30a331056f34cd2ad55927fd281fd57cb016f81a7f599bba5ac3a4110577a67e",
+  "policy": "jev-policy-v3",
+  "block_personal_use": true,
+  "new_paid_calls": 0,
+  "historical_paid_calls": 127,
+  "quality_verified": false,
+  "worker_tests": 210,
+  "frontend_checks": 73,
+  "actual_service_scenarios": 10,
+  "android_device_tests_this_batch": false
+}

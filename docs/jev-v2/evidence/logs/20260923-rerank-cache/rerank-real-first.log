@@ -1,0 +1,12 @@
+== TestLocalWorkerRerankCacheAcrossProcesses: starting worker on 127.0.0.1:59513 ==
+=== RUN   TestLocalWorkerRerankCacheAcrossProcesses
+    rerank_cache_test.go:266: unexpected child: === RUN   TestRerankCacheProcessHelper
+        WIRE_HASH=dde8ad4105be43516b1659f9e18980ea76c141a0071474ce0363de85d774d576
+        CACHE_RESULT={"candidates":[{"id":"2","text":"","rank":0,"role":"reading_summary","allowed":true}],"applied":true,"reason":"ranked by shared-rubric score","cache_status":"hit","scope":"current_candidates","next_before_id":2}
+        --- PASS: TestRerankCacheProcessHelper (0.08s)
+        PASS
+        ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.079s
+--- FAIL: TestLocalWorkerRerankCacheAcrossProcesses (1.76s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.760s
+FAIL

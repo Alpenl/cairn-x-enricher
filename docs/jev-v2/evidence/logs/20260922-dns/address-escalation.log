@@ -1,0 +1,8 @@
+WHAT: 验证最终公网拒绝策略的处理器集成
+WHY:  复跑真实补材料恢复场景并检查未新增收费请求
+== TestLocalWorkerEvidenceExecutionRecovery: starting worker on 127.0.0.1:40269 ==
+=== RUN   TestLocalWorkerEvidenceExecutionRecovery
+    escalation_test.go:247: real production evidence escalation: competing owner denied; 1 external HTTP fetch, checkpoint lost-response replay, 3 bounded finalize failures, new processor recovery, 2 model fixture calls; 3 original blocks retained and third poll unchanged
+--- PASS: TestLocalWorkerEvidenceExecutionRecovery (0.78s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.783s

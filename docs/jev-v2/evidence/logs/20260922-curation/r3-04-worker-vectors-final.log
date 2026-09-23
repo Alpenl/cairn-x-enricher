@@ -1,0 +1,16 @@
+WHAT: 核对新 reset 向量的 Worker 实现
+WHY:  确保两端相同行为
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:327573) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 <workspace>/Cairn/cairn-share/worker
+
+
+ Test Files  1 passed (1)
+      Tests  30 passed (30)
+   Start at  15:56:28
+   Duration  8.74s (transform 119ms, setup 0ms, import 189ms, tests 8.14s, environment 0ms)
+

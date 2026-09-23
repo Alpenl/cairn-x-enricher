@@ -1,0 +1,56 @@
+import { applyD1Migrations, env, reset } from "cloudflare:test";
+import { beforeEach, expect, it } from "vitest";
+import worker from "../src/index";
+
+beforeEach(async () => { await reset(); await applyD1Migrations(env.DB, env.TEST_MIGRATIONS); });
+async function request(path: string, body?: unknown, token = "internal") {
+  return worker.fetch(new Request(`https://test.example/api/${path}`, {
+    method: body === undefined ? "GET" : "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body)
+  }), { DB: env.DB, ENRICHMENT_IMAGES: env.ENRICHMENT_IMAGES, CAIRN_API_TOKEN: "app", CAIRN_ENRICHER_TOKEN: "internal" });
+}
+async function fixture() {
+  const ids: number[] = [];
+  for (const name of ["first", "second"]) {
+    const created = await request("links", { url: `https://example.com/filter/${name}` }, "app");
+    expect(created.status).toBe(201);
+    ids.push((await created.json() as { id: number }).id);
+  }
+  for (const [index, fields] of [
+    { topics: ["llm", "eng", "eval", "design"], content_functions: ["method"], carriers: ["single"], affordances: ["practice"] },
+    { topics: ["eng"], content_functions: ["data"], carriers: ["external_article"], affordances: ["background"] }
+  ].entries()) {
+    for (const [field, terms] of Object.entries(fields)) for (const term of terms) {
+      const response = await request(`v2/links/${ids[index]}/overrides`, { operation_key: `${index}-${field}-${term}`, field, term, action: "accept" });
+      expect(response.status).toBe(200);
+    }
+  }
+  return ids;
+}
+
+it.each([
+  ["topic=design", "fourth topic"],
+  ["content_functions=method,data&carriers=single&affordances=practice", "OR within dimensions and AND across dimensions"]
+])("actual list routes apply %s (%s) to the effective selection", async query => {
+  const [first] = await fixture();
+  for (const [route, token] of [["links", "app"], ["enrichment/jobs", "internal"]]) {
+    const response = await request(`${route}?${query}`, undefined, token);
+    expect(response.status).toBe(200);
+    const result = await response.json() as { items: Array<{ id: number }> };
+    expect(result.items.map(row => row.id), route).toEqual([first]);
+  }
+});
+
+it("actual list routes distinguish absent entity runs from failed runs", async () => {
+  await fixture();
+  const response = await request("links?entity_state=failed", undefined, "app");
+  expect(response.status).toBe(200);
+  expect((await response.json() as { items: unknown[] }).items).toEqual([]);
+});
+
+it("invalid v2 filters do not silently broaden a query", async () => {
+  await fixture();
+  const response = await request("links?content_functions=not_a_term", undefined, "app");
+  expect(response.status).toBe(400);
+});

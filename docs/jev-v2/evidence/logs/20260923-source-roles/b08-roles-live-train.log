@@ -1,0 +1,51 @@
+sample=auto-design-opinion-0 phase=finished usage_known=true input_tokens=10172 elapsed_ms=834
+sample=auto-design-opinion-1 phase=finished usage_known=true input_tokens=10188 elapsed_ms=363
+sample=auto-design-opinion-2 phase=finished usage_known=true input_tokens=10213 elapsed_ms=350
+sample=auto-design-opinion-3 phase=finished usage_known=true input_tokens=10275 elapsed_ms=329
+sample=auto-design-opinion-4 phase=finished usage_known=true input_tokens=10272 elapsed_ms=366
+sample=auto-design-opinion-5 phase=finished usage_known=true input_tokens=10601 elapsed_ms=353
+sample=auto-eval-opinion-0 phase=finished usage_known=true input_tokens=10172 elapsed_ms=350
+sample=auto-eval-opinion-1 phase=finished usage_known=true input_tokens=10188 elapsed_ms=417
+sample=auto-eval-opinion-2 phase=finished usage_known=true input_tokens=10213 elapsed_ms=346
+sample=auto-eval-opinion-3 phase=finished usage_known=true input_tokens=10277 elapsed_ms=349
+sample=auto-eval-opinion-4 phase=finished usage_known=true input_tokens=10272 elapsed_ms=420
+sample=auto-eval-opinion-5 phase=finished usage_known=true input_tokens=10601 elapsed_ms=377
+sample=auto-health-method-0 phase=finished usage_known=true input_tokens=10183 elapsed_ms=390
+sample=auto-health-method-1 phase=finished usage_known=true input_tokens=10200 elapsed_ms=326
+sample=auto-health-method-2 phase=finished usage_known=true input_tokens=10236 elapsed_ms=376
+sample=auto-health-method-3 phase=finished usage_known=true input_tokens=10298 elapsed_ms=352
+sample=auto-health-method-4 phase=finished usage_known=true input_tokens=10295 elapsed_ms=359
+sample=auto-health-method-5 phase=finished usage_known=true input_tokens=10799 elapsed_ms=356
+sample=auto-incidental-ai-0 phase=finished usage_known=true input_tokens=10176 elapsed_ms=349
+sample=auto-incidental-ai-1 phase=finished usage_known=true input_tokens=10187 elapsed_ms=337
+sample=auto-incidental-ai-2 phase=finished usage_known=true input_tokens=10216 elapsed_ms=347
+sample=auto-incidental-ai-3 phase=finished usage_known=true input_tokens=10280 elapsed_ms=348
+sample=auto-incidental-ai-4 phase=finished usage_known=true input_tokens=10275 elapsed_ms=475
+sample=auto-incidental-ai-5 phase=finished usage_known=true input_tokens=10673 elapsed_ms=353
+sample=auto-invest-opinion-0 phase=finished usage_known=true input_tokens=10176 elapsed_ms=321
+sample=auto-invest-opinion-1 phase=finished usage_known=true input_tokens=10187 elapsed_ms=397
+sample=auto-invest-opinion-2 phase=finished usage_known=true input_tokens=10216 elapsed_ms=347
+sample=auto-invest-opinion-3 phase=finished usage_known=true input_tokens=10280 elapsed_ms=341
+sample=auto-invest-opinion-4 phase=finished usage_known=true input_tokens=10275 elapsed_ms=386
+sample=auto-invest-opinion-5 phase=finished usage_known=true input_tokens=10673 elapsed_ms=352
+sample=auto-law-opinion-0 phase=finished usage_known=true input_tokens=10177 elapsed_ms=351
+sample=auto-law-opinion-1 phase=finished usage_known=true input_tokens=10190 elapsed_ms=395
+sample=auto-law-opinion-2 phase=finished usage_known=true input_tokens=10220 elapsed_ms=364
+sample=auto-law-opinion-3 phase=finished usage_known=true input_tokens=10284 elapsed_ms=363
+sample=auto-law-opinion-4 phase=finished usage_known=true input_tokens=10279 elapsed_ms=369
+sample=auto-law-opinion-5 phase=finished usage_known=true input_tokens=10691 elapsed_ms=345
+sample=auto-product-method-0 phase=finished usage_known=true input_tokens=10176 elapsed_ms=356
+sample=auto-product-method-1 phase=finished usage_known=true input_tokens=10190 elapsed_ms=418
+sample=auto-product-method-2 phase=finished usage_known=true input_tokens=10219 elapsed_ms=344
+sample=auto-product-method-3 phase=finished usage_known=true input_tokens=10279 elapsed_ms=362
+sample=auto-product-method-4 phase=finished usage_known=true input_tokens=10278 elapsed_ms=362
+sample=auto-product-method-5 phase=finished usage_known=true input_tokens=10673 elapsed_ms=458
+{
+  "artifacts": "/home/alpen/.local/share/cairn/evaluations/20260923-reference-v1-source-roles-train",
+  "calls": 42,
+  "completed": true,
+  "input_tokens": 432725,
+  "reference_hash": "ea14264cbaabcedd13a328bfef6473cf31a18827ca0285b27c8047150370b414",
+  "reserved_input_tokens": 2752512,
+  "usage_missing_calls": 0
+}

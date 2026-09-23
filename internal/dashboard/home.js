@@ -6,7 +6,8 @@
   const FEATURE_COUNT = 4;
   const NARROW_FEATURE_COUNT = 1;
   const POLL_INTERVAL = 10000;
-  const filterKeys = ["curation_status", "topic", "form", "use", "source", "since", "uncertain"];
+  const multiFilterKeys = ["topics", "content_functions", "carriers", "affordances", "entity_state"];
+  const filterKeys = ["curation_status", ...multiFilterKeys, "form", "use", "source", "since", "uncertain"];
   const initialParams = new URLSearchParams(window.location.search);
 
   const state = {
@@ -18,6 +19,11 @@
     column: null
   };
   state.filters = Object.fromEntries(filterKeys.map((key) => [key, initialParams.get(key) || ""]));
+  // Preserve shared URLs using the original single-topic parameter.
+  if (initialParams.get("topic")) state.filters.topics = [...new Set([
+    ...state.filters.topics.split(",").filter(Boolean), initialParams.get("topic")
+  ])].join(",");
+  const needsFilterContract = () => [...multiFilterKeys, "form", "use"].some(key => state.filters[key]);
   let activeRequest = null;
   let requestVersion = 0;
   let firstPageSnapshot = "";
@@ -247,9 +253,11 @@
       if (!state.search) params.set("view", "summary");
       if (state.search) params.set("q", state.search);
       for (const [key, value] of Object.entries(state.filters)) if (value) params.set(key, value);
+      if (needsFilterContract()) params.set("filter_contract_version", "1");
       if (append && state.nextBeforeID) params.set("before_id", String(state.nextBeforeID));
       const page = await ui.fetchJSON(`/api/bookmarks?${params}`, { signal: activeRequest.signal });
       if (version !== requestVersion) return;
+      if (needsFilterContract() && page.filter_contract_version !== 1) throw new Error("unsupported_filter_contract");
       if (!append) {
         const snapshot = JSON.stringify(page);
         if (silent && snapshot === firstPageSnapshot) return;
@@ -260,7 +268,11 @@
       ui.byId("tail").hidden = Boolean(state.nextBeforeID) || state.items.length === 0;
     } catch (error) {
       if (version !== requestVersion || error.name === "AbortError") return;
-      if (!silent) ui.byId("load-error").hidden = false;
+      if (!silent) {
+        ui.byId("load-error").hidden = false;
+        ui.byId("load-error-text").textContent = error.message === "unsupported_filter_contract"
+          ? "服务暂不支持完整筛选，请更新服务或清除筛选后浏览。" : "读取收藏失败";
+      }
     } finally {
       if (version === requestVersion) {
         state.loading = false;
@@ -297,13 +309,16 @@
   for (const key of filterKeys) {
     const control = ui.byId(`filter-${key}`);
     if (key === "uncertain") control.checked = state.filters[key] === "true";
-    else if (key === "since" && state.filters[key]) {
+    else if (multiFilterKeys.includes(key)) {
+      for (const option of control.options) option.selected = state.filters[key].split(",").includes(option.value);
+    } else if (key === "since" && state.filters[key]) {
       const date = new Date(state.filters[key]);
       if (Number.isFinite(date.getTime())) control.value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     } else control.value = state.filters[key];
     control.addEventListener("change", () => {
       if (key === "uncertain") state.filters[key] = control.checked ? "true" : "";
       else if (key === "since") state.filters[key] = control.value ? new Date(`${control.value}T00:00:00`).toISOString() : "";
+      else if (multiFilterKeys.includes(key)) state.filters[key] = [...control.selectedOptions].map(option => option.value).join(",");
       else state.filters[key] = control.value;
       changeFilters();
     });
@@ -316,19 +331,33 @@
       state.filters[key] = "";
       const control = ui.byId(`filter-${key}`);
       control.value = "";
+      if (multiFilterKeys.includes(key)) for (const option of control.options) option.selected = false;
       if (key === "uncertain") control.checked = false;
     }
     changeFilters();
   });
   ui.byId("export-markdown").addEventListener("click", async () => {
-    // Exporting now yields between chunks, so disable the control while it runs
-    // and surface a failure instead of letting an unhandled rejection vanish.
+    // The server-side export carries the full effective v2 dimensions, the
+    // human origin and partial counts under the current filters. The local
+    // builder stays as a fallback for a backend without the endpoint.
     const button = ui.byId("export-markdown");
     button.disabled = true;
     try {
-      await ui.exportMarkdown(state.items, Boolean(state.nextBeforeID));
-    } catch (_) {
-      ui.showToast("导出失败，请重试", true);
+      const params = new URLSearchParams({ limit: String(Math.max(state.items.length, PAGE_SIZE)) });
+      if (state.search) params.set("q", state.search);
+      for (const [key, value] of Object.entries(state.filters)) if (value) params.set(key, value);
+      if (needsFilterContract()) params.set("filter_contract_version", "1");
+      await ui.exportServerMarkdown(params);
+    } catch (error) {
+      if (error?.message === "export_unsupported") {
+        try {
+          await ui.exportMarkdown(state.items, Boolean(state.nextBeforeID));
+        } catch (_) {
+          ui.showToast("导出失败，请重试", true);
+        }
+      } else {
+        ui.showToast("导出失败，请重试", true);
+      }
     } finally {
       button.disabled = state.items.length === 0;
     }
@@ -377,7 +406,7 @@
   if (state.search) ui.byId("find").value = state.search;
   ui.byId("clear-filters").hidden = !filtered();
   ui.loadTaxonomy().then((catalog) => {
-    for (const [key, dimension, label] of [["topic", "topics", "全部主题"], ["form", "forms", "全部形态"], ["use", "uses", "全部用途"]]) {
+    for (const [key, dimension, label] of [["form", "forms", "全部形态"], ["use", "uses", "全部用途"]]) {
       const control = ui.byId(`filter-${key}`);
       ui.fillTerms(control, catalog[dimension], label, true);
       control.value = state.filters[key];
@@ -391,6 +420,33 @@
       if (item) holder.replaceWith(ui.metadata(item));
     }
   }).catch(() => ui.showToast("读取标签词表失败", true));
+  ui.fetchJSON("/api/v2-taxonomy").then(catalog => {
+    if (catalog.available === false) throw new Error("unsupported");
+    for (const dimension of ["topics", "content_functions", "carriers", "affordances"]) {
+      if (!Array.isArray(catalog[dimension])) throw new Error("unsupported");
+      const control = ui.byId(`filter-${dimension}`);
+      control.replaceChildren();
+      const requested = state.filters[dimension].split(",").filter(Boolean);
+      const known = new Set();
+      for (const term of catalog[dimension]) {
+        const option = document.createElement("option");
+        option.value = term.id;
+        option.textContent = `${term.label || term.id}${term.deprecated || term.active === false ? "（已停用）" : ""}`;
+        option.selected = requested.includes(term.id);
+        control.append(option); known.add(term.id);
+      }
+      // A saved URL never silently loses an unknown requested ID.
+      for (const id of requested.filter(id => !known.has(id))) {
+        const option = document.createElement("option");
+        option.value = id; option.textContent = `${id}（词表不可用）`; option.selected = true;
+        control.append(option);
+      }
+      control.disabled = false;
+    }
+  }).catch(() => {
+    ui.byId("filter-capability").hidden = false;
+    ui.byId("filter-capability").textContent = "多维词表暂不可用；已选筛选条件仍保留，可重试或清除。";
+  });
   load();
   setInterval(() => {
     if (document.hidden || filtered() || state.loading) return;
