@@ -1,0 +1,41 @@
+
+> test
+> vitest run test/source-revision.test.ts
+
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:3159079) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-source-revision-next/worker
+
+ ❯ test/source-revision.test.ts (1 test | 1 failed) 217ms
+   × one actual source save changing context and links increments content revision exactly once 217ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/source-revision.test.ts > one actual source save changing context and links increments content revision exactly once
+AssertionError: expected 4 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 4
+
+ ❯ test/source-revision.test.ts:21:77
+     19|  const f=await setup(),before=await f.revision();
+     20|  const source={...f.source,context_text:"second context",related_links…
+     21|  expect((await f.save(source)).status).toBe(200);expect(await f.revisi…
+       |                                                                             ^
+     22|  expect((await f.save(source)).status).toBe(200);expect(await f.revisi…
+     23| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  07:49:10
+   Duration  852ms (transform 112ms, setup 0ms, import 194ms, tests 217ms, environment 1ms)
