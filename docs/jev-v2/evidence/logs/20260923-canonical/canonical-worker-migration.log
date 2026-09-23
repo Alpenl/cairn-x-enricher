@@ -1,0 +1,52 @@
+
+> test
+> vitest run test/entity-judgments.test.ts test/reset-migration.test.ts
+
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:3264558) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-canonical-next/worker
+
+ ❯ test/entity-judgments.test.ts (5 tests | 1 failed) 3166ms
+   × upgrades legacy entity records with unknown provenance without rewriting source or results 690ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/entity-judgments.test.ts > upgrades legacy entity records with unknown provenance without rewriting source or results
+AssertionError: expected { success: true, meta: { …(8) }, …(1) } to deeply equal { success: true, meta: { …(8) }, …(1) }
+
+- Expected
++ Received
+
+@@ -1,11 +1,11 @@
+  {
+    "meta": {
+      "changed_db": false,
+      "changes": 0,
+      "duration": 0,
+-     "last_row_id": 1,
++     "last_row_id": 30,
+      "rows_read": 1,
+      "rows_written": 0,
+      "served_by": "miniflare.db",
+      "size_after": 352256,
+    },
+
+ ❯ test/entity-judgments.test.ts:87:73
+     85|  await applyD1Migrations(env.DB,env.TEST_MIGRATIONS.slice(index));
+     86|  expect(await env.DB.prepare("SELECT * FROM entity_states").first()).t…
+     87|  expect(await env.DB.prepare("SELECT * FROM evidence_snapshots").all()…
+       |                                                                         ^
+     88|  expect(await(await call("v2/links/1/entities")).json()).toMatchObject…
+     89| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 6 passed (7)
+   Start at  08:28:29
+   Duration  9.40s (transform 230ms, setup 0ms, import 478ms, tests 11.73s, environment 0ms)

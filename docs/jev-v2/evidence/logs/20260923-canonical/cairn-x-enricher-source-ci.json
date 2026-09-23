@@ -1,0 +1,198 @@
+{
+  "conclusion": "success",
+  "headSha": "dd6bcfa1ed22aa89c2b0ffcfe4cba120bc4cf34f",
+  "jobs": [
+    {
+      "completedAt": "2026-09-23T00:41:25Z",
+      "conclusion": "success",
+      "databaseId": 106997699358,
+      "name": "Test and lint",
+      "startedAt": "2026-09-23T00:40:48Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-09-23T00:40:50Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-09-23T00:40:49Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:40:52Z",
+          "conclusion": "success",
+          "name": "Check out source",
+          "number": 2,
+          "startedAt": "2026-09-23T00:40:50Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:40:57Z",
+          "conclusion": "success",
+          "name": "Set up Go",
+          "number": 3,
+          "startedAt": "2026-09-23T00:40:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:40:57Z",
+          "conclusion": "success",
+          "name": "Verify modules",
+          "number": 4,
+          "startedAt": "2026-09-23T00:40:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:41:08Z",
+          "conclusion": "success",
+          "name": "Lint",
+          "number": 5,
+          "startedAt": "2026-09-23T00:40:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:41:20Z",
+          "conclusion": "success",
+          "name": "Test with race detector",
+          "number": 6,
+          "startedAt": "2026-09-23T00:41:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:41:22Z",
+          "conclusion": "success",
+          "name": "Lint experiment harness",
+          "number": 7,
+          "startedAt": "2026-09-23T00:41:20Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:41:22Z",
+          "conclusion": "success",
+          "name": "Check frontend assets",
+          "number": 8,
+          "startedAt": "2026-09-23T00:41:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:41:23Z",
+          "conclusion": "success",
+          "name": "Build",
+          "number": 9,
+          "startedAt": "2026-09-23T00:41:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:41:23Z",
+          "conclusion": "success",
+          "name": "Post Lint",
+          "number": 16,
+          "startedAt": "2026-09-23T00:41:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:41:23Z",
+          "conclusion": "success",
+          "name": "Post Set up Go",
+          "number": 17,
+          "startedAt": "2026-09-23T00:41:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:41:23Z",
+          "conclusion": "success",
+          "name": "Post Check out source",
+          "number": 18,
+          "startedAt": "2026-09-23T00:41:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:41:23Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 19,
+          "startedAt": "2026-09-23T00:41:23Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/Alpenl/cairn-x-enricher/actions/runs/35803100595/job/106997699358"
+    },
+    {
+      "completedAt": "2026-09-23T00:42:16Z",
+      "conclusion": "success",
+      "databaseId": 106997850256,
+      "name": "Build container",
+      "startedAt": "2026-09-23T00:41:27Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-09-23T00:41:29Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-09-23T00:41:28Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:41:30Z",
+          "conclusion": "success",
+          "name": "Check out source",
+          "number": 2,
+          "startedAt": "2026-09-23T00:41:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:41:42Z",
+          "conclusion": "success",
+          "name": "Set up Docker Buildx",
+          "number": 3,
+          "startedAt": "2026-09-23T00:41:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:42:13Z",
+          "conclusion": "success",
+          "name": "Build all release platforms",
+          "number": 4,
+          "startedAt": "2026-09-23T00:41:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:42:14Z",
+          "conclusion": "success",
+          "name": "Post Build all release platforms",
+          "number": 6,
+          "startedAt": "2026-09-23T00:42:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:42:15Z",
+          "conclusion": "success",
+          "name": "Post Set up Docker Buildx",
+          "number": 7,
+          "startedAt": "2026-09-23T00:42:14Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:42:15Z",
+          "conclusion": "success",
+          "name": "Post Check out source",
+          "number": 8,
+          "startedAt": "2026-09-23T00:42:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-23T00:42:15Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 9,
+          "startedAt": "2026-09-23T00:42:15Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/Alpenl/cairn-x-enricher/actions/runs/35803100595/job/106997850256"
+    }
+  ],
+  "status": "completed",
+  "url": "https://github.com/Alpenl/cairn-x-enricher/actions/runs/35803100595"
+}

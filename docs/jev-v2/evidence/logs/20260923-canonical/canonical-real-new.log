@@ -1,0 +1,6 @@
+== TestLocalWorkerCanonicalEntitiesCLI: starting worker on 127.0.0.1:38989 ==
+=== RUN   TestLocalWorkerCanonicalEntitiesCLI
+    entity_canonical_test.go:189: three real CLI processes load the controlled catalog; two equal names keep different IDs, unsupported occurrence stays unknown; restart reuses raw Choice results; catalog version change invalidates cache; two local entity HTTP calls, zero paid
+--- PASS: TestLocalWorkerCanonicalEntitiesCLI (1.43s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.431s

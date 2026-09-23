@@ -1,0 +1,7 @@
+== TestLocalWorkerCanonicalEntitiesCLI: starting worker on 127.0.0.1:49627 ==
+=== RUN   TestLocalWorkerCanonicalEntitiesCLI
+    entity_canonical_test.go:174: stored identity {"id":1,"state":"completed_nonempty","state_content_revision":2,"evidence_snapshot_id":1,"content_hash":"d53a7d221344e920b43f6a995fcf2693966612b6514c50a9e033cd90769306ac","stale":false,"updated_at":"2026-09-23T00:36:15.383Z","automatic":["Acme"],"archived_entities":["Acme"],"entities":["Acme"],"human":[],"overrides":[],"revision":0} <nil>
+--- FAIL: TestLocalWorkerCanonicalEntitiesCLI (1.63s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.631s
+FAIL
