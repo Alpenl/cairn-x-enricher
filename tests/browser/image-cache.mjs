@@ -14,7 +14,8 @@ try {
  check("prewarm old release URL",(await read(oldURL)).body,"old-cached-private-image");
  check("browser actually reuses old response",(await read(oldURL)).body,"old-cached-private-image");
  check("old cached response avoided a second HTTP request",(await stats()).legacy,1);
- const url=await page.evaluate(key=>window.CairnUI.imagePath(key),key);
+ await page.waitForFunction(()=>typeof window.CairnImagePath==="function");
+ const url=await page.evaluate(key=>window.CairnImagePath(key),key);
  assert.notEqual(url,oldURL,"production imagePath must migrate the old cache key");checks++; console.log(`ok ${checks} production URL escapes old cache`);
  check("current image comes from actual Go proxy",(await read(url)).body,"synthetic-image-1");
  check("private cache policy",(await read(url)).cache,"private, no-store");

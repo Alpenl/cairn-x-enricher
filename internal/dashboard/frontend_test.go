@@ -2,17 +2,19 @@ package dashboard
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 )
 
 // TestFrontendAssetsPassTheirChecks runs the dependency-free Node checker that
-// CI also runs. It guards the dashboard behaviour the performance work depends
-// on, such as cached formatters and chunked exports.
+// CI also runs. It exercises the pure modules and the static deploy guards.
 func TestFrontendAssetsPassTheirChecks(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
@@ -42,28 +44,85 @@ func TestFrontendAssetsPassTheirChecks(t *testing.T) {
 	}
 }
 
-// TestDashboardAssetsAreEmbedded fails if a page references an asset that is
-// not served, which would surface only as a broken page in the browser.
+var (
+	shellAssetPattern  = regexp.MustCompile(`(?:src|href)="(/assets/[^"]+)"`)
+	moduleImportPatten = regexp.MustCompile(`from "\./([\w-]+\.js)"`)
+)
+
+// TestDashboardAssetsAreEmbedded fails if the shell or a module references a
+// file the binary does not serve, which would otherwise surface only as a
+// broken page in the browser after deploy.
 func TestDashboardAssetsAreEmbedded(t *testing.T) {
-	assets := map[string][]byte{
-		"dashboard.css": dashboardCSS,
-		"common.js":     commonJS,
-		"home.js":       homeJS,
-		"reader.js":     readerJS,
-		"backstage.js":  backstageJS,
-		"download.svg":  downloadSVG,
+	server := New(context.Background(), startedTracker(), &fakeBackend{}, &fakeProcessor{}, testLogger(), 1)
+	defer server.Drain(time.Second)
+	handler := server.Handler()
+
+	fetch := func(path string) *httptest.ResponseRecorder {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil))
+		return response
 	}
-	for name, content := range assets {
-		if len(content) == 0 {
-			t.Errorf("embedded asset %s is empty", name)
-		}
+
+	wantTypes := map[string]string{".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml"}
+	referenced := map[string]bool{}
+	for _, match := range shellAssetPattern.FindAllStringSubmatch(string(appShell), -1) {
+		referenced[match[1]] = true
 	}
-	for name, page := range map[string][]byte{"index": indexHTML, "reader": readerHTML, "backstage": backstageHTML} {
-		text := string(page)
-		for _, want := range []string{"/assets/dashboard.css", "/assets/common.js"} {
-			if !strings.Contains(text, want) {
-				t.Errorf("%s.html does not reference %s", name, want)
+	if !referenced["/assets/js/main.js"] || !referenced["/assets/app.css"] {
+		t.Fatalf("the shell does not load the application: %v", referenced)
+	}
+	for name, asset := range webAssets {
+		if strings.HasPrefix(name, "js/") {
+			for _, match := range moduleImportPatten.FindAllStringSubmatch(string(asset.content), -1) {
+				referenced["/assets/js/"+match[1]] = true
 			}
 		}
+	}
+	for path := range referenced {
+		response := fetch(path)
+		if response.Code != http.StatusOK || response.Body.Len() == 0 {
+			t.Errorf("GET %s = %d with %d bytes", path, response.Code, response.Body.Len())
+			continue
+		}
+		if want := wantTypes[filepath.Ext(path)]; !strings.HasPrefix(response.Header().Get("Content-Type"), want) {
+			t.Errorf("GET %s Content-Type = %q, want %s", path, response.Header().Get("Content-Type"), want)
+		}
+		if response.Header().Get("X-Content-Type-Options") != "nosniff" {
+			t.Errorf("GET %s is missing nosniff", path)
+		}
+	}
+	for _, path := range []string{"/assets/missing.js", "/assets/../dashboard.go", "/assets/index.html"} {
+		if response := fetch(path); response.Code == http.StatusOK {
+			t.Errorf("GET %s = 200, want a refusal", path)
+		}
+	}
+}
+
+// TestAssetsRevalidateWithETag keeps reloads cheap: an unchanged module is
+// confirmed with a bodiless 304 instead of being downloaded again.
+func TestAssetsRevalidateWithETag(t *testing.T) {
+	server := New(context.Background(), startedTracker(), &fakeBackend{}, &fakeProcessor{}, testLogger(), 1)
+	defer server.Drain(time.Second)
+	first := httptest.NewRecorder()
+	server.Handler().ServeHTTP(first, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/assets/js/main.js", nil))
+	etag := first.Header().Get("ETag")
+	if first.Code != http.StatusOK || etag == "" || first.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("first GET = %d etag=%q cache=%q", first.Code, etag, first.Header().Get("Cache-Control"))
+	}
+	for _, header := range []string{etag, "W/" + etag, `"other", ` + etag} {
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/assets/js/main.js", nil)
+		request.Header.Set("If-None-Match", header)
+		second := httptest.NewRecorder()
+		server.Handler().ServeHTTP(second, request)
+		if second.Code != http.StatusNotModified || second.Body.Len() != 0 {
+			t.Fatalf("If-None-Match %q = %d with %d bytes", header, second.Code, second.Body.Len())
+		}
+	}
+	stale := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/assets/js/main.js", nil)
+	stale.Header.Set("If-None-Match", `"stale"`)
+	third := httptest.NewRecorder()
+	server.Handler().ServeHTTP(third, stale)
+	if third.Code != http.StatusOK || third.Body.Len() == 0 {
+		t.Fatalf("stale ETag = %d", third.Code)
 	}
 }

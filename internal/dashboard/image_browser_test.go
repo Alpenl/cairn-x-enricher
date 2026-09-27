@@ -17,8 +17,9 @@ import (
 )
 
 // An explicit opt-in because ordinary Go gates must not require Chrome.
-// The old backend is an HTTP contract fixture; the Go client/proxy/common.js
-// and browser cache are real, with no Playwright request interception.
+// The old backend is an HTTP contract fixture; the Go client/proxy, the
+// application's api.js module and the browser cache are real, with no
+// Playwright request interception.
 func TestBrowserPrivateImageCache(t *testing.T) {
 	if os.Getenv("CAIRN_IMAGE_BROWSER") != "1" {
 		t.Skip("set CAIRN_IMAGE_BROWSER=1 with Playwright and Chrome installed")
@@ -62,7 +63,8 @@ func TestBrowserPrivateImageCache(t *testing.T) {
 		case "/privacy-probe":
 			w.Header().Set("Content-Type", "text/html")
 			w.Header().Set("Cache-Control", "no-store")
-			_, _ = io.WriteString(w, `<!doctype html><script src="/assets/common.js"></script>`)
+			// The production helper is imported from the real embedded module.
+			_, _ = io.WriteString(w, `<!doctype html><script type="module">import { imagePath } from "/assets/js/api.js"; window.CairnImagePath = imagePath;</script>`)
 		case "/privacy-control":
 			if r.Method == http.MethodPost {
 				revision.Store(2)

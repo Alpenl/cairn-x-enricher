@@ -163,7 +163,7 @@ func TestHandlerServesChineseDashboardAndBookmarkData(t *testing.T) {
 	if root.Code != http.StatusOK || !strings.Contains(root.Body.String(), "Cairn 收藏") {
 		t.Fatalf("GET / = %d %q", root.Code, root.Body.String())
 	}
-	for _, label := range []string{"搜索收藏", "/assets/home.js", "/backstage", "整理状态", "filter-topic"} {
+	for _, label := range []string{"搜索收藏", "/assets/js/main.js", "/backstage", "整理状态", "收藏原因", "展开原文", "下一条"} {
 		if !strings.Contains(root.Body.String(), label) {
 			t.Errorf("GET / does not contain %q", label)
 		}
@@ -178,33 +178,34 @@ func TestHandlerServesChineseDashboardAndBookmarkData(t *testing.T) {
 		t.Fatal("GET / Content-Security-Policy still allows inline assets")
 	}
 
-	reader := httptest.NewRecorder()
-	server.Handler().ServeHTTP(reader, httptest.NewRequestWithContext(ctx, http.MethodGet, "/bookmarks/7", nil))
-	if reader.Code != http.StatusOK {
-		t.Fatalf("GET /bookmarks/7 = %d", reader.Code)
-	}
-	for _, label := range []string{"展开原文", "下一条", "/assets/reader.js"} {
-		if !strings.Contains(reader.Body.String(), label) {
-			t.Errorf("GET /bookmarks/7 does not contain %q", label)
+	// Every page route serves the same application shell so deep links keep
+	// working; the client router picks the view from the URL.
+	for _, path := range []string{"/bookmarks/7", "/bookmarks/7?topics=llm&curation_status=all", "/backstage"} {
+		page := httptest.NewRecorder()
+		server.Handler().ServeHTTP(page, httptest.NewRequestWithContext(ctx, http.MethodGet, path, nil))
+		if page.Code != http.StatusOK || page.Body.String() != root.Body.String() {
+			t.Fatalf("GET %s = %d, want the application shell", path, page.Code)
+		}
+		if page.Header().Get("Cache-Control") != "no-store" || page.Header().Get("Content-Security-Policy") == "" {
+			t.Fatalf("GET %s headers = %v", path, page.Header())
 		}
 	}
-
-	backstage := httptest.NewRecorder()
-	server.Handler().ServeHTTP(backstage, httptest.NewRequestWithContext(ctx, http.MethodGet, "/backstage", nil))
-	if backstage.Code != http.StatusOK || !strings.Contains(backstage.Body.String(), "/assets/backstage.js") {
-		t.Fatalf("GET /backstage = %d %q", backstage.Code, backstage.Body.String())
+	invalid := httptest.NewRecorder()
+	server.Handler().ServeHTTP(invalid, httptest.NewRequestWithContext(ctx, http.MethodGet, "/bookmarks/0", nil))
+	if invalid.Code != http.StatusNotFound {
+		t.Fatalf("GET /bookmarks/0 = %d, want 404", invalid.Code)
 	}
 
 	script := httptest.NewRecorder()
-	server.Handler().ServeHTTP(script, httptest.NewRequestWithContext(ctx, http.MethodGet, "/assets/home.js", nil))
+	server.Handler().ServeHTTP(script, httptest.NewRequestWithContext(ctx, http.MethodGet, "/assets/js/main.js", nil))
 	if script.Code != http.StatusOK || !strings.Contains(script.Header().Get("Content-Type"), "text/javascript") {
-		t.Fatalf("GET /assets/home.js = %d %q", script.Code, script.Header().Get("Content-Type"))
+		t.Fatalf("GET /assets/js/main.js = %d %q", script.Code, script.Header().Get("Content-Type"))
 	}
 
 	stylesheet := httptest.NewRecorder()
-	server.Handler().ServeHTTP(stylesheet, httptest.NewRequestWithContext(ctx, http.MethodGet, "/assets/dashboard.css", nil))
-	if stylesheet.Code != http.StatusOK || !strings.Contains(stylesheet.Header().Get("Content-Type"), "text/css") || !strings.Contains(stylesheet.Body.String(), ".feature") {
-		t.Fatalf("GET /assets/dashboard.css = %d %q", stylesheet.Code, stylesheet.Header().Get("Content-Type"))
+	server.Handler().ServeHTTP(stylesheet, httptest.NewRequestWithContext(ctx, http.MethodGet, "/assets/app.css", nil))
+	if stylesheet.Code != http.StatusOK || !strings.Contains(stylesheet.Header().Get("Content-Type"), "text/css") || !strings.Contains(stylesheet.Body.String(), ".detail-pane") {
+		t.Fatalf("GET /assets/app.css = %d %q", stylesheet.Code, stylesheet.Header().Get("Content-Type"))
 	}
 
 	list := httptest.NewRecorder()

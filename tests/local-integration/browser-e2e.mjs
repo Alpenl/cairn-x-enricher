@@ -148,14 +148,15 @@ async function main() {
 
     // 4. The real browser loads the real Go proxy over the real Worker.
     browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ["--no-sandbox"] });
-    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(String(error)));
     await page.goto(`http://127.0.0.1:${goPort}/bookmarks/${id}`, { waitUntil: "load" });
-    await page.waitForSelector("#v2-curation:not([hidden])", { timeout: 30000 });
-    check("the v2 panel loads through the real proxy", await page.isVisible("#v2-curation"));
-    const checked = await page.$$eval("#v2-topics input:checked", (nodes) => nodes.map((node) => node.value));
-    check("the browser shows the same effective topics as the Worker", JSON.stringify(checked.sort()) === JSON.stringify([...topics].sort()), JSON.stringify({ checked, topics }));
+    await page.waitForSelector("#v2-topics .chip.on", { timeout: 30000 });
+    check("the multidimensional editor loads through the real proxy", await page.isVisible("#v2-topics"));
+    const effectiveTopics = () => page.$$eval("#v2-topics .chip.on", (nodes) => nodes.map((node) => node.dataset.term));
+    const checked = await effectiveTopics();
+    check("the browser shows the same effective topics as the Worker", JSON.stringify([...checked].sort()) === JSON.stringify([...topics].sort()), JSON.stringify({ checked, topics }));
     const folded = await page.textContent("#v2-folded-note");
     check("the fourth effective topic is folded, not deleted", /另外 [1-9]/.test(folded || ""), folded || "");
 
@@ -168,26 +169,37 @@ async function main() {
         process.stdout.write(`library HTTP ${response.status()}: ${await response.text()}\n`);
       }
     });
+    const libraryIdle = () => library.waitForFunction(() => document.querySelector("#list-pane")?.dataset.loading === "false");
+    // Facets live in the drawer on a phone; open it and the group, then toggle.
+    const toggleFacet = async (key, value) => {
+      if (!await library.evaluate(() => document.getElementById("app").classList.contains("sidebar-open"))) {
+        await library.click("#list-pane [data-open-sidebar]");
+      }
+      const group = library.locator(`details[data-group='${key}']`);
+      if (!await group.evaluate((node) => node.open)) await group.locator("summary").click();
+      await library.click(`[data-facet='${key}'][data-value='${value}']`);
+      await libraryIdle();
+    };
     await library.goto(`http://127.0.0.1:${goPort}/?topics=${encodeURIComponent(topics[3])}`, { waitUntil: "load" });
-    await library.waitForSelector("#filter-topics:not([disabled])");
-    await library.waitForSelector(`#stream a[href^='/bookmarks/${id}?']`).catch(async error => {
+    await library.waitForSelector(`[data-facet='topics'][data-value='${topics[3]}']`, { state: "attached" });
+    await library.waitForSelector(`#rows a.row-main[href^='/bookmarks/${id}?']`).catch(async error => {
       process.stdout.write(`library diagnostic: ${JSON.stringify({
-        errors: pageErrors, status: await library.locator("#load-error").innerText(),
-        items: await library.locator("#stream").innerText(),
+        errors: pageErrors, status: await library.locator("#list-notice").innerText(),
+        items: await library.locator("#rows").innerText(),
         direct: await jsonFetch(`http://127.0.0.1:${goPort}/api/bookmarks?topics=${encodeURIComponent(topics[3])}&view=summary&filter_contract_version=1`)
       })}\n`);
       throw error;
     });
-    check("real blank-query library finds the fourth effective topic", await library.locator("#stream a.entry").count() === 1);
-    const selectedTopics = await library.$eval("#filter-topics", node => [...node.selectedOptions].map(option => option.value));
+    check("real blank-query library finds the fourth effective topic", await library.locator("#rows li.row").count() === 1);
+    const selectedTopics = await library.$$eval("[data-facet='topics'][aria-pressed='true']", nodes => nodes.map(node => node.dataset.value));
     check("real library restores a saved multi-topic filter", JSON.stringify(selectedTopics) === JSON.stringify([topics[3]]));
     for (const dimension of ["content_functions", "carriers", "affordances"]) {
       const terms = selection.payload.selection[dimension];
       if (!terms?.length) throw new Error(`fixture has no ${dimension}`);
-      await library.selectOption(`#filter-${dimension}`, terms[0]);
+      await toggleFacet(dimension, terms[0]);
     }
-    await library.selectOption("#filter-entity_state", "completed_nonempty");
-    await library.waitForFunction(() => document.querySelector("#loading").hidden && document.querySelectorAll("#stream a.entry").length === 1);
+    await toggleFacet("entity_state", "completed_nonempty");
+    await library.waitForFunction(() => document.querySelector("#list-pane").dataset.loading === "false" && document.querySelectorAll("#rows li.row").length === 1);
     const filteredURL = new URL(library.url());
     const filtered = await jsonFetch(`http://127.0.0.1:${goPort}/api/bookmarks?${filteredURL.searchParams}&filter_contract_version=1`);
     check("real multidimensional query returns confirmed membership and filtered counts", filtered.status === 200 && filtered.payload.filter_contract_version === 1 && filtered.payload.counts?.total === 1 && filtered.payload.items?.[0]?.id === id, JSON.stringify(filtered.payload).slice(0, 200));
@@ -195,13 +207,11 @@ async function main() {
     const filteredExport = await fetch(`http://127.0.0.1:${goPort}/api/export?${filteredURL.searchParams}&filter_contract_version=1`).then(response => response.text());
     check("real filtered export carries the matching full dimensions", filteredExport.includes(`收藏 ID：${id}`) && filteredExport.includes(topics[3]) && filteredExport.includes("内容功能："));
     await library.goto(`http://127.0.0.1:${goPort}/?topics=${encodeURIComponent(checked[0])}`, { waitUntil: "load" });
-    await library.waitForSelector(`#stream a[href^='/bookmarks/${id}?']`);
+    await library.waitForSelector(`#rows a.row-main[href^='/bookmarks/${id}?']`);
 
     // 5. A human reject reaches the real Worker and survives a refresh.
     const rejected = checked[0];
-    await page.click("#v2-curation > summary");
-    await page.waitForSelector(`#v2-topics input[value='${rejected}']`, { state: "visible" });
-    await page.click(`#v2-topics input[value='${rejected}']`);
+    await page.click(`#v2-topics .chip.on[data-term='${rejected}']`);
     await waitFor("the override to reach the real Worker", async () => {
       const overrides = await jsonFetch(`${workerURL}/api/v2/links/${id}/overrides`, { headers: auth(enricherToken) });
       return overrides.payload.overrides?.some((entry) => entry.field === "topics" && entry.action === "reject" && entry.term === rejected);
@@ -210,60 +220,62 @@ async function main() {
     const afterReject = await jsonFetch(`${workerURL}/api/v2/links/${id}/selection`, { headers: auth(enricherToken) });
     check("the effective view no longer contains the rejected topic", !(afterReject.payload.selection.topics || []).includes(rejected), JSON.stringify(afterReject.payload.selection.topics));
     await page.reload({ waitUntil: "load" });
-    await page.waitForSelector("#v2-curation:not([hidden])", { timeout: 30000 });
-    await page.click("#v2-curation > summary");
-    const afterReload = await page.$eval(`#v2-topics input[value='${rejected}']`, (node) => node.checked);
-    check("the refreshed UI shows the human decision", afterReload === false);
+    await page.waitForSelector("#v2-topics .chip.on", { timeout: 30000 });
+    check("the refreshed UI shows the human decision", !(await effectiveTopics()).includes(rejected));
     await library.reload({ waitUntil: "load" });
     await library.waitForSelector("#empty:not([hidden])");
-    check("real filtered library removes a confirmed human rejection", await library.locator("#stream a.entry").count() === 0 && !await library.isVisible("#load-error"));
-    await library.waitForSelector("#filter-topics:not([disabled])");
-    await library.selectOption("#filter-topics", [rejected, afterReject.payload.selection.topics[0]]);
-    await library.waitForSelector(`#stream a[href^='/bookmarks/${id}?']`);
-    check("real multi-topic OR includes the remaining accepted topic", await library.locator("#stream a.entry").count() === 1);
+    check("real filtered library removes a confirmed human rejection", await library.locator("#rows li.row").count() === 0 && !await library.isVisible("#list-notice"));
+    await library.waitForSelector(`[data-facet='topics'][data-value='${rejected}']`, { state: "attached" });
+    await toggleFacet("topics", afterReject.payload.selection.topics[0]);
+    await library.waitForSelector(`#rows a.row-main[href^='/bookmarks/${id}?']`);
+    check("real multi-topic OR includes the remaining accepted topic", await library.locator("#rows li.row").count() === 1);
     await library.close();
 
-    // 6. Re-selecting an earlier radio option must use action order, including
-    // after the next request reconstructs the effective view from D1 rows.
-    const carrierOptions = await page.$$eval("#v2-carriers input", (nodes) => nodes.map((node) => ({ value: node.value, checked: node.checked })));
+    // 6. Re-selecting an earlier single-valued option must use action order,
+    // including after the next request reconstructs the view from D1 rows.
+    await page.click("#v2-carriers [data-edit='carriers']");
+    const carrierOptions = await page.$$eval("#v2-carriers [data-field='carriers'][data-term]:not([data-term=''])", (nodes) => nodes.map((node) => ({ value: node.dataset.term, checked: node.classList.contains("on") })));
     const firstCarrier = carrierOptions.find((option) => !option.checked)?.value;
-    const secondCarrier = carrierOptions.find((option) => option.value !== firstCarrier)?.value;
-    if (!firstCarrier || !secondCarrier) throw new Error("expected two carrier choices in the real UI");
+    const secondCarrier = carrierOptions.find((option) => option.value !== firstCarrier && !option.checked)?.value
+      || carrierOptions.find((option) => option.value !== firstCarrier)?.value;
+    if (!firstCarrier || !secondCarrier) throw new Error(`expected two carrier choices in the real UI: ${JSON.stringify(carrierOptions)}`);
     for (const [index, term] of [firstCarrier, secondCarrier, firstCarrier].entries()) {
-      await page.click(`#v2-carriers input[value='${term}']`);
+      await page.click(`#v2-carriers [data-field='carriers'][data-term='${term}'][data-action='accept']`);
       await waitFor(`carrier choice ${index + 1} to persist`, async () => {
         const current = await jsonFetch(`${workerURL}/api/v2/links/${id}/selection`, { headers: auth(enricherToken) });
         return JSON.stringify(current.payload.selection?.carriers) === JSON.stringify([term]);
       }, 30000);
+      await page.waitForFunction(() => document.querySelector("#curate")?.getAttribute("aria-busy") !== "true");
       check(`carrier choice ${index + 1} is the last selected value`, true);
     }
     await page.reload({ waitUntil: "load" });
-    await page.waitForSelector("#v2-carriers input:checked", { state: "attached", timeout: 30000 });
-    check("carrier A survives refresh after A-B-A", await page.$eval("#v2-carriers input:checked", (node) => node.value) === firstCarrier);
+    await page.waitForSelector("#v2-carriers .chip.on", { state: "attached", timeout: 30000 });
+    check("carrier A survives refresh after A-B-A", await page.$eval("#v2-carriers .chip.on", (node) => node.dataset.term) === firstCarrier);
     const otherPage = await browser.newPage();
     await otherPage.goto(`http://127.0.0.1:${goPort}/bookmarks/${id}`, { waitUntil: "load" });
-    await otherPage.waitForSelector("#v2-carriers input:checked", { state: "attached", timeout: 30000 });
-    check("a second browser page reads the final carrier A", await otherPage.$eval("#v2-carriers input:checked", (node) => node.value) === firstCarrier);
+    await otherPage.waitForSelector("#v2-carriers .chip.on", { state: "attached", timeout: 30000 });
+    check("a second browser page reads the final carrier A", await otherPage.$eval("#v2-carriers .chip.on", (node) => node.dataset.term) === firstCarrier);
     await otherPage.close();
 
     // Entity processing uses the actual opt-in extension and model client.
     await page.waitForFunction(() => document.querySelector("#v2-entity-list")?.textContent.includes("BrowserEntity"));
-    check("the entity panel and reading header show the production entity", (await page.textContent("#read-entities")).includes("BrowserEntity"));
-    await page.click("#v2-entities > summary");
-    await page.click("#v2-entity-provenance > summary");
+    check("the entity row shows the production entity", (await page.textContent("#v2-entity-list")).includes("BrowserEntity"));
+    await page.click("#diagnostics > summary");
+    await page.waitForSelector("#v2-entity-observations li");
     check("real entity observations expose source occurrences and explicit unknown identity", (await page.textContent("#v2-entity-observations")).includes("原文「BrowserEntity」") && (await page.textContent("#v2-entity-observations")).includes("身份未确认"));
     await page.locator(".v2-entity", { hasText: "BrowserEntity" }).getByRole("button", { name: "移除" }).click();
     await page.waitForFunction(() => !document.querySelector("#v2-entity-list")?.textContent.includes("BrowserEntity"));
-    check("rejecting an entity also clears the reading header", !(await page.textContent("#read-entities")).includes("BrowserEntity"));
+    check("rejecting an entity removes it from the entity row", !(await page.textContent("#v2-entity-list")).includes("BrowserEntity"));
+    await page.waitForFunction(() => [...document.querySelectorAll("#v2-entity-observations li")].some((node) => node.textContent.includes("非当前有效结果")));
     check("rejected entity provenance remains an explicit historical judgment", (await page.locator("#v2-entity-observations li", { hasText: "BrowserEntity" }).first().textContent()).includes("非当前有效结果"));
     const serverExport = await fetch(`http://127.0.0.1:${goPort}/api/export`).then(response => response.text());
     check("server export excludes the rejected entity", !serverExport.includes("实体：BrowserEntity"));
     const downloadPromise = page.waitForEvent("download");
-    await page.click("#read-export");
+    await page.click("#detail-export");
     const download = await downloadPromise;
     let exported = "";
     for await (const chunk of await download.createReadStream()) exported += chunk;
-    check("the real export button excludes the rejected entity", !exported.includes("实体：BrowserEntity"));
+    check("the real export button excludes the rejected entity", exported.startsWith("# Cairn 收藏摘录") && !exported.includes("实体：BrowserEntity"));
     const currentEntities = await jsonFetch(`http://127.0.0.1:${goPort}/api/bookmarks/${id}/entities`);
     const restoredEntities = await jsonFetch(`http://127.0.0.1:${goPort}/api/bookmarks/${id}/entities`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
@@ -272,10 +284,15 @@ async function main() {
     });
     check("entity reset reaches the real Worker through Go", restoredEntities.status === 200 && restoredEntities.payload.entities?.includes("BrowserEntity"));
     await page.reload({ waitUntil: "load" });
-    await page.waitForFunction(() => document.querySelector("#read-entities")?.textContent.includes("BrowserEntity"));
+    await page.waitForFunction(() => document.querySelector("#v2-entity-list")?.textContent.includes("BrowserEntity"));
     check("a page reload restores the automatic entity after reset", (await page.textContent("#v2-entity-list")).includes("BrowserEntity"));
     const restoredExport = await fetch(`http://127.0.0.1:${goPort}/api/export`).then(response => response.text());
     check("server export includes the restored entity", restoredExport.includes("实体：BrowserEntity"));
+
+    // 7. Navigation counts come from the real Worker through the Go overview.
+    const overview = await jsonFetch(`http://127.0.0.1:${goPort}/api/overview`);
+    check("the real overview reports every navigation view", overview.status === 200 && ["all", "inbox", "kept", "compiled", "drop", "uncertain"].every((view) => Number.isInteger(overview.payload.views?.[view])), JSON.stringify(overview.payload));
+    check("the new bookmark is counted in the inbox", overview.payload.views?.inbox >= 1 && overview.payload.views?.all >= 1);
 
     check("no page errors during the real browser session", pageErrors.length === 0, pageErrors.join("; "));
   } finally {

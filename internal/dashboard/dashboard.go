@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"context"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -40,39 +39,6 @@ const (
 )
 
 var backstageAttentionStatuses = []string{"failed", "exhausted"}
-
-//go:embed index.html
-var indexHTML []byte
-
-//go:embed reader.html
-var readerHTML []byte
-
-//go:embed backstage.html
-var backstageHTML []byte
-
-//go:embed dashboard.css
-var dashboardCSS []byte
-
-//go:embed common.js
-var commonJS []byte
-
-//go:embed home.js
-var homeJS []byte
-
-//go:embed backstage.js
-var backstageJS []byte
-
-//go:embed reader.js
-var readerJS []byte
-
-//go:embed curation-v2.js
-var curationV2JS []byte
-
-//go:embed reader-v2-panels.js
-var readerV2PanelsJS []byte
-
-//go:embed download.svg
-var downloadSVG []byte
 
 // Backend provides the internal Cloudflare data plane used by the dashboard.
 type Backend interface {
@@ -157,6 +123,10 @@ type Server struct {
 	summaryMu       sync.Mutex
 	summaryCache    *backstageSummary
 	summaryCachedAt time.Time
+
+	// overview caches the navigation counts, which fan out to several
+	// upstream count queries.
+	overview overviewCache
 }
 
 // backstageSummaryTTL bounds backstage aggregation freshness. The page polls
@@ -297,37 +267,16 @@ func waitForWorkers(group *sync.WaitGroup, timeout time.Duration) bool {
 // Handler returns the complete health and management HTTP surface.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	// Every page route serves the same application shell; the client router
+	// renders the library, a bookmark or the backstage view from the URL.
 	mux.HandleFunc("GET /{$}", func(writer http.ResponseWriter, _ *http.Request) {
-		servePage(writer, indexHTML)
+		servePage(writer, appShell)
 	})
 	mux.HandleFunc("GET /bookmarks/{id}", serveReader)
 	mux.HandleFunc("GET /backstage", func(writer http.ResponseWriter, _ *http.Request) {
-		servePage(writer, backstageHTML)
+		servePage(writer, appShell)
 	})
-	mux.HandleFunc("GET /assets/dashboard.css", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "text/css; charset=utf-8", dashboardCSS)
-	})
-	mux.HandleFunc("GET /assets/common.js", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "text/javascript; charset=utf-8", commonJS)
-	})
-	mux.HandleFunc("GET /assets/home.js", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "text/javascript; charset=utf-8", homeJS)
-	})
-	mux.HandleFunc("GET /assets/backstage.js", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "text/javascript; charset=utf-8", backstageJS)
-	})
-	mux.HandleFunc("GET /assets/reader.js", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "text/javascript; charset=utf-8", readerJS)
-	})
-	mux.HandleFunc("GET /assets/curation-v2.js", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "text/javascript; charset=utf-8", curationV2JS)
-	})
-	mux.HandleFunc("GET /assets/reader-v2-panels.js", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "text/javascript; charset=utf-8", readerV2PanelsJS)
-	})
-	mux.HandleFunc("GET /assets/download.svg", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "image/svg+xml", downloadSVG)
-	})
+	mux.HandleFunc("GET /assets/{path...}", serveWebAsset)
 
 	healthHandler := s.tracker.Handler()
 	mux.Handle("GET /healthz", healthHandler)
@@ -355,6 +304,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/bookmarks/{id}", s.getBookmark)
 	mux.HandleFunc("GET /api/images/{key...}", s.getImage)
 	mux.HandleFunc("GET /api/backstage", s.getBackstage)
+	mux.HandleFunc("GET /api/overview", s.getOverview)
 	mux.HandleFunc("POST /api/bookmarks/process", s.processBookmarks)
 	mux.HandleFunc("POST /api/bookmarks/{id}/source", s.processBookmarkSource)
 	return mux
@@ -365,7 +315,7 @@ func serveReader(writer http.ResponseWriter, request *http.Request) {
 		http.NotFound(writer, request)
 		return
 	}
-	servePage(writer, readerHTML)
+	servePage(writer, appShell)
 }
 
 func servePage(writer http.ResponseWriter, content []byte) {
@@ -373,14 +323,6 @@ func servePage(writer http.ResponseWriter, content []byte) {
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.Header().Set("Content-Security-Policy", "default-src 'none'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 	writer.Header().Set("Referrer-Policy", "no-referrer")
-	writer.Header().Set("X-Content-Type-Options", "nosniff")
-	writer.WriteHeader(http.StatusOK)
-	_, _ = writer.Write(content)
-}
-
-func serveAsset(writer http.ResponseWriter, contentType string, content []byte) {
-	writer.Header().Set("Content-Type", contentType)
-	writer.Header().Set("Cache-Control", "no-cache")
 	writer.Header().Set("X-Content-Type-Options", "nosniff")
 	writer.WriteHeader(http.StatusOK)
 	_, _ = writer.Write(content)
@@ -475,6 +417,7 @@ func (s *Server) updateCuration(writer http.ResponseWriter, request *http.Reques
 		s.writeBackendError(writer, "update curation", id, err)
 		return
 	}
+	s.invalidateOverview()
 	writeJSON(writer, http.StatusOK, detail)
 }
 
@@ -629,6 +572,7 @@ func (s *Server) applyV2Override(writer http.ResponseWriter, request *http.Reque
 		s.writeBackendError(writer, "apply v2 override", id, err)
 		return
 	}
+	s.invalidateOverview()
 	writeJSON(writer, http.StatusOK, result)
 }
 
@@ -860,6 +804,8 @@ func (s *Server) processBookmarks(writer http.ResponseWriter, request *http.Requ
 	status := http.StatusAccepted
 	if len(accepted) == 0 {
 		status = http.StatusConflict
+	} else {
+		s.invalidateOverview()
 	}
 	writeJSON(writer, status, map[string]any{
 		"accepted": accepted,
@@ -922,6 +868,7 @@ func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http
 	}
 	s.queued.Add(1)
 	s.jobs <- manualJob{job: job, sourceText: sourceText}
+	s.invalidateOverview()
 	writeProcessingResult(writer, http.StatusAccepted, []int64{id}, nil)
 }
 

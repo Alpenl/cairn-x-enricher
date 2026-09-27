@@ -17,7 +17,7 @@ Cairn Share App -> 原有 Worker API -> D1 links
                                   |          +-> 独立 Jev 队列 -> 自动分类建议
                                   +-> 阅读增强请求 -> 标题、译文、摘要、R2 图片
 
-浏览器 -> NAS 收藏首页 -> 阅读页/搜索/后台重试 -> 同一处理流程
+浏览器 -> NAS 收藏库（列表 + 阅读 + 整理）-> 搜索/筛选/后台重试 -> 同一处理流程
 ```
 
 核心保证：
@@ -71,7 +71,7 @@ HTTP 服务在这两项检查通过后才开始监听，因此配置错误表现
 ```bash
 go test ./...
 make test-frontend   # 零依赖的前端逻辑检查，只需 Node
-make test-browser    # 真实 Chrome 驱动的多维整理验收（21 项，无付费调用）
+make test-browser    # 真实 Chrome 驱动的整理与收件箱验收（100+ 项，无付费调用）
 make ablation-architecture # 离线逐项移除行为，在临时副本运行回归
 make verify          # vet + golangci-lint + 上述检查 + 构建
 make test-ablation   # 离线重放已记录的消融结论，零模型调用
@@ -87,11 +87,14 @@ go run ./experiments/classification/main -dataset internal/evaluation/testdata/s
 
 `serve` 启动后立即执行一批任务，之后按 `POLL_INTERVAL` 运行，并在 `127.0.0.1:8080` 暴露：
 
-- `/`：收藏首页，支持主题、形态、用途、来源、整理状态和时间筛选；搜索覆盖原文、译文、摘要、实体、备注及收藏原因，命中处高亮；当前加载结果可导出 Markdown。
-- `/bookmarks/{id}`：阅读页，展示标题、图片、摘要和全文，原文默认收起；可确认分类、填写收藏原因、修改整理状态并导出单条收藏。
-- `/backstage`：后台页，只展示服务状态和需要人工处理的失败收藏，平时不需要打开。
+- `/`：收藏库。宽屏为“视图与筛选 / 列表 / 阅读”三栏，默认打开收件箱；左侧视图（收件箱、精选、已编入笔记、搁置、全部、待确认分类）带实时计数，筛选覆盖主题、内容功能、载体、潜在用途、来源、时间和实体状态（同类任一、跨类同时满足）。搜索覆盖原文、译文、摘要、实体、备注及收藏原因，命中处高亮。所有状态都在 URL 里，可收藏、分享和前进后退。
+- `/bookmarks/{id}`：同一应用中打开某条收藏；列表保持原位，阅读区展示标题、摘要、整理卡片、图片、译文和按需展开的原文。整理状态一键保存，收藏原因自动保存，标签逐项接受/移除，诊断与重算收在“分类依据与诊断”中。窄屏时阅读区全屏，底部是整理状态按钮。
+- `/backstage`：服务状态视图，展示队列计数和需要人工处理（重试或粘贴原文）的收藏，也可从侧栏底部的状态行进入。
+- 键盘优先：`J`/`K` 切换，`1`–`4` 设置整理状态并自动前进，`Z` 撤销，`R` 写收藏原因，`A` 确认 AI 标签，`X` 多选后批量整理，`/` 搜索，`G` 加字母跳转视图，`?` 查看全部快捷键。
 - `/api/backstage`：后台页使用的聚合状态，统一返回最近处理记录、失败计数和可手动重试条目。
-- `/api/bookmarks`：处理台的同源收藏列表代理。
+- `/api/overview`：导航计数，每个视图的数量与列表使用同一套过滤语义；短时缓存，整理后立即失效。
+- `/api/bookmarks`：收藏库的同源列表代理。
+- `/api/export`：按当前筛选导出 Markdown，自动翻页，单次最多 500 条（默认 200），不调用模型。
 - `/api/bookmarks/{id}`：包含完整原文的单条详情。
 - `/api/taxonomy`：当前标签词表的同源接口。
 - `/api/bookmarks/{id}/curation`：通过 `PATCH` 保存人工整理，不调用模型。
@@ -103,6 +106,15 @@ go run ./experiments/classification/main -dataset internal/evaluation/testdata/s
 - `/status`：最近一批的匿名统计、错误状态、就绪原因和构建信息。
 
 `once` 是适合 cron 和诊断的有界批处理命令，输出稳定 JSON；根命令不会隐式调用付费 API 或修改数据库。
+
+### 前端
+
+收藏库是 `internal/dashboard/web/` 下的原生 ES 模块和一份样式表，没有构建步骤，编译时嵌入二进制；资源带内容哈希 ETag，刷新时未变的文件只做 304 校验。严格 CSP 下不使用内联脚本或样式，用户内容只以文本写入页面。修改前端时可以用合成数据预览，不需要 Worker、模型或密钥：
+
+```bash
+node tests/browser/fixture-server.mjs --port 8099   # 打开 http://127.0.0.1:8099
+node tests/browser/fixture-server.mjs --v1          # 模拟未启用多维分类的旧 Worker
+```
 
 `classify` 仅消费 Jev 队列，不调用 X Search 或生成阅读增强。`classify --id 123` 会先将指定的已有原文入队，再消费队列（可能包含其他待处理条目）。新抓取的原文自动入队；历史收藏不会全库回填。
 
@@ -151,7 +163,7 @@ Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网�
 
 ## 安全
 
-不要提交 `.env`。处理台不向浏览器发送 Worker token 或模型密钥，但会展示收藏内容并允许触发付费模型请求，因此端口 `8088` 只应开放在可信局域网，不应配置公网端口转发。任何曾出现在聊天、终端历史或日志中的 API key 都应立即轮换，再更新运行环境。漏洞报告流程见 [SECURITY.md](SECURITY.md)。
+不要提交 `.env`。收藏库页面不向浏览器发送 Worker token 或模型密钥，但会展示收藏内容并允许触发付费模型请求，因此端口 `8088` 只应开放在可信局域网，不应配置公网端口转发。任何曾出现在聊天、终端历史或日志中的 API key 都应立即轮换，再更新运行环境。漏洞报告流程见 [SECURITY.md](SECURITY.md)。
 
 ## License
 
