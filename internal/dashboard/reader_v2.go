@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
@@ -290,77 +292,157 @@ func newestReplayableRun(runs []cairn.StoredRun) (cairn.StoredRun, error) {
 	return cairn.StoredRun{}, errors.New("no complete succeeded run")
 }
 
+// Export bounds. The list endpoint caps one page at maxPageSize for the UI;
+// the export pages on its own, up to the Worker's list maximum per request,
+// and hydrates each bookmark's effective view with a few concurrent reads.
+const (
+	defaultExportLimit = 200
+	maxExportLimit     = 500
+	exportPageSize     = 100
+	exportHydrators    = 4
+)
+
 // exportMarkdown streams a bounded Markdown export that carries every effective
 // v2 dimension, why/source, human origin and partial counts. It makes no model
 // call and changes no curation state (B05-T13/B06-T09).
 func (s *Server) exportMarkdown(writer http.ResponseWriter, request *http.Request) {
 	// The export honours the same filters as the list so the file matches what
-	// the user is looking at; the limit is bounded because the export hydrates
-	// each bookmark's effective view.
-	query, err := bookmarkQuery(request)
+	// the user is looking at. Its own limit is validated here, because a list
+	// page is capped far below what an export may cover.
+	limit := defaultExportLimit
+	values := request.URL.Query()
+	if raw := values.Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > maxExportLimit {
+			writeError(writer, http.StatusBadRequest, "invalid_query")
+			return
+		}
+		limit = parsed
+	}
+	values.Del("limit")
+	filtered := request.Clone(request.Context())
+	filtered.URL.RawQuery = values.Encode()
+	query, err := bookmarkQuery(filtered)
 	if err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid_query")
 		return
 	}
-	if query.Limit < 1 || query.Limit > 500 {
-		query.Limit = 200
-	}
-	page, err := s.backend.ListBookmarks(request.Context(), query)
+	// Only summary fields are exported, so the large bodies are never read.
+	query.SummaryOnly = true
+	items, truncated, err := s.collectExport(request.Context(), query, limit)
 	if err != nil {
 		s.writeBackendError(writer, "export bookmarks", 0, err)
 		return
 	}
-	v2, hasV2 := s.backend.(V2Backend)
+	views := s.hydrateExport(request.Context(), items)
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "# Cairn 收藏导出\n\n生成时间：%s\n\n", exportTimestamp())
-	fmt.Fprintf(&builder, "本页 %d 条；导出包含多维有效结果与人工来源，不调用模型。\n\n", len(page.Items))
+	fmt.Fprintf(&builder, "共 %d 条；导出包含多维有效结果与人工来源，不调用模型。\n\n", len(items))
+	if truncated {
+		fmt.Fprintf(&builder, "已达到单次导出上限 %d 条，还有更多符合条件的收藏没有导出，可缩小筛选范围后分批导出。\n\n", limit)
+	}
 	partial := 0
-	for _, item := range page.Items {
+	for index, item := range items {
 		fmt.Fprintf(&builder, "## %s\n\n", exportLine(item.URL))
 		fmt.Fprintf(&builder, "- 收藏 ID：%d\n- 来源：%s\n- 整理状态：%s\n", item.ID, exportLine(item.Source), exportLine(item.CurationStatus))
-		if hasV2 {
-			if payload, err := v2.GetV2Effective(request.Context(), item.ID); err == nil {
-				var view struct {
-					Effective struct {
-						Topics           []string `json:"topics"`
-						ContentFunctions []string `json:"content_functions"`
-						Carriers         []string `json:"carriers"`
-						Affordances      []string `json:"affordances"`
-						Form             string   `json:"form"`
-						Use              string   `json:"use"`
-						Reviewed         bool     `json:"reviewed"`
-						Entities         []string `json:"entities"`
-					} `json:"effective"`
-					Projected bool `json:"projected"`
-					Stale     bool `json:"stale"`
-				}
-				if json.Unmarshal(payload, &view) == nil {
-					fmt.Fprintf(&builder, "- 主题：%s\n", exportList(view.Effective.Topics))
-					fmt.Fprintf(&builder, "- 实体：%s\n", exportList(view.Effective.Entities))
-					fmt.Fprintf(&builder, "- 内容功能：%s\n", exportList(view.Effective.ContentFunctions))
-					fmt.Fprintf(&builder, "- 载体：%s\n", exportList(view.Effective.Carriers))
-					fmt.Fprintf(&builder, "- 潜在用途：%s\n", exportList(view.Effective.Affordances))
-					fmt.Fprintf(&builder, "- v1 形态/用途：%s / %s\n", exportLine(view.Effective.Form), exportLine(view.Effective.Use))
-					fmt.Fprintf(&builder, "- 结果来源：%s；人工整理：%t；过期：%t\n", map[bool]string{true: "decision", false: "legacy"}[view.Projected], view.Effective.Reviewed, view.Stale)
-					if !view.Projected || view.Stale {
-						partial++
-					}
-				}
+		if view := views[index]; view != nil {
+			fmt.Fprintf(&builder, "- 主题：%s\n", exportList(view.Effective.Topics))
+			fmt.Fprintf(&builder, "- 实体：%s\n", exportList(view.Effective.Entities))
+			fmt.Fprintf(&builder, "- 内容功能：%s\n", exportList(view.Effective.ContentFunctions))
+			fmt.Fprintf(&builder, "- 载体：%s\n", exportList(view.Effective.Carriers))
+			fmt.Fprintf(&builder, "- 潜在用途：%s\n", exportList(view.Effective.Affordances))
+			fmt.Fprintf(&builder, "- v1 形态/用途：%s / %s\n", exportLine(view.Effective.Form), exportLine(view.Effective.Use))
+			fmt.Fprintf(&builder, "- 结果来源：%s；人工整理：%t；过期：%t\n", map[bool]string{true: "decision", false: "legacy"}[view.Projected], view.Effective.Reviewed, view.Stale)
+			if !view.Projected || view.Stale {
+				partial++
 			}
 		}
-		for label, value := range map[string]string{"收藏原因": item.Why, "收藏备注": item.Note, "AI 标题": item.AITitle, "摘要": item.Summary} {
-			if strings.TrimSpace(value) != "" {
-				fmt.Fprintf(&builder, "\n### %s\n\n%s\n", label, exportLine(value))
+		for _, field := range []struct{ label, value string }{
+			{"收藏原因", item.Why}, {"收藏备注", item.Note}, {"AI 标题", item.AITitle}, {"摘要", item.Summary},
+		} {
+			if strings.TrimSpace(field.value) != "" {
+				fmt.Fprintf(&builder, "\n### %s\n\n%s\n", field.label, exportLine(field.value))
 			}
 		}
 		builder.WriteString("\n")
 	}
-	fmt.Fprintf(&builder, "---\n\n部分/过期结果：%d 条（共 %d 条）。\n", partial, len(page.Items))
+	fmt.Fprintf(&builder, "---\n\n部分/过期结果：%d 条（共 %d 条）。\n", partial, len(items))
 	writer.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	writer.Header().Set("Content-Disposition", `attachment; filename="cairn-export.md"`)
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(writer, builder.String())
+}
+
+// collectExport pages through the filtered list until the limit is reached.
+// truncated reports that more matching bookmarks exist beyond the limit.
+func (s *Server) collectExport(ctx context.Context, query cairn.BookmarkQuery, limit int) ([]cairn.Bookmark, bool, error) {
+	items := make([]cairn.Bookmark, 0, min(limit, exportPageSize))
+	for {
+		query.Limit = min(exportPageSize, limit-len(items))
+		page, err := s.backend.ListBookmarks(ctx, query)
+		if err != nil {
+			return nil, false, err
+		}
+		items = append(items, page.Items...)
+		if page.NextBeforeID == nil || len(page.Items) == 0 {
+			return items, false, nil
+		}
+		if len(items) >= limit {
+			return items[:limit], true, nil
+		}
+		query.BeforeID = *page.NextBeforeID
+	}
+}
+
+type exportView struct {
+	Effective struct {
+		Topics           []string `json:"topics"`
+		ContentFunctions []string `json:"content_functions"`
+		Carriers         []string `json:"carriers"`
+		Affordances      []string `json:"affordances"`
+		Form             string   `json:"form"`
+		Use              string   `json:"use"`
+		Reviewed         bool     `json:"reviewed"`
+		Entities         []string `json:"entities"`
+	} `json:"effective"`
+	Projected bool `json:"projected"`
+	Stale     bool `json:"stale"`
+}
+
+// hydrateExport reads every bookmark's effective view with bounded
+// concurrency, keeping the list order. A missing or unreadable view leaves
+// that entry nil; it is exported with its summary fields only.
+func (s *Server) hydrateExport(ctx context.Context, items []cairn.Bookmark) []*exportView {
+	views := make([]*exportView, len(items))
+	v2, ok := s.backend.(V2Backend)
+	if !ok || len(items) == 0 {
+		return views
+	}
+	next := make(chan int)
+	var wait sync.WaitGroup
+	for range min(exportHydrators, len(items)) {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			for index := range next {
+				payload, err := v2.GetV2Effective(ctx, items[index].ID)
+				if err != nil {
+					continue
+				}
+				var view exportView
+				if json.Unmarshal(payload, &view) == nil {
+					views[index] = &view
+				}
+			}
+		}()
+	}
+	for index := range items {
+		next <- index
+	}
+	close(next)
+	wait.Wait()
+	return views
 }
 
 func exportTimestamp() string {
