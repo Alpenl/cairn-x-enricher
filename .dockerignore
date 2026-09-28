@@ -5,6 +5,9 @@
 !.env.example
 bin
 dist
+experiments
+node_modules
+tests
 coverage.out
 *.prof
 docs
