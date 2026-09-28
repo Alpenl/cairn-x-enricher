@@ -170,6 +170,8 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	}
 	management := dashboard.New(ctx, tracker, queue, worker, logger, cfg.MaxConcurrency)
 	management.SetExtensions(worker.Extensions())
+	wakeup := make(chan struct{}, 1)
+	management.SetWakeup(wakeup)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           management.Handler(),
@@ -193,7 +195,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	schedulerDone := make(chan struct{})
 	go func() {
 		defer close(schedulerDone)
-		runScheduler(ctx, worker, tracker, cfg, logger)
+		runScheduler(ctx, worker, tracker, cfg, logger, wakeup)
 	}()
 
 	select {
@@ -246,6 +248,7 @@ func runScheduler(
 	tracker *health.Tracker,
 	cfg config.Config,
 	logger *slog.Logger,
+	wakeup ...<-chan struct{},
 ) {
 	// A batch can lease up to MAX_JOBS_PER_RUN jobs, so it must not inherit
 	// the shutdown context directly. Cancelling mid-batch would strand every
@@ -300,6 +303,10 @@ func runScheduler(
 	run()
 	ticker := time.NewTicker(cfg.PollInterval)
 	defer ticker.Stop()
+	var notified <-chan struct{}
+	if len(wakeup) > 0 {
+		notified = wakeup[0]
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -311,6 +318,8 @@ func runScheduler(
 			waitForBatch(&batch, batchTimeout(cfg), logger)
 			return
 		case <-ticker.C:
+			run()
+		case <-notified:
 			run()
 		}
 	}

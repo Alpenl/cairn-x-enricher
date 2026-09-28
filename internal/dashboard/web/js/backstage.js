@@ -1,6 +1,6 @@
 // Service status and the bookmarks that need a manual retry. It is a view in
 // the same shell, reached from the status line at the bottom of the sidebar.
-import { api, errorLabel } from "./api.js";
+import { api, errorLabel, prepareSourceSubmission } from "./api.js";
 import { byId, clear, h } from "./dom.js";
 import { displayTitle, formatRelative, shortURL } from "./format.js";
 import { icon } from "./icons.js";
@@ -30,6 +30,7 @@ function attentionRow(item) {
   const textarea = h("textarea.source-input", { name: "original_text", maxLength: 100000, rows: 7, placeholder: "粘贴原帖正文，会直接根据这段文字生成标题、译文和摘要" });
   const submit = h("button.btn.btn-sm.btn-primary", { type: "submit" }, "提交生成");
   const cancel = h("button.btn.btn-sm", { type: "button" }, "取消");
+  let submission = null;
   form.append(textarea, h("div.source-actions", cancel, submit));
 
   retry.addEventListener("click", async () => {
@@ -63,12 +64,14 @@ function attentionRow(item) {
     }
     submit.disabled = true;
     try {
-      const result = await api.submitSource(item.id, text);
+      submission = await prepareSourceSubmission(item.id, text, submission);
+      const result = await api.submitSource(item.id, submission);
       if (result.accepted.length) {
-        toast("已提交原文生成请求", { tone: "ok" });
+        toast("原文已保存，阅读内容已排队", { tone: "ok" });
         form.hidden = true;
         setTimeout(refresh, 900);
       } else {
+        if (["input_changed", "operation_conflict"].includes(result.rejected[0]?.error)) submission = null;
         toast(errorLabel(result.rejected[0]?.error), { tone: "error" });
       }
     } catch (error) {

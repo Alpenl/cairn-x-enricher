@@ -20,15 +20,19 @@ import (
 )
 
 type fakeBackend struct {
-	mu        sync.Mutex
-	query     cairn.BookmarkQuery
-	page      cairn.BookmarkPage
-	pages     map[string]cairn.BookmarkPage
-	detail    cairn.BookmarkDetail
-	jobs      map[int64]*cairn.Job
-	claimErrs map[int64]error
-	imageBody string
-	curation  cairn.CurationUpdate
+	mu                     sync.Mutex
+	query                  cairn.BookmarkQuery
+	page                   cairn.BookmarkPage
+	pages                  map[string]cairn.BookmarkPage
+	detail                 cairn.BookmarkDetail
+	jobs                   map[int64]*cairn.Job
+	claimErrs              map[int64]error
+	imageBody              string
+	curation               cairn.CurationUpdate
+	manualSourceText       string
+	manualOperationKey     string
+	manualExpectedRevision int64
+	manualSaveErr          error
 
 	// Counters let tests assert that handler-level caching actually removes
 	// upstream round trips.
@@ -109,6 +113,18 @@ func (b *fakeBackend) ClaimByID(_ context.Context, id int64) (*cairn.Job, error)
 		return nil, err
 	}
 	return b.jobs[id], nil
+}
+
+func (b *fakeBackend) SaveManualSource(_ context.Context, id int64, key string, expected int64, source string) (cairn.ManualSourceResult, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.manualSourceText = source
+	b.manualOperationKey = key
+	b.manualExpectedRevision = expected
+	if b.manualSaveErr != nil {
+		return cairn.ManualSourceResult{}, b.manualSaveErr
+	}
+	return cairn.ManualSourceResult{ID: id, Status: "source_saved", ContentRevision: expected + 1}, nil
 }
 
 type fakeProcessor struct {
@@ -351,7 +367,7 @@ func TestBackstageSummaryMarksAttentionItemsAsActionable(t *testing.T) {
 	}
 }
 
-func TestHandlerQueuesManualSourceText(t *testing.T) {
+func TestHandlerSavesManualSourceBeforeAcceptance(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	backend := &fakeBackend{
@@ -365,12 +381,14 @@ func TestHandlerQueuesManualSourceText(t *testing.T) {
 		processed: make(chan int64, 1),
 		sources:   sources,
 	}, testLogger(), 1)
+	wakeup := make(chan struct{}, 1)
+	server.SetWakeup(wakeup)
 
 	request := httptest.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
 		"/api/bookmarks/20/source",
-		strings.NewReader(`{"original_text":" 人工粘贴原文 "}`),
+		strings.NewReader(`{"original_text":" 人工粘贴原文 ","operation_key":"manual-20-1","expected_revision":7}`),
 	)
 	request.Header.Set("Content-Type", "application/json; charset=utf-8")
 	response := httptest.NewRecorder()
@@ -379,13 +397,41 @@ func TestHandlerQueuesManualSourceText(t *testing.T) {
 		t.Fatalf("POST /api/bookmarks/20/source status = %d, body = %s", response.Code, response.Body.String())
 	}
 
+	if backend.manualSourceText != "人工粘贴原文" || backend.manualOperationKey != "manual-20-1" || backend.manualExpectedRevision != 7 {
+		t.Fatalf("manual source save = %q, %q, %d", backend.manualSourceText, backend.manualOperationKey, backend.manualExpectedRevision)
+	}
+	select {
+	case <-wakeup:
+	default:
+		t.Fatal("scheduler was not notified")
+	}
 	select {
 	case got := <-sources:
-		if got.ID != 20 || got.SourceText != "人工粘贴原文" {
-			t.Fatalf("source process = %+v", got)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("manual source job was not processed")
+		t.Fatalf("source was processed through local queue: %+v", got)
+	default:
+	}
+}
+
+func TestHandlerDoesNotAcceptOrWakeWhenManualSourceSaveFails(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	backend := &fakeBackend{manualSaveErr: &cairn.APIError{StatusCode: http.StatusConflict, Code: "input_changed"}}
+	server := New(ctx, startedTracker(), backend, &fakeProcessor{processed: make(chan int64, 1),
+		sources: make(chan sourceProcess, 1)}, testLogger(), 1)
+	wakeup := make(chan struct{}, 1)
+	server.SetWakeup(wakeup)
+	request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/bookmarks/20/source",
+		strings.NewReader(`{"original_text":"post","operation_key":"manual-20-1","expected_revision":7}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "input_changed") {
+		t.Fatalf("failed save response = %d %s", response.Code, response.Body.String())
+	}
+	select {
+	case <-wakeup:
+		t.Fatal("failed save woke scheduler")
+	default:
 	}
 }
 

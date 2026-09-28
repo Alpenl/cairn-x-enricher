@@ -143,7 +143,10 @@ func TestClientListsAndGetsBookmarks(t *testing.T) {
 			}
 			_, _ = writer.Write([]byte(`{"items":[{"id":7,"url":"https://x.com/a/status/1","note":"手动备注","created_at":"2026-09-03T00:00:00Z","status":"completed","processable":true,"attempts":1,"ai_title":"人工智能生成的测试中文标题","original_language":"en","original_text":"完整原文","translated_text":"完整简体中文译文","summary":"摘要","related_links":["https://example.com/source"],"images":[{"key":"enrichment/7/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","content_type":"image/jpeg"}],"model":"grok-4.6","enriched_at":"2026-09-03T00:01:00Z"}],"next_before_id":7,"counts":{"total":3,"pending":1,"processing":0,"completed":1,"failed":0,"exhausted":0,"unsupported":1}}`))
 		case "/api/enrichment/jobs/7":
-			_, _ = writer.Write([]byte(`{"id":7,"url":"https://x.com/a/status/1","note":"手动备注","created_at":"2026-09-03T00:00:00Z","status":"completed","attempts":1,"ai_title":"人工智能生成的测试中文标题","original_language":"en","summary":"摘要","original_text":"完整原文","translated_text":"完整简体中文译文","related_links":[],"images":[],"model":"grok-4.6"}`))
+			if request.URL.Query().Get("include_cache_identity") != "1" {
+				t.Errorf("detail cache identity was not requested")
+			}
+			_, _ = writer.Write([]byte(`{"id":7,"url":"https://x.com/a/status/1","note":"手动备注","created_at":"2026-09-03T00:00:00Z","status":"completed","attempts":1,"ai_title":"人工智能生成的测试中文标题","original_language":"en","summary":"摘要","original_text":"完整原文","translated_text":"完整简体中文译文","related_links":[],"images":[],"model":"grok-4.6","cache_identity":{"schema_version":1,"content_revision":3,"body_revision":2,"personal_revision":0,"latest_decision_id":0,"latest_entity_revision":0}}`))
 		default:
 			http.NotFound(writer, request)
 		}
@@ -168,8 +171,40 @@ func TestClientListsAndGetsBookmarks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetBookmark() error = %v", err)
 	}
-	if detail.OriginalText != "完整原文" || detail.TranslatedText != "完整简体中文译文" || detail.Status != "completed" {
+	if detail.OriginalText != "完整原文" || detail.TranslatedText != "完整简体中文译文" || detail.Status != "completed" ||
+		detail.CacheIdentity == nil || detail.CacheIdentity.ContentRevision != 3 {
 		t.Fatalf("GetBookmark() = %+v", detail)
+	}
+}
+
+func TestClientSavesManualSourceAndChecksReceipt(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requests++
+		if request.URL.Path != "/api/enrichment/jobs/7/manual-source" || request.Method != http.MethodPost ||
+			request.Header.Get("Authorization") != "Bearer token" {
+			t.Errorf("manual source request = %s %s, auth %q", request.Method, request.URL.Path, request.Header.Get("Authorization"))
+		}
+		var body map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Errorf("decode source request: %v", err)
+		}
+		if body["operation_key"] != "op-7" || body["expected_revision"] != float64(3) || body["original_text"] != "full post" {
+			t.Errorf("source request body = %#v", body)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"id":7,"status":"source_saved","content_revision":4}`))
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "token", server.Client())
+	for range 2 {
+		receipt, err := client.SaveManualSource(context.Background(), 7, "op-7", 3, "full post")
+		if err != nil || receipt.ContentRevision != 4 || receipt.Status != "source_saved" {
+			t.Fatalf("SaveManualSource() = (%+v, %v)", receipt, err)
+		}
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want retry with same operation", requests)
 	}
 }
 

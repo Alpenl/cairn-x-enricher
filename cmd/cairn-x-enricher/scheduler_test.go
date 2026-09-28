@@ -24,6 +24,21 @@ type countingQueue struct {
 	calls atomic.Int64
 }
 
+type emptyNotifiedQueue struct{ claims chan struct{} }
+
+func (q *emptyNotifiedQueue) Claim(context.Context) (*cairn.Job, error) {
+	q.claims <- struct{}{}
+	return nil, nil
+}
+func (q *emptyNotifiedQueue) GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error) {
+	return cairn.BookmarkDetail{}, nil
+}
+func (q *emptyNotifiedQueue) StoreImages(context.Context, int64, string, []string) ([]cairn.ImageRef, error) {
+	return nil, nil
+}
+func (q *emptyNotifiedQueue) Complete(context.Context, int64, cairn.Completion) error { return nil }
+func (q *emptyNotifiedQueue) Fail(context.Context, int64, string, string) error       { return nil }
+
 func (q *countingQueue) Claim(ctx context.Context) (*cairn.Job, error) {
 	q.calls.Add(1)
 	<-ctx.Done()
@@ -188,5 +203,38 @@ func TestSchedulerStopsAdmittingNewBatchesAfterShutdown(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if got := queue.calls.Load(); got != after {
 		t.Fatalf("batches continued after shutdown: %d -> %d", after, got)
+	}
+}
+
+func TestSchedulerWakesAfterManualSourceSave(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	queue := &emptyNotifiedQueue{claims: make(chan struct{}, 2)}
+	worker := processor.New(queue, &noopEnricher{}, discardLogger(), 1)
+	tracker := health.NewTracker()
+	tracker.MarkStarted()
+	wakeup := make(chan struct{}, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runScheduler(ctx, worker, tracker, config.Config{MaxJobsPerRun: 1, PollInterval: time.Hour,
+			ShutdownTimeout: time.Second}, discardLogger(), wakeup)
+	}()
+	select {
+	case <-queue.claims:
+	case <-time.After(time.Second):
+		t.Fatal("initial claim did not run")
+	}
+	wakeup <- struct{}{}
+	select {
+	case <-queue.claims:
+	case <-time.After(time.Second):
+		t.Fatal("manual save did not wake scheduler")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("scheduler did not stop")
 	}
 }

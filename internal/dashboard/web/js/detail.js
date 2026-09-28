@@ -1,6 +1,6 @@
 // The reading pane: one bookmark with its status control, curation card,
 // images, translation, lazily rendered original text and diagnostics.
-import { api, errorLabel, imagePath } from "./api.js";
+import { api, errorLabel, imagePath, prepareSourceSubmission } from "./api.js";
 import * as curation from "./curation.js";
 import * as diagnostics from "./diagnostics.js";
 import { byId, clear, h } from "./dom.js";
@@ -283,6 +283,8 @@ export async function processItem(id) {
 
 export function pasteSource(id) {
   const textarea = h("textarea.source-input#source-text", { rows: 10, maxLength: 100000, placeholder: "把原帖正文粘贴到这里。会直接根据这段文字生成标题、译文和摘要，不再搜索 X。" });
+  let submission = null;
+  let baseRevision = getItem(id)?.cache_identity?.content_revision;
   openDialog({
     title: "粘贴原文生成",
     body: [textarea, h("p.dialog-detail", "会调用一次模型生成阅读内容；不会改动人工整理。")],
@@ -299,15 +301,20 @@ export function pasteSource(id) {
             return false;
           }
           try {
-            const result = await api.submitSource(id, text);
+            submission = await prepareSourceSubmission(id, text, submission, baseRevision);
+            const result = await api.submitSource(id, submission);
             if (!result.accepted.length) {
+              if (["input_changed", "operation_conflict"].includes(result.rejected[0]?.error)) {
+                submission = null;
+                baseRevision = null;
+              }
               toast(errorLabel(result.rejected[0]?.error), { tone: "error" });
               return false;
             }
-            toast("已提交原文生成请求", { tone: "ok" });
+            toast("原文已保存，阅读内容已排队", { tone: "ok" });
             const item = getItem(id);
             if (item) {
-              mergeItem({ ...item, status: "processing" });
+              mergeItem({ ...item, status: "pending" });
               emit("item", id);
             }
             if (id === currentId) setTimeout(() => refreshCurrent(), 900);

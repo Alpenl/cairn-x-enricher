@@ -107,6 +107,39 @@ type ClassificationJob struct {
 	classify.Input
 }
 
+// ManualSourceResult is a durable receipt for one pasted source operation.
+type ManualSourceResult struct {
+	ID              int64  `json:"id"`
+	Status          string `json:"status"`
+	ContentRevision int64  `json:"content_revision"`
+}
+
+// SaveManualSource atomically stores a pasted source and fences an older lease.
+// A retry with the same operation key returns the original receipt.
+func (c *Client) SaveManualSource(ctx context.Context, id int64, operationKey string, expectedRevision int64, originalText string) (ManualSourceResult, error) {
+	if id < 1 || operationKey == "" || expectedRevision < 0 || strings.TrimSpace(originalText) == "" {
+		return ManualSourceResult{}, errors.New("invalid manual source request")
+	}
+	response, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/enrichment/jobs/%d/manual-source", id), map[string]any{
+		"operation_key": operationKey, "expected_revision": expectedRevision, "original_text": originalText,
+	})
+	if err != nil {
+		return ManualSourceResult{}, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return ManualSourceResult{}, apiError(response)
+	}
+	var result ManualSourceResult
+	if err := decodeJSON(response.Body, &result); err != nil {
+		return ManualSourceResult{}, fmt.Errorf("decode manual source receipt: %w", err)
+	}
+	if result.ID != id || result.Status != "source_saved" || result.ContentRevision < 1 {
+		return ManualSourceResult{}, errors.New("manual source receipt is invalid")
+	}
+	return result, nil
+}
+
 // GetSource returns a snapshot only when it still matches the saved bookmark.
 func (c *Client) GetSource(ctx context.Context, id int64) (*enrich.Source, error) {
 	response, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/enrichment/jobs/%d/source", id), nil)

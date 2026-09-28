@@ -9,6 +9,9 @@ const ERROR_LABELS = Object.freeze({
   shutting_down: "服务正在重启，请稍后再试",
   invalid_ids: "所选收藏无效",
   invalid_source: "原文不能为空或过长",
+  input_changed: "这条收藏已更新，请核对原文后重试",
+  operation_conflict: "这次提交与先前请求不一致，请重新提交",
+  source_unsupported: "服务尚未支持安全保存原文，请稍后重试",
   invalid_curation: "整理内容无效，请检查标签和收藏原因",
   invalid_id: "收藏编号无效",
   invalid_query: "筛选条件无效",
@@ -82,6 +85,17 @@ async function processingRequest(path, body) {
   };
 }
 
+// Keep the operation key and source revision across a transport retry. A new
+// text value is a new action and reads the current revision before submission.
+export async function prepareSourceSubmission(id, text, previous, baseRevision) {
+  if (previous?.text === text) return previous;
+  const revision = Number.isSafeInteger(baseRevision)
+    ? baseRevision
+    : (await fetchJSON(`/api/bookmarks/${id}`)).cache_identity?.content_revision;
+  if (!Number.isSafeInteger(revision) || revision < 0) throw new APIError("source_unsupported", 503);
+  return { text, operation_key: newOperationKey(`manual-source-${id}`), expected_revision: revision };
+}
+
 const once = new Map();
 function cached(key, load) {
   if (!once.has(key)) {
@@ -108,7 +122,10 @@ export const api = {
   refreshSource: (id) => fetchJSON(`/api/bookmarks/${id}/refresh-source`, { method: "POST" }),
   replayPolicy: (id, commit) => fetchJSON(`/api/bookmarks/${id}/replay-policy`, jsonBody("POST", commit ? { commit: true } : {})),
   process: (ids) => processingRequest("/api/bookmarks/process", { ids }),
-  submitSource: (id, originalText) => processingRequest(`/api/bookmarks/${id}/source`, { original_text: originalText })
+  submitSource: (id, submission) => processingRequest(`/api/bookmarks/${id}/source`, {
+    original_text: submission.text, operation_key: submission.operation_key,
+    expected_revision: submission.expected_revision
+  })
 };
 
 export function imagePath(key) {

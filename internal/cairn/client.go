@@ -365,7 +365,7 @@ func (c *Client) GetBookmark(ctx context.Context, id int64) (BookmarkDetail, err
 	if id < 1 {
 		return BookmarkDetail{}, errors.New("bookmark ID must be positive")
 	}
-	path := fmt.Sprintf("/api/enrichment/jobs/%d", id)
+	path := fmt.Sprintf("/api/enrichment/jobs/%d?include_cache_identity=1", id)
 	response, err := c.do(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return BookmarkDetail{}, err

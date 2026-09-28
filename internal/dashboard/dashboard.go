@@ -46,6 +46,7 @@ type Backend interface {
 	GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error)
 	GetImage(context.Context, string) (*http.Response, error)
 	ClaimByID(context.Context, int64) (*cairn.Job, error)
+	SaveManualSource(context.Context, int64, string, int64, string) (cairn.ManualSourceResult, error)
 	GetTaxonomy(context.Context) (taxonomy.Catalog, error)
 	UpdateCuration(context.Context, int64, cairn.CurationUpdate) (cairn.BookmarkDetail, error)
 }
@@ -98,6 +99,7 @@ type Server struct {
 	processor   JobProcessor
 	logger      *slog.Logger
 	jobs        chan manualJob
+	wakeup      chan<- struct{}
 	workers     sync.WaitGroup
 
 	// enqueueMu serialises admission so capacity cannot be oversold.
@@ -179,6 +181,10 @@ func New(
 	}
 	return server
 }
+
+// SetWakeup connects durable manual submissions to the shared scheduler.
+// It is configured once before the HTTP server starts accepting requests.
+func (s *Server) SetWakeup(wakeup chan<- struct{}) { s.wakeup = wakeup }
 
 // Drain stops admitting new manual work and waits up to timeout for jobs that
 // were already leased to finish. Without this, an in-flight manual job would
@@ -829,7 +835,9 @@ func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http
 	decoder := json.NewDecoder(request.Body)
 	decoder.DisallowUnknownFields()
 	var body struct {
-		OriginalText string `json:"original_text"`
+		OriginalText     string `json:"original_text"`
+		OperationKey     string `json:"operation_key"`
+		ExpectedRevision *int64 `json:"expected_revision"`
 	}
 	if err := decoder.Decode(&body); err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid_json")
@@ -840,36 +848,46 @@ func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http
 		return
 	}
 	sourceText := strings.TrimSpace(body.OriginalText)
-	if sourceText == "" || len(sourceText) > maxSourceLength {
+	if sourceText == "" || len(sourceText) > maxSourceLength || body.OperationKey == "" ||
+		len(body.OperationKey) > 200 || body.ExpectedRevision == nil || *body.ExpectedRevision < 0 {
 		writeProcessingResult(writer, http.StatusConflict, nil, []rejection{{ID: id, Error: "invalid_source"}})
 		return
 	}
 
 	s.enqueueMu.Lock()
-	defer s.enqueueMu.Unlock()
-	if s.draining {
+	draining := s.draining
+	s.enqueueMu.Unlock()
+	if draining {
 		writeError(writer, http.StatusServiceUnavailable, "shutting_down")
 		return
 	}
-	if s.queued.Load()+1 > int64(cap(s.jobs)) {
-		writeError(writer, http.StatusServiceUnavailable, "queue_full")
+	started := time.Now()
+	receipt, saveErr := s.backend.SaveManualSource(request.Context(), id, body.OperationKey, *body.ExpectedRevision, sourceText)
+	if saveErr != nil {
+		code := publicErrorCode(saveErr)
+		s.logger.WarnContext(request.Context(), "manual source save rejected", "link_id", id,
+			"duration_ms", time.Since(started).Milliseconds(), "error", saveErr)
+		status := http.StatusBadGateway
+		if code == "input_changed" || code == "operation_conflict" || code == "not_found" || code == "invalid_source" {
+			status = http.StatusConflict
+		}
+		writeProcessingResult(writer, status, nil, []rejection{{ID: id, Error: code}})
 		return
 	}
-	job, claimErr := s.backend.ClaimByID(request.Context(), id)
-	if claimErr != nil {
-		code := publicErrorCode(claimErr)
-		s.logger.WarnContext(request.Context(), "manual source claim rejected", "link_id", id, "error", claimErr)
-		writeProcessingResult(writer, http.StatusConflict, nil, []rejection{{ID: id, Error: code}})
-		return
+	s.logger.InfoContext(request.Context(), "manual source persisted", "link_id", id,
+		"content_revision", receipt.ContentRevision,
+		"duration_ms", time.Since(started).Milliseconds())
+	if s.wakeup != nil {
+		select {
+		case s.wakeup <- struct{}{}:
+		default:
+		}
 	}
-	if job == nil {
-		writeProcessingResult(writer, http.StatusConflict, nil, []rejection{{ID: id, Error: "not_found"}})
-		return
-	}
-	s.queued.Add(1)
-	s.jobs <- manualJob{job: job, sourceText: sourceText}
 	s.invalidateOverview()
-	writeProcessingResult(writer, http.StatusAccepted, []int64{id}, nil)
+	writeJSON(writer, http.StatusAccepted, map[string]any{
+		"accepted": []int64{id}, "rejected": []rejection{},
+		"status": receipt.Status, "content_revision": receipt.ContentRevision,
+	})
 }
 
 // runJobSafely executes one manual job, converting a panic into an error so
@@ -1128,7 +1146,8 @@ func (s *Server) writeBackendError(writer http.ResponseWriter, operation string,
 
 func publicErrorCode(err error) string {
 	var apiErr *cairn.APIError
-	if errors.As(err, &apiErr) && (apiErr.Code == "not_found" || apiErr.Code == "job_busy") {
+	if errors.As(err, &apiErr) && (apiErr.Code == "not_found" || apiErr.Code == "job_busy" ||
+		apiErr.Code == "input_changed" || apiErr.Code == "operation_conflict" || apiErr.Code == "invalid_source") {
 		return apiErr.Code
 	}
 	return "backend_error"
