@@ -224,6 +224,18 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 			defer processor.RecoverTask(logger, "observability control server")
 			controlErrors <- controlServer.Serve(controlListener)
 		}()
+		go func() {
+			ticker := time.NewTicker(time.Hour)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					_ = observer.PruneAudit() // failures remain visible in control_audit_errors while logs are off
+				}
+			}
+		}()
 	}
 
 	serverErrors := make(chan error, 1)

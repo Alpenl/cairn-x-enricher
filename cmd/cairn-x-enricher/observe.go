@@ -26,6 +26,9 @@ func newObserveCommand() *cobra.Command {
 	command.AddCommand(&cobra.Command{Use: "show", Short: "Show desired and effective local observability state", RunE: func(cmd *cobra.Command, _ []string) error {
 		return callObserve(cmd.Context(), address, http.MethodGet, "/v1/observability", nil, cmd.OutOrStdout())
 	}})
+	command.AddCommand(&cobra.Command{Use: "audit", Short: "Show bounded private control-change history", RunE: func(cmd *cobra.Command, _ []string) error {
+		return callObserve(cmd.Context(), address, http.MethodGet, "/v1/observability/audit", nil, cmd.OutOrStdout())
+	}})
 	var mode string
 	var duration time.Duration
 	var expected uint64
@@ -77,9 +80,16 @@ func callObserve(ctx context.Context, address, method, path string, body any, ou
 		return err
 	}
 	defer func() { _ = response.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(response.Body, 4096))
+	limit := int64(4096)
+	if path == "/v1/observability/audit" {
+		limit = 256*1024 + 4096
+	}
+	data, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	if err != nil {
 		return err
+	}
+	if int64(len(data)) > limit {
+		return fmt.Errorf("observability control response exceeds %d bytes", limit)
 	}
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("observability control returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(data)))

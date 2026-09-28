@@ -29,6 +29,16 @@ func (s *Store) Handler() http.Handler {
 		}
 		writeControlJSON(w, http.StatusOK, s.Snapshot())
 	})
+	mux.HandleFunc("GET /v1/observability/audit", func(w http.ResponseWriter, r *http.Request) {
+		if !allowLocal(w, r) {
+			return
+		}
+		if err := s.PruneAudit(); err != nil {
+			writeControlJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "audit_unavailable"})
+			return
+		}
+		writeControlJSON(w, http.StatusOK, s.Audit())
+	})
 	mux.HandleFunc("PUT /v1/observability/logs", func(w http.ResponseWriter, r *http.Request) {
 		if !allowLocal(w, r) {
 			return
@@ -59,6 +69,8 @@ func (s *Store) Handler() http.Handler {
 			writeControlJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 		case errors.Is(err, ErrInvalidPolicy):
 			writeControlJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_config"})
+		case errors.Is(err, ErrAuditUnavailable):
+			writeControlJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "audit_unavailable", "applied_version": status.AppliedVersion})
 		case err != nil:
 			writeControlJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "persistence_unconfirmed", "applied_version": status.AppliedVersion})
 		default:

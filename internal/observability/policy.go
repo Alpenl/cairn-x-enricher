@@ -31,9 +31,10 @@ const (
 // Configuration errors let the control endpoint distinguish stale or overly
 // frequent writes from failures to persist a valid policy.
 var (
-	ErrVersionConflict = errors.New("observability configuration version conflict")
-	ErrRateLimited     = errors.New("observability configuration update rate limited")
-	ErrInvalidPolicy   = errors.New("invalid observability configuration")
+	ErrVersionConflict  = errors.New("observability configuration version conflict")
+	ErrRateLimited      = errors.New("observability configuration update rate limited")
+	ErrInvalidPolicy    = errors.New("invalid observability configuration")
+	ErrAuditUnavailable = errors.New("observability control audit unavailable")
 )
 
 // Policy is the persisted desired configuration. An expired diagnostic mode
@@ -50,24 +51,29 @@ type Policy struct {
 // Status distinguishes the persisted intent from the mode actually applied
 // in this process. The same version is retained when a timer expires.
 type Status struct {
-	Desired          Policy             `json:"desired"`
-	EffectiveLogs    LogMode            `json:"effective_logs"`
-	AppliedVersion   uint64             `json:"applied_version"`
-	MetricsAvailable bool               `json:"metrics_available"`
-	TracesAvailable  bool               `json:"traces_available"`
-	LogExporter      *LogExporterStatus `json:"log_exporter,omitempty"`
+	Desired               Policy             `json:"desired"`
+	EffectiveLogs         LogMode            `json:"effective_logs"`
+	AppliedVersion        uint64             `json:"applied_version"`
+	MetricsAvailable      bool               `json:"metrics_available"`
+	TracesAvailable       bool               `json:"traces_available"`
+	LogExporter           *LogExporterStatus `json:"log_exporter,omitempty"`
+	ControlAuditErrors    uint64             `json:"control_audit_errors"`
+	ControlAuditAvailable bool               `json:"control_audit_available"`
 }
 
 // Store owns the local log switch. Updates are persisted before publication,
 // so a failed write cannot make the running process disagree with the file.
 type Store struct {
-	mu         sync.Mutex
-	path       string
-	baseLevel  slog.Level
-	current    atomic.Pointer[Policy]
-	now        func() time.Time
-	lastUpdate time.Time
-	export     atomic.Pointer[asyncLogState]
+	mu          sync.Mutex
+	path        string
+	baseLevel   slog.Level
+	current     atomic.Pointer[Policy]
+	now         func() time.Time
+	lastUpdate  time.Time
+	export      atomic.Pointer[asyncLogState]
+	audit       controlAudit
+	auditReady  bool
+	auditErrors atomic.Uint64
 }
 
 // Open loads a previously saved policy or starts in basic mode. The directory
@@ -122,6 +128,15 @@ func Open(path string, baseLevel slog.Level) (*Store, error) {
 		return nil, fmt.Errorf("read observability policy: %w", err)
 	}
 	s.current.Store(&policy)
+	s.auditReady = true
+	if err := s.openAudit(); err != nil {
+		// A corrupt optional audit must not prevent ordinary processing. Keep
+		// the control plane read-only until an operator repairs it and restarts.
+		s.auditReady = false
+		if s.auditErrors.Load() == 0 {
+			s.auditErrors.Add(1)
+		}
+	}
 	return s, nil
 }
 
@@ -147,7 +162,8 @@ func validateSaved(policy Policy) error {
 // diagnostic period immediately falls back to its prior mode without another write.
 func (s *Store) Snapshot() Status {
 	desired := *s.current.Load()
-	status := Status{Desired: desired, EffectiveLogs: s.effectiveLogs(&desired), AppliedVersion: desired.Version}
+	status := Status{Desired: desired, EffectiveLogs: s.effectiveLogs(&desired), AppliedVersion: desired.Version,
+		ControlAuditErrors: s.auditErrors.Load(), ControlAuditAvailable: s.auditReady}
 	if exporter := s.export.Load(); exporter != nil {
 		stats := exporter.status()
 		status.LogExporter = &stats
@@ -167,6 +183,9 @@ func (s *Store) effectiveLogs(policy *Policy) LogMode {
 func (s *Store) Update(expected uint64, mode LogMode, ttl time.Duration) (Status, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if !s.auditReady {
+		return s.Snapshot(), ErrAuditUnavailable
+	}
 	previous := s.current.Load()
 	if previous.Version != expected {
 		return Status{}, ErrVersionConflict
@@ -197,12 +216,27 @@ func (s *Store) Update(expected uint64, mode LogMode, ttl time.Duration) (Status
 	default:
 		return Status{}, fmt.Errorf("%w: invalid log mode", ErrInvalidPolicy)
 	}
+	if err := s.appendAudit(ControlAuditEntry{At: now, Version: policy.Version,
+		ExpectedVersion: expected, Signal: "logs", Mode: mode, DiagnosticUntil: policy.DiagnosticUntil,
+		Actor: "container_loopback", Result: "started"}); err != nil {
+		return s.Snapshot(), fmt.Errorf("%w: %w", ErrAuditUnavailable, err)
+	}
 	committed, err := s.persist(policy)
 	if committed {
 		s.current.Store(&policy)
 		s.lastUpdate = nowRaw
 	}
-	return s.Snapshot(), err
+	result := "rejected"
+	if committed {
+		result = "applied"
+		if err != nil {
+			result = "unconfirmed"
+		}
+	}
+	auditErr := s.appendAudit(ControlAuditEntry{At: now, Version: policy.Version,
+		ExpectedVersion: expected, Signal: "logs", Mode: mode, DiagnosticUntil: policy.DiagnosticUntil,
+		Actor: "container_loopback", Result: result})
+	return s.Snapshot(), errors.Join(err, auditErr)
 }
 
 func (s *Store) persist(policy Policy) (bool, error) {
