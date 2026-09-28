@@ -33,11 +33,17 @@ import (
 
 func main() {
 	_ = godotenv.Load()
-	command := newRootCommand()
-	if err := command.Execute(); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "error:", err)
+	if executeCommand(newRootCommand(), os.Stderr) != 0 {
 		os.Exit(1)
 	}
+}
+
+func executeCommand(command *cobra.Command, stderr io.Writer) int {
+	if err := command.Execute(); err != nil {
+		_, _ = fmt.Fprintln(stderr, "error:", observability.SafeErrorCode(err))
+		return 1
+	}
+	return 0
 }
 
 func newRootCommand() *cobra.Command {

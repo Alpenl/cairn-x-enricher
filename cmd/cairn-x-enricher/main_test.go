@@ -1,13 +1,28 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 )
+
+func TestMainErrorDoesNotCopyPrivateCommandText(t *testing.T) {
+	const private = "private-source-token-123"
+	command := newRootCommand()
+	command.SetArgs([]string{private})
+	var stderr bytes.Buffer
+	if code := executeCommand(command, &stderr); code != 1 {
+		t.Fatalf("command exit = %d, output = %q", code, stderr.String())
+	}
+	if strings.Contains(stderr.String(), private) || !strings.Contains(stderr.String(), "error: unknown") {
+		t.Fatalf("unsafe command failure output: %q", stderr.String())
+	}
+}
 
 func TestIsContractFailureClassifiesConfigurationFaults(t *testing.T) {
 	// These statuses mean the deployment is misconfigured or the provider

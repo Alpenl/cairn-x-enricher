@@ -183,6 +183,10 @@ func safeErrorCode(value any) string {
 	return safeErrorClass(enrich.ClassOf(err))
 }
 
+// SafeErrorCode is suitable for the top-level command failure line, which may
+// be captured by Docker even when the structured exporter is disabled.
+func SafeErrorCode(err error) string { return safeErrorCode(err) }
+
 func safeErrorClass(class enrich.ErrorClass) string {
 	switch class {
 	case enrich.ErrorClassConfiguration, enrich.ErrorClassContract,
