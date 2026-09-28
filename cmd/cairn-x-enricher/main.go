@@ -60,16 +60,28 @@ func newRootCommand() *cobra.Command {
 			}
 			logger := newLogger(cfg.LogLevel)
 			var observer *observability.Store
+			var closeLogs func(context.Context) error
 			if cfg.ObservabilityConfigPath != "" {
 				observer, err = observability.Open(cfg.ObservabilityConfigPath, logLevel(cfg.LogLevel))
 				if err != nil {
 					return err
 				}
-				logger = observer.Logger(os.Stderr)
+				logger, closeLogs, err = observer.AsyncLogger(os.Stderr, 1024)
+				if err != nil {
+					return err
+				}
 			}
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
-			return runServe(ctx, cfg, logger, observer)
+			serveErr := runServe(ctx, cfg, logger, observer)
+			if closeLogs != nil {
+				// Diagnostics never delay shutdown indefinitely or change the
+				// business result if stderr or an optional collector is blocked.
+				drainCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				_ = closeLogs(drainCtx)
+				cancel()
+			}
+			return serveErr
 		},
 	})
 

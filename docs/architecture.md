@@ -32,7 +32,9 @@ pending
 
 ## 本地日志热开关
 
-新版本可用 `deploy/nas/compose.observability.yaml` 叠加持久配置卷；当前生产 Compose 仍钉在 v0.6.0，不应用该叠加文件。控制 HTTP 只监听容器内 `127.0.0.1:9090`，不向宿主机或局域网发布。管理员经 SSH 登录 NAS 后执行 `docker exec cairn-x-enricher /cairn-x-enricher observe show` 读取期望版本及实际模式，再用 `observe set-log --mode off|basic|diagnostic --expected-version <版本>` 修改；`diagnostic` 默认 15 分钟，最长 1 小时，到期自动回到进入诊断前的 off 或 basic。配置先写入卷再生效，响应丢失时先重新读取版本。`LOG_LEVEL` 是 basic 的最低日志级别；全局 off 关闭应用 JSON 日志。当前控制只覆盖 Go 日志；指标、链路、跨端版本传播、私有采集器和观察期报告仍按 #20 OBS-01–05 实施，状态接口明确标为不可用。
+新版本可用 `deploy/nas/compose.observability.yaml` 叠加持久配置卷；当前生产 Compose 仍钉在 v0.6.0，不应用该叠加文件。控制 HTTP 只监听容器内 `127.0.0.1:9090`，不向宿主机或局域网发布。管理员经 SSH 登录 NAS 后执行 `docker exec cairn-x-enricher /cairn-x-enricher observe show` 读取期望版本及实际模式，再用 `observe set-log --mode off|basic|diagnostic --expected-version <版本>` 修改；`diagnostic` 默认 15 分钟，最长 1 小时，到期自动回到进入诊断前的 off 或 basic。配置先写入卷再生效，响应丢失时先重新读取版本。`LOG_LEVEL` 是 basic 的最低日志级别；全局 off 关闭应用 JSON 日志。
+
+启用观测配置时，Go 日志经 1,024 条有界队列异步写入 stderr；输出阻塞时业务请求不等待，超额日志丢弃并累计计数。只读状态的 `log_exporter` 报告队列占用、丢弃与写入错误；关停最多等待 2 秒排空，避免采集端故障拖住退出。导出前按固定字段和值白名单过滤：原文、prompt、URL、异常详情、panic 和栈不会进入可选日志，错误仅保留固定类别与 HTTP 状态。此队列只负责日志传输，不能代替付费尝试的持久账本。当前控制只覆盖 Go 日志；指标、链路、跨端版本传播、私有采集器和观察期报告仍按 #20 OBS-01–05 实施，状态接口明确标为不可用。
 
 ## 组件
 

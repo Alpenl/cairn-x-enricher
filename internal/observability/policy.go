@@ -50,11 +50,12 @@ type Policy struct {
 // Status distinguishes the persisted intent from the mode actually applied
 // in this process. The same version is retained when a timer expires.
 type Status struct {
-	Desired          Policy  `json:"desired"`
-	EffectiveLogs    LogMode `json:"effective_logs"`
-	AppliedVersion   uint64  `json:"applied_version"`
-	MetricsAvailable bool    `json:"metrics_available"`
-	TracesAvailable  bool    `json:"traces_available"`
+	Desired          Policy             `json:"desired"`
+	EffectiveLogs    LogMode            `json:"effective_logs"`
+	AppliedVersion   uint64             `json:"applied_version"`
+	MetricsAvailable bool               `json:"metrics_available"`
+	TracesAvailable  bool               `json:"traces_available"`
+	LogExporter      *LogExporterStatus `json:"log_exporter,omitempty"`
 }
 
 // Store owns the local log switch. Updates are persisted before publication,
@@ -66,6 +67,7 @@ type Store struct {
 	current    atomic.Pointer[Policy]
 	now        func() time.Time
 	lastUpdate time.Time
+	export     atomic.Pointer[asyncLogState]
 }
 
 // Open loads a previously saved policy or starts in basic mode. The directory
@@ -145,11 +147,19 @@ func validateSaved(policy Policy) error {
 // diagnostic period immediately falls back to its prior mode without another write.
 func (s *Store) Snapshot() Status {
 	desired := *s.current.Load()
-	effective := desired.Logs
-	if effective == LogDiagnostic && !s.now().Before(desired.DiagnosticUntil) {
-		effective = desired.FallbackLogs
+	status := Status{Desired: desired, EffectiveLogs: s.effectiveLogs(&desired), AppliedVersion: desired.Version}
+	if exporter := s.export.Load(); exporter != nil {
+		stats := exporter.status()
+		status.LogExporter = &stats
 	}
-	return Status{Desired: desired, EffectiveLogs: effective, AppliedVersion: desired.Version}
+	return status
+}
+
+func (s *Store) effectiveLogs(policy *Policy) LogMode {
+	if policy.Logs == LogDiagnostic && !s.now().Before(policy.DiagnosticUntil) {
+		return policy.FallbackLogs
+	}
+	return policy.Logs
 }
 
 // Update requires compare-and-swap on the persisted version. Detailed logging
@@ -229,9 +239,8 @@ func (s *Store) persist(policy Policy) (bool, error) {
 	return true, handle.Sync()
 }
 
-// Logger returns a JSON logger whose level and hard-off gate follow the live
-// policy. The writer is supplied by the caller so output can later be routed
-// through a bounded exporter without changing business call sites.
+// Logger is a direct-writer helper for policy tests. It has no bounded queue
+// or private-field filter; the serve command uses AsyncLogger instead.
 func (s *Store) Logger(writer io.Writer) *slog.Logger {
 	base := slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: slog.LevelDebug})
 	return slog.New(&logGate{store: s, next: base})
@@ -243,7 +252,7 @@ type logGate struct {
 }
 
 func (h *logGate) Enabled(ctx context.Context, level slog.Level) bool {
-	mode := h.store.Snapshot().EffectiveLogs
+	mode := h.store.effectiveLogs(h.store.current.Load())
 	if mode == LogOff {
 		return false
 	}
