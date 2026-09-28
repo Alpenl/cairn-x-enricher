@@ -5,11 +5,68 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"regexp"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 )
 
 const providerAttemptPath = "/api/enrichment/provider-attempts"
+
+var providerOperationKeyPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
+
+// ProviderAttemptInspection contains only ledger metadata needed for a
+// read-only operator lookup. The Worker never returns prompt or lease hashes.
+type ProviderAttemptInspection struct {
+	OperationKey           string  `json:"operation_key"`
+	LinkID                 *int64  `json:"link_id"`
+	ContentRevision        *int64  `json:"content_revision"`
+	CurrentContentRevision *int64  `json:"current_content_revision"`
+	CurrentPaidUnresolved  *int64  `json:"current_paid_unresolved"`
+	Stage                  string  `json:"stage"`
+	Variant                string  `json:"variant"`
+	AttemptNumber          int     `json:"attempt_number"`
+	Model                  string  `json:"model"`
+	State                  string  `json:"state"`
+	ResponseID             *string `json:"response_id"`
+	HTTPStatus             *int    `json:"http_status"`
+	CreatedAt              string  `json:"created_at"`
+	SettledAt              *string `json:"settled_at"`
+	InputTokens            *int64  `json:"input_tokens"`
+	OutputTokens           *int64  `json:"output_tokens"`
+	TotalTokens            *int64  `json:"total_tokens"`
+	XSearchCalls           *int64  `json:"x_search_calls"`
+	CostUSDTicks           *int64  `json:"cost_usd_ticks"`
+	EvidenceKind           *string `json:"evidence_kind"`
+	ReconciledAt           *string `json:"reconciled_at"`
+}
+
+// InspectProviderAttempt requires a client configured with the distinct
+// operator token. It does not alter the permit, budget or blocked job.
+func (c *Client) InspectProviderAttempt(ctx context.Context, operationKey string) (ProviderAttemptInspection, error) {
+	if !providerOperationKeyPattern.MatchString(operationKey) {
+		return ProviderAttemptInspection{}, errors.New("invalid provider operation key")
+	}
+	response, err := c.do(ctx, http.MethodGet, providerAttemptPath+"/inspect?operation_key="+url.QueryEscape(operationKey), nil)
+	if err != nil {
+		return ProviderAttemptInspection{}, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return ProviderAttemptInspection{}, apiError(response)
+	}
+	var payload struct {
+		Attempt ProviderAttemptInspection `json:"attempt"`
+	}
+	if err := decodeJSON(response.Body, &payload); err != nil {
+		return ProviderAttemptInspection{}, fmt.Errorf("decode provider attempt inspection: %w", err)
+	}
+	if payload.Attempt.OperationKey != operationKey || payload.Attempt.Model == "" ||
+		payload.Attempt.Stage == "" || payload.Attempt.State == "" || payload.Attempt.CreatedAt == "" {
+		return ProviderAttemptInspection{}, errors.New("provider attempt inspection receipt is invalid")
+	}
+	return payload.Attempt, nil
+}
 
 // DeferSourceBudget returns an unused leased stage to the queue at the next
 // UTC budget window, without charging a task attempt or starting a model POST.

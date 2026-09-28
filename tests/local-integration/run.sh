@@ -53,7 +53,7 @@ start_worker() {
   "r2_buckets": [
     { "binding": "ENRICHMENT_IMAGES", "bucket_name": "cairn-x-enrichment-images-$name" }
   ],
-  "vars": { "CAIRN_API_TOKEN": "app", "CAIRN_ENRICHER_TOKEN": "internal" }
+  "vars": { "CAIRN_API_TOKEN": "app", "CAIRN_ENRICHER_TOKEN": "internal", "CAIRN_OPERATOR_TOKEN": "operator" }
 }
 EOF
   (cd "$share_root/worker" && ./node_modules/.bin/wrangler d1 migrations apply "cairn-share-$name" --local --config "$work/wrangler.jsonc" >"$work/migrations.log" 2>&1) \

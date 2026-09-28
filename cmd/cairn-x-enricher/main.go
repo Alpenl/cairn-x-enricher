@@ -126,6 +126,7 @@ func newRootCommand() *cobra.Command {
 	root.AddCommand(newObserveCommand())
 	root.AddCommand(newReplayCommand())
 	root.AddCommand(newRefreshSourceCommand())
+	root.AddCommand(newProviderInspectCommand())
 	root.AddCommand(newExportDatasetCommand())
 
 	var healthURL string

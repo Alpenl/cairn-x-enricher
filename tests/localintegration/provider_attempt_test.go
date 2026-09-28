@@ -85,6 +85,7 @@ func TestLocalWorkerProviderAttemptLedger(t *testing.T) {
 	}
 	items := readProviderAttempts(ctx, t, base, "internal")
 	var source, reading int
+	var sourceOperation string
 	for _, item := range items {
 		if item.LinkID != id {
 			continue
@@ -94,6 +95,7 @@ func TestLocalWorkerProviderAttemptLedger(t *testing.T) {
 		}
 		if item.Stage == "fetch" {
 			source++
+			sourceOperation = item.OperationKey
 		}
 		if item.Stage == "reading" {
 			reading++
@@ -101,6 +103,15 @@ func TestLocalWorkerProviderAttemptLedger(t *testing.T) {
 	}
 	if source != 1 || reading != 1 {
 		t.Fatalf("source=%d reading=%d items=%+v", source, reading, items)
+	}
+	operator := cairn.NewClient(base, "operator", httpClient)
+	known, err := operator.InspectProviderAttempt(ctx, sourceOperation)
+	if err != nil || known.State != "responded" || known.ResponseID == nil ||
+		*known.ResponseID != "resp_local_fixture" || known.LinkID == nil || *known.LinkID != id {
+		t.Fatalf("known provider inspection = %+v, err=%v", known, err)
+	}
+	if _, err := queue.InspectProviderAttempt(ctx, sourceOperation); err == nil {
+		t.Fatal("enricher token inspected an operator-only permit")
 	}
 	// A process loses the provider response after the server received its POST.
 	loseResponse.Store(true)
@@ -117,13 +128,20 @@ func TestLocalWorkerProviderAttemptLedger(t *testing.T) {
 	}
 	items = readProviderAttempts(ctx, t, base, "internal")
 	var unresolved int
+	var unknownOperation string
 	for _, item := range items {
 		if item.LinkID == failedID && item.State == "reserved" {
 			unresolved++
+			unknownOperation = item.OperationKey
 		}
 	}
 	if unresolved != 1 {
 		t.Fatalf("unresolved=%d items=%+v", unresolved, items)
+	}
+	unknown, err := operator.InspectProviderAttempt(ctx, unknownOperation)
+	if err != nil || unknown.State != "reserved" || unknown.ResponseID != nil ||
+		unknown.CurrentPaidUnresolved == nil || *unknown.CurrentPaidUnresolved != 1 {
+		t.Fatalf("unknown provider inspection = %+v, err=%v", unknown, err)
 	}
 	if claimed, err := queue.Claim(ctx); err != nil || claimed != nil {
 		t.Fatalf("unknown result reclaimed: %+v %v", claimed, err)
@@ -131,6 +149,7 @@ func TestLocalWorkerProviderAttemptLedger(t *testing.T) {
 }
 
 type providerAttemptView struct {
+	OperationKey string `json:"operation_key"`
 	LinkID       int64  `json:"link_id"`
 	Stage        string `json:"stage"`
 	State        string `json:"state"`
