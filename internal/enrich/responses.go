@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -44,6 +45,7 @@ type ResponsesClient struct {
 	userAgent  string
 	httpClient *http.Client
 	ledger     PaidAttemptLedger
+	logger     *slog.Logger
 	catalog    taxonomy.Catalog
 	renderer   *taxonomy.Renderer
 
@@ -54,6 +56,23 @@ type ResponsesClient struct {
 // SetPaidAttemptLedger wires the durable Worker budget into every model POST.
 // Production installs it before the startup canary or any queue work.
 func (c *ResponsesClient) SetPaidAttemptLedger(ledger PaidAttemptLedger) { c.ledger = ledger }
+
+// SetLogger attaches the optional, dynamically controlled diagnostic exporter.
+// Provider accounting remains in the Worker ledger when logging is off.
+func (c *ResponsesClient) SetLogger(logger *slog.Logger) { c.logger = logger }
+
+func (c *ResponsesClient) logPaidAttempt(ctx context.Context, level slog.Level,
+	event, stage, variant string, started time.Time, extra ...slog.Attr) {
+	if c.ledger == nil || c.logger == nil || !c.logger.Enabled(ctx, level) {
+		return
+	}
+	attrs := []slog.Attr{
+		slog.Int("schema_version", 1), slog.String("event_name", event),
+		slog.String("stage", stage), slog.String("provider_variant", variant),
+		slog.Int64("duration_ms", time.Since(started).Milliseconds()),
+	}
+	c.logger.LogAttrs(ctx, level, "provider attempt", append(attrs, extra...)...)
+}
 
 // ModelHTTPError reports a non-success status from the model endpoint.
 //
@@ -238,29 +257,46 @@ func (c *ResponsesClient) invokePayload(ctx context.Context, input Input, stage,
 			reservation.ContentRevision = input.ContentRevision
 			reservation.MinRemainingMS = input.MinRemainingMS
 		}
+		reserveStarted := time.Now()
 		granted, err := c.ledger.ReserveProviderAttempt(ctx, reservation)
 		if err != nil {
+			c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_denied", stage, variant,
+				reserveStarted, slog.String("error_class", string(ClassOf(err))))
 			return responseEnvelope{}, "", fmt.Errorf("reserve paid model attempt: %w", err)
 		}
 		if !granted {
+			c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_denied", stage, variant,
+				reserveStarted, slog.String("provider_reason", "already_reserved"))
 			return responseEnvelope{}, "", errors.New("paid model attempt was already reserved or budget exhausted")
 		}
+		c.logPaidAttempt(ctx, slog.LevelInfo, "provider_attempt_reserved", stage, variant, reserveStarted)
 	}
+	providerStarted := time.Now()
 	response, err := c.httpClient.Do(request)
 	if err != nil {
+		c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_unknown", stage, variant,
+			providerStarted, slog.String("provider_reason", "network_unknown"))
 		return responseEnvelope{}, operationKey, fmt.Errorf("call model API: %w", err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		if err := c.settleAttempt(ctx, ProviderSettlement{OperationKey: operationKey,
 			HTTPStatus: response.StatusCode}); err != nil {
+			c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_unknown", stage, variant,
+				providerStarted, slog.Int("provider_http_status", response.StatusCode),
+				slog.String("provider_reason", "settlement_failed"))
 			return responseEnvelope{}, operationKey, err
 		}
+		c.logPaidAttempt(ctx, slog.LevelInfo, "provider_attempt_responded", stage, variant,
+			providerStarted, slog.Int("provider_http_status", response.StatusCode))
 		return responseEnvelope{}, operationKey, readModelHTTPError(response)
 	}
 	var envelope responseEnvelope
 	decoder := json.NewDecoder(io.LimitReader(response.Body, maxModelResponseBytes))
 	if err := decoder.Decode(&envelope); err != nil {
+		c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_unknown", stage, variant,
+			providerStarted, slog.Int("provider_http_status", response.StatusCode),
+			slog.String("provider_reason", "decode_failed"))
 		return responseEnvelope{}, operationKey, fmt.Errorf("decode model response: %w", err)
 	}
 	settlement := ProviderSettlement{OperationKey: operationKey, HTTPStatus: response.StatusCode,
@@ -271,7 +307,29 @@ func (c *ResponsesClient) invokePayload(ctx context.Context, input Input, stage,
 		settlement.ResponseID = &envelope.ID
 	}
 	if err := c.settleAttempt(ctx, settlement); err != nil {
+		c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_unknown", stage, variant,
+			providerStarted, slog.Int("provider_http_status", response.StatusCode),
+			slog.String("provider_reason", "settlement_failed"))
 		return responseEnvelope{}, operationKey, err
+	}
+	if c.ledger != nil && c.logger != nil && c.logger.Enabled(ctx, slog.LevelInfo) {
+		attrs := []slog.Attr{slog.Int("provider_http_status", response.StatusCode)}
+		if settlement.InputTokens != nil {
+			attrs = append(attrs, slog.Int64("input_tokens", *settlement.InputTokens))
+		}
+		if settlement.OutputTokens != nil {
+			attrs = append(attrs, slog.Int64("output_tokens", *settlement.OutputTokens))
+		}
+		if settlement.TotalTokens != nil {
+			attrs = append(attrs, slog.Int64("total_tokens", *settlement.TotalTokens))
+		}
+		if settlement.XSearchCalls != nil {
+			attrs = append(attrs, slog.Int64("x_search_calls", *settlement.XSearchCalls))
+		}
+		if settlement.CostUSDTicks != nil {
+			attrs = append(attrs, slog.Int64("cost_usd_ticks", *settlement.CostUSDTicks))
+		}
+		c.logPaidAttempt(ctx, slog.LevelInfo, "provider_attempt_responded", stage, variant, providerStarted, attrs...)
 	}
 	return envelope, operationKey, nil
 }

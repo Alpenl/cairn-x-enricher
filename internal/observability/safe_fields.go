@@ -19,6 +19,9 @@ var numericLogFields = map[string]bool{
 	"duration_ms": true, "content_revision": true, "original_text_bytes": true,
 	"related_links": true, "images": true, "discarded_tags": true,
 	"declared": true, "written": true, "timeout": true,
+	"schema_version": true, "provider_http_status": true,
+	"input_tokens": true, "output_tokens": true, "total_tokens": true,
+	"x_search_calls": true, "cost_usd_ticks": true,
 }
 
 func safeLogAttrs(attrs []slog.Attr) []slog.Attr {
@@ -51,7 +54,14 @@ func safeLogAttr(attr slog.Attr) (slog.Attr, bool) {
 func safeLogDimension(key, value string) bool {
 	switch key {
 	case "stage":
-		return oneOf(value, "source", "fetch", "reading", "classification", "evidence")
+		return oneOf(value, "source", "fetch", "reading", "canary", "classification", "evidence")
+	case "event_name":
+		return oneOf(value, "provider_attempt_reserved", "provider_attempt_denied",
+			"provider_attempt_responded", "provider_attempt_unknown")
+	case "provider_variant":
+		return oneOf(value, "fetch_thread", "fetch_post", "reading", "canary")
+	case "provider_reason":
+		return oneOf(value, "already_reserved", "network_unknown", "decode_failed", "settlement_failed")
 	case "component":
 		return oneOf(value, "source", "classification", "evidence", "web", "scheduler")
 	case "status":

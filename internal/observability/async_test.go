@@ -43,6 +43,37 @@ func TestAsyncLoggerDrainsStructuredRecords(t *testing.T) {
 	}
 }
 
+func TestPaidAttemptEventsKeepOnlySafeDimensions(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "observability.json"), slog.LevelInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	logger, closeExporter, err := store.AsyncLogger(&output, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logger.Info("provider attempt", "schema_version", 1,
+		"event_name", "provider_attempt_responded", "stage", "fetch",
+		"provider_variant", "fetch_post", "provider_http_status", 200,
+		"cost_usd_ticks", 1234, "operation_key", "private-operation",
+		"response_id", "private-response", "prompt", "private-prompt")
+	if err := closeExporter(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	log := output.String()
+	for _, want := range []string{`"event_name":"provider_attempt_responded"`,
+		`"provider_variant":"fetch_post"`, `"cost_usd_ticks":1234`} {
+		if !strings.Contains(log, want) {
+			t.Fatalf("safe paid event field %q missing: %s", want, log)
+		}
+	}
+	if strings.Contains(log, "private-") || strings.Contains(log, "operation_key") ||
+		strings.Contains(log, "response_id") || strings.Contains(log, "prompt") {
+		t.Fatalf("private paid event field leaked: %s", log)
+	}
+}
+
 type blockedWriter struct {
 	once    sync.Once
 	entered chan struct{}

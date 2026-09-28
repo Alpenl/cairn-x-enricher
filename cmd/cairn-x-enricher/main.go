@@ -485,6 +485,7 @@ func newProcessor(
 		catalog,
 	)
 	model.SetPaidAttemptLedger(queue)
+	model.SetLogger(logger)
 	if _, err := model.Transform(ctx, enrich.Input{URL: "https://x.com/canary/status/0", Attempt: 1,
 		SourceText: "Canary check: validate structured reading aids.", Canary: true}); err != nil {
 		// A contract break must fail loudly at startup instead of silently

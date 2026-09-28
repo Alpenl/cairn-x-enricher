@@ -1,10 +1,13 @@
 package enrich
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -68,6 +71,8 @@ func TestPaidSourceAttemptIsReservedBeforePOSTAndSettledWithUsage(t *testing.T) 
 	defer server.Close()
 	client := NewResponsesClient(server.URL, "key", "grok-test", 1024, "", server.Client(), testTaxonomy())
 	client.SetPaidAttemptLedger(ledger)
+	var diagnostic bytes.Buffer
+	client.SetLogger(slog.New(slog.NewJSONHandler(&diagnostic, nil)))
 	input := Input{ID: 7, URL: "https://x.com/a/status/7", LeaseToken: "lease-7",
 		ContentRevision: 3, MinRemainingMS: 210_000}
 	source, err := client.FetchSource(context.Background(), input)
@@ -85,6 +90,13 @@ func TestPaidSourceAttemptIsReservedBeforePOSTAndSettledWithUsage(t *testing.T) 
 		*s.ResponseID != "resp_test_1" || s.CostUSDTicks == nil || *s.CostUSDTicks != 1234 ||
 		s.XSearchCalls == nil || *s.XSearchCalls != 1 {
 		t.Fatalf("reservation=%+v settlement=%+v", a, s)
+	}
+	if log := diagnostic.String(); !strings.Contains(log, `"event_name":"provider_attempt_reserved"`) ||
+		!strings.Contains(log, `"event_name":"provider_attempt_responded"`) ||
+		!strings.Contains(log, `"cost_usd_ticks":1234`) ||
+		strings.Contains(log, input.LeaseToken) || strings.Contains(log, input.URL) ||
+		strings.Contains(log, a.OperationKey) || strings.Contains(log, "resp_test_1") {
+		t.Fatalf("paid diagnostic event was incomplete or leaked identity: %s", log)
 	}
 	// Re-entering the same leased operation cannot obtain a second permit.
 	_, err = client.FetchSource(context.Background(), input)
@@ -108,12 +120,18 @@ func TestLostProviderResponseLeavesPaidAttemptUnsettledAndStopsFallback(t *testi
 	defer server.Close()
 	client := NewResponsesClient(server.URL, "key", "grok-test", 1024, "", server.Client(), testTaxonomy())
 	client.SetPaidAttemptLedger(ledger)
+	var diagnostic bytes.Buffer
+	client.SetLogger(slog.New(slog.NewJSONHandler(&diagnostic, nil)))
 	_, err := client.FetchSource(context.Background(), Input{ID: 8, URL: "https://x.com/a/status/8",
 		LeaseToken: "lease-8", ContentRevision: 1, MinRemainingMS: 210_000})
 	if err == nil || posts.Load() != 1 || len(ledger.reservations) != 1 ||
 		len(ledger.settlements) != 0 || len(ledger.authorizations) != 0 {
 		t.Fatalf("posts=%d reserve=%d settle=%d fallback=%d error=%v", posts.Load(),
 			len(ledger.reservations), len(ledger.settlements), len(ledger.authorizations), err)
+	}
+	if !strings.Contains(diagnostic.String(), `"event_name":"provider_attempt_unknown"`) ||
+		!strings.Contains(diagnostic.String(), `"provider_reason":"network_unknown"`) {
+		t.Fatalf("unknown attempt event missing: %s", diagnostic.String())
 	}
 }
 
