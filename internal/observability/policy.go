@@ -51,14 +51,23 @@ type Policy struct {
 // Status distinguishes the persisted intent from the mode actually applied
 // in this process. The same version is retained when a timer expires.
 type Status struct {
-	Desired               Policy             `json:"desired"`
-	EffectiveLogs         LogMode            `json:"effective_logs"`
-	AppliedVersion        uint64             `json:"applied_version"`
-	MetricsAvailable      bool               `json:"metrics_available"`
-	TracesAvailable       bool               `json:"traces_available"`
-	LogExporter           *LogExporterStatus `json:"log_exporter,omitempty"`
-	ControlAuditErrors    uint64             `json:"control_audit_errors"`
-	ControlAuditAvailable bool               `json:"control_audit_available"`
+	Desired                Policy             `json:"desired"`
+	EffectiveLogs          LogMode            `json:"effective_logs"`
+	AppliedVersion         uint64             `json:"applied_version"`
+	MetricsAvailable       bool               `json:"metrics_available"`
+	TracesAvailable        bool               `json:"traces_available"`
+	LogExporter            *LogExporterStatus `json:"log_exporter,omitempty"`
+	ControlAuditErrors     uint64             `json:"control_audit_errors"`
+	ControlAuditAvailable  bool               `json:"control_audit_available"`
+	WorkerPersistedVersion *uint64            `json:"worker_persisted_version,omitempty"`
+	WorkerPublishState     string             `json:"worker_publish_state"`
+	WorkerLastConfirmedAt  *time.Time         `json:"worker_last_confirmed_at,omitempty"`
+}
+
+type workerPublishState struct {
+	version     *uint64
+	state       string
+	confirmedAt time.Time
 }
 
 // Store owns the local log switch. Updates are persisted before publication,
@@ -74,6 +83,7 @@ type Store struct {
 	audit       controlAudit
 	auditReady  bool
 	auditErrors atomic.Uint64
+	worker      atomic.Pointer[workerPublishState]
 }
 
 // Open loads a previously saved policy or starts in basic mode. The directory
@@ -163,12 +173,42 @@ func validateSaved(policy Policy) error {
 func (s *Store) Snapshot() Status {
 	desired := *s.current.Load()
 	status := Status{Desired: desired, EffectiveLogs: s.effectiveLogs(&desired), AppliedVersion: desired.Version,
-		ControlAuditErrors: s.auditErrors.Load(), ControlAuditAvailable: s.auditReady}
+		ControlAuditErrors: s.auditErrors.Load(), ControlAuditAvailable: s.auditReady,
+		WorkerPublishState: "pending"}
+	if published := s.worker.Load(); published != nil {
+		status.WorkerPersistedVersion = published.version
+		status.WorkerPublishState = published.state
+		if !published.confirmedAt.IsZero() {
+			confirmedAt := published.confirmedAt
+			status.WorkerLastConfirmedAt = &confirmedAt
+		}
+		if published.version != nil && *published.version < desired.Version && published.state == "confirmed" {
+			status.WorkerPublishState = "pending"
+		}
+	}
 	if exporter := s.export.Load(); exporter != nil {
 		stats := exporter.status()
 		status.LogExporter = &stats
 	}
 	return status
+}
+
+// SetWorkerPublishResult records only safe control status. A confirmed version
+// means durable acceptance by one Worker request, not all isolates refreshed.
+func (s *Store) SetWorkerPublishResult(version *uint64, state string) {
+	previous := s.worker.Load()
+	next := &workerPublishState{state: state}
+	if previous != nil {
+		next.version = previous.version
+		next.confirmedAt = previous.confirmedAt
+	}
+	if version != nil {
+		confirmed := *version
+		next.version = &confirmed
+		next.confirmedAt = time.Now().UTC()
+		next.state = "confirmed"
+	}
+	s.worker.Store(next)
 }
 
 func (s *Store) effectiveLogs(policy *Policy) LogMode {

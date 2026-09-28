@@ -219,6 +219,10 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 	if observer != nil {
 		auditCtx, stopAudit := context.WithCancel(ctx)
 		defer stopAudit()
+		go func() {
+			defer processor.RecoverTask(logger, "Worker observability publisher")
+			runWorkerPolicyPublisher(auditCtx, observer, queue)
+		}()
 		controlServer = &http.Server{Handler: observer.Handler(), ReadHeaderTimeout: 5 * time.Second,
 			ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
 		controlErrors = make(chan error, 1)
