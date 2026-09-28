@@ -101,6 +101,8 @@ run_case() {
   (
     cd "$enricher_root"
     CAIRN_WORKER_URL="http://127.0.0.1:$port" \
+    CAIRN_WRANGLER_CONFIG="$work/wrangler.jsonc" \
+    CAIRN_SHARE_ROOT="$share_root" \
     CAIRN_APP_TOKEN=app \
     CAIRN_ENRICHER_TOKEN=internal \
     go test ./tests/localintegration/ -run "$test_name" -count=1 -v
@@ -111,6 +113,7 @@ run_case() {
 run_case lifecycle TestLocalWorkerFullLifecycle
 run_case sourcelease TestLocalWorkerSourceLeaseAdmission
 run_case providerledger TestLocalWorkerProviderAttemptLedger
+run_case providerrecovery TestLocalWorkerProviderReadingRecovery
 run_case manualrestart TestLocalWorkerManualSourceSurvivesProcessExit
 run_case competition TestLocalWorkerVersionCompetition
 run_case rename TestLocalWorkerDisplayRenameKeepsSemantics

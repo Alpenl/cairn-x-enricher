@@ -74,6 +74,39 @@ func RetrieveStoredSource(ctx context.Context, baseURL, apiKey, responseID strin
 	return summary, source, nil
 }
 
+// RetrieveStoredReading validates a saved reading response against the current
+// persisted source. The model is allowed to supply reading fields only; source
+// text and links are copied from that source and verified by validateReading.
+func RetrieveStoredReading(ctx context.Context, baseURL, apiKey, responseID string,
+	source Source, httpClient *http.Client) (StoredResponseSummary, ReadingResult, error) {
+	body, err := retrieveStoredResponseBody(ctx, baseURL, apiKey, responseID, httpClient)
+	if err != nil {
+		return StoredResponseSummary{}, ReadingResult{}, err
+	}
+	summary, err := storedResponseSummary(body, responseID)
+	if err != nil {
+		return StoredResponseSummary{}, ReadingResult{}, err
+	}
+	var envelope responseEnvelope
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return StoredResponseSummary{}, ReadingResult{}, errors.New("invalid stored reading payload")
+	}
+	reading, err := decodeReading(envelope, "")
+	if err != nil {
+		return StoredResponseSummary{}, ReadingResult{}, fmt.Errorf("invalid stored reading: %w", err)
+	}
+	_, err = validateReading(Input{SourceText: source.OriginalText}, Result{
+		AITitle: reading.AITitle, OriginalLanguage: reading.OriginalLanguage,
+		OriginalText: source.OriginalText, TranslatedText: reading.TranslatedText,
+		Summary: reading.Summary, RelatedLinks: source.RelatedLinks,
+		ImageURLs: source.ImageURLs, Model: reading.Model,
+	})
+	if err != nil {
+		return StoredResponseSummary{}, ReadingResult{}, fmt.Errorf("invalid stored reading: %w", err)
+	}
+	return summary, reading, nil
+}
+
 func retrieveStoredResponseBody(ctx context.Context, baseURL, apiKey, responseID string,
 	httpClient *http.Client) ([]byte, error) {
 	if !storedResponseIDPattern.MatchString(responseID) {

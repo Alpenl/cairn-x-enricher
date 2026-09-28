@@ -49,6 +49,49 @@ type ProviderSourceRecoveryReceipt struct {
 	ContentRevision int64  `json:"content_revision"`
 }
 
+// ProviderReadingRecoveryReceipt records one settled reading completion.
+type ProviderReadingRecoveryReceipt struct {
+	Recovered       bool   `json:"recovered"`
+	ID              int64  `json:"id"`
+	Status          string `json:"status"`
+	ContentRevision int64  `json:"content_revision"`
+	EnrichedAt      string `json:"enriched_at"`
+}
+
+// RecoverProviderReading submits only the model's reading fields. The Worker
+// reads the authoritative source and image objects before committing.
+func (c *Client) RecoverProviderReading(ctx context.Context, operationKey, responseID,
+	actor string, reading enrich.ReadingResult) (ProviderReadingRecoveryReceipt, error) {
+	if !providerOperationKeyPattern.MatchString(operationKey) || responseID == "" || actor == "" ||
+		reading.AITitle == "" || reading.Summary == "" || reading.Model == "" {
+		return ProviderReadingRecoveryReceipt{}, errors.New("invalid provider reading recovery")
+	}
+	response, err := c.do(ctx, http.MethodPost, providerAttemptPath+"/recover-reading", map[string]any{
+		"operation_key": operationKey, "response_id": responseID, "actor": actor,
+		"reading": map[string]string{
+			"ai_title": reading.AITitle, "original_language": reading.OriginalLanguage,
+			"translated_text": reading.TranslatedText, "summary": reading.Summary,
+			"model": reading.Model,
+		},
+	})
+	if err != nil {
+		return ProviderReadingRecoveryReceipt{}, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return ProviderReadingRecoveryReceipt{}, apiError(response)
+	}
+	var receipt ProviderReadingRecoveryReceipt
+	if err := decodeJSON(response.Body, &receipt); err != nil {
+		return ProviderReadingRecoveryReceipt{}, fmt.Errorf("decode provider reading recovery: %w", err)
+	}
+	if !receipt.Recovered || receipt.ID < 1 || receipt.Status != "completed" ||
+		receipt.ContentRevision < 1 || receipt.EnrichedAt == "" {
+		return ProviderReadingRecoveryReceipt{}, errors.New("provider reading recovery receipt is invalid")
+	}
+	return receipt, nil
+}
+
 // RecoverProviderSource submits one operator-verified, ledger-bound stored
 // source. The Worker owns the atomic audit, source and evidence transaction.
 func (c *Client) RecoverProviderSource(ctx context.Context, operationKey, responseID,

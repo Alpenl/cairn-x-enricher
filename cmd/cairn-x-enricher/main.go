@@ -134,6 +134,7 @@ func newRootCommand() *cobra.Command {
 	root.AddCommand(newRefreshSourceCommand())
 	root.AddCommand(newProviderInspectCommand())
 	root.AddCommand(newProviderRecoverSourceCommand())
+	root.AddCommand(newProviderRecoverReadingCommand())
 	root.AddCommand(newExportDatasetCommand())
 
 	var healthURL string

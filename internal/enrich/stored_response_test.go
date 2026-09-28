@@ -100,3 +100,29 @@ func TestRetrieveStoredSourceRequiresBoundIdentityAndSearchEvidence(t *testing.T
 		t.Fatal("source without completed search evidence was accepted")
 	}
 }
+
+func TestRetrieveStoredReadingValidatesOutputAgainstPersistedSource(t *testing.T) {
+	output := `{"object":"response","id":"resp_reading","status":"completed","model":"grok-test",` +
+		`"output":[{"type":"message","content":[{"type":"output_text",` +
+		`"text":"{\"ai_title\":\"中文阅读辅助标题测试\",\"original_language\":\"en\",` +
+		`\"translated_text\":\"完整译文\",\"summary\":\"阅读摘要\"}"}]}]}`
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet || request.URL.Path != "/v1/responses/resp_reading" {
+			t.Errorf("unexpected provider request %s %s", request.Method, request.URL.Path)
+		}
+		_, _ = writer.Write([]byte(output))
+	}))
+	defer server.Close()
+	source := Source{OriginalText: "private original source", RelatedLinks: []string{}, ImageURLs: []string{}}
+	summary, reading, err := RetrieveStoredReading(context.Background(), server.URL+"/v1", "fixture-key",
+		"resp_reading", source, server.Client())
+	if err != nil || summary.ID != "resp_reading" || reading.Model != "grok-test" ||
+		reading.TranslatedText != "完整译文" {
+		t.Fatalf("stored reading = %+v, summary=%+v, err=%v", reading, summary, err)
+	}
+	output = strings.Replace(output, `\"summary\":\"阅读摘要\"`, `\"summary\":\"\"`, 1)
+	if _, _, err := RetrieveStoredReading(context.Background(), server.URL+"/v1", "fixture-key",
+		"resp_reading", source, server.Client()); err == nil {
+		t.Fatal("empty saved reading summary was accepted")
+	}
+}
