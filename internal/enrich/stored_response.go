@@ -1,6 +1,7 @@
 package enrich
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -41,21 +42,55 @@ type StoredResponseSummary struct {
 // a 404, timeout or malformed reply never proves that no charge occurred.
 func RetrieveStoredResponse(ctx context.Context, baseURL, apiKey, responseID string,
 	httpClient *http.Client) (StoredResponseSummary, error) {
+	body, err := retrieveStoredResponseBody(ctx, baseURL, apiKey, responseID, httpClient)
+	if err != nil {
+		return StoredResponseSummary{}, err
+	}
+	return storedResponseSummary(body, responseID)
+}
+
+// RetrieveStoredSource keeps provider input/output in memory and returns only
+// a source that passes the same search-evidence and field validation as an
+// ordinary paid fetch. The caller must still verify the ledger-bound ID/model
+// and let the Worker fence the original lease before any write.
+func RetrieveStoredSource(ctx context.Context, baseURL, apiKey, responseID string,
+	httpClient *http.Client) (StoredResponseSummary, Source, error) {
+	body, err := retrieveStoredResponseBody(ctx, baseURL, apiKey, responseID, httpClient)
+	if err != nil {
+		return StoredResponseSummary{}, Source{}, err
+	}
+	summary, err := storedResponseSummary(body, responseID)
+	if err != nil {
+		return StoredResponseSummary{}, Source{}, err
+	}
+	var envelope responseEnvelope
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return StoredResponseSummary{}, Source{}, errors.New("invalid stored source payload")
+	}
+	source, err := decodeSource(envelope)
+	if err != nil {
+		return StoredResponseSummary{}, Source{}, fmt.Errorf("invalid stored source: %w", err)
+	}
+	return summary, source, nil
+}
+
+func retrieveStoredResponseBody(ctx context.Context, baseURL, apiKey, responseID string,
+	httpClient *http.Client) ([]byte, error) {
 	if !storedResponseIDPattern.MatchString(responseID) {
-		return StoredResponseSummary{}, errors.New("invalid stored response ID")
+		return nil, errors.New("invalid stored response ID")
 	}
 	if apiKey == "" {
-		return StoredResponseSummary{}, errors.New("provider API key is required")
+		return nil, errors.New("provider API key is required")
 	}
 	base, err := url.Parse(strings.TrimRight(baseURL, "/"))
 	if err != nil || base == nil || (base.Scheme != "https" && base.Scheme != "http") || base.Host == "" ||
 		base.RawQuery != "" || base.ForceQuery || base.Fragment != "" {
-		return StoredResponseSummary{}, errors.New("invalid provider base URL")
+		return nil, errors.New("invalid provider base URL")
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		strings.TrimRight(baseURL, "/")+"/responses/"+url.PathEscape(responseID), nil)
 	if err != nil {
-		return StoredResponseSummary{}, fmt.Errorf("create stored response lookup: %w", err)
+		return nil, fmt.Errorf("create stored response lookup: %w", err)
 	}
 	request.Header.Set("Authorization", "Bearer "+apiKey)
 	request.Header.Set("Accept", "application/json")
@@ -67,20 +102,28 @@ func RetrieveStoredResponse(ctx context.Context, baseURL, apiKey, responseID str
 	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	response, err := noRedirect.Do(request)
 	if err != nil {
-		return StoredResponseSummary{}, fmt.Errorf("stored response lookup failed; billing remains unknown: %w", err)
+		return nil, fmt.Errorf("stored response lookup failed; billing remains unknown: %w", err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusNotFound {
-		return StoredResponseSummary{}, ErrStoredResponseNotFound
+		return nil, ErrStoredResponseNotFound
 	}
 	if response.StatusCode != http.StatusOK {
-		return StoredResponseSummary{}, fmt.Errorf("stored response lookup HTTP %d; billing remains unknown", response.StatusCode)
+		return nil, fmt.Errorf("stored response lookup HTTP %d; billing remains unknown", response.StatusCode)
 	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxModelResponseBytes+1))
+	if err != nil || len(body) > maxModelResponseBytes {
+		return nil, errors.New("invalid stored response payload; billing remains unknown")
+	}
+	return body, nil
+}
+
+func storedResponseSummary(body []byte, responseID string) (StoredResponseSummary, error) {
 	var wire struct {
 		Object string `json:"object"`
 		StoredResponseSummary
 	}
-	decoder := json.NewDecoder(io.LimitReader(response.Body, maxModelResponseBytes+1))
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	if err := decoder.Decode(&wire); err != nil {
 		return StoredResponseSummary{}, errors.New("invalid stored response payload; billing remains unknown")
 	}

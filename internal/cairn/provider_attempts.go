@@ -41,6 +41,42 @@ type ProviderAttemptInspection struct {
 	ReconciledAt           *string `json:"reconciled_at"`
 }
 
+// ProviderSourceRecoveryReceipt records a single settled source recovery.
+type ProviderSourceRecoveryReceipt struct {
+	Recovered       bool   `json:"recovered"`
+	ID              int64  `json:"id"`
+	Status          string `json:"status"`
+	ContentRevision int64  `json:"content_revision"`
+}
+
+// RecoverProviderSource submits one operator-verified, ledger-bound stored
+// source. The Worker owns the atomic audit, source and evidence transaction.
+func (c *Client) RecoverProviderSource(ctx context.Context, operationKey, responseID,
+	actor string, source enrich.Source) (ProviderSourceRecoveryReceipt, error) {
+	if !providerOperationKeyPattern.MatchString(operationKey) || responseID == "" || actor == "" ||
+		source.OriginalText == "" || source.Model == "" {
+		return ProviderSourceRecoveryReceipt{}, errors.New("invalid provider source recovery")
+	}
+	response, err := c.do(ctx, http.MethodPost, providerAttemptPath+"/recover-source", map[string]any{
+		"operation_key": operationKey, "response_id": responseID, "actor": actor, "source": source,
+	})
+	if err != nil {
+		return ProviderSourceRecoveryReceipt{}, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return ProviderSourceRecoveryReceipt{}, apiError(response)
+	}
+	var receipt ProviderSourceRecoveryReceipt
+	if err := decodeJSON(response.Body, &receipt); err != nil {
+		return ProviderSourceRecoveryReceipt{}, fmt.Errorf("decode provider source recovery: %w", err)
+	}
+	if !receipt.Recovered || receipt.ID < 1 || receipt.Status != "source_saved" || receipt.ContentRevision < 1 {
+		return ProviderSourceRecoveryReceipt{}, errors.New("provider source recovery receipt is invalid")
+	}
+	return receipt, nil
+}
+
 // InspectProviderAttempt requires a client configured with the distinct
 // operator token. It does not alter the permit, budget or blocked job.
 func (c *Client) InspectProviderAttempt(ctx context.Context, operationKey string) (ProviderAttemptInspection, error) {

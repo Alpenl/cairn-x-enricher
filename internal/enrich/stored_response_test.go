@@ -74,3 +74,29 @@ func TestRetrieveStoredResponseNeverInfersBillingFromMissingOrInvalidData(t *tes
 		})
 	}
 }
+
+func TestRetrieveStoredSourceRequiresBoundIdentityAndSearchEvidence(t *testing.T) {
+	var output = `{"object":"response","id":"resp_123","status":"completed","model":"grok-test",` +
+		`"output":[{"type":"x_search_call","status":"completed"},{"type":"message",` +
+		`"content":[{"type":"output_text","text":"{\"original_text\":\"Private source\",` +
+		`\"original_language\":\"en\",\"context_text\":\"\",\"related_links\":[],\"image_urls\":[]}"}]}]}`
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet {
+			t.Errorf("unexpected paid method %s", request.Method)
+		}
+		_, _ = writer.Write([]byte(output))
+	}))
+	defer server.Close()
+	summary, source, err := RetrieveStoredSource(context.Background(), server.URL+"/v1", "fixture-key",
+		"resp_123", server.Client())
+	if err != nil || summary.ID != "resp_123" || source.OriginalText != "Private source" ||
+		source.Model != "grok-test" {
+		t.Fatalf("stored source = %+v, summary=%+v, err=%v", source, summary, err)
+	}
+	output = strings.Replace(output, `"type":"x_search_call","status":"completed"`,
+		`"type":"x_search_call","status":"incomplete"`, 1)
+	if _, _, err := RetrieveStoredSource(context.Background(), server.URL+"/v1", "fixture-key",
+		"resp_123", server.Client()); err == nil {
+		t.Fatal("source without completed search evidence was accepted")
+	}
+}
