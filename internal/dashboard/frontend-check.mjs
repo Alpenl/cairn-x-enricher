@@ -196,6 +196,90 @@ for (const code of ["job_busy", "not_found", "backend_error", "queue_full", "inv
 equal("errorLabel unknown is shown verbatim", errorLabel("brand_new_code"), "brand_new_code");
 {
   const originalFetch = globalThis.fetch;
+  const pending = [];
+  globalThis.fetch = (path) => new Promise((resolve) => pending.push({ path, resolve }));
+  const reply = (index, item) => pending[index].resolve({ ok: true, json: async () => item });
+  try {
+    const prefetch = api.prefetchDetail(701);
+    const open = api.detail(701);
+    check("prefetch and open share one in-flight detail request", pending.length === 1);
+    reply(0, { id: 701, original_text: "same response" });
+    equal("shared detail returns the same response", await Promise.all([prefetch, open]),
+      [{ id: 701, original_text: "same response" }, { id: 701, original_text: "same response" }]);
+
+    const completed = api.prefetchDetail(702);
+    reply(1, { id: 702, original_text: "prefetched" });
+    await completed;
+    equal("opening a completed prefetch avoids a second request", await api.detail(702),
+      { id: 702, original_text: "prefetched" });
+    check("completed prefetch used one detail request", pending.length === 2);
+
+    const stale = api.prefetchDetail(703);
+    const fresh = api.detailFresh(703);
+    check("explicit refresh starts a new request", pending.length === 4);
+    reply(3, { id: 703, original_text: "new" });
+    reply(2, { id: 703, original_text: "old" });
+    equal("old prefetch cannot replace a newer refresh", await Promise.all([stale, fresh]),
+      [null, { id: 703, original_text: "new" }]);
+
+    const cached = api.prefetchDetail(704);
+    reply(4, { id: 704, original_text: "before write" });
+    await cached;
+    const write = api.curation(704, { why: "new reason" });
+    reply(5, { id: 704, why: "new reason" });
+    await write;
+    const afterWrite = api.detail(704);
+    check("local write invalidates a completed prefetch", pending.length === 7);
+    reply(6, { id: 704, original_text: "after write" });
+    equal("detail after local write uses new content", await afterWrite,
+      { id: 704, original_text: "after write" });
+  } finally { globalThis.fetch = originalFetch; }
+}
+{
+  const originalFetch = globalThis.fetch;
+  const pending = [];
+  const identity = { schema_version: 1, content_revision: 1, body_revision: 1,
+    personal_revision: 1, latest_decision_id: 0, latest_entity_revision: 0 };
+  globalThis.fetch = () => new Promise((resolve) => pending.push(resolve));
+  try {
+    const old = api.v2Selection(906, identity);
+    const fresh = api.v2Selection(906, identity, { fresh: true });
+    pending[1]({ ok: true, json: async () => ({ revision: 2 }) });
+    pending[0]({ ok: true, json: async () => ({ revision: 1 }) });
+    equal("older selection read cannot refill after a forced refresh", await Promise.all([old, fresh]),
+      [null, { revision: 2 }]);
+    equal("forced selection result remains cached", await api.v2Selection(906, identity), { revision: 2 });
+    check("forced refresh uses two requests without a third", pending.length === 2);
+  } finally { globalThis.fetch = originalFetch; }
+}
+{
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  const identity = { schema_version: 1, content_revision: 1, body_revision: 1,
+    personal_revision: 1, latest_decision_id: 0, latest_entity_revision: 0 };
+  globalThis.fetch = async (path) => {
+    calls.push(path);
+    return { ok: true, json: async () => ({ available: true, revision: 1, selection: { topics: ["llm"] } }) };
+  };
+  try {
+    const firstSelection = await api.v2Selection(705, identity);
+    firstSelection.selection.topics.push("local-only");
+    const cachedSelection = await api.v2Selection(705, identity);
+    check("matching identity reuses the v2 selection", calls.length === 1);
+    equal("local selection edits do not mutate the cached server snapshot",
+      cachedSelection.selection.topics, ["llm"]);
+    await api.entities(705, identity);
+    check("entity state has a separate cache entry", calls.length === 2);
+    await api.curation(705, { why: "edited" });
+    await api.v2Selection(705, identity);
+    check("local edit invalidates auxiliary reads", calls.length === 4);
+    for (let id = 800; id < 870; id++) await api.v2Selection(id, identity);
+    check("auxiliary cache stays within entry and byte limits",
+      api.cacheStats().auxiliary_items <= 64 && api.cacheStats().auxiliary_bytes <= 2 * 1024 * 1024);
+  } finally { globalThis.fetch = originalFetch; }
+}
+{
+  const originalFetch = globalThis.fetch;
   const keys = [];
   globalThis.fetch = async (_path, options) => {
     keys.push(JSON.parse(options.body).operation_keys["7"]);

@@ -55,6 +55,10 @@ type Backend interface {
 	UpdateCuration(context.Context, int64, cairn.CurationUpdate) (cairn.BookmarkDetail, error)
 }
 
+type identityBackend interface {
+	GetBookmarkIdentity(context.Context, int64) (cairn.BookmarkIdentity, error)
+}
+
 // V2Backend is the optional multidimensional API. A backend that does not
 // implement it degrades to read-only v1 rather than showing empty data.
 type V2Backend interface {
@@ -326,6 +330,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/export", s.exportMarkdown)
 	mux.HandleFunc("POST /api/rerank", s.rerank)
 	mux.HandleFunc("GET /api/bookmarks/{id}", s.getBookmark)
+	mux.HandleFunc("GET /api/bookmarks/{id}/identity", s.getBookmarkIdentity)
 	mux.HandleFunc("GET /api/images/{key...}", s.getImage)
 	mux.HandleFunc("GET /api/backstage", s.getBackstage)
 	mux.HandleFunc("GET /api/overview", s.getOverview)
@@ -378,6 +383,25 @@ func (s *Server) getBookmark(writer http.ResponseWriter, request *http.Request) 
 		return
 	}
 	writeJSON(writer, http.StatusOK, detail)
+}
+
+func (s *Server) getBookmarkIdentity(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	backend, ok := s.backend.(identityBackend)
+	if !ok {
+		writeError(writer, http.StatusServiceUnavailable, "identity_unsupported")
+		return
+	}
+	identity, err := backend.GetBookmarkIdentity(request.Context(), id)
+	if err != nil {
+		s.writeBackendError(writer, "get bookmark identity", id, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, identity)
 }
 
 func (s *Server) getTaxonomy(writer http.ResponseWriter, request *http.Request) {

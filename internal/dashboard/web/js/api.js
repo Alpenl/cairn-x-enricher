@@ -159,28 +159,175 @@ function cached(key, load) {
   return once.get(key);
 }
 
+// A nearby row is prefetched only once. A later explicit refresh starts a new
+// generation so a slow old prefetch cannot put stale text back into the cache.
+const detailFlights = new Map();
+const prefetchedDetails = new Map();
+const detailStates = new Map();
+const PREFETCH_MAX_ITEMS = 4;
+const PREFETCH_MAX_BYTES = 2 * 1024 * 1024;
+const PREFETCH_TTL_MS = 15_000;
+let prefetchBytes = 0;
+const auxCache = new Map();
+const auxFlights = new Map();
+const auxEpochs = new Map();
+const auxActive = new Map();
+const AUX_MAX_ITEMS = 64;
+const AUX_MAX_BYTES = 2 * 1024 * 1024;
+let auxBytes = 0;
+
+function forgetAux(key) {
+  const entry = auxCache.get(key);
+  if (entry) auxBytes -= entry.bytes;
+  auxCache.delete(key);
+  if (entry && !auxActive.get(entry.id) &&
+      ![...auxCache.values()].some((cached) => cached.id === entry.id)) auxEpochs.delete(entry.id);
+}
+
+function compactAux() {
+  while (auxCache.size > AUX_MAX_ITEMS || auxBytes > AUX_MAX_BYTES) {
+    forgetAux(auxCache.keys().next().value);
+  }
+}
+
+function invalidateAux(id) {
+  auxEpochs.set(id, (auxEpochs.get(id) || 0) + 1);
+  for (const [key, entry] of auxCache) if (entry.id === id) forgetAux(key);
+  if (!auxActive.get(id)) auxEpochs.delete(id);
+}
+
+function readAux(kind, id, identity, { fresh = false } = {}) {
+  const path = `/api/bookmarks/${id}/${kind}`;
+  const versions = identity && [identity.content_revision, identity.body_revision,
+    identity.personal_revision, identity.latest_decision_id, identity.latest_entity_revision];
+  if (identity?.schema_version !== 1 || !versions.every((value) => Number.isSafeInteger(value) && value >= 0)) {
+    return fetchJSON(path);
+  }
+  const key = `${kind}:${id}:${versions.join(":")}`;
+  if (fresh) forgetAux(key);
+  else {
+    const stored = auxCache.get(key);
+    if (stored) {
+      auxCache.delete(key);
+      auxCache.set(key, stored);
+      return Promise.resolve(structuredClone(stored.value));
+    }
+  }
+  const epoch = auxEpochs.get(id) || 0;
+  const current = auxFlights.get(key);
+  if (fresh && current) current.invalidated = true;
+  if (!fresh && current?.epoch === epoch && !current.invalidated) return current.promise;
+  const flight = { epoch, invalidated: false, promise: null };
+  auxActive.set(id, (auxActive.get(id) || 0) + 1);
+  flight.promise = fetchJSON(path).then((value) => {
+    if (flight.invalidated || (auxEpochs.get(id) || 0) !== epoch) return null;
+    const bytes = JSON.stringify(value).length * 2;
+    if (bytes <= AUX_MAX_BYTES) {
+      forgetAux(key);
+      auxCache.set(key, { id, value: structuredClone(value), bytes });
+      auxBytes += bytes;
+      compactAux();
+    }
+    return value;
+  }).finally(() => {
+    if (auxFlights.get(key) === flight) auxFlights.delete(key);
+    const active = (auxActive.get(id) || 1) - 1;
+    if (active) auxActive.set(id, active);
+    else { auxActive.delete(id); if (![...auxCache.values()].some((entry) => entry.id === id)) auxEpochs.delete(id); }
+  });
+  auxFlights.set(key, flight);
+  return flight.promise;
+}
+
+function forgetPrefetch(id) {
+  const old = prefetchedDetails.get(id);
+  if (old) prefetchBytes -= old.bytes;
+  prefetchedDetails.delete(id);
+  if (detailStates.get(id)?.active === 0 && !detailFlights.has(id)) detailStates.delete(id);
+}
+
+function rememberPrefetch(id, item) {
+  const bytes = JSON.stringify(item).length * 2;
+  if (bytes > PREFETCH_MAX_BYTES) return;
+  forgetPrefetch(id);
+  prefetchedDetails.set(id, { item: structuredClone(item), bytes, until: Date.now() + PREFETCH_TTL_MS });
+  prefetchBytes += bytes;
+  while (prefetchedDetails.size > PREFETCH_MAX_ITEMS || prefetchBytes > PREFETCH_MAX_BYTES) {
+    forgetPrefetch(prefetchedDetails.keys().next().value);
+  }
+}
+
+function invalidateDetail(id) {
+  invalidateAux(id);
+  const state = detailStates.get(id) || { generation: 0, active: 0 };
+  state.generation++;
+  forgetPrefetch(id);
+  if (state.active > 0) detailStates.set(id, state);
+  else detailStates.delete(id);
+}
+
+function readDetail(id, { prefetch = false, fresh = false } = {}) {
+  let state = detailStates.get(id);
+  if (!state) { state = { generation: 0, active: 0 }; detailStates.set(id, state); }
+  if (fresh) {
+    state.generation++;
+    forgetPrefetch(id);
+  } else if (!prefetch) {
+    const ready = prefetchedDetails.get(id);
+    if (ready) {
+      forgetPrefetch(id);
+      if (ready.until > Date.now()) return Promise.resolve(ready.item);
+    }
+  }
+  const current = detailFlights.get(id);
+  if (!fresh && current?.generation === state.generation) {
+    if (!prefetch) { current.used = true; forgetPrefetch(id); }
+    return current.promise;
+  }
+  const generation = state.generation;
+  const flight = { used: !prefetch, generation, promise: null };
+  detailStates.set(id, state);
+  state.active++;
+  flight.promise = fetchJSON(`/api/bookmarks/${id}`).then((item) => {
+    if (state.generation !== generation) return null;
+    if (!flight.used) rememberPrefetch(id, item);
+    return item;
+  }).finally(() => {
+    if (detailFlights.get(id) === flight) detailFlights.delete(id);
+    state.active--;
+    if (state.active === 0 && !prefetchedDetails.has(id)) detailStates.delete(id);
+  });
+  detailFlights.set(id, flight);
+  return flight.promise;
+}
+
 export const api = {
+  cacheStats: () => ({ prefetch_items: prefetchedDetails.size, prefetch_bytes: prefetchBytes,
+    auxiliary_items: auxCache.size, auxiliary_bytes: auxBytes }),
   list: (params, signal) => fetchJSON(`/api/bookmarks?${params}`, { signal }),
-  detail: (id, signal) => fetchJSON(`/api/bookmarks/${id}`, { signal }),
+  detail: (id) => readDetail(id),
+  detailFresh: (id) => readDetail(id, { fresh: true }),
+  prefetchDetail: (id) => readDetail(id, { prefetch: true }),
+  identity: (id) => fetchJSON(`/api/bookmarks/${id}/identity`),
   overview: () => fetchJSON("/api/overview"),
   backstage: () => fetchJSON("/api/backstage"),
   taxonomy: () => cached("taxonomy", () => fetchJSON("/api/taxonomy")),
   taxonomyV2: () => cached("taxonomy-v2", () => fetchJSON("/api/v2-taxonomy")),
-  curation: (id, body) => fetchJSON(`/api/bookmarks/${id}/curation`, jsonBody("PATCH", body)),
-  v2Selection: (id) => fetchJSON(`/api/bookmarks/${id}/v2-selection`),
-  v2Override: (id, body) => fetchJSON(`/api/bookmarks/${id}/v2-override`, jsonBody("POST", body)),
+  curation: (id, body) => { invalidateDetail(id); return fetchJSON(`/api/bookmarks/${id}/curation`, jsonBody("PATCH", body)); },
+  v2Selection: (id, identity, options) => readAux("v2-selection", id, identity, options),
+  v2Override: (id, body) => { invalidateDetail(id); return fetchJSON(`/api/bookmarks/${id}/v2-override`, jsonBody("POST", body)); },
   evidence: (id) => fetchJSON(`/api/bookmarks/${id}/evidence`),
   classificationStatus: (id) => fetchJSON(`/api/bookmarks/${id}/classification-status`),
-  entities: (id) => fetchJSON(`/api/bookmarks/${id}/entities`),
-  correctEntity: (id, body) => fetchJSON(`/api/bookmarks/${id}/entities`, jsonBody("POST", body)),
-  retryClassification: (id) => fetchJSON(`/api/bookmarks/${id}/retry-classification`, { method: "POST" }),
-  refreshSource: refreshSourceRequest,
-  replayPolicy: (id, commit) => fetchJSON(`/api/bookmarks/${id}/replay-policy`, jsonBody("POST", commit ? { commit: true } : {})),
-  process: processRequest,
-  submitSource: (id, submission) => processingRequest(`/api/bookmarks/${id}/source`, {
+  entities: (id, identity, options) => readAux("entities", id, identity, options),
+  correctEntity: (id, body) => { invalidateDetail(id); return fetchJSON(`/api/bookmarks/${id}/entities`, jsonBody("POST", body)); },
+  retryClassification: (id) => { invalidateDetail(id); return fetchJSON(`/api/bookmarks/${id}/retry-classification`, { method: "POST" }); },
+  refreshSource: (id) => { invalidateDetail(id); return refreshSourceRequest(id); },
+  replayPolicy: (id, commit) => { invalidateDetail(id); return fetchJSON(`/api/bookmarks/${id}/replay-policy`, jsonBody("POST", commit ? { commit: true } : {})); },
+  process: (ids) => { ids.forEach(invalidateDetail); return processRequest(ids); },
+  submitSource: (id, submission) => { invalidateDetail(id); return processingRequest(`/api/bookmarks/${id}/source`, {
     original_text: submission.text, operation_key: submission.operation_key,
     expected_revision: submission.expected_revision
-  })
+  }); }
 };
 
 export function imagePath(key) {

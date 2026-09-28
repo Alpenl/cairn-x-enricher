@@ -11,6 +11,7 @@ import { emit, getItem, mergeItem, on, state } from "./store.js";
 import { confirmAction, openDialog, openMenu, toast } from "./ui.js";
 
 const POLL_INTERVAL = 8000;
+const IDENTITY_INTERVAL = 15000;
 // A job that never advances (worker down, lease stuck) must not poll the LAN
 // server for as long as the tab stays open.
 const MAX_POLLS = 30;
@@ -21,6 +22,7 @@ let currentId = 0;
 let polls = 0;
 let loadToken = 0;
 let fetchTimer = 0;
+let identityBusy = false;
 const renderedText = new WeakMap();
 let renderedImages = "";
 let renderedLinks = "";
@@ -169,10 +171,10 @@ function render(item) {
 async function fetchDetail(id, { silent = false } = {}) {
   const token = ++loadToken;
   try {
-    const item = await api.detail(id);
+    const item = await (silent ? api.detailFresh(id) : api.detail(id));
+    if (!item) return false;
     if (token !== loadToken || id !== currentId) {
-      mergeItem(item);
-      return;
+      return false;
     }
     const merged = mergeItem(item);
     els.bodyLoading.hidden = true;
@@ -181,12 +183,13 @@ async function fetchDetail(id, { silent = false } = {}) {
     render(merged);
     curation.refresh(id);
     emit("item", id);
+    return true;
   } catch (error) {
-    if (token !== loadToken || id !== currentId) return;
+    if (token !== loadToken || id !== currentId) return false;
     els.bodyLoading.hidden = true;
     if (silent) {
       toast("刷新内容失败", { tone: "error" });
-      return;
+      return false;
     }
     if (!getItem(id)) {
       els.article.hidden = true;
@@ -195,6 +198,7 @@ async function fetchDetail(id, { silent = false } = {}) {
     } else {
       toast(`读取全文失败：${errorLabel(error?.message)}`, { tone: "error" });
     }
+    return false;
   }
 }
 
@@ -444,6 +448,11 @@ export function initDetail(options) {
   });
   on("list:loaded", () => { if (currentId) renderPosition(); });
   on("list:more", () => { if (currentId) renderPosition(); });
+  on("classification:changed", async (id) => {
+    if (id === currentId && await fetchDetail(id, { silent: true }) && id === currentId) {
+      curation.reloadRemote(id);
+    }
+  });
 
   setInterval(() => {
     if (document.hidden || !currentId) return;
@@ -452,5 +461,32 @@ export function initDetail(options) {
     if (polls++ >= MAX_POLLS) return;
     fetchDetail(currentId, { silent: true });
   }, POLL_INTERVAL);
+
+  // A visible, idle detail can change in another client without any queue
+  // activity. Only fetch the full article after its small identity changes.
+  setInterval(async () => {
+    if (document.hidden || !currentId || identityBusy) return;
+    const id = currentId;
+    const before = getItem(id);
+    if (!before?.cache_identity || (isWorking(before) && polls < MAX_POLLS)) return;
+    identityBusy = true;
+    try {
+      const remote = await api.identity(id);
+      if (id !== currentId) return;
+      const current = getItem(id);
+      if (!current) return;
+      const versionChanged = JSON.stringify(remote.cache_identity) !== JSON.stringify(current.cache_identity);
+      const statusChanged = current.processable !== false && remote.status !== current.status;
+      if (!versionChanged && !statusChanged && remote.updated_at === current.updated_at &&
+          remote.paid_call_unresolved === current.paid_call_unresolved) return;
+      if (await fetchDetail(id, { silent: true }) && id === currentId && versionChanged) {
+        curation.reloadRemote(id);
+      }
+    } catch {
+      // Identity checks are best effort; the next visible tick retries.
+    } finally {
+      identityBusy = false;
+    }
+  }, IDENTITY_INTERVAL);
 
 }

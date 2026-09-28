@@ -6,7 +6,7 @@ import { api, errorLabel } from "./api.js";
 import { byId, clear, h } from "./dom.js";
 import { formatDateTime } from "./format.js";
 import { entityPayload } from "./curation.js";
-import { on } from "./store.js";
+import { emit, on } from "./store.js";
 import { confirmAction, toast } from "./ui.js";
 
 const ROLE_LABELS = Object.freeze({
@@ -80,7 +80,10 @@ async function loadStatus(id) {
       note(els.status, "后端不支持分类状态查询。");
       return;
     }
+    const previous = els.status.dataset.status;
     renderStatus(id, payload);
+    if (["pending", "processing"].includes(previous) &&
+        !["pending", "processing"].includes(payload?.status)) emit("classification:changed", id);
   } catch {
     if (id === currentId) note(els.status, "分类状态暂不可用。");
   }
@@ -128,6 +131,7 @@ function load(id) {
   statusTimer = 0;
   els.replay.hidden = true;
   els.replay.replaceChildren();
+  els.status.dataset.status = "";
   note(els.status, "正在读取分类状态…");
   note(els.evidenceStatus, "正在读取来源快照…");
   els.evidenceBlocks.replaceChildren();

@@ -101,6 +101,15 @@ type BookmarkCacheIdentity struct {
 	LatestEntityRevision int64 `json:"latest_entity_revision"`
 }
 
+// BookmarkIdentity is the small, versioned response used while a detail stays visible.
+type BookmarkIdentity struct {
+	ID                 int64                 `json:"id"`
+	Status             string                `json:"status"`
+	UpdatedAt          string                `json:"updated_at"`
+	PaidCallUnresolved bool                  `json:"paid_call_unresolved"`
+	CacheIdentity      BookmarkCacheIdentity `json:"cache_identity"`
+}
+
 // BookmarkDetail preserves the detail endpoint's named response type.
 type BookmarkDetail struct {
 	Bookmark
@@ -483,6 +492,33 @@ func (c *Client) GetBookmark(ctx context.Context, id int64) (BookmarkDetail, err
 		return BookmarkDetail{}, errors.New("bookmark detail contains an invalid image")
 	}
 	return detail, nil
+}
+
+// GetBookmarkIdentity avoids transferring the article body on idle checks.
+func (c *Client) GetBookmarkIdentity(ctx context.Context, id int64) (BookmarkIdentity, error) {
+	if id < 1 {
+		return BookmarkIdentity{}, errors.New("bookmark ID must be positive")
+	}
+	path := fmt.Sprintf("/api/enrichment/jobs/%d/cache-identity", id)
+	response, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return BookmarkIdentity{}, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return BookmarkIdentity{}, apiError(response)
+	}
+	var identity BookmarkIdentity
+	if err := decodeJSON(response.Body, &identity); err != nil {
+		return BookmarkIdentity{}, fmt.Errorf("decode bookmark identity: %w", err)
+	}
+	if identity.ID != id || !validBookmarkStatus(identity.Status) ||
+		identity.CacheIdentity.SchemaVersion != 1 || identity.CacheIdentity.ContentRevision < 1 ||
+		identity.CacheIdentity.BodyRevision < 0 || identity.CacheIdentity.PersonalRevision < 0 ||
+		identity.CacheIdentity.LatestDecisionID < 0 || identity.CacheIdentity.LatestEntityRevision < 0 {
+		return BookmarkIdentity{}, errors.New("bookmark identity is invalid")
+	}
+	return identity, nil
 }
 
 // GetTaxonomy loads the Worker's single authoritative vocabulary.

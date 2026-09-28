@@ -67,6 +67,21 @@ func TestLocalWorkerManualSourceSurvivesProcessExit(t *testing.T) {
 		detail.CacheIdentity.ContentRevision <= before.CacheIdentity.ContentRevision {
 		t.Fatalf("pasted source after process exit: detail=%+v error=%v", detail, err)
 	}
+	identity, err := restarted.GetBookmarkIdentity(ctx, id)
+	if err != nil || identity.CacheIdentity != *detail.CacheIdentity || identity.ID != id {
+		t.Fatalf("small identity differs from detail after restart: %+v %v", identity, err)
+	}
+	server := dashboard.New(ctx, health.NewTracker(), restarted, neverRunManualSource{},
+		slog.New(slog.NewJSONHandler(io.Discard, nil)), 1)
+	identityRequest := httptest.NewRequestWithContext(ctx, http.MethodGet,
+		fmt.Sprintf("/api/bookmarks/%d/identity", id), nil)
+	identityResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(identityResponse, identityRequest)
+	if identityResponse.Code != http.StatusOK ||
+		strings.Contains(identityResponse.Body.String(), restartManualText) {
+		t.Fatalf("dashboard identity transferred body or failed: %d %s",
+			identityResponse.Code, identityResponse.Body.String())
+	}
 	source, err := restarted.GetSource(ctx, id)
 	if err != nil || source == nil || source.OriginalText != restartManualText || source.Model != "manual" {
 		t.Fatalf("archived source after process exit: %+v %v", source, err)

@@ -93,7 +93,7 @@ function prefetch(id) {
   const item = getItem(id);
   if (!item || item.content_loaded !== false) return;
   const idle = window.requestIdleCallback || ((callback) => setTimeout(callback, 300));
-  idle(() => api.detail(id).then(mergeItem).catch(() => {}));
+  idle(() => api.prefetchDetail(id).then(mergeItem).catch(() => {}));
 }
 
 function select(id, { fromList = false, scroll = true } = {}) {

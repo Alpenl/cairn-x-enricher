@@ -42,8 +42,8 @@ function sessionFor(id) {
       id,
       why: { dirty: false, timer: 0, saving: false, error: false },
       v1: { selection: null, dirty: false, timer: 0, saving: false },
-      v2: { status: "idle", selection: null, automatic: null, revision: 0, queue: [], inFlight: false, blocked: null },
-      entities: { status: "idle", payload: null, revision: 0 },
+      v2: { status: "idle", selection: null, automatic: null, revision: 0, queue: [], inFlight: false, blocked: null, readEpoch: 0 },
+      entities: { status: "idle", payload: null, revision: 0, readEpoch: 0 },
       editing: new Set(),
       saveState: ""
     };
@@ -260,10 +260,16 @@ async function loadV2(session, { force = false } = {}) {
   // A poll or refresh must never overwrite a draft or a pending action.
   if (session.v2.queue.length || session.v2.inFlight || session.v2.blocked) return;
   if (!force && session.v2.status === "loading") return;
+  const readEpoch = ++session.v2.readEpoch;
   session.v2.status = session.v2.status === "ready" ? "ready" : "loading";
   try {
-    const response = await api.v2Selection(session.id);
-    if (session.v2.queue.length || session.v2.inFlight || session.v2.blocked) return;
+    const response = await api.v2Selection(session.id, getItem(session.id)?.cache_identity, { fresh: force });
+    if (readEpoch !== session.v2.readEpoch || session.v2.queue.length || session.v2.inFlight || session.v2.blocked) return;
+    if (!response) {
+      session.v2.status = "idle";
+      if (session.id === currentId) queueMicrotask(() => loadV2(session, { force: true }));
+      return;
+    }
     if (!response.available) {
       session.v2.status = "unavailable";
     } else {
@@ -275,6 +281,7 @@ async function loadV2(session, { force = false } = {}) {
       if (typeof response.revision === "number") session.v2.revision = response.revision;
     }
   } catch {
+    if (readEpoch !== session.v2.readEpoch) return;
     session.v2.status = "unavailable";
   }
   if (session.id === currentId) renderTags();
@@ -400,10 +407,17 @@ function renderConflict(session) {
 
 // --- Entities ---------------------------------------------------------------------
 
-async function loadEntities(session) {
+async function loadEntities(session, { force = false } = {}) {
+  const readEpoch = ++session.entities.readEpoch;
   if (session.entities.status === "idle") session.entities.status = "loading";
   try {
-    const payload = await api.entities(session.id);
+    const payload = await api.entities(session.id, getItem(session.id)?.cache_identity, { fresh: force });
+    if (readEpoch !== session.entities.readEpoch) return;
+    if (!payload) {
+      session.entities.status = "idle";
+      if (session.id === currentId) queueMicrotask(() => loadEntities(session, { force: true }));
+      return;
+    }
     if (!payload || payload.available === false) {
       session.entities.status = "unavailable";
     } else {
@@ -412,6 +426,7 @@ async function loadEntities(session) {
       if (Number.isInteger(payload.revision)) session.entities.revision = payload.revision;
     }
   } catch {
+    if (readEpoch !== session.entities.readEpoch) return;
     session.entities.status = "unavailable";
   }
   if (session.id === currentId) renderTags();
@@ -428,13 +443,14 @@ async function submitEntity(session, action, term) {
       operation_key: newOperationKey(`entity-${session.id}-${action}`),
       action, term, expected_revision: session.entities.revision
     });
+    session.entities.readEpoch++;
     session.entities.payload = payload;
     if (Number.isInteger(payload.revision)) session.entities.revision = payload.revision;
     toast(action === "reject" ? `已移除实体「${term}」` : `已添加实体「${term}」`, { tone: "ok" });
   } catch (error) {
     if (error?.message === "revision_conflict") {
       toast("实体已被其他客户端更新，已载入最新结果，请再操作一次", { tone: "error" });
-      await loadEntities(session);
+      await loadEntities(session, { force: true });
       return;
     }
     toast(`实体没有更新：${errorLabel(error?.message)}`, { tone: "error" });
@@ -703,7 +719,7 @@ export function reloadRemote(id) {
   const session = sessions.get(id);
   if (!session) return;
   loadV2(session, { force: true });
-  loadEntities(session);
+  loadEntities(session, { force: true });
 }
 
 export function toggleEditingAll() {

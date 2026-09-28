@@ -98,7 +98,13 @@ function createMock() {
     entityState: "completed_nonempty",
     actions: [],
     listQueries: [],
-    oldFilterBackend: false
+    oldFilterBackend: false,
+    identityRevision: 1,
+    identityReads: 0,
+    detailReads: 0,
+    remoteTitle: null,
+    holdWhy: false,
+    releaseWhy: null
   };
 }
 
@@ -117,6 +123,7 @@ async function serveFile(res, file) {
 const BOOKMARK = {
   id: 12, url: "https://x.com/a/status/12", note: "", created_at: "2026-09-20T00:00:00Z",
   status: "completed", processable: true, curation_status: "inbox", why: "", classification_reviewed: false,
+  paid_call_unresolved: false,
   ai_title: "测试标题", summary: "摘要", translated_text: "译文", original_text: "<script>alert(1)</script><img src=x onerror=alert(2)>",
   related_links: [], images: [], classification: { topics: ["llm", "eng", "eval"], form: "method", use: "try", entities: [], uncertainty: false, why_suggestion: "", taxonomy_version: "x", discarded_tags: [] }
 };
@@ -132,7 +139,19 @@ function startMockServer(state) {
     if (url.pathname === "/" || url.pathname === "/bookmarks/12") return serveFile(res, path.join(webDir, "index.html"));
     const asset = url.pathname.match(/^\/assets\/(.+)$/);
     if (asset) return serveFile(res, path.join(webDir, path.normalize(asset[1])));
-    if (url.pathname === "/api/bookmarks/12") return send(200, { ...BOOKMARK });
+    const cache_identity = { schema_version: 1, content_revision: 1,
+      body_revision: state.identityRevision, personal_revision: state.revision,
+      latest_decision_id: 0, latest_entity_revision: state.revision };
+    if (url.pathname === "/api/bookmarks/12") {
+      state.detailReads++;
+      return send(200, { ...BOOKMARK, ai_title: state.remoteTitle || BOOKMARK.ai_title,
+        cache_identity, updated_at: "2026-09-20T00:00:00Z" });
+    }
+    if (url.pathname === "/api/bookmarks/12/identity") {
+      state.identityReads++;
+      return send(200, { id: 12, status: BOOKMARK.status, updated_at: "2026-09-20T00:00:00Z",
+        paid_call_unresolved: false, cache_identity });
+    }
     if (url.pathname === "/api/taxonomy") {
       return send(200, { version: "2026-09-20.1", topics: taxonomyV2().topics, forms: taxonomyV2().forms, uses: taxonomyV2().uses });
     }
@@ -213,6 +232,9 @@ function startMockServer(state) {
     }
     if (url.pathname === "/api/bookmarks/12/curation") {
       state.requests.push({ path: url.pathname, body });
+      if (state.holdWhy && "why" in body) {
+        await new Promise((resolve) => { state.releaseWhy = resolve; });
+      }
       return send(200, { ...BOOKMARK, why: body.why ?? "", curation_status: body.curation_status ?? "inbox", classification_reviewed: "classification" in body });
     }
     if (url.pathname === "/api/bookmarks") {
@@ -663,12 +685,60 @@ async function partC(browser) {
   server.close();
 }
 
+// A detail left open on an idle, non-first-page-like route must discover a
+// remote revision without losing a locally saving reason draft.
+async function partD(browser) {
+  const state = createMock();
+  const server = await startMockServer(state);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(String(error)));
+  try {
+    await page.clock.install();
+    await page.goto(`${base}/bookmarks/12`, { waitUntil: "networkidle" });
+    check("visible detail initially loads its body", await waitFor(() => state.detailReads > 0));
+    const initialReads = state.detailReads;
+    state.identityRevision++;
+    state.remoteTitle = "另一客户端的新标题";
+    await page.clock.fastForward(16_000);
+    check("idle visible detail discovers a remote version", await waitFor(async () =>
+      (await page.textContent("#detail-title")) === state.remoteTitle));
+    check("version change fetches one new detail", state.identityReads >= 1 && state.detailReads === initialReads + 1);
+
+    const unchangedReads = state.detailReads;
+    await page.clock.fastForward(16_000);
+    const secondIdentity = await waitFor(() => state.identityReads >= 2);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    check("unchanged identity avoids a full detail request", secondIdentity && state.detailReads === unchangedReads,
+      JSON.stringify({ identityReads: state.identityReads, detailReads: state.detailReads, unchangedReads }));
+
+    state.holdWhy = true;
+    await page.fill("#curation-why", "本地尚未确认的原因");
+    await page.press("#curation-why", "Enter");
+    check("local reason save is in flight", await waitFor(() => typeof state.releaseWhy === "function"));
+    state.identityRevision++;
+    state.remoteTitle = "第三次远端更新";
+    await page.clock.fastForward(16_000);
+    check("remote update still refreshes a visible detail", await waitFor(async () =>
+      (await page.textContent("#detail-title")) === state.remoteTitle));
+    equal("remote refresh keeps the local reason draft", await page.inputValue("#curation-why"), "本地尚未确认的原因");
+    state.releaseWhy?.();
+    check("visible identity check has no page error", pageErrors.length === 0, pageErrors.join("; "));
+  } finally {
+    state.releaseWhy?.();
+    await page.close();
+    server.close();
+  }
+}
+
 async function main() {
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ["--no-sandbox"] });
   try {
     await partA(browser);
     await partB(browser);
     await partC(browser);
+    await partD(browser);
   } finally {
     await browser.close();
   }
