@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -250,77 +249,104 @@ func runScheduler(
 	logger *slog.Logger,
 	wakeup ...<-chan struct{},
 ) {
-	// A batch can lease up to MAX_JOBS_PER_RUN jobs, so it must not inherit
-	// the shutdown context directly. Cancelling mid-batch would strand every
-	// already-leased job until its lease expires, wasting attempts.
-	//
-	// The batch budget is half the shutdown budget, leaving the other half for
-	// runServe to wait out the same batch. Giving both phases the full budget
-	// would exceed stop_grace_period, and Docker would SIGKILL the process
-	// before either could finish.
-	var mu sync.Mutex
-	var batch sync.WaitGroup
-	var stopping atomic.Bool
-
-	run := func() {
-		if stopping.Load() {
-			return
-		}
-		mu.Lock()
-		if stopping.Load() {
-			mu.Unlock()
-			return
-		}
-		batch.Add(1)
-		mu.Unlock()
-		defer batch.Done()
-
-		// Recover per batch, not per scheduler: a panic must fail one batch and
-		// drop readiness, but the loop has to keep running afterwards.
-		stats, err := runBatchSafely(ctx, worker, cfg, logger)
-		tracker.Record(stats, err)
-		if err != nil && isContractFailure(err) {
-			// A provider contract break will fail every future batch the
-			// same way, so leave readiness false and stop pretending the
-			// service is usable until an operator intervenes.
-			tracker.MarkDegraded(err.Error())
-		}
-		attributes := []any{
-			"claimed", stats.Claimed,
-			"completed", stats.Completed,
-			"failed", stats.Failed,
-			"classified", stats.Classified,
-			"classification_failed", stats.ClassificationFailed,
-			"duration_ms", stats.Duration.Milliseconds(),
-		}
-		if err != nil {
-			logger.ErrorContext(ctx, "scheduled batch failed", append(attributes, "error", err)...)
-			return
-		}
-		logger.InfoContext(ctx, "scheduled batch finished", attributes...)
-	}
-
-	run()
-	ticker := time.NewTicker(cfg.PollInterval)
-	defer ticker.Stop()
 	var notified <-chan struct{}
 	if len(wakeup) > 0 {
 		notified = wakeup[0]
 	}
+	var loops sync.WaitGroup
+	loops.Add(3)
+	go func() {
+		defer loops.Done()
+		defer processor.RecoverTask(logger, "source scheduler")
+		runSourceScheduler(ctx, worker, tracker, cfg, logger, notified)
+	}()
+	go func() {
+		defer loops.Done()
+		defer processor.RecoverTask(logger, "classification scheduler")
+		runClassificationScheduler(ctx, worker, tracker, cfg, logger)
+	}()
+	go func() {
+		defer loops.Done()
+		defer processor.RecoverTask(logger, "evidence scheduler")
+		runEvidenceScheduler(ctx, worker, cfg, logger)
+	}()
+	<-ctx.Done()
+	// Each loop stops claiming on cancellation. Already leased jobs retain
+	// their own bounded stage contexts; wait within the shared shutdown budget.
+	waitForBatch(&loops, batchTimeout(cfg), logger)
+}
+
+func runSourceScheduler(ctx context.Context, worker *processor.Processor, tracker *health.Tracker, cfg config.Config, logger *slog.Logger, notified <-chan struct{}) {
+	ticker := time.NewTicker(cfg.PollInterval)
+	defer ticker.Stop()
 	for {
+		if ctx.Err() != nil {
+			return
+		}
+		stats, err := runSourceSweepSafely(ctx, worker, cfg, logger)
+		tracker.Record(stats, err)
+		if err != nil && isContractFailure(err) {
+			tracker.MarkComponentDegraded("source", err.Error())
+		} else if err == nil && stats.Completed > 0 {
+			tracker.MarkComponentRecovered("source")
+		}
+		attributes := []any{"stage", "source", "claimed", stats.Claimed, "completed", stats.Completed, "failed", stats.Failed, "duration_ms", stats.Duration.Milliseconds()}
+		if err != nil {
+			logger.ErrorContext(ctx, "scheduled batch failed", append(attributes, "error", err)...)
+		} else {
+			logger.InfoContext(ctx, "scheduled batch finished", attributes...)
+		}
 		select {
 		case <-ctx.Done():
-			// Stop admitting new batches, then let the in-flight one finish
-			// within the shutdown budget.
-			mu.Lock()
-			stopping.Store(true)
-			mu.Unlock()
-			waitForBatch(&batch, batchTimeout(cfg), logger)
 			return
 		case <-ticker.C:
-			run()
 		case <-notified:
-			run()
+		}
+	}
+}
+
+func runClassificationScheduler(ctx context.Context, worker *processor.Processor, tracker *health.Tracker, cfg config.Config, logger *slog.Logger) {
+	// Create the ticker before the first round: a long initial drain cannot
+	// postpone the next scheduling opportunity by another full interval.
+	ticker := time.NewTicker(cfg.PollInterval)
+	defer ticker.Stop()
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		stats, err := runClassificationSafely(ctx, worker, cfg, logger)
+		tracker.RecordClassification(stats, err)
+		if err != nil && isContractFailure(err) {
+			tracker.MarkComponentDegraded("classification", err.Error())
+		} else if err == nil && stats.Classified > 0 {
+			tracker.MarkComponentRecovered("classification")
+		}
+		attributes := []any{"classified", stats.Classified, "failed", stats.ClassificationFailed, "duration_ms", stats.Duration.Milliseconds()}
+		if err != nil {
+			logger.WarnContext(ctx, "classification round stopped", append(attributes, "error", err)...)
+		} else {
+			logger.InfoContext(ctx, "classification round finished", attributes...)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func runEvidenceScheduler(ctx context.Context, worker *processor.Processor, cfg config.Config, logger *slog.Logger) {
+	ticker := time.NewTicker(cfg.PollInterval)
+	defer ticker.Stop()
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		runEvidenceSafely(ctx, worker, cfg, logger)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
 		}
 	}
 }
@@ -410,6 +436,7 @@ func newProcessor(
 	}
 	tracker.MarkStarted()
 	worker := processor.NewStaged(queue, model, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
+	worker.SetClaimTimeout(batchTimeout(cfg))
 	worker.SetPaidStageTimeout(cfg.RequestTimeout)
 	fetcher, policy := evidenceFetcher(cfg)
 	extensions, err := extensionService(cfg, classifier)
@@ -483,9 +510,8 @@ func waitForSignal(done <-chan struct{}, timeout time.Duration) bool {
 	}
 }
 
-// batchTimeout is the slice of the shutdown budget a single scheduled batch may
-// consume. The other half is reserved for runServe to wait out that same batch,
-// because both phases have to fit inside the container's stop_grace_period.
+// batchTimeout bounds one claim request and the scheduler shutdown wait. It
+// does not limit how long a source or classification round can keep claiming.
 func batchTimeout(cfg config.Config) time.Duration {
 	timeout := cfg.ShutdownTimeout / 2
 	if timeout <= 0 {
@@ -494,18 +520,43 @@ func batchTimeout(cfg config.Config) time.Duration {
 	return timeout
 }
 
-// runBatchSafely runs one scheduled batch, converting a panic into an error so
-// the scheduler records a failure and continues instead of the process dying.
-func runBatchSafely(
-	ctx context.Context,
-	worker *processor.Processor,
-	cfg config.Config,
-	logger *slog.Logger,
-) (stats processor.Stats, err error) {
-	defer processor.RecoverTask(logger, "scheduled batch")
-	runCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), batchTimeout(cfg))
-	defer cancel()
-	return worker.Run(runCtx, cfg.MaxJobsPerRun)
+// runSourceSweepSafely follows a full batch immediately while backlog remains.
+// A trigger is capped at three batches; each claim has its own timeout, while
+// shutdown cancellation stops the next claim without cutting off paid work.
+func runSourceSweepSafely(ctx context.Context, worker *processor.Processor, cfg config.Config, logger *slog.Logger) (stats processor.Stats, err error) {
+	defer processor.RecoverJob(logger, "scheduled source sweep", 0, &err)
+	stats.StartedAt = time.Now().UTC()
+	for range 3 {
+		if ctx.Err() != nil {
+			break
+		}
+		part, runErr := worker.RunSources(ctx, cfg.MaxJobsPerRun)
+		stats.Claimed += part.Claimed
+		stats.Completed += part.Completed
+		stats.Failed += part.Failed
+		if runErr != nil {
+			err = runErr
+			break
+		}
+		if cfg.MaxJobsPerRun <= 0 || part.Claimed < int64(cfg.MaxJobsPerRun) || part.Completed+part.Failed == 0 {
+			break
+		}
+	}
+	stats.Duration = time.Since(stats.StartedAt)
+	return stats, err
+}
+
+func runClassificationSafely(ctx context.Context, worker *processor.Processor, cfg config.Config, logger *slog.Logger) (stats processor.Stats, err error) {
+	defer processor.RecoverJob(logger, "scheduled classification round", 0, &err)
+	stats.StartedAt = time.Now().UTC()
+	stats.Classified, stats.ClassificationFailed, err = worker.RunClassifications(ctx, cfg.MaxJobsPerRun)
+	stats.Duration = time.Since(stats.StartedAt)
+	return stats, err
+}
+
+func runEvidenceSafely(ctx context.Context, worker *processor.Processor, cfg config.Config, logger *slog.Logger) {
+	defer processor.RecoverTask(logger, "scheduled evidence recovery")
+	worker.RunEvidenceRecovery(ctx, cfg.MaxJobsPerRun)
 }
 
 // readinessReason extracts the human-readable reason from a /readyz body so a

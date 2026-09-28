@@ -60,6 +60,15 @@ func newClassifyCommand() *cobra.Command {
 		fetcher, policy := evidenceFetcher(cfg)
 		worker.SetExtensions(extensions, fetcher, policy)
 		completed, failed, err := worker.RunClassifications(ctx, maxJobs)
+		if ctx.Err() == nil {
+			worker.RunEvidenceRecovery(ctx, maxJobs)
+		}
+		if err == nil && ctx.Err() == nil && extensions.Flags.Evidence && int(completed+failed) < maxJobs {
+			moreCompleted, moreFailed, moreErr := worker.RunClassifications(ctx, maxJobs-int(completed+failed))
+			completed += moreCompleted
+			failed += moreFailed
+			err = moreErr
+		}
 		if encodeErr := json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]int64{"classified": completed, "failed": failed}); encodeErr != nil {
 			return encodeErr
 		}

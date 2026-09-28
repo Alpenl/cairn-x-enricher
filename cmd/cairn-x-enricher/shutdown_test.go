@@ -47,15 +47,15 @@ func TestShutdownBudgetFitsInsideStopGracePeriod(t *testing.T) {
 	}
 }
 
-func TestRunBatchSafelyRecoversFromAPanic(t *testing.T) {
+func TestSourceSweepRecoversFromAPanic(t *testing.T) {
 	// A panicking queue stands in for a bug anywhere in the batch path.
 	queue := &panickingQueue{}
 	worker := processor.New(queue, &noopEnricher{}, discardLogger(), 1)
 	cfg := config.Config{MaxJobsPerRun: 1, ShutdownTimeout: 2 * time.Second}
 
-	stats, err := runBatchSafely(context.Background(), worker, cfg, discardLogger())
+	stats, err := runSourceSweepSafely(context.Background(), worker, cfg, discardLogger())
 	if err == nil {
-		t.Fatal("runBatchSafely() error = nil, want the recovered panic")
+		t.Fatal("runSourceSweepSafely() error = nil, want the recovered panic")
 	}
 	// The zero Stats returned alongside a recovered panic must still be usable
 	// by the caller's error path.
@@ -64,23 +64,23 @@ func TestRunBatchSafelyRecoversFromAPanic(t *testing.T) {
 	}
 }
 
-func TestBatchTimeoutBoundsABatchThatIgnoresCancellation(t *testing.T) {
-	// The batch context deliberately detaches from the parent so jobs are not
-	// cancelled mid-flight, which means only the timeout can stop it.
+func TestClaimTimeoutBoundsAHangingQueueCall(t *testing.T) {
+	// Claim has its own timeout. No whole-round timer can stop healthy work.
 	var once sync.Once
 	queue := &blockingQueue{started: make(chan struct{}), once: &once}
 	worker := processor.New(queue, &noopEnricher{}, discardLogger(), 1)
 	cfg := config.Config{MaxJobsPerRun: 1, ShutdownTimeout: 200 * time.Millisecond}
+	worker.SetClaimTimeout(batchTimeout(cfg))
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_, _ = runBatchSafely(context.Background(), worker, cfg, discardLogger())
+		_, _ = runSourceSweepSafely(context.Background(), worker, cfg, discardLogger())
 	}()
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("batch was not bounded by its timeout")
+		t.Fatal("claim was not bounded by its timeout")
 	}
 }
 
@@ -123,10 +123,10 @@ func (q *emptyQueue) Fail(context.Context, int64, string, string) error { return
 func TestTrackerRecordsNoFailureWhenOnlyWorkIsEmpty(t *testing.T) {
 	tracker := health.NewTracker()
 	tracker.MarkStarted()
-	stats, err := runBatchSafely(context.Background(), processor.New(&emptyQueue{}, &noopEnricher{}, discardLogger(), 1),
+	stats, err := runSourceSweepSafely(context.Background(), processor.New(&emptyQueue{}, &noopEnricher{}, discardLogger(), 1),
 		config.Config{MaxJobsPerRun: 1, ShutdownTimeout: time.Second}, discardLogger())
 	if err != nil {
-		t.Fatalf("runBatchSafely() error = %v", err)
+		t.Fatalf("runSourceSweepSafely() error = %v", err)
 	}
 	tracker.Record(stats, err)
 	if snapshot := tracker.Snapshot(); !snapshot.Ready {

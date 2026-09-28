@@ -45,6 +45,7 @@ type stageQueue struct {
 	evidenceSnapshot       json.RawMessage
 	evidenceReadErr        error
 	evidenceRequestStatus  string
+	recoverEvidenceHook    func(context.Context) ([]cairn.EvidenceExecution, error)
 	refreshAcks            int
 	admitCalls             int
 	admitErr               error
@@ -110,8 +111,64 @@ func (q *stageQueue) CreateEvidenceRequest(context.Context, int64, map[string]an
 	}
 	return cairn.EvidenceRequestAck{ID: "req-1", Status: status, Replayed: status != "pending"}, nil
 }
-func (q *stageQueue) RecoverableEvidenceRequests(context.Context, int) ([]cairn.EvidenceExecution, error) {
+func (q *stageQueue) RecoverableEvidenceRequests(ctx context.Context, _ int) ([]cairn.EvidenceExecution, error) {
+	if q.recoverEvidenceHook != nil {
+		return q.recoverEvidenceHook(ctx)
+	}
+	if q.evidenceRequests > 0 && (q.evidenceRequestStatus == "" || q.evidenceRequestStatus == "pending") {
+		return []cairn.EvidenceExecution{{ID: "req-1"}}, nil
+	}
 	return nil, nil
+}
+
+func TestSlowEvidenceRecoveryCannotBlockHalfOpenClassificationProbe(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	q := &stageQueue{fakeQueue: newFakeQueue(), job: &cairn.ClassificationJob{ID: 1}}
+	q.recoverEvidenceHook = func(ctx context.Context) ([]cairn.EvidenceExecution, error) {
+		close(started)
+		select {
+		case <-release:
+			return nil, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	p := NewStaged(q, nil, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+	flags := extension.DefaultFlags()
+	flags.Evidence = true
+	p.SetExtensions(extension.NewService(flags, extension.DefaultBudget(), fakeJudge{value: 0.95}), &http.Client{}, extension.DefaultFetchPolicy([]string{"allowed.example"}))
+	p.stages.pause.trip("previous provider fault")
+	p.stages.pause.now = func() time.Time { return time.Now().Add(time.Hour) }
+	recoveryDone := make(chan struct{})
+	go func() { defer close(recoveryDone); p.RunEvidenceRecovery(context.Background(), 20) }()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("evidence recovery did not start")
+	}
+	probeDone := make(chan struct{})
+	go func() {
+		defer close(probeDone)
+		done, failed, err := p.RunClassifications(context.Background(), 20)
+		if err != nil || done != 1 || failed != 0 {
+			t.Errorf("half-open probe did not complete: done=%d failed=%d err=%v", done, failed, err)
+		}
+	}()
+	select {
+	case <-probeDone:
+	case <-time.After(time.Second):
+		t.Fatal("slow evidence recovery blocked classification probe")
+	}
+	close(release)
+	select {
+	case <-recoveryDone:
+	case <-time.After(time.Second):
+		t.Fatal("evidence recovery did not finish")
+	}
+	if paused, _, _ := p.ClassificationPaused(); paused {
+		t.Fatal("successful probe did not clear the circuit breaker")
+	}
 }
 func (q *stageQueue) ClaimEvidenceRequest(_ context.Context, id, owner string) (cairn.EvidenceExecution, error) {
 	status := q.evidenceRequestStatus
@@ -133,6 +190,40 @@ func (q *stageQueue) FinalizeEvidenceRequest(context.Context, string, string) (c
 		q.retries++
 	}
 	return cairn.EvidenceReceipt{Status: status, Changed: status == "completed", Requeued: status == "completed"}, nil
+}
+
+type evidenceRequeueQueue struct {
+	*stageQueue
+	requeued *cairn.ClassificationJob
+}
+
+func (q *evidenceRequeueQueue) FinalizeEvidenceRequest(ctx context.Context, id, hash string) (cairn.EvidenceReceipt, error) {
+	receipt, err := q.stageQueue.FinalizeEvidenceRequest(ctx, id, hash)
+	if err == nil && receipt.Requeued {
+		q.mu.Lock()
+		q.job = q.requeued
+		q.mu.Unlock()
+	}
+	return receipt, err
+}
+
+func TestOneShotClassifiesEvidenceRecoveredWithinJobLimit(t *testing.T) {
+	job := &cairn.ClassificationJob{ID: 1, Revision: 2,
+		Input: classify.Input{URL: "https://x.com/a/status/1", OriginalText: "Acme builds Widgets."}}
+	base := &stageQueue{fakeQueue: newFakeQueue(), evidenceRequests: 1}
+	bindExtensionFixture(t, base, job)
+	queue := &evidenceRequeueQueue{stageQueue: base, requeued: job}
+	p := NewStaged(queue, nil, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+	flags := extension.DefaultFlags()
+	flags.Evidence = true
+	p.SetExtensions(extension.NewService(flags, extension.DefaultBudget(), fakeJudge{value: 0.95}),
+		&http.Client{Transport: staticTransport{body: "<html><body>Fetched external article body.</body></html>"}},
+		extension.DefaultFetchPolicy([]string{"allowed.example"}))
+
+	stats, err := p.Run(context.Background(), 1)
+	if err != nil || stats.Classified != 1 || queue.classified != 1 || queue.retries != 1 {
+		t.Fatalf("one-shot recovery and classification: stats=%+v classified=%d retries=%d err=%v", stats, queue.classified, queue.retries, err)
+	}
 }
 func (q *stageQueue) GetEvidenceAt(context.Context, int64, int64) (json.RawMessage, error) {
 	return q.evidenceSnapshot, q.evidenceReadErr
@@ -496,6 +587,10 @@ func TestExtensionsRunAfterClassificationWithoutFailingIt(t *testing.T) {
 	if q.entityState["state"] != string(extension.EntityCompletedNonempty) {
 		t.Fatalf("entity state = %v", q.entityState["state"])
 	}
+	if q.evidenceRequests != 1 || q.evidence != 0 {
+		t.Fatalf("classification should only persist evidence intent: requests=%d snapshots=%d", q.evidenceRequests, q.evidence)
+	}
+	p.RunEvidenceRecovery(context.Background(), 1)
 	if q.evidenceRequests != 1 || q.evidence != 1 {
 		t.Fatalf("evidence escalation did not run: requests=%d snapshots=%d", q.evidenceRequests, q.evidence)
 	}
@@ -514,6 +609,7 @@ func TestExtensionsRunAfterClassificationWithoutFailingIt(t *testing.T) {
 	if _, _, err := p.RunClassifications(context.Background(), 1); err != nil {
 		t.Fatal(err)
 	}
+	p.RunEvidenceRecovery(context.Background(), 1)
 	if len(q.evidenceDecisions) != 1 || q.evidenceDecisions[0]["status"] != "blocked" {
 		t.Fatalf("a blocked fetch must be reported, not silently skipped: %+v", q.evidenceDecisions)
 	}

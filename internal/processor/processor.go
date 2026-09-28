@@ -49,12 +49,20 @@ func (s Stats) HasWork() bool {
 
 // Processor leases and enriches jobs with bounded concurrency.
 type Processor struct {
-	stages      *stages
-	queue       Queue
-	enricher    enrich.Enricher
-	logger      *slog.Logger
-	concurrency int
-	slots       chan struct{}
+	stages       *stages
+	queue        Queue
+	enricher     enrich.Enricher
+	logger       *slog.Logger
+	concurrency  int
+	slots        chan struct{}
+	claimTimeout time.Duration
+}
+
+// SetClaimTimeout bounds each queue request without imposing a time window on
+// the whole round. A slow paid job must not stop future claims merely because
+// the previous batch started several seconds earlier.
+func (p *Processor) SetClaimTimeout(timeout time.Duration) {
+	p.claimTimeout = timeout
 }
 
 // New creates a Processor over a queue and enrichment workflow.
@@ -84,14 +92,52 @@ func (p *Processor) ProcessWithSource(ctx context.Context, job *cairn.Job, sourc
 	return p.processJob(ctx, job, sourceText)
 }
 
-// Run processes up to maxJobs and stops early on queue infrastructure errors.
-// Run processes up to maxJobs and stops early on queue infrastructure errors.
+// Run processes one bounded source and classification round. The one-shot CLI
+// keeps this combined behavior; serve schedules the two queues independently.
 //
 // Cancelling ctx stops the batch from claiming new work and bounds the run, but
 // an already-claimed job is allowed to finish while its own request deadline
 // holds. Cancelling the work itself would interrupt jobs mid-request and waste
 // their lease, which is exactly what graceful shutdown is trying to avoid.
 func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
+	started := time.Now().UTC()
+	if maxJobs < 1 {
+		return Stats{StartedAt: started, Duration: time.Since(started)}, nil
+	}
+	var classificationErr error
+	var classified, classificationFailed int64
+	classificationDone := make(chan struct{})
+	go func() {
+		defer close(classificationDone)
+		defer RecoverJob(p.logger, "classification batch", 0, &classificationErr)
+		classified, classificationFailed, classificationErr = p.RunClassifications(ctx, maxJobs)
+	}()
+	stats, sourceErr := p.RunSources(ctx, maxJobs)
+	<-classificationDone
+	stats.Classified, stats.ClassificationFailed = classified, classificationFailed
+	// Unlike serve, the one-shot command has no later evidence tick. Recover
+	// pending requests before using the remaining classification allowance so
+	// a newly appended snapshot can be classified in this invocation.
+	if ctx.Err() == nil {
+		p.RunEvidenceRecovery(ctx, maxJobs)
+	}
+	if classificationErr == nil && ctx.Err() == nil && p.stages != nil {
+		remaining := maxJobs - int(stats.Classified+stats.ClassificationFailed)
+		if remaining > 0 {
+			done, failed, err := p.RunClassifications(ctx, remaining)
+			stats.Classified += done
+			stats.ClassificationFailed += failed
+			classificationErr = err
+		}
+	}
+	stats.StartedAt = started
+	stats.Duration = time.Since(started)
+	return stats, errors.Join(sourceErr, classificationErr)
+}
+
+// RunSources claims one bounded source round. It never waits for semantic work,
+// so a slow classifier or evidence recovery cannot hold up source retrieval.
+func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) {
 	started := time.Now().UTC()
 	stats := Stats{StartedAt: started}
 	if maxJobs < 1 {
@@ -112,13 +158,6 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 	var firstErr error
 	var errOnce sync.Once
 	var workers sync.WaitGroup
-	var classificationErr error
-	classificationDone := make(chan struct{})
-	go func() {
-		defer close(classificationDone)
-		defer RecoverJob(p.logger, "classification batch", 0, &classificationErr)
-		stats.Classified, stats.ClassificationFailed, classificationErr = p.RunClassifications(ctx, maxJobs)
-	}()
 
 	recordFatal := func(err error) {
 		errOnce.Do(func() {
@@ -149,7 +188,13 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 				if claimSlots.Add(1) > int64(maxJobs) {
 					return
 				}
-				job, err := p.queue.Claim(claimCtx)
+				requestCtx := claimCtx
+				stopRequest := func() {}
+				if p.claimTimeout > 0 {
+					requestCtx, stopRequest = context.WithTimeout(claimCtx, p.claimTimeout)
+				}
+				job, err := p.queue.Claim(requestCtx)
+				stopRequest()
 				if err != nil {
 					// A cancelled claim context means the batch was told to stop,
 					// not that the queue failed.
@@ -170,30 +215,35 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 						continue
 					}
 					failed.Add(1)
-					return
+					if sourceComponentFailure(err) {
+						recordFatal(fmt.Errorf("source component paused: %w", err))
+						return
+					}
+					// One bad bookmark does not stop unrelated source work.
+					continue
 				}
 				completed.Add(1)
 			}
 		}()
 	}
 	workers.Wait()
-	<-classificationDone
-	if classificationErr == nil && ctx.Err() == nil && p.stages != nil {
-		remaining := maxJobs - int(stats.Classified+stats.ClassificationFailed)
-		if remaining > 0 {
-			done, failed, err := p.RunClassifications(ctx, remaining)
-			stats.Classified += done
-			stats.ClassificationFailed += failed
-			classificationErr = err
-		}
-	}
 
 	stats.Claimed = claimed.Load()
 	stats.Completed = completed.Load()
 	stats.Failed = failed.Load()
-	firstErr = errors.Join(firstErr, classificationErr)
 	stats.Duration = time.Since(started)
 	return stats, firstErr
+}
+
+// Source content errors stay local to one bookmark. A failed Worker write is
+// shared infrastructure; continuing to claim would burn every lease while the
+// queue is unavailable. Typed stale/completed replies are per-job exceptions.
+func sourceComponentFailure(err error) bool {
+	if enrich.PausesComponent(err) {
+		return true
+	}
+	var apiErr *cairn.APIError
+	return errors.As(err, &apiErr) && !enrich.IsStale(err) && apiErr.Class() != enrich.ErrorClassCompleted
 }
 
 func (p *Processor) processJob(ctx context.Context, job *cairn.Job, sourceText string) error {

@@ -163,7 +163,11 @@ func TestLocalWorkerEvidenceExecutionRecovery(t *testing.T) {
 	}
 	firstDone := make(chan outcome, 1)
 	go func() {
-		done, failed, err := makeProcessor(broken).RunClassifications(ctx, 1)
+		first := makeProcessor(broken)
+		done, failed, err := first.RunClassifications(ctx, 1)
+		if err == nil {
+			first.RunEvidenceRecovery(ctx, 1)
+		}
 		firstDone <- outcome{done, failed, err}
 	}()
 	select {
@@ -185,8 +189,11 @@ func TestLocalWorkerEvidenceExecutionRecovery(t *testing.T) {
 	if err != nil || other.Owned || other.OwnerToken != nil || other.Attempts != 1 {
 		t.Fatalf("pending duplicate acquired fetch: %+v %v", other, err)
 	}
-	// A second normal poll also sees no executable pending owner.
-	done, failed, err := makeProcessor(queue).RunClassifications(ctx, 1)
+	// Ordinary classification is free to poll while the slow fetch is in
+	// progress; a competing evidence worker cannot take the same owner.
+	competitor := makeProcessor(queue)
+	done, failed, err := competitor.RunClassifications(ctx, 1)
+	competitor.RunEvidenceRecovery(ctx, 1)
 	if err != nil || done != 0 || failed != 0 || fetchCalls.Load() != 1 {
 		t.Fatalf("competing processor fetched: %d/%d %v fetch=%d", done, failed, err, fetchCalls.Load())
 	}
@@ -202,9 +209,10 @@ func TestLocalWorkerEvidenceExecutionRecovery(t *testing.T) {
 	if err != nil || len(pending) != 1 || pending[0].Status != "checkpointed" || pending[0].Attempts != 1 {
 		t.Fatalf("durable recovery missing: %+v %v", pending, err)
 	}
-	// New processor, no in-memory fetch outcome: finalize stored text and classify
-	// the appended snapshot in the same bounded poll.
+	// New processor, no in-memory fetch outcome: finalize the checkpoint in the
+	// independent evidence loop, then classify the appended snapshot.
 	recovered := makeProcessor(queue)
+	recovered.RunEvidenceRecovery(ctx, 1)
 	done, failed, err = recovered.RunClassifications(ctx, 1)
 	if err != nil || done != 1 || failed != 0 {
 		t.Fatalf("checkpoint recovery %d/%d %v logs=%s", done, failed, err, logs.String())

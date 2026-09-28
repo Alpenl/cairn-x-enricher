@@ -450,8 +450,9 @@ func (p *Processor) finishReading(ctx context.Context, job *cairn.Job, source en
 }
 
 // RunClassifications drains semantic jobs without retrieving the primary source.
-// Explicitly enabled evidence extensions can fetch one bounded external gap
-// under durable ownership and recover a stored outcome before claiming work.
+// Evidence requests are created after a successful classification and fetched
+// by the independent recovery loop. Slow networks must not delay a half-open
+// classification probe or the next ordinary classification claim.
 // A component-level fault (configuration or contract) stops the loop instead of
 // burning every queued job's attempt budget; a stale job is not a model failure
 // and does not abort the batch.
@@ -463,11 +464,6 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		return 0, 0, err
 	}
 	s := p.stages
-	evidenceRemaining := 0
-	if s.extensions != nil && s.extensions.Flags.Evidence && s.fetcher != nil {
-		evidenceRemaining = min(maxJobs, 20, s.extensions.Budget.MaxCallsTotal)
-		p.recoverEvidence(ctx, &evidenceRemaining)
-	}
 	var completed, failed int64
 	// The pause gate runs before any claim. A component that failed on the
 	// previous poll must not acquire another lease until the backoff elapses:
@@ -503,7 +499,13 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		if ctx.Err() != nil {
 			break
 		}
-		job, err := s.queue.ClaimClassification(ctx, s.classifier.SpecID(), s.version, s.model)
+		claimCtx := ctx
+		stopClaim := func() {}
+		if p.claimTimeout > 0 {
+			claimCtx, stopClaim = context.WithTimeout(ctx, p.claimTimeout)
+		}
+		job, err := s.queue.ClaimClassification(claimCtx, s.classifier.SpecID(), s.version, s.model)
+		stopClaim()
 		if err != nil {
 			if enrich.PausesComponent(err) {
 				// Trip the breaker so the next poll does not claim and burn
@@ -571,7 +573,7 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		}
 		cancel()
 		completed++
-		p.runExtensions(ctx, job, &evidenceRemaining)
+		p.runExtensions(ctx, job)
 	}
 	return completed, failed, nil
 }
@@ -625,7 +627,7 @@ func (p *Processor) previousJudgments(ctx context.Context, job *cairn.Classifica
 // runExtensions runs the opt-in bounded extensions after a successful
 // classification. Every failure is logged and swallowed: an extension can never
 // fail the bookmark or lose the classification that was already committed.
-func (p *Processor) runExtensions(ctx context.Context, job *cairn.ClassificationJob, remaining *int) {
+func (p *Processor) runExtensions(ctx context.Context, job *cairn.ClassificationJob) {
 	s := p.stages
 	if s.extensions == nil {
 		return
@@ -668,7 +670,7 @@ func (p *Processor) runExtensions(ctx context.Context, job *cairn.Classification
 			p.logger.WarnContext(ctx, "entity state was not stored", "link_id", job.ID, "error", err)
 		}
 	}
-	if !s.extensions.Flags.Evidence || s.fetcher == nil || *remaining <= 0 {
+	if !s.extensions.Flags.Evidence || s.fetcher == nil || s.extensions.Budget.MaxCallsTotal <= 0 {
 		return
 	}
 	rawURL := firstMissingAllowlisted(blocks, job.RelatedLinks, s.fetchPolicy)
@@ -692,9 +694,11 @@ func (p *Processor) runExtensions(ctx context.Context, job *cairn.Classification
 		p.logger.WarnContext(ctx, "evidence request was not stored", "link_id", job.ID, "error", err)
 		return
 	}
-	// Replayed pending intents also go through the atomic claim; replay is never
-	// interpreted as ownership. Checkpointed results can be finalized without fetch.
-	p.executeEvidence(ctx, ack.ID, remaining)
+	// A separate loop executes pending and checkpointed intents. The durable
+	// request survives shutdown and gives the fetch its own bounded budget.
+	if ack.Status == "pending" || ack.Status == "fetching" || ack.Status == "checkpointed" {
+		p.logger.InfoContext(ctx, "evidence request queued", "link_id", job.ID, "request_id", ack.ID, "status", ack.Status)
+	}
 }
 
 // attachBoundEvidence loads the snapshot the lease was bound to and builds the

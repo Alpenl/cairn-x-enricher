@@ -30,6 +30,17 @@ func retryEvidenceWrite(ctx context.Context, action func() error) error {
 	}
 	return err
 }
+
+// RunEvidenceRecovery handles a bounded set of durable evidence requests. It
+// runs independently of classification and is a no-op with the extension off.
+func (p *Processor) RunEvidenceRecovery(ctx context.Context, maxRequests int) {
+	if p.stages == nil || p.stages.extensions == nil || !p.stages.extensions.Flags.Evidence || p.stages.fetcher == nil || maxRequests <= 0 {
+		return
+	}
+	remaining := min(maxRequests, 20, p.stages.extensions.Budget.MaxCallsTotal)
+	p.recoverEvidence(ctx, &remaining)
+}
+
 func (p *Processor) recoverEvidence(ctx context.Context, remaining *int) {
 	if *remaining <= 0 {
 		return

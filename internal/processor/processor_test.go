@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
@@ -131,7 +132,7 @@ func TestRunCompletesClaimedJobs(t *testing.T) {
 	}
 }
 
-func TestRunReportsModelFailureAndStopsThatWorker(t *testing.T) {
+func TestRunContinuesAfterOneBookmarkFails(t *testing.T) {
 	queue := newFakeQueue(
 		&cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, LeaseToken: "lease-1"},
 		&cairn.Job{ID: 2, URL: "https://x.com/a/status/2", Attempt: 1, LeaseToken: "lease-2"},
@@ -142,7 +143,7 @@ func TestRunReportsModelFailureAndStopsThatWorker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if stats.Claimed != 1 || stats.Completed != 0 || stats.Failed != 1 {
+	if stats.Claimed != 2 || stats.Completed != 1 || stats.Failed != 1 {
 		t.Fatalf("Run() stats = %+v", stats)
 	}
 	// The stored message names the path so a retrieval failure is
@@ -150,8 +151,41 @@ func TestRunReportsModelFailureAndStopsThatWorker(t *testing.T) {
 	if queue.failures[1] != "[search] model failure" {
 		t.Fatalf("failure = %q, want the path-labelled cause", queue.failures[1])
 	}
-	if len(queue.jobs) != 1 {
-		t.Fatalf("remaining jobs = %d", len(queue.jobs))
+	if len(queue.jobs) != 0 || len(queue.completions) != 1 {
+		t.Fatalf("other bookmark was not processed: pending=%d complete=%d", len(queue.jobs), len(queue.completions))
+	}
+}
+
+type hangingClaimQueue struct{ Queue }
+
+func (hangingClaimQueue) Claim(ctx context.Context) (*cairn.Job, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestEachSourceClaimHasItsOwnTimeout(t *testing.T) {
+	p := New(hangingClaimQueue{}, fakeEnricher{}, discardLogger(), 1)
+	p.SetClaimTimeout(30 * time.Millisecond)
+	started := time.Now()
+	_, err := p.RunSources(context.Background(), 1)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("claim error = %v, want request timeout", err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("single claim took %s despite its timeout", elapsed)
+	}
+}
+
+func TestWorkerWriteFailureStopsSourceClaims(t *testing.T) {
+	queue := newFakeQueue(
+		&cairn.Job{ID: 1, URL: "https://x.com/a/status/1", LeaseToken: "one"},
+		&cairn.Job{ID: 2, URL: "https://x.com/a/status/2", LeaseToken: "two"},
+	)
+	queue.failErr = &cairn.APIError{StatusCode: 503, Code: "upstream_unavailable"}
+	p := New(queue, fakeEnricher{failID: 1}, discardLogger(), 1)
+	stats, err := p.RunSources(context.Background(), 10)
+	if err == nil || stats.Claimed != 1 || len(queue.jobs) != 1 {
+		t.Fatalf("Worker failure consumed unrelated leases: stats=%+v pending=%d err=%v", stats, len(queue.jobs), err)
 	}
 }
 
