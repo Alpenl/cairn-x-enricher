@@ -1201,6 +1201,7 @@ func publicErrorCode(err error) string {
 	var apiErr *cairn.APIError
 	if errors.As(err, &apiErr) && (apiErr.Code == "not_found" || apiErr.Code == "job_busy" ||
 		apiErr.Code == "lease_conflict" ||
+		apiErr.Code == "provider_result_unknown" ||
 		apiErr.Code == "input_changed" || apiErr.Code == "operation_conflict" ||
 		apiErr.Code == "manual_queue_full" || apiErr.Code == "invalid_source") {
 		return apiErr.Code

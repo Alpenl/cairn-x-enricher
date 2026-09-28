@@ -251,7 +251,8 @@ func TestClientAdmitsPaidSourceStageOnlyWithWorkerReceipt(t *testing.T) {
 		}
 		var body map[string]any
 		if err := json.NewDecoder(request.Body).Decode(&body); err != nil ||
-			body["lease_token"] != "lease-7" || body["min_remaining_ms"] != float64(210000) {
+			body["lease_token"] != "lease-7" || body["stage"] != "reading" ||
+			body["min_remaining_ms"] != float64(210000) {
 			t.Errorf("admission body = %#v, error=%v", body, err)
 		}
 		if requests == 2 {
@@ -263,10 +264,10 @@ func TestClientAdmitsPaidSourceStageOnlyWithWorkerReceipt(t *testing.T) {
 	}))
 	defer server.Close()
 	client := NewClient(server.URL, "token", server.Client())
-	if err := client.AdmitSourceStage(context.Background(), 7, "lease-7", 210*time.Second); err != nil {
+	if err := client.AdmitSourceStage(context.Background(), 7, "lease-7", "reading", 210*time.Second); err != nil {
 		t.Fatalf("AdmitSourceStage() = %v", err)
 	}
-	err := client.AdmitSourceStage(context.Background(), 7, "lease-7", 210*time.Second)
+	err := client.AdmitSourceStage(context.Background(), 7, "lease-7", "reading", 210*time.Second)
 	var apiErr *APIError
 	if !errors.As(err, &apiErr) || apiErr.Code != "lease_released" || apiErr.Class() != enrich.ErrorClassStale {
 		t.Fatalf("short lease = %v", err)
@@ -285,7 +286,7 @@ func TestClientRequiresSourceLeaseContractBeforeScheduling(t *testing.T) {
 				_, _ = writer.Write([]byte(`{"error":"not_found"}`))
 				return
 			}
-			_, _ = writer.Write([]byte(`{"protocol":1,"lease_ms":900000,"paid_stage_admission":true}`))
+			_, _ = writer.Write([]byte(`{"protocol":1,"lease_ms":900000,"paid_stage_admission":true,"provider_result_guard":true}`))
 		}))
 		client := NewClient(server.URL, "token", server.Client())
 		err := client.VerifySourceLeaseCapability(context.Background())

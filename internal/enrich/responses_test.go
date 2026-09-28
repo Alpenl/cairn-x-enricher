@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestResponsesClientForcesXSearchAndParsesStructuredOutput(t *testing.T) {
@@ -116,45 +115,25 @@ func TestResponsesClientReturnsSanitizedHTTPError(t *testing.T) {
 	}
 }
 
-func TestResponsesClientRetriesTransientHTTPFailures(t *testing.T) {
+func TestResponsesClientDoesNotRepeatAmbiguousHTTPFailures(t *testing.T) {
 	var calls int
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		calls++
-		if calls < 3 {
-			writer.Header().Set("Retry-After", "0")
-			writer.WriteHeader(http.StatusBadGateway)
-			_, _ = writer.Write([]byte(`{"error":{"message":"Upstream service temporarily unavailable"}}`))
-			return
-		}
-
-		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`{
-          "status":"completed",
-          "model":"grok-test",
-          "output":[
-            {"type":"x_search_call","status":"completed"},
-            {"type":"message","status":"completed","content":[
-              {"type":"output_text","text":"{\"ai_title\":\"人工智能生成的测试中文标题\",\"original_language\":\"en\",\"original_text\":\"source\",\"translated_text\":\"中文译文\",\"summary\":\"summary\",\"related_links\":[],\"image_urls\":[]}"}
-            ]}
-          ]
-        }`))
+		writer.Header().Set("Retry-After", "0")
+		writer.WriteHeader(http.StatusBadGateway)
+		_, _ = writer.Write([]byte(`{"error":{"message":"Upstream service temporarily unavailable"}}`))
 	}))
 	defer server.Close()
 
 	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client(), testTaxonomy())
-	candidate, err := client.Generate(context.Background(), Input{ID: 9, URL: "https://x.com/a/status/9", Attempt: 5})
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
-	}
-	if calls != 3 {
-		t.Fatalf("calls = %d, want 3", calls)
-	}
-	if candidate.Result.AITitle != "人工智能生成的测试中文标题" {
-		t.Fatalf("Generate() = %+v", candidate)
+	_, err := client.Generate(context.Background(), Input{ID: 9, URL: "https://x.com/a/status/9", Attempt: 5})
+	var httpErr *ModelHTTPError
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusBadGateway || calls != 1 {
+		t.Fatalf("ambiguous provider response: calls=%d, error=%v", calls, err)
 	}
 }
 
-func TestResponsesClientFallsBackToPostOnlyPromptAfterTransientHTTPFailures(t *testing.T) {
+func TestResponsesClientDoesNotTryAnotherPromptAfterHTTPFailure(t *testing.T) {
 	var sawFallback bool
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		var body struct {
@@ -193,15 +172,10 @@ func TestResponsesClientFallsBackToPostOnlyPromptAfterTransientHTTPFailures(t *t
 	defer server.Close()
 
 	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client(), testTaxonomy())
-	candidate, err := client.Generate(context.Background(), Input{ID: 12, URL: "https://x.com/a/status/12", Attempt: 5})
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
-	}
-	if !sawFallback {
-		t.Fatal("fallback prompt was not used")
-	}
-	if candidate.Result.AITitle != "公众号三年经验与创作工作流" {
-		t.Fatalf("Generate() = %+v", candidate)
+	_, err := client.Generate(context.Background(), Input{ID: 12, URL: "https://x.com/a/status/12", Attempt: 5})
+	var httpErr *ModelHTTPError
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusBadGateway || sawFallback {
+		t.Fatalf("ambiguous response started fallback=%v: %v", sawFallback, err)
 	}
 }
 
@@ -259,14 +233,5 @@ func TestResponsesClientTransformsTrustedSourceWithoutXSearch(t *testing.T) {
 	}
 	if len(candidate.Result.ImageURLs) != 0 {
 		t.Fatalf("ImageURLs = %#v", candidate.Result.ImageURLs)
-	}
-}
-
-func TestSlowModelFailuresSkipSamePromptRetry(t *testing.T) {
-	if shouldRetryModelRequest(http.StatusBadGateway, 1, slowModelFailure) {
-		t.Fatal("slow model failure should move to fallback instead of retrying the same prompt")
-	}
-	if !shouldRetryModelRequest(http.StatusBadGateway, 1, time.Second) {
-		t.Fatal("fast transient model failure should retry")
 	}
 }

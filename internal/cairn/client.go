@@ -78,6 +78,8 @@ type Bookmark struct {
 	Images                 []ImageRef               `json:"images"`
 	Model                  string                   `json:"model,omitempty"`
 	Error                  string                   `json:"error,omitempty"`
+	PaidCallUnresolved     bool                     `json:"paid_call_unresolved"`
+	PaidStage              string                   `json:"paid_stage,omitempty"`
 	UpdatedAt              string                   `json:"updated_at,omitempty"`
 	EnrichedAt             string                   `json:"enriched_at,omitempty"`
 	Source                 string                   `json:"source,omitempty"`
@@ -279,15 +281,16 @@ func (c *Client) VerifySourceLeaseCapability(ctx context.Context) error {
 		return fmt.Errorf("source lease admission is unavailable: %w", apiError(response))
 	}
 	var capability struct {
-		Protocol           int  `json:"protocol"`
-		LeaseMS            int  `json:"lease_ms"`
-		PaidStageAdmission bool `json:"paid_stage_admission"`
+		Protocol            int  `json:"protocol"`
+		LeaseMS             int  `json:"lease_ms"`
+		PaidStageAdmission  bool `json:"paid_stage_admission"`
+		ProviderResultGuard bool `json:"provider_result_guard"`
 	}
 	if err := decodeJSON(response.Body, &capability); err != nil {
 		return fmt.Errorf("decode source lease capability: %w", err)
 	}
 	if capability.Protocol != 1 || capability.LeaseMS != int((15*time.Minute).Milliseconds()) ||
-		!capability.PaidStageAdmission {
+		!capability.PaidStageAdmission || !capability.ProviderResultGuard {
 		return errors.New("source lease admission protocol is incompatible")
 	}
 	return nil
@@ -296,12 +299,13 @@ func (c *Client) VerifySourceLeaseCapability(ctx context.Context) error {
 // AdmitSourceStage checks the authoritative lease immediately before a paid
 // call. A short lease is conditionally released by the Worker; a claim with no
 // previous paid-stage admission has its attempt refunded there.
-func (c *Client) AdmitSourceStage(ctx context.Context, id int64, leaseToken string, minRemaining time.Duration) error {
-	if id < 1 || leaseToken == "" || minRemaining <= 0 || minRemaining > 15*time.Minute {
+func (c *Client) AdmitSourceStage(ctx context.Context, id int64, leaseToken, stage string, minRemaining time.Duration) error {
+	if id < 1 || leaseToken == "" || (stage != "fetch" && stage != "reading") ||
+		minRemaining <= 0 || minRemaining > 15*time.Minute {
 		return errors.New("invalid source stage admission")
 	}
 	response, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/enrichment/jobs/%d/lease-admit", id),
-		map[string]any{"lease_token": leaseToken, "min_remaining_ms": minRemaining.Milliseconds()})
+		map[string]any{"lease_token": leaseToken, "stage": stage, "min_remaining_ms": minRemaining.Milliseconds()})
 	if err != nil {
 		return err
 	}

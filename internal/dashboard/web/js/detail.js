@@ -89,7 +89,11 @@ function renderProcessBanner(item) {
   const actions = [];
   let tone = "info";
   let text = "";
-  if (item.status === "processing") text = "正在读取原帖并生成中文标题、译文与摘要…";
+  if (item.paid_call_unresolved) {
+    tone = "danger";
+    text = "上次模型调用结果尚未核对，已暂停自动重试。可以粘贴新的原文或更换来源。";
+    actions.push(h("button.btn.btn-sm", { type: "button", onclick: () => pasteSource(item.id) }, icon("clipboard", 14), "粘贴原文"));
+  } else if (item.status === "processing") text = "正在读取原帖并生成中文标题、译文与摘要…";
   else if (item.status === "pending") text = "已排队，稍后会自动读取原帖。";
   else if (item.status === "failed") {
     tone = "warn";
@@ -107,7 +111,7 @@ function renderProcessBanner(item) {
   banner.hidden = !text;
   if (!text) return;
   banner.className = `banner banner-${tone}`;
-  clear(banner, isWorking(item) ? icon("loader", 16, "spin") : icon(tone === "info" ? "clock" : "alert", 16),
+  clear(banner, isWorking(item) && !item.paid_call_unresolved ? icon("loader", 16, "spin") : icon(tone === "info" ? "clock" : "alert", 16),
     h("p", text), actions.length ? h("div.banner-actions", actions) : null);
 }
 
@@ -369,7 +373,7 @@ function openDetailMenu(anchor) {
     { heading: "阅读内容" },
     processable ? {
       label: item.translated_text ? "重新处理" : "立即处理", icon: "refresh", hint: "会调用模型读取原帖",
-      disabled: item.status === "processing", run: () => processItem(item.id)
+      disabled: item.status === "processing" || item.paid_call_unresolved, run: () => processItem(item.id)
     } : null,
     { label: "粘贴原文生成", icon: "clipboard", hint: "跳过 X 搜索，直接用粘贴的正文", run: () => pasteSource(item.id) },
     { label: "重新抓取原文", icon: "download", hint: "会重新读取来源", run: () => diagnostics.refreshSource(item.id) },

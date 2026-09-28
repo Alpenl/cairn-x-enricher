@@ -24,7 +24,7 @@ type StageQueue interface {
 	Queue
 	// AdmitSourceStage fences the current lease before each paid retrieval or
 	// reading call, releasing a short lease without charging an unused attempt.
-	AdmitSourceStage(context.Context, int64, string, time.Duration) error
+	AdmitSourceStage(context.Context, int64, string, string, time.Duration) error
 	GetSource(context.Context, int64) (*enrich.Source, error)
 	SaveSource(context.Context, int64, string, enrich.Source) error
 	ClaimClassification(context.Context, string, string, string) (*cairn.ClassificationJob, error)
@@ -231,13 +231,14 @@ func (p *Processor) SetPaidStageTimeout(timeout time.Duration) {
 }
 
 func (p *Processor) admitPaidStage(ctx context.Context, job *cairn.Job, stage string) error {
-	err := p.stages.queue.AdmitSourceStage(ctx, job.ID, job.LeaseToken,
+	err := p.stages.queue.AdmitSourceStage(ctx, job.ID, job.LeaseToken, stage,
 		p.stages.paidStageTimeout+paidStageCommitMargin)
 	if err == nil {
 		return nil
 	}
 	var apiErr *cairn.APIError
-	if errors.As(err, &apiErr) && (apiErr.Code == "lease_released" || apiErr.Code == "lease_conflict") {
+	if errors.As(err, &apiErr) && (apiErr.Code == "lease_released" || apiErr.Code == "lease_conflict" ||
+		apiErr.Code == "provider_result_unknown") {
 		p.logger.InfoContext(ctx, "paid stage deferred after source lease check",
 			"link_id", job.ID, "stage", stage, "reason", apiErr.Code)
 		return ErrJobDeferred

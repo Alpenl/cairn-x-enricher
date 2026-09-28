@@ -23,6 +23,7 @@ const ERROR_LABELS = Object.freeze({
   revision_conflict: "已被其他客户端更新",
   snapshot_conflict: "已被其他客户端更新",
   lease_conflict: "已有抓取任务在进行中",
+  provider_result_unknown: "上次模型调用结果尚未核对，已暂停重试；可粘贴新的原文或更换来源。",
   unsupported_filter_contract: "服务暂不支持完整筛选，请更新服务或清除筛选后浏览。",
   v2_unsupported: "后端不支持这个操作",
   no_replayable_run: "还没有可重算的分类记录",

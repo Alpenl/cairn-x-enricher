@@ -164,7 +164,7 @@ export function needsAttention(item) {
 }
 
 export function isWorking(item) {
-  return item?.status === "pending" || item?.status === "processing";
+  return !item?.paid_call_unresolved && (item?.status === "pending" || item?.status === "processing");
 }
 
 // An unreviewed record with no suggestion, or an explicitly uncertain one,

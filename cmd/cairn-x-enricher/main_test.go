@@ -15,7 +15,7 @@ func TestIsContractFailureClassifiesConfigurationFaults(t *testing.T) {
 	for _, status := range []int{
 		http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusBadRequest,
 	} {
-		err := &enrich.ModelHTTPError{StatusCode: status, Message: "no"}
+		err := &enrich.ModelHTTPError{StatusCode: status}
 		if !isContractFailure(err) {
 			t.Errorf("isContractFailure(HTTP %d) = false, want true", status)
 		}

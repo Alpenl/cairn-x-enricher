@@ -7,12 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand/v2"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
@@ -20,11 +17,6 @@ import (
 const (
 	maxModelResponseBytes  = 4 << 20
 	maxModelOutputBytes    = 1 << 20
-	maxModelHTTPAttempts   = 3
-	modelRetryBaseDelay    = 500 * time.Millisecond
-	maxModelRetryDelay     = 5 * time.Second
-	slowModelFailure       = 30 * time.Second
-	retryJitterPercent     = 25
 	promptTemplate         = "读取此 X 帖及相关评论。严格返回：约20个简体中文字符的标题；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅与内容直接相关的最终链接；原帖或相关评论中的图片原始媒体 URL（仅 pbs.twimg.com/media）。无图或无链接返回空数组，忽略广告和无关项。\nURL: %s"
 	postOnlyPromptTemplate = "读取此 X 帖。优先读取原帖正文；不要展开全量评论，只有在评论可立即获得且直接相关时才纳入。严格返回：约20个简体中文字符的标题；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅与内容直接相关的最终链接；原帖中的图片原始媒体 URL（仅 pbs.twimg.com/media）。无图或无链接返回空数组，忽略广告和无关项。\nURL: %s"
 	sourcePromptTemplate   = "基于已提供的 X 原文生成增强结果。不要搜索、不要补写未提供的正文。严格返回：约20个简体中文字符的标题；原文语言标识；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅保留原文中明确出现且与内容直接相关的最终链接；image_urls 返回空数组。\nURL: %s\n原文:\n%s"
@@ -57,29 +49,22 @@ type ResponsesClient struct {
 
 // ModelHTTPError reports a non-success status from the model endpoint.
 //
-// The Type field carries the provider's error class (for example
-// "upstream_error"), which is the most actionable part of the response: it
-// separates a transient upstream outage from a quota, auth, or schema problem,
-// and those need different operator responses. Error() puts the status and type
-// first because the stored failure message is truncated downstream, and a
-// truncated message must still identify what went wrong.
+// The Type field carries a bounded, validated provider error class. A provider
+// message can echo private input or credentials, so neither logs nor the stored
+// failure string include it. HTTP status and type remain available for triage.
 type ModelHTTPError struct {
 	StatusCode int
 	Type       string
-	Message    string
 }
 
 func (e *ModelHTTPError) Error() string {
 	var head string
-	if e.Type != "" {
-		head = fmt.Sprintf("HTTP %d %s", e.StatusCode, e.Type)
+	if safeType := safeProviderType(e.Type); safeType != "" {
+		head = fmt.Sprintf("HTTP %d %s", e.StatusCode, safeType)
 	} else {
 		head = fmt.Sprintf("HTTP %d", e.StatusCode)
 	}
-	if e.Message == "" {
-		return head
-	}
-	return head + ": " + e.Message
+	return head
 }
 
 // NewResponsesClient creates a narrow xAI Responses API adapter.
@@ -113,9 +98,9 @@ func NewResponsesClient(baseURL, apiKey, model string, maxTokens int, userAgent 
 //     unexamined would abandon the bookmark even though the other prompt can
 //     serve it.
 //
-// A non-retryable request error (auth, quota, malformed request) still aborts
-// immediately, because retrying it with different wording cannot help and would
-// only multiply a configuration fault across every bookmark.
+// A request error ends this invocation. Even a transient HTTP failure can
+// follow a provider-side execution, and the Responses API does not document
+// a guarantee that our Idempotency-Key header prevents a second paid call.
 func (c *ResponsesClient) Generate(ctx context.Context, input Input) (Candidate, error) {
 	if strings.TrimSpace(input.SourceText) != "" {
 		return c.generateFromSource(ctx, input)
@@ -125,11 +110,7 @@ func (c *ResponsesClient) Generate(ctx context.Context, input Input) (Candidate,
 	for _, prompt := range responsePromptVariants {
 		envelope, err := c.invokeResponse(ctx, input, prompt)
 		if err != nil {
-			lastErr = err
-			if !retryableModelError(err) {
-				return Candidate{}, err
-			}
-			continue
+			return Candidate{}, err
 		}
 		candidate, err := c.candidateFromEnvelope(input, envelope, false)
 		if err != nil {
@@ -212,38 +193,24 @@ func (c *ResponsesClient) invokePayload(ctx context.Context, input Input, prompt
 		return responseEnvelope{}, fmt.Errorf("encode model request: %w", err)
 	}
 
-	for requestAttempt := 1; requestAttempt <= maxModelHTTPAttempts; requestAttempt++ {
-		request, err := c.newGenerateRequest(ctx, body, input, promptName, requestAttempt)
-		if err != nil {
-			return responseEnvelope{}, err
-		}
-		started := time.Now()
-		response, err := c.httpClient.Do(request)
-		if err != nil {
-			return responseEnvelope{}, fmt.Errorf("call model API: %w", err)
-		}
-		if response.StatusCode == http.StatusOK {
-			defer func() { _ = response.Body.Close() }()
-			var envelope responseEnvelope
-			decoder := json.NewDecoder(io.LimitReader(response.Body, maxModelResponseBytes))
-			if err := decoder.Decode(&envelope); err != nil {
-				return responseEnvelope{}, fmt.Errorf("decode model response: %w", err)
-			}
-			return envelope, nil
-		}
-
-		modelErr := readModelHTTPError(response)
-		shouldRetry := shouldRetryModelRequest(response.StatusCode, requestAttempt, time.Since(started))
-		delay := modelRetryDelay(response, requestAttempt)
-		_ = response.Body.Close()
-		if !shouldRetry {
-			return responseEnvelope{}, modelErr
-		}
-		if err := waitForRetry(ctx, delay); err != nil {
-			return responseEnvelope{}, err
-		}
+	request, err := c.newGenerateRequest(ctx, body, input, promptName, 1)
+	if err != nil {
+		return responseEnvelope{}, err
 	}
-	return responseEnvelope{}, errors.New("model request attempts exhausted")
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return responseEnvelope{}, fmt.Errorf("call model API: %w", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return responseEnvelope{}, readModelHTTPError(response)
+	}
+	var envelope responseEnvelope
+	decoder := json.NewDecoder(io.LimitReader(response.Body, maxModelResponseBytes))
+	if err := decoder.Decode(&envelope); err != nil {
+		return responseEnvelope{}, fmt.Errorf("decode model response: %w", err)
+	}
+	return envelope, nil
 }
 
 func (c *ResponsesClient) candidateFromEnvelope(input Input, envelope responseEnvelope, sourceVerified bool) (Candidate, error) {
@@ -323,10 +290,9 @@ func (c *ResponsesClient) newGenerateRequest(ctx context.Context, body []byte, i
 
 func modelIdempotencyKey(input Input, promptName string, requestAttempt int) string {
 	// Reading is a pure function of the persisted source, which is already
-	// fingerprinted into promptName. Keying the provider request on that
-	// fingerprint rather than the job attempt makes a retry after a lost
-	// completion response reuse the same server-side result instead of paying
-	// for the same reading twice.
+	// fingerprinted into promptName. This creates a stable request correlation
+	// key across job retries. Provider-side deduplication is not documented for
+	// this endpoint; callers must not rely on this header to prevent payment.
 	if strings.HasPrefix(promptName, "reading-") {
 		return "cairn-reading-" + strings.TrimPrefix(promptName, "reading-") + fmt.Sprintf("-%d", requestAttempt)
 	}
@@ -335,99 +301,6 @@ func modelIdempotencyKey(input Input, promptName string, requestAttempt int) str
 		return base
 	}
 	return fmt.Sprintf("%s-%s-%d", base, promptName, requestAttempt)
-}
-
-func shouldRetryModelRequest(status, requestAttempt int, elapsed time.Duration) bool {
-	// A request that already consumed most of the budget must not add a
-	// second long wait: the caller degrades to the post-only prompt instead.
-	// This keeps the retry decision and the fallback decision consistent.
-	if elapsed >= slowModelFailure {
-		return false
-	}
-	return requestAttempt < maxModelHTTPAttempts && retryableModelStatus(status)
-}
-
-func retryableModelError(err error) bool {
-	// Only transient faults are retried in place. Configuration and contract
-	// faults are deterministic and would otherwise consume the attempt budget of
-	// every queued job; stale/conflict responses are superseded, not retried.
-	return IsRetryable(ClassifyModelError(err))
-}
-
-func retryableModelStatus(status int) bool {
-	switch status {
-	case http.StatusRequestTimeout,
-		http.StatusTooManyRequests,
-		http.StatusInternalServerError,
-		http.StatusBadGateway,
-		http.StatusServiceUnavailable,
-		http.StatusGatewayTimeout:
-		return true
-	default:
-		return false
-	}
-}
-
-func modelRetryDelay(response *http.Response, requestAttempt int) time.Duration {
-	if delay, ok := retryAfterDelay(response.Header.Get("Retry-After")); ok {
-		return min(delay, maxModelRetryDelay)
-	}
-	// Jitter prevents every replica from retrying in lockstep after a shared
-	// upstream outage, which would otherwise re-create the same thundering
-	// herd the backoff is meant to avoid.
-	base := min(time.Duration(requestAttempt)*modelRetryBaseDelay, maxModelRetryDelay)
-	return jitterDuration(base, retryJitterPercent)
-}
-
-// jitterDuration spreads a base delay by +-percent. It never returns a
-// negative duration.
-//
-// Randomness here only de-synchronises replicas after a shared outage; it is
-// deliberately not a security decision and carries no secret, so a fast
-// non-cryptographic source is the correct choice.
-func jitterDuration(base time.Duration, percent int) time.Duration {
-	if base <= 0 || percent <= 0 {
-		return base
-	}
-	span := int64(base) * int64(percent) / 100
-	if span <= 0 {
-		return base
-	}
-	//nolint:gosec // non-cryptographic de-synchronisation jitter, not a security decision
-	offset := time.Duration(rand.Int64N(2*span+1)) - time.Duration(span)
-	return base + offset
-}
-
-func retryAfterDelay(raw string) (time.Duration, bool) {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return 0, false
-	}
-	if seconds, err := strconv.Atoi(value); err == nil && seconds >= 0 {
-		return time.Duration(seconds) * time.Second, true
-	}
-	if when, err := http.ParseTime(value); err == nil {
-		delay := time.Until(when)
-		if delay < 0 {
-			delay = 0
-		}
-		return delay, true
-	}
-	return 0, false
-}
-
-func waitForRetry(ctx context.Context, delay time.Duration) error {
-	if delay <= 0 {
-		return ctx.Err()
-	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
 }
 
 func isXSearchOutput(item responseOutputItem) bool {
@@ -527,30 +400,31 @@ func decodeStrictJSON(reader io.Reader, target any) error {
 func readModelHTTPError(response *http.Response) error {
 	var payload struct {
 		Error struct {
-			Message string `json:"message"`
-			Type    string `json:"type"`
+			Type string `json:"type"`
 		} `json:"error"`
 	}
 	_ = json.NewDecoder(io.LimitReader(response.Body, 32<<10)).Decode(&payload)
-	message := strings.TrimSpace(payload.Error.Message)
-	if len(message) > 500 {
-		message = message[:500]
-	}
 	return &ModelHTTPError{
 		StatusCode: response.StatusCode,
-		Type:       boundedField(payload.Error.Type, 60),
-		Message:    message,
+		Type:       safeProviderType(payload.Error.Type),
 	}
 }
 
-// boundedField trims a provider-supplied field so an oversized or hostile value
-// cannot dominate the stored failure message.
-func boundedField(value string, limit int) string {
+// safeProviderType accepts only compact protocol identifiers. Free text from
+// the provider is not safe to include in logs or user-visible failure records.
+func safeProviderType(value string) string {
 	value = strings.TrimSpace(value)
-	if len(value) <= limit {
-		return value
+	if len(value) == 0 || len(value) > 60 {
+		return ""
 	}
-	return value[:limit]
+	for _, char := range value {
+		allowed := (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') || char == '_' || char == '-' || char == '.'
+		if !allowed {
+			return ""
+		}
+	}
+	return value
 }
 
 type responseRequest struct {

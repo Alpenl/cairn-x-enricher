@@ -37,11 +37,7 @@ func (c *ResponsesClient) FetchSource(ctx context.Context, input Input) (Source,
 			Text: responseTextConfig{Format: responseFormat{Type: "json_schema", Name: "x_source", Strict: true, Schema: sourceSchema()}}}
 		envelope, err := c.invokePayload(ctx, input, variant.name, payload)
 		if err != nil {
-			lastErr = err
-			if !retryableModelError(err) {
-				return Source{}, err
-			}
-			continue
+			return Source{}, err
 		}
 		if envelope.Model == "" {
 			envelope.Model = c.model

@@ -85,6 +85,7 @@ check("classification status polling is bounded", /statusPolls\+\+ >= \d+/.test(
 // --- Formatting -------------------------------------------------------------------
 
 const format = await load("format.js");
+equal("unresolved paid call does not poll as active work", format.isWorking({ status: "processing", paid_call_unresolved: true }), false);
 equal("formatDate empty", format.formatDate(""), "-");
 equal("formatDate invalid", format.formatDate("nope"), "-");
 check("formatDate formats", format.formatDate("2026-09-11T00:00:00Z").includes("2026"));
@@ -189,7 +190,7 @@ const query = await load("query.js");
 const { api, errorLabel } = await load("api.js");
 for (const code of ["job_busy", "not_found", "backend_error", "queue_full", "invalid_ids", "invalid_source", "invalid_curation",
   "invalid_id", "invalid_query", "invalid_json", "invalid_content_type", "revision_conflict", "unsupported_filter_contract", "lease_conflict",
-  "manual_queue_full", "invalid_operation_key"]) {
+  "manual_queue_full", "invalid_operation_key", "provider_result_unknown"]) {
   check(`errorLabel(${code})`, errorLabel(code) !== code, errorLabel(code));
 }
 equal("errorLabel unknown is shown verbatim", errorLabel("brand_new_code"), "brand_new_code");

@@ -2,6 +2,7 @@ package localintegration
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -15,6 +16,13 @@ import (
 
 type localSourceReader struct {
 	fetches, transforms int
+}
+
+type localFailedSourceReader struct{ localSourceReader }
+
+func (r *localFailedSourceReader) FetchSource(context.Context, enrich.Input) (enrich.Source, error) {
+	r.fetches++
+	return enrich.Source{}, &enrich.ModelHTTPError{StatusCode: http.StatusBadGateway, Type: "upstream_error"}
 }
 
 func (r *localSourceReader) FetchSource(context.Context, enrich.Input) (enrich.Source, error) {
@@ -57,5 +65,31 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 		reader.fetches != 1 || reader.transforms != 1 {
 		t.Fatalf("source admission lifecycle = %+v, fetches=%d transforms=%d, err=%v",
 			detail, reader.fetches, reader.transforms, err)
+	}
+
+	failedID := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
+	failedJob, err := queue.Claim(ctx)
+	if err != nil || failedJob == nil || failedJob.ID != failedID {
+		t.Fatalf("failed source claim = %+v, %v", failedJob, err)
+	}
+	failedReader := &localFailedSourceReader{}
+	failedWorker := processor.NewStaged(queue, failedReader, nil, "", "",
+		slog.New(slog.NewJSONHandler(io.Discard, nil)), 1)
+	failedWorker.SetPaidStageTimeout(10 * time.Second)
+	if err := failedWorker.Process(ctx, failedJob); err == nil {
+		t.Fatal("ambiguous provider response unexpectedly succeeded")
+	} else {
+		var modelErr *enrich.ModelHTTPError
+		if !errors.As(err, &modelErr) || modelErr.StatusCode != http.StatusBadGateway {
+			t.Fatalf("provider error = %v", err)
+		}
+	}
+	failedDetail, err := queue.GetBookmark(ctx, failedID)
+	if err != nil || failedDetail.Status != "failed" || !failedDetail.PaidCallUnresolved ||
+		failedDetail.PaidStage != "fetch" || failedReader.fetches != 1 {
+		t.Fatalf("ambiguous result guard = %+v, fetches=%d, err=%v", failedDetail, failedReader.fetches, err)
+	}
+	if claimed, err := queue.Claim(ctx); err != nil || claimed != nil {
+		t.Fatalf("possibly paid call was claimed again: %+v, %v", claimed, err)
 	}
 }

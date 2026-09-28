@@ -52,7 +52,7 @@ type stageQueue struct {
 	admitErrAt             int
 }
 
-func (q *stageQueue) AdmitSourceStage(context.Context, int64, string, time.Duration) error {
+func (q *stageQueue) AdmitSourceStage(context.Context, int64, string, string, time.Duration) error {
 	q.admitCalls++
 	if q.admitErrAt == 0 || q.admitCalls == q.admitErrAt {
 		return q.admitErr
