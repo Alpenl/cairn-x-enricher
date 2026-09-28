@@ -173,7 +173,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
     if (route === "/api/bookmarks" && request.method === "GET") {
       const limit = Math.min(60, Math.max(1, Number(url.searchParams.get("limit") || 20)));
       const filtered = filterItems(state, url.searchParams);
-      const counts = countsOf(filtered);
+      const counts = url.searchParams.get("counts") === "0" ? null : countsOf(filtered);
       let page = filtered;
       const before = Number(url.searchParams.get("before_id") || 0);
       if (before) page = page.filter((item) => item.id < before);
@@ -184,7 +184,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
       return send(200, {
         items: items.map((item) => (summary ? summaryOf(item) : publicDetail(item))),
         next_before_id: page.length > limit ? items.at(-1).id : null,
-        counts,
+        ...(counts ? { counts } : {}),
         ...(url.searchParams.get("filter_contract_version") === "1" ? { filter_contract_version: 1 } : {})
       });
     }

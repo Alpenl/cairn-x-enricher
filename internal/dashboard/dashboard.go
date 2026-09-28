@@ -372,6 +372,14 @@ func (s *Server) listBookmarks(writer http.ResponseWriter, request *http.Request
 		s.writeBackendError(writer, "list bookmarks", 0, err)
 		return
 	}
+	if query.SkipCounts {
+		writeJSON(writer, http.StatusOK, struct {
+			Items                 []cairn.Bookmark `json:"items"`
+			NextBeforeID          *int64           `json:"next_before_id"`
+			FilterContractVersion *int             `json:"filter_contract_version,omitempty"`
+		}{Items: page.Items, NextBeforeID: page.NextBeforeID, FilterContractVersion: page.FilterContractVersion})
+		return
+	}
 	writeJSON(writer, http.StatusOK, page)
 }
 
@@ -1135,6 +1143,11 @@ func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 		CurationStatus: values.Get("curation_status"), Topic: values.Get("topic"),
 		Form: values.Get("form"), Use: values.Get("use"), Source: values.Get("source"), Since: values.Get("since"),
 		SummaryOnly: values.Get("view") == "summary",
+	}
+	if options := values["counts"]; len(options) > 1 || len(options) == 1 && options[0] != "0" && options[0] != "1" {
+		return cairn.BookmarkQuery{}, errors.New("invalid counts option")
+	} else if len(options) == 1 && options[0] == "0" {
+		query.SkipCounts = true
 	}
 	for _, filter := range []struct {
 		key    string

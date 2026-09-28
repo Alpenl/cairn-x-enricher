@@ -15,6 +15,21 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 )
 
+func TestListBookmarksCanSkipUnusedCounts(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Query().Get("counts") != "0" {
+			t.Errorf("counts option = %q", request.URL.Query().Get("counts"))
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"items":[{"id":7,"url":"https://x.com/a/status/7","status":"pending","processable":true,"related_links":[],"images":[]}],"next_before_id":null}`))
+	}))
+	defer server.Close()
+	page, err := NewClient(server.URL, "token", server.Client()).ListBookmarks(context.Background(), BookmarkQuery{Limit: 20, SkipCounts: true})
+	if err != nil || len(page.Items) != 1 || page.Items[0].ID != 7 {
+		t.Fatalf("count-free page = %+v, %v", page, err)
+	}
+}
+
 func TestClientClaimCompleteAndFail(t *testing.T) {
 	t.Helper()
 	var requests []map[string]any

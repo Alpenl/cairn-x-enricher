@@ -385,6 +385,7 @@ func (s *Server) exportMarkdown(writer http.ResponseWriter, request *http.Reques
 	}
 	// Only summary fields are exported, so the large bodies are never read.
 	query.SummaryOnly = true
+	query.SkipCounts = true
 	items, truncated, err := s.collectExport(request.Context(), query, limit)
 	if err != nil {
 		s.writeBackendError(writer, "export bookmarks", 0, err)
@@ -598,6 +599,7 @@ func (s *Server) rerank(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	query.IncludeCacheIdentity = s.extensions.HasRerankStore()
+	query.SkipCounts = true
 	page, err := s.backend.ListBookmarks(request.Context(), query)
 	if err != nil {
 		s.writeBackendError(writer, "rerank candidates", 0, err)

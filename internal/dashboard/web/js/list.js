@@ -354,6 +354,7 @@ export async function loadMore() {
   updateFooter();
   try {
     const params = apiParams(state.filters, state.search, { limit: PAGE_SIZE, beforeId: state.nextBeforeID });
+    params.set("counts", "0");
     const page = await api.list(params, controller.signal);
     if (version !== requestVersion) return false;
     const items = (Array.isArray(page.items) ? page.items : []).filter((item) => !state.order.includes(item.id));
@@ -384,6 +385,7 @@ async function pollFirstPage() {
   if (!head.some(isWorking)) return;
   try {
     const params = apiParams(state.filters, state.search, { limit: PAGE_SIZE });
+    params.set("counts", "0");
     const page = await api.list(params);
     for (const item of page.items || []) {
       if (!state.order.includes(item.id)) continue;

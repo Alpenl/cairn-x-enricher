@@ -83,8 +83,19 @@ func TestLocalWorkerManualSourceSurvivesProcessExit(t *testing.T) {
 		withoutBody.Detail.CacheIdentity == nil || *withoutBody.Detail.CacheIdentity != *detail.CacheIdentity {
 		t.Fatalf("matching body revision should omit the article: %+v %v", withoutBody, err)
 	}
+	compact, err := restarted.ListBookmarks(ctx, cairn.BookmarkQuery{Limit: 1, SkipCounts: true})
+	if err != nil || len(compact.Items) != 1 || compact.Items[0].ID != id {
+		t.Fatalf("count-free list after restart: %+v %v", compact, err)
+	}
 	server := dashboard.New(ctx, health.NewTracker(), restarted, neverRunManualSource{},
 		slog.New(slog.NewJSONHandler(io.Discard, nil)), 1)
+	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/bookmarks?limit=1&counts=0", nil)
+	listResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(listResponse, listRequest)
+	if listResponse.Code != http.StatusOK || strings.Contains(listResponse.Body.String(), `"counts"`) ||
+		!strings.Contains(listResponse.Body.String(), fmt.Sprintf(`"id":%d`, id)) {
+		t.Fatalf("dashboard count-free list failed: %d %s", listResponse.Code, listResponse.Body.String())
+	}
 	identityRequest := httptest.NewRequestWithContext(ctx, http.MethodGet,
 		fmt.Sprintf("/api/bookmarks/%d/identity", id), nil)
 	identityResponse := httptest.NewRecorder()

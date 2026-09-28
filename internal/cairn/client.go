@@ -155,6 +155,7 @@ type BookmarkQuery struct {
 	Uncertain               bool
 	Since                   string
 	SummaryOnly             bool
+	SkipCounts              bool
 }
 
 // NeedsFilterContract rejects old backends that silently ignore v2 conditions.
@@ -392,6 +393,9 @@ func decodeClaimResponse(response *http.Response) (*Job, error) {
 // ListBookmarks returns a filtered newest-first page for the management UI.
 func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (BookmarkPage, error) {
 	values := make(url.Values)
+	if query.SkipCounts {
+		values.Set("counts", "0")
+	}
 	if query.IncludeCacheIdentity {
 		values.Set("include_cache_identity", "1")
 	}

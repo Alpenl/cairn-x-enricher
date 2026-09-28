@@ -49,6 +49,36 @@ type fakeBackend struct {
 	imageCacheControl     string
 }
 
+func TestBookmarkQueryOnlySkipsCountsWhenExplicitlyRequested(t *testing.T) {
+	for path, want := range map[string]struct{ skip, valid bool }{
+		"/api/bookmarks":                   {false, true},
+		"/api/bookmarks?counts=1":          {false, true},
+		"/api/bookmarks?counts=0":          {true, true},
+		"/api/bookmarks?counts=2":          {false, false},
+		"/api/bookmarks?counts=0&counts=1": {false, false},
+	} {
+		query, err := bookmarkQuery(httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil))
+		if (err == nil) != want.valid || err == nil && query.SkipCounts != want.skip {
+			t.Errorf("bookmarkQuery(%q) = %+v, %v", path, query, err)
+		}
+	}
+}
+
+func TestBookmarkPageOmitsCountsWhenSkipped(t *testing.T) {
+	backend := &fakeBackend{page: cairn.BookmarkPage{Items: []cairn.Bookmark{}, Counts: cairn.BookmarkCounts{Total: 99}}}
+	server := New(context.Background(), startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+	defer server.Drain(time.Second)
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/bookmarks?counts=0", nil))
+	var body map[string]json.RawMessage
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &body) != nil {
+		t.Fatalf("count-free list = %d %s", response.Code, response.Body.String())
+	}
+	if !backend.query.SkipCounts || body["counts"] != nil {
+		t.Fatalf("count-free list kept counts: query %+v, body %s", backend.query, response.Body.String())
+	}
+}
+
 func TestReadingRouteValidatesVersionBeforeCheckingOptionalBackend(t *testing.T) {
 	server := New(context.Background(), startedTracker(), &fakeBackend{}, &fakeProcessor{}, testLogger(), 1)
 	defer server.Drain(time.Second)

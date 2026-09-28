@@ -67,7 +67,7 @@ func TestExportPagesBeyondOneListPage(t *testing.T) {
 		t.Fatal("export did not keep the newest-first cursor order")
 	}
 	for _, query := range backend.queries {
-		if query.Limit > exportPageSize || !query.SummaryOnly || query.CurationStatus != "kept" {
+		if query.Limit > exportPageSize || !query.SummaryOnly || !query.SkipCounts || query.CurationStatus != "kept" {
 			t.Fatalf("export list query = %+v", query)
 		}
 	}
