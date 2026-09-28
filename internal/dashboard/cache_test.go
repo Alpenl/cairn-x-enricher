@@ -172,32 +172,6 @@ func TestImageProxyRejectsTruncatedUpstreamBody(t *testing.T) {
 	}
 }
 
-func TestManualQueueCapacityUsesAtomicCounter(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	processing := make(chan int64, 1)
-	backend := &fakeBackend{
-		jobs:      map[int64]*cairn.Job{},
-		claimErrs: map[int64]error{},
-	}
-	server := New(ctx, startedTracker(), backend, &fakeProcessor{processed: processing}, testLogger(), 1)
-
-	if got := server.queued.Load(); got != 0 {
-		t.Fatalf("initial queued = %d", got)
-	}
-	// Simulate a saturated queue without starting real work.
-	server.queued.Store(int64(cap(server.jobs)))
-
-	body := `{"ids":[1]}`
-	request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/bookmarks/process", stringReader(body))
-	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
-	server.Handler().ServeHTTP(response, request)
-	if response.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503 when the queue is saturated", response.Code)
-	}
-}
-
 func TestDrainWaitsForQueuedWork(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -304,8 +278,6 @@ func (*plainError) Error() string { return "plain failure" }
 
 // testImageKey is a well-formed R2 enrichment key matching one bookmark ID.
 const testImageKey = "0000000000000000000000000000000000000000000000000000000000000000.jpg"
-
-func stringReader(value string) *strings.Reader { return strings.NewReader(value) }
 
 func TestImageProxyNeverPersistsPrivateImages(t *testing.T) {
 	for _, upstream := range []string{"", "public, max-age=604800, immutable", "private, max-age=86400", "no-store"} {

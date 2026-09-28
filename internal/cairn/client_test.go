@@ -208,6 +208,54 @@ func TestClientSavesManualSourceAndChecksReceipt(t *testing.T) {
 	}
 }
 
+func TestClientEnqueuesDurableManualRequestAndPreservesBackpressure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil || body["operation_key"] != "op-7" {
+			t.Errorf("manual enqueue body = %#v, error=%v", body, err)
+		}
+		if request.URL.Path == "/api/enrichment/jobs/7/enqueue" {
+			_, _ = writer.Write([]byte(`{"id":7,"status":"pending","action":"manual_process"}`))
+			return
+		}
+		writer.Header().Set("Retry-After", "5")
+		writer.WriteHeader(http.StatusTooManyRequests)
+		_, _ = writer.Write([]byte(`{"error":"manual_queue_full"}`))
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "token", server.Client())
+	if err := client.RequestEnrichment(context.Background(), 7, "op-7"); err != nil {
+		t.Fatalf("RequestEnrichment(7) = %v", err)
+	}
+	err := client.RequestEnrichment(context.Background(), 8, "op-7")
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Code != "manual_queue_full" ||
+		apiErr.StatusCode != http.StatusTooManyRequests || apiErr.RetryAfter != "5" {
+		t.Fatalf("RequestEnrichment(8) = %v", err)
+	}
+}
+
+func TestClientRefreshSourceForwardsStableOperation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/api/enrichment/jobs/7/refresh-source" {
+			t.Errorf("refresh path = %q", request.URL.Path)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil || body["operation_key"] != "refresh-7" {
+			t.Errorf("refresh body = %#v, error=%v", body, err)
+		}
+		_, _ = writer.Write([]byte(`{"id":7,"status":"pending","action":"refresh_source","content_revision":3,"preserves":[]}`))
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "token", server.Client())
+	for range 2 {
+		payload, err := client.RefreshSourceWithOperation(context.Background(), 7, "refresh-7")
+		if err != nil || !strings.Contains(string(payload), `"content_revision":3`) {
+			t.Fatalf("RefreshSourceWithOperation() = (%s, %v)", payload, err)
+		}
+	}
+}
+
 func TestClientRejectsUnsafeImageReferences(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")

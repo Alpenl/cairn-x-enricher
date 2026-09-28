@@ -6,6 +6,8 @@ const ERROR_LABELS = Object.freeze({
   not_found: "这条收藏不存在",
   backend_error: "Cloudflare 后端暂时不可用",
   queue_full: "本机处理队列已满，请稍后再试",
+  manual_queue_full: "待执行的人工请求已满，请稍后重试",
+  invalid_operation_key: "请求编号无效，请重试",
   shutting_down: "服务正在重启，请稍后再试",
   invalid_ids: "所选收藏无效",
   invalid_source: "原文不能为空或过长",
@@ -96,6 +98,58 @@ export async function prepareSourceSubmission(id, text, previous, baseRevision) 
   return { text, operation_key: newOperationKey(`manual-source-${id}`), expected_revision: revision };
 }
 
+const pendingProcessKeys = new Map();
+const pendingRefreshKeys = new Map();
+function processKey(id) {
+  if (pendingProcessKeys.has(id)) return pendingProcessKeys.get(id);
+  const storageKey = `cairn:manual-process:${id}`;
+  let key;
+  try { key = globalThis.sessionStorage?.getItem(storageKey); } catch { /* storage can be disabled */ }
+  if (!key) key = newOperationKey(`manual-process-${id}`);
+  pendingProcessKeys.set(id, key);
+  try { globalThis.sessionStorage?.setItem(storageKey, key); } catch { /* in-memory retry still works */ }
+  return key;
+}
+
+function clearProcessKey(id) {
+  pendingProcessKeys.delete(id);
+  try { globalThis.sessionStorage?.removeItem(`cairn:manual-process:${id}`); } catch { /* optional storage */ }
+}
+
+async function processRequest(ids) {
+  const operation_keys = Object.fromEntries(ids.map(id => [String(id), processKey(id)]));
+  const result = await processingRequest("/api/bookmarks/process", { ids, operation_keys });
+  for (const id of result.accepted) clearProcessKey(id);
+  for (const { id, error } of result.rejected) {
+    if (["manual_queue_full", "lease_conflict", "job_busy", "not_found", "invalid_operation_key"].includes(error)) {
+      clearProcessKey(id);
+    }
+  }
+  return result;
+}
+
+async function refreshSourceRequest(id) {
+  let key = pendingRefreshKeys.get(id);
+  if (!key) {
+    try { key = globalThis.sessionStorage?.getItem(`cairn:refresh-source:${id}`); } catch { /* optional storage */ }
+  }
+  if (!key) key = newOperationKey(`refresh-source-${id}`);
+  pendingRefreshKeys.set(id, key);
+  try { globalThis.sessionStorage?.setItem(`cairn:refresh-source:${id}`, key); } catch { /* optional storage */ }
+  try {
+    const result = await fetchJSON(`/api/bookmarks/${id}/refresh-source`, jsonBody("POST", { operation_key: key }));
+    pendingRefreshKeys.delete(id);
+    try { globalThis.sessionStorage?.removeItem(`cairn:refresh-source:${id}`); } catch { /* optional storage */ }
+    return result;
+  } catch (error) {
+    if ([409, 429].includes(error?.status)) {
+      pendingRefreshKeys.delete(id);
+      try { globalThis.sessionStorage?.removeItem(`cairn:refresh-source:${id}`); } catch { /* optional storage */ }
+    }
+    throw error;
+  }
+}
+
 const once = new Map();
 function cached(key, load) {
   if (!once.has(key)) {
@@ -119,9 +173,9 @@ export const api = {
   entities: (id) => fetchJSON(`/api/bookmarks/${id}/entities`),
   correctEntity: (id, body) => fetchJSON(`/api/bookmarks/${id}/entities`, jsonBody("POST", body)),
   retryClassification: (id) => fetchJSON(`/api/bookmarks/${id}/retry-classification`, { method: "POST" }),
-  refreshSource: (id) => fetchJSON(`/api/bookmarks/${id}/refresh-source`, { method: "POST" }),
+  refreshSource: refreshSourceRequest,
   replayPolicy: (id, commit) => fetchJSON(`/api/bookmarks/${id}/replay-policy`, jsonBody("POST", commit ? { commit: true } : {})),
-  process: (ids) => processingRequest("/api/bookmarks/process", { ids }),
+  process: processRequest,
   submitSource: (id, submission) => processingRequest(`/api/bookmarks/${id}/source`, {
     original_text: submission.text, operation_key: submission.operation_key,
     expected_revision: submission.expected_revision

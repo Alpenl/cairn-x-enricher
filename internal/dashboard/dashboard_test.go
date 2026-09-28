@@ -27,6 +27,9 @@ type fakeBackend struct {
 	detail                 cairn.BookmarkDetail
 	jobs                   map[int64]*cairn.Job
 	claimErrs              map[int64]error
+	enqueueErrs            map[int64]error
+	queuedIDs              []int64
+	queuedKeys             []string
 	imageBody              string
 	curation               cairn.CurationUpdate
 	manualSourceText       string
@@ -113,6 +116,17 @@ func (b *fakeBackend) ClaimByID(_ context.Context, id int64) (*cairn.Job, error)
 		return nil, err
 	}
 	return b.jobs[id], nil
+}
+
+func (b *fakeBackend) RequestEnrichment(_ context.Context, id int64, key string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err := b.enqueueErrs[id]; err != nil {
+		return err
+	}
+	b.queuedIDs = append(b.queuedIDs, id)
+	b.queuedKeys = append(b.queuedKeys, key)
+	return nil
 }
 
 func (b *fakeBackend) SaveManualSource(_ context.Context, id int64, key string, expected int64, source string) (cairn.ManualSourceResult, error) {
@@ -259,23 +273,20 @@ func TestHandlerServesChineseDashboardAndBookmarkData(t *testing.T) {
 func TestHandlerQueuesSelectedBookmarksAndReportsRejections(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	backend := &fakeBackend{
-		jobs: map[int64]*cairn.Job{
-			1: {ID: 1, URL: "https://x.com/example/status/1", Attempt: 1, LeaseToken: "lease-1"},
-		},
-		claimErrs: map[int64]error{
-			2: &cairn.APIError{StatusCode: http.StatusConflict, Code: "job_busy"},
-		},
-	}
+	backend := &fakeBackend{enqueueErrs: map[int64]error{
+		2: &cairn.APIError{StatusCode: http.StatusConflict, Code: "lease_conflict"},
+	}}
 	processed := make(chan int64, 1)
 	tracker := startedTracker()
 	server := New(ctx, tracker, backend, &fakeProcessor{processed: processed, sources: make(chan sourceProcess, 1)}, testLogger(), 1)
+	wakeup := make(chan struct{}, 1)
+	server.SetWakeup(wakeup)
 
 	request := httptest.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
 		"/api/bookmarks/process",
-		strings.NewReader(`{"ids":[1,2,1]}`),
+		strings.NewReader(`{"ids":[1,2,1],"operation_keys":{"1":"op-1","2":"op-2"}}`),
 	)
 	request.Header.Set("Content-Type", "application/json; charset=utf-8")
 	response := httptest.NewRecorder()
@@ -296,17 +307,48 @@ func TestHandlerQueuesSelectedBookmarksAndReportsRejections(t *testing.T) {
 	if len(body.Accepted) != 1 || body.Accepted[0] != 1 {
 		t.Fatalf("accepted = %v", body.Accepted)
 	}
-	if len(body.Rejected) != 1 || body.Rejected[0].ID != 2 || body.Rejected[0].Error != "job_busy" {
+	if len(body.Rejected) != 1 || body.Rejected[0].ID != 2 || body.Rejected[0].Error != "lease_conflict" {
 		t.Fatalf("rejected = %+v", body.Rejected)
 	}
-
+	if len(backend.queuedIDs) != 1 || backend.queuedIDs[0] != 1 || backend.queuedKeys[0] != "op-1" {
+		t.Fatalf("durable requests = %v keys=%v", backend.queuedIDs, backend.queuedKeys)
+	}
+	select {
+	case <-wakeup:
+	default:
+		t.Fatal("manual request did not wake scheduler")
+	}
 	select {
 	case id := <-processed:
-		if id != 1 {
-			t.Fatalf("processed ID = %d", id)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("manual job was not processed")
+		t.Fatalf("old local worker ran %d", id)
+	default:
+	}
+}
+
+func TestHandlerReturnsManualQueueBackpressure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	backend := &fakeBackend{enqueueErrs: map[int64]error{
+		1: &cairn.APIError{StatusCode: http.StatusTooManyRequests, Code: "manual_queue_full", RetryAfter: "5"},
+	}}
+	server := New(ctx, startedTracker(), backend, &fakeProcessor{processed: make(chan int64, 1),
+		sources: make(chan sourceProcess, 1)}, testLogger(), 1)
+	wakeup := make(chan struct{}, 1)
+	server.SetWakeup(wakeup)
+	request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/bookmarks/process",
+		strings.NewReader(`{"ids":[1]}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") != "5" ||
+		!strings.Contains(response.Body.String(), "manual_queue_full") {
+		t.Fatalf("backpressure response = %d %s, retry-after=%q", response.Code,
+			response.Body.String(), response.Header().Get("Retry-After"))
+	}
+	select {
+	case <-wakeup:
+		t.Fatal("rejected request woke scheduler")
+	default:
 	}
 }
 

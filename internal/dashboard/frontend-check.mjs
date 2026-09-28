@@ -186,12 +186,41 @@ const query = await load("query.js");
 
 // --- Error labels -------------------------------------------------------------------
 
-const { errorLabel } = await load("api.js");
+const { api, errorLabel } = await load("api.js");
 for (const code of ["job_busy", "not_found", "backend_error", "queue_full", "invalid_ids", "invalid_source", "invalid_curation",
-  "invalid_id", "invalid_query", "invalid_json", "invalid_content_type", "revision_conflict", "unsupported_filter_contract", "lease_conflict"]) {
+  "invalid_id", "invalid_query", "invalid_json", "invalid_content_type", "revision_conflict", "unsupported_filter_contract", "lease_conflict",
+  "manual_queue_full", "invalid_operation_key"]) {
   check(`errorLabel(${code})`, errorLabel(code) !== code, errorLabel(code));
 }
 equal("errorLabel unknown is shown verbatim", errorLabel("brand_new_code"), "brand_new_code");
+{
+  const originalFetch = globalThis.fetch;
+  const keys = [];
+  globalThis.fetch = async (_path, options) => {
+    keys.push(JSON.parse(options.body).operation_keys["7"]);
+    if (keys.length === 1) throw new Error("lost response");
+    return { ok: true, json: async () => ({ accepted: [7], rejected: [] }) };
+  };
+  try {
+    await api.process([7]).catch(() => {});
+    await api.process([7]);
+    check("manual process reuses its operation key after a lost response", keys.length === 2 && keys[0] === keys[1]);
+  } finally { globalThis.fetch = originalFetch; }
+}
+{
+  const originalFetch = globalThis.fetch;
+  const keys = [];
+  globalThis.fetch = async (_path, options) => {
+    keys.push(JSON.parse(options.body).operation_key);
+    if (keys.length === 1) throw new Error("lost response");
+    return { ok: true, json: async () => ({ id: 8, action: "refresh_source" }) };
+  };
+  try {
+    await api.refreshSource(8).catch(() => {});
+    await api.refreshSource(8);
+    check("source refresh reuses its operation key after a lost response", keys.length === 2 && keys[0] === keys[1]);
+  } finally { globalThis.fetch = originalFetch; }
+}
 
 // --- Markdown export ---------------------------------------------------------------------
 

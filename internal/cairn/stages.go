@@ -361,10 +361,27 @@ func (c *Client) AckSourceRefresh(ctx context.Context, id, epoch int64, status, 
 // Worker re-arms the retrieval queue while keeping the old readable content and
 // human curation until new source bytes actually arrive (F13).
 func (c *Client) RefreshSource(ctx context.Context, id int64) (json.RawMessage, error) {
+	return c.refreshSource(ctx, id, "")
+}
+
+// RefreshSourceWithOperation lets a browser retry a lost acceptance response
+// without scheduling a second source fetch.
+func (c *Client) RefreshSourceWithOperation(ctx context.Context, id int64, operationKey string) (json.RawMessage, error) {
+	if operationKey == "" || len(operationKey) > 200 {
+		return nil, errors.New("invalid refresh operation key")
+	}
+	return c.refreshSource(ctx, id, operationKey)
+}
+
+func (c *Client) refreshSource(ctx context.Context, id int64, operationKey string) (json.RawMessage, error) {
 	if id < 1 {
 		return nil, errors.New("bookmark ID must be positive")
 	}
-	response, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/enrichment/jobs/%d/refresh-source", id), map[string]any{})
+	body := map[string]any{}
+	if operationKey != "" {
+		body["operation_key"] = operationKey
+	}
+	response, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/enrichment/jobs/%d/refresh-source", id), body)
 	if err != nil {
 		return nil, err
 	}

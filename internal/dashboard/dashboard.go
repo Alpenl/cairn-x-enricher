@@ -2,6 +2,8 @@ package dashboard
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -46,6 +48,7 @@ type Backend interface {
 	GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error)
 	GetImage(context.Context, string) (*http.Response, error)
 	ClaimByID(context.Context, int64) (*cairn.Job, error)
+	RequestEnrichment(context.Context, int64, string) error
 	SaveManualSource(context.Context, int64, string, int64, string) (cairn.ManualSourceResult, error)
 	GetTaxonomy(context.Context) (taxonomy.Catalog, error)
 	UpdateCuration(context.Context, int64, cairn.CurationUpdate) (cairn.BookmarkDetail, error)
@@ -761,7 +764,8 @@ func (s *Server) processBookmarks(writer http.ResponseWriter, request *http.Requ
 	decoder := json.NewDecoder(request.Body)
 	decoder.DisallowUnknownFields()
 	var body struct {
-		IDs []int64 `json:"ids"`
+		IDs           []int64           `json:"ids"`
+		OperationKeys map[string]string `json:"operation_keys"`
 	}
 	if err := decoder.Decode(&body); err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid_json")
@@ -781,42 +785,70 @@ func (s *Server) processBookmarks(writer http.ResponseWriter, request *http.Requ
 	rejected := make([]rejection, 0)
 
 	s.enqueueMu.Lock()
-	defer s.enqueueMu.Unlock()
-	if s.draining {
+	draining := s.draining
+	s.enqueueMu.Unlock()
+	if draining {
 		writeError(writer, http.StatusServiceUnavailable, "shutting_down")
 		return
 	}
-	if s.queued.Load()+int64(len(ids)) > int64(cap(s.jobs)) {
-		writeError(writer, http.StatusServiceUnavailable, "queue_full")
-		return
-	}
+	retryAfter := ""
 	for _, id := range ids {
-		job, claimErr := s.backend.ClaimByID(request.Context(), id)
-		if claimErr != nil {
-			code := publicErrorCode(claimErr)
+		key := body.OperationKeys[strconv.FormatInt(id, 10)]
+		if key == "" {
+			key, err = newManualOperationKey()
+			if err != nil {
+				rejected = append(rejected, rejection{ID: id, Error: "backend_error"})
+				continue
+			}
+		}
+		if len(key) > 200 {
+			rejected = append(rejected, rejection{ID: id, Error: "invalid_operation_key"})
+			continue
+		}
+		requestErr := s.backend.RequestEnrichment(request.Context(), id, key)
+		if requestErr != nil {
+			code := publicErrorCode(requestErr)
 			rejected = append(rejected, rejection{ID: id, Error: code})
-			s.logger.WarnContext(request.Context(), "manual claim rejected", "link_id", id, "error", claimErr)
+			s.logger.WarnContext(request.Context(), "manual request rejected", "link_id", id, "error", requestErr)
+			var apiErr *cairn.APIError
+			if errors.As(requestErr, &apiErr) && apiErr.StatusCode == http.StatusTooManyRequests {
+				retryAfter = apiErr.RetryAfter
+			}
 			continue
 		}
-		if job == nil {
-			rejected = append(rejected, rejection{ID: id, Error: "not_found"})
-			continue
-		}
-		s.queued.Add(1)
-		s.jobs <- manualJob{job: job}
 		accepted = append(accepted, id)
 	}
 
 	status := http.StatusAccepted
 	if len(accepted) == 0 {
 		status = http.StatusConflict
+		if retryAfter != "" {
+			status = http.StatusTooManyRequests
+		}
 	} else {
 		s.invalidateOverview()
+		if s.wakeup != nil {
+			select {
+			case s.wakeup <- struct{}{}:
+			default:
+			}
+		}
+	}
+	if retryAfter != "" {
+		writer.Header().Set("Retry-After", retryAfter)
 	}
 	writeJSON(writer, status, map[string]any{
 		"accepted": accepted,
 		"rejected": rejected,
 	})
+}
+
+func newManualOperationKey() (string, error) {
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return "", err
+	}
+	return "manual-" + hex.EncodeToString(random[:]), nil
 }
 
 func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http.Request) {
@@ -868,6 +900,11 @@ func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http
 		s.logger.WarnContext(request.Context(), "manual source save rejected", "link_id", id,
 			"duration_ms", time.Since(started).Milliseconds(), "error", saveErr)
 		status := http.StatusBadGateway
+		var apiErr *cairn.APIError
+		if errors.As(saveErr, &apiErr) && apiErr.StatusCode == http.StatusTooManyRequests {
+			status = http.StatusTooManyRequests
+			writer.Header().Set("Retry-After", apiErr.RetryAfter)
+		}
 		if code == "input_changed" || code == "operation_conflict" || code == "lease_conflict" ||
 			code == "not_found" || code == "invalid_source" {
 			status = http.StatusConflict
@@ -1149,7 +1186,8 @@ func publicErrorCode(err error) string {
 	var apiErr *cairn.APIError
 	if errors.As(err, &apiErr) && (apiErr.Code == "not_found" || apiErr.Code == "job_busy" ||
 		apiErr.Code == "lease_conflict" ||
-		apiErr.Code == "input_changed" || apiErr.Code == "operation_conflict" || apiErr.Code == "invalid_source") {
+		apiErr.Code == "input_changed" || apiErr.Code == "operation_conflict" ||
+		apiErr.Code == "manual_queue_full" || apiErr.Code == "invalid_source") {
 		return apiErr.Code
 	}
 	return "backend_error"

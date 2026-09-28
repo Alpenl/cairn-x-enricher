@@ -164,6 +164,7 @@ type APIError struct {
 	StatusCode int
 	Code       string
 	Revision   *int64
+	RetryAfter string
 }
 
 func (e *APIError) Error() string {
@@ -263,6 +264,35 @@ func (c *Client) ClaimByID(ctx context.Context, id int64) (*Job, error) {
 	}
 	defer func() { _ = response.Body.Close() }()
 	return decodeClaimResponse(response)
+}
+
+// RequestEnrichment persists a priority request. The scheduler will claim it
+// after it has execution capacity, so no lease waits in an HTTP handler queue.
+func (c *Client) RequestEnrichment(ctx context.Context, id int64, operationKey string) error {
+	if id < 1 || operationKey == "" || len(operationKey) > 200 {
+		return errors.New("invalid manual request")
+	}
+	response, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/enrichment/jobs/%d/enqueue", id),
+		map[string]any{"operation_key": operationKey})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return apiError(response)
+	}
+	var receipt struct {
+		ID     int64  `json:"id"`
+		Status string `json:"status"`
+		Action string `json:"action"`
+	}
+	if err := decodeJSON(response.Body, &receipt); err != nil {
+		return fmt.Errorf("decode manual queue receipt: %w", err)
+	}
+	if receipt.ID != id || receipt.Status != "pending" {
+		return errors.New("manual queue receipt is invalid")
+	}
+	return nil
 }
 
 func decodeClaimResponse(response *http.Response) (*Job, error) {
@@ -577,7 +607,8 @@ func apiError(response *http.Response) error {
 		Revision *int64 `json:"revision"`
 	}
 	_ = json.NewDecoder(io.LimitReader(response.Body, 8<<10)).Decode(&payload)
-	return &APIError{StatusCode: response.StatusCode, Code: payload.Code, Revision: payload.Revision}
+	return &APIError{StatusCode: response.StatusCode, Code: payload.Code, Revision: payload.Revision,
+		RetryAfter: response.Header.Get("Retry-After")}
 }
 
 func validBookmarkStatus(status string) bool {
