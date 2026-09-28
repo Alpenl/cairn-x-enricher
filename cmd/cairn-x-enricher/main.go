@@ -217,6 +217,8 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 	var controlServer *http.Server
 	var controlErrors chan error
 	if observer != nil {
+		auditCtx, stopAudit := context.WithCancel(ctx)
+		defer stopAudit()
 		controlServer = &http.Server{Handler: observer.Handler(), ReadHeaderTimeout: 5 * time.Second,
 			ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
 		controlErrors = make(chan error, 1)
@@ -229,7 +231,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 			defer ticker.Stop()
 			for {
 				select {
-				case <-ctx.Done():
+				case <-auditCtx.Done():
 					return
 				case <-ticker.C:
 					_ = observer.PruneAudit() // failures remain visible in control_audit_errors while logs are off
