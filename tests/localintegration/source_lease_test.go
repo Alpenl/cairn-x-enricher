@@ -44,6 +44,16 @@ func (r *workerRequestRecorder) snapshot() []string {
 	return append([]string(nil), r.routes...)
 }
 
+func countRoute(routes []string, route string) int {
+	n := 0
+	for _, observed := range routes {
+		if observed == route {
+			n++
+		}
+	}
+	return n
+}
+
 func (r *localFailedSourceReader) FetchSource(ctx context.Context, input enrich.Input) (enrich.Source, error) {
 	r.fetches++
 	if err := r.reserve(ctx, input, "fetch", false); err != nil {
@@ -121,22 +131,13 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 		t.Fatalf("source processing with two paid-stage admissions: %v", err)
 	}
 	processRoutes := recorder.snapshot()[beforeProcess:]
-	count := func(route string) int {
-		n := 0
-		for _, observed := range processRoutes {
-			if observed == route {
-				n++
-			}
-		}
-		return n
-	}
 	// The old seven-call estimate predates source-lease admission and the
 	// per-network-attempt ledger. Keep the current safe path's full HTTP
 	// budget visible, including its two paid stages.
 	if len(processRoutes) > 12 ||
-		count("POST /api/enrichment/provider-attempts/reserve") != 2 ||
-		count("POST /api/enrichment/provider-attempts/settle") != 2 ||
-		count("POST /api/enrichment/jobs/"+strconv.FormatInt(id, 10)+"/lease-admit") != 2 {
+		countRoute(processRoutes, "POST /api/enrichment/provider-attempts/reserve") != 2 ||
+		countRoute(processRoutes, "POST /api/enrichment/provider-attempts/settle") != 2 ||
+		countRoute(processRoutes, "POST /api/enrichment/jobs/"+strconv.FormatInt(id, 10)+"/lease-admit") != 2 {
 		t.Fatalf("source request budget or paid-stage accounting changed: %v", processRoutes)
 	}
 	t.Logf("source Worker HTTP calls = %d (budget 12): %v", len(processRoutes), processRoutes)
@@ -175,6 +176,7 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 	failedWorker := processor.NewStaged(queue, failedReader, nil, "", "",
 		slog.New(slog.NewJSONHandler(io.Discard, nil)), 1)
 	failedWorker.SetPaidStageTimeout(10 * time.Second)
+	beforeFailedProcess := len(recorder.snapshot())
 	if err := failedWorker.Process(ctx, failedJob); err == nil {
 		t.Fatal("ambiguous provider response unexpectedly succeeded")
 	} else {
@@ -183,6 +185,16 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 			t.Fatalf("provider error = %v", err)
 		}
 	}
+	failedRoutes := recorder.snapshot()[beforeFailedProcess:]
+	failedJobBase := "POST /api/enrichment/jobs/" + strconv.FormatInt(failedID, 10)
+	if len(failedRoutes) > 5 ||
+		countRoute(failedRoutes, failedJobBase+"/lease-admit") != 1 ||
+		countRoute(failedRoutes, "POST /api/enrichment/provider-attempts/reserve") != 1 ||
+		countRoute(failedRoutes, "POST /api/enrichment/provider-attempts/settle") != 0 ||
+		countRoute(failedRoutes, failedJobBase+"/fail") != 1 {
+		t.Fatalf("unknown provider result request budget or ledger state changed: %v", failedRoutes)
+	}
+	t.Logf("unknown provider result Worker HTTP calls = %d (budget 5): %v", len(failedRoutes), failedRoutes)
 	failedDetail, err := queue.GetBookmark(ctx, failedID)
 	if err != nil || failedDetail.Status != "failed" || !failedDetail.PaidCallUnresolved ||
 		failedDetail.PaidStage != "fetch" || failedReader.fetches != 1 {
