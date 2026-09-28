@@ -126,3 +126,29 @@ func TestOverviewReportsUpstreamFailure(t *testing.T) {
 		t.Fatalf("GET /api/overview with a failing view = %d, want 502", code)
 	}
 }
+
+func TestOverviewMarksLastGoodCountsStaleDuringUpstreamFailure(t *testing.T) {
+	backend := &countingBackend{totals: map[string]int{"all": 3, "inbox": 3}}
+	server := New(context.Background(), startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+	defer server.Drain(time.Second)
+	handler := server.Handler()
+	if code, _ := getOverview(t, handler); code != http.StatusOK {
+		t.Fatalf("initial overview = %d", code)
+	}
+	backend.fail = "kept"
+	server.overview.mu.Lock()
+	server.overview.cachedAt = time.Now().Add(-overviewTTL - time.Second)
+	server.overview.mu.Unlock()
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/overview", nil))
+	if response.Code != http.StatusOK || response.Header().Get("Warning") == "" {
+		t.Fatalf("stale overview = %d, Warning %q", response.Code, response.Header().Get("Warning"))
+	}
+	var body overviewSummary
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if !body.Stale || body.Views["inbox"] != 3 {
+		t.Fatalf("stale overview = %+v", body)
+	}
+}

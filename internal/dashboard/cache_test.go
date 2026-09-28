@@ -147,10 +147,49 @@ func TestBackstageSummaryRefreshesAfterTTL(t *testing.T) {
 	}
 	fetch()
 	// Expire the cache by rewinding the recorded timestamp rather than sleeping.
-	server.summaryCachedAt = time.Now().Add(-backstageSummaryTTL - time.Second)
+	server.summary.mu.Lock()
+	server.summary.cachedAt = time.Now().Add(-backstageSummaryTTL - time.Second)
+	server.summary.mu.Unlock()
 	fetch()
 	if backend.listCalls != 2*len(backstageAttentionStatuses) {
 		t.Fatalf("listCalls = %d, want %d", backend.listCalls, 2*len(backstageAttentionStatuses))
+	}
+}
+
+type parallelBackstageBackend struct {
+	fakeBackend
+	started chan string
+	release chan struct{}
+}
+
+func (b *parallelBackstageBackend) ListBookmarks(ctx context.Context, query cairn.BookmarkQuery) (cairn.BookmarkPage, error) {
+	b.started <- query.Status
+	select {
+	case <-b.release:
+		return cairn.BookmarkPage{}, nil
+	case <-ctx.Done():
+		return cairn.BookmarkPage{}, ctx.Err()
+	}
+}
+
+func TestBackstageReadsIndependentAttentionStatusesInParallel(t *testing.T) {
+	backend := &parallelBackstageBackend{started: make(chan string, 2), release: make(chan struct{})}
+	server := New(context.Background(), startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+	defer server.Drain(time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { _, err := server.buildBackstageSummary(ctx); result <- err }()
+	for range backstageAttentionStatuses {
+		select {
+		case <-backend.started:
+		case <-ctx.Done():
+			t.Fatal("the second attention read waited for the first")
+		}
+	}
+	close(backend.release)
+	if err := <-result; err != nil {
+		t.Fatal(err)
 	}
 }
 

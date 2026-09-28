@@ -244,6 +244,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
       if ("curation_status" in body) {
         if (!CURATION.has(body.curation_status)) return send(400, { error: "invalid_curation" });
         item.curation_status = body.curation_status;
+        item.classification_reviewed = true;
       }
       if ("classification" in body) {
         if (body.classification === null) {

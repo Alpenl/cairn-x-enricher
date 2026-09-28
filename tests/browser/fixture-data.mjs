@@ -219,7 +219,7 @@ export function createBookmarks({ count = 96, seed = 7, now = Date.now() } = {})
     const roll = random();
     const curationStatus = index < 14 ? (roll < 0.85 ? "inbox" : "kept")
       : roll < 0.45 ? "inbox" : roll < 0.72 ? "kept" : roll < 0.84 ? "compiled" : "drop";
-    const reviewed = curationStatus !== "inbox" && random() < 0.6;
+    const reviewed = curationStatus !== "inbox";
     const uncertain = !reviewed && random() < 0.35;
     const title = variant === 0 ? base.title : `${base.title}（${["续", "补充", "讨论", "译"][variant % 4]}）`;
     const topics = base.topics.slice();

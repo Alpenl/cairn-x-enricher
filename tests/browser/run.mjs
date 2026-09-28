@@ -515,12 +515,23 @@ async function partB(browser) {
 
   // A number key files the bookmark, drops it from the inbox and advances.
   const beforeKeep = curationRequests().length;
+  const overviewBeforeKeep = state.requests.filter((entry) => entry.path === "/api/overview").length;
+  const statusBeforeKeep = state.requests.filter((entry) => entry.path === "/status").length;
+  const inboxCountBefore = Number(await page.textContent("[data-view='inbox'] .nav-count"));
+  const uncertainCountBefore = Number(await page.textContent("[data-view='uncertain'] .nav-count"));
+  const filed = state.items.find((item) => item.id === inbox[1]);
+  const wasUncertain = !filed.classification_reviewed && (!filed.classification || filed.classification.uncertainty);
   await page.keyboard.press("2");
   await waitFor(() => curationRequests().length > beforeKeep);
   const keep = curationRequests().at(-1);
   equal("status keys send only the status", keep.body, { curation_status: "kept" });
   await waitFor(async () => !(await rowIds()).includes(inbox[1]));
   check("a filed bookmark leaves the inbox view", !(await rowIds()).includes(inbox[1]));
+  await waitFor(async () => Number(await page.textContent("[data-view='inbox'] .nav-count")) === inboxCountBefore - 1);
+  await waitFor(async () => Number(await page.textContent("[data-view='uncertain'] .nav-count")) === uncertainCountBefore - Number(wasUncertain));
+  await page.waitForTimeout(900);
+  equal("filing updates navigation before an overview request", state.requests.filter((entry) => entry.path === "/api/overview").length, overviewBeforeKeep);
+  equal("filing does not request service status", state.requests.filter((entry) => entry.path === "/status").length, statusBeforeKeep);
   equal("the next bookmark opens automatically", await selectedId(), inbox[2]);
   await page.waitForSelector(".toast .toast-action");
   check("the change can be undone from the toast", /撤销/.test(await page.textContent(".toast .toast-action") || ""));
@@ -531,6 +542,8 @@ async function partB(browser) {
   await waitFor(() => curationRequests().length > beforeUndo);
   equal("undo restores the previous status", curationRequests().at(-1).body, { curation_status: "inbox" });
   await waitFor(async () => (await rowIds()).includes(inbox[1]));
+  await waitFor(async () => Number(await page.textContent("[data-view='inbox'] .nav-count")) === inboxCountBefore);
+  equal("undo keeps an explicitly curated inbox item out of uncertain", Number(await page.textContent("[data-view='uncertain'] .nav-count")), uncertainCountBefore - Number(wasUncertain));
   equal("undo puts the bookmark back in order", (await rowIds()).slice(0, 3), inbox.slice(0, 3));
   equal("undo reopens the bookmark", await selectedId(), inbox[1]);
 

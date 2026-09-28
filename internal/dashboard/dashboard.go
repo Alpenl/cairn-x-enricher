@@ -135,13 +135,11 @@ type Server struct {
 
 	// summary caches the backstage aggregate, which costs several backend
 	// list calls and is polled by an idle browser tab.
-	summaryMu       sync.Mutex
-	summaryCache    *backstageSummary
-	summaryCachedAt time.Time
+	summary snapshotCache[backstageSummary]
 
 	// overview caches the navigation counts, which fan out to several
 	// upstream count queries.
-	overview overviewCache
+	overview snapshotCache[overviewSummary]
 }
 
 // backstageSummaryTTL bounds backstage aggregation freshness. The page polls
@@ -152,6 +150,7 @@ const backstageSummaryTTL = 5 * time.Second
 type backstageSummary struct {
 	Title          string               `json:"title"`
 	State          string               `json:"state"`
+	Stale          bool                 `json:"stale,omitempty"`
 	LastError      string               `json:"last_error,omitempty"`
 	Attention      []cairn.Bookmark     `json:"attention"`
 	AttentionTotal int                  `json:"attention_total"`
@@ -729,31 +728,48 @@ func (s *Server) getImage(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (s *Server) getBackstage(writer http.ResponseWriter, request *http.Request) {
-	summary, err := s.buildBackstageSummary(request.Context())
+	summary, stale, err := s.summary.read(request.Context(), s.requestCtx, backstageSummaryTTL, s.computeBackstageSummary)
 	if err != nil {
 		s.writeBackendError(writer, "build backstage summary", 0, err)
 		return
+	}
+	if stale {
+		summary.Stale = true
+		writer.Header().Set("Warning", `110 - "Response is stale"`)
 	}
 	writeJSON(writer, http.StatusOK, summary)
 }
 
 func (s *Server) buildBackstageSummary(ctx context.Context) (backstageSummary, error) {
-	s.summaryMu.Lock()
-	defer s.summaryMu.Unlock()
-	if s.summaryCache != nil && time.Since(s.summaryCachedAt) < backstageSummaryTTL {
-		return *s.summaryCache, nil
-	}
+	summary, _, err := s.summary.read(ctx, s.requestCtx, backstageSummaryTTL, s.computeBackstageSummary)
+	return summary, err
+}
 
+func (s *Server) computeBackstageSummary(ctx context.Context) (backstageSummary, error) {
 	status := s.tracker.Snapshot()
 	// A filtered list already carries queue-wide counts, so one request per
 	// attention status replaces the previous extra unfiltered counts call.
+	type result struct {
+		page cairn.BookmarkPage
+		err  error
+	}
+	results := make([]result, len(backstageAttentionStatuses))
+	var group sync.WaitGroup
+	for index, name := range backstageAttentionStatuses {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			results[index].page, results[index].err = s.backend.ListBookmarks(ctx, cairn.BookmarkQuery{Limit: 20, Status: name})
+		}()
+	}
+	group.Wait()
 	attention := []cairn.Bookmark{}
 	var counts cairn.BookmarkCounts
 	for index, name := range backstageAttentionStatuses {
-		page, err := s.backend.ListBookmarks(ctx, cairn.BookmarkQuery{Limit: 20, Status: name})
-		if err != nil {
-			return backstageSummary{}, fmt.Errorf("list %s bookmarks: %w", name, err)
+		if results[index].err != nil {
+			return backstageSummary{}, fmt.Errorf("list %s bookmarks: %w", name, results[index].err)
 		}
+		page := results[index].page
 		if index == 0 {
 			counts = page.Counts
 		} else {
@@ -775,8 +791,6 @@ func (s *Server) buildBackstageSummary(ctx context.Context) (backstageSummary, e
 		Counts:         counts,
 		Build:          status.Build,
 	}
-	s.summaryCache = &summary
-	s.summaryCachedAt = time.Now()
 	return summary, nil
 }
 

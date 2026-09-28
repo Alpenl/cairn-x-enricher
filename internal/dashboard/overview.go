@@ -32,6 +32,7 @@ var overviewViews = []struct {
 
 type overviewSummary struct {
 	Views map[string]int `json:"views"`
+	Stale bool           `json:"stale,omitempty"`
 	// Counts are the processing-state counts over the whole library.
 	Counts cairn.BookmarkCounts `json:"counts"`
 	// Attention is the number of bookmarks whose reading failed and that may
@@ -40,28 +41,20 @@ type overviewSummary struct {
 	Queued    int `json:"queued"`
 }
 
-type overviewCache struct {
-	mu       sync.Mutex
-	value    *overviewSummary
-	cachedAt time.Time
-}
-
 func (s *Server) getOverview(writer http.ResponseWriter, request *http.Request) {
-	summary, err := s.buildOverview(request.Context())
+	summary, stale, err := s.overview.read(request.Context(), s.requestCtx, overviewTTL, s.computeOverview)
 	if err != nil {
 		s.writeBackendError(writer, "build overview", 0, err)
 		return
 	}
+	if stale {
+		summary.Stale = true
+		writer.Header().Set("Warning", `110 - "Response is stale"`)
+	}
 	writeJSON(writer, http.StatusOK, summary)
 }
 
-func (s *Server) buildOverview(ctx context.Context) (overviewSummary, error) {
-	s.overview.mu.Lock()
-	defer s.overview.mu.Unlock()
-	if s.overview.value != nil && time.Since(s.overview.cachedAt) < overviewTTL {
-		return *s.overview.value, nil
-	}
-
+func (s *Server) computeOverview(ctx context.Context) (overviewSummary, error) {
 	type result struct {
 		counts cairn.BookmarkCounts
 		err    error
@@ -98,15 +91,11 @@ func (s *Server) buildOverview(ctx context.Context) (overviewSummary, error) {
 	}
 	summary.Attention = summary.Counts.Failed + summary.Counts.Exhausted
 	summary.Queued = summary.Counts.Pending + summary.Counts.Processing
-	s.overview.value = &summary
-	s.overview.cachedAt = time.Now()
 	return summary, nil
 }
 
 // invalidateOverview drops the cached counts after a local mutation, so the
 // navigation reflects a status change on the very next read.
 func (s *Server) invalidateOverview() {
-	s.overview.mu.Lock()
-	s.overview.value = nil
-	s.overview.mu.Unlock()
+	s.overview.invalidate()
 }

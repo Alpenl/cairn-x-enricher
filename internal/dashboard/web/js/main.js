@@ -8,7 +8,7 @@ import * as detail from "./detail.js";
 import * as diagnostics from "./diagnostics.js";
 import { byId } from "./dom.js";
 import { exportItems, exportServer } from "./export.js";
-import { curationLabels } from "./format.js";
+import { curationLabels, needsReview } from "./format.js";
 import * as list from "./list.js";
 import {
   apiParams, buildQuery, clearFacets, matchesStatusView, parseQuery, sinceLabel, toggleValue, withView
@@ -21,9 +21,14 @@ import { initTheme } from "./theme.js";
 import { confirmAction, openMenu, runLastToastAction, toast } from "./ui.js";
 
 const OVERVIEW_INTERVAL = 30000;
+const OVERVIEW_EDIT_DELAY = 5000;
 const app = byId("app");
 let bootDeepLink = 0;
 let overviewTimer = 0;
+let overviewGeneration = 0;
+let pendingCuration = 0;
+let healthState = "ok";
+let overviewState = "ok";
 
 // --- URLs & routing ----------------------------------------------------------------
 
@@ -211,24 +216,65 @@ function wireSearch() {
 
 // --- Overview counts -------------------------------------------------------------------------
 
+function renderServiceState() {
+  sidebar.setServiceState(overviewState === "ok" ? healthState : overviewState);
+}
+
+async function refreshStatus() {
+  try {
+    const response = await fetch("/status", { cache: "no-store" });
+    if (!response.ok) throw new Error("status_unavailable");
+    const health = await response.json();
+    healthState = health.ready === false ? "not-ready" : "ok";
+  } catch {
+    healthState = "offline";
+  }
+  renderServiceState();
+}
+
 async function refreshOverview() {
-  const status = fetch("/status", { cache: "no-store" }).then((response) => response.json()).catch(() => null);
+  if (pendingCuration) return;
+  const generation = overviewGeneration;
   try {
     const overview = await api.overview();
+    // A read started before a local edit may contain the old counts. Let
+    // the edit's trailing refresh fetch a new snapshot after it is saved.
+    if (generation !== overviewGeneration || pendingCuration) return;
     state.overview = overview;
-    const health = await status;
-    sidebar.setServiceState(health && health.ready === false ? "not-ready" : "ok");
+    overviewState = overview?.stale ? "backend" : "ok";
+    renderServiceState();
     emit("overview", overview);
   } catch (error) {
-    // The Go service answered but could not reach the Worker, or it did not
-    // answer at all; either way the status line must not claim all is well.
-    sidebar.setServiceState(error?.message === "network_error" ? "offline" : "backend");
+    if (generation !== overviewGeneration) return;
+    overviewState = error?.message === "network_error" ? "offline" : "backend";
+    renderServiceState();
   }
 }
 
-function scheduleOverview(delay = 700) {
+function scheduleOverview(delay = OVERVIEW_EDIT_DELAY) {
+  overviewGeneration++;
   clearTimeout(overviewTimer);
-  overviewTimer = setTimeout(refreshOverview, delay);
+  overviewTimer = setTimeout(() => { overviewTimer = 0; refreshOverview(); }, delay);
+}
+
+function adjustOverviewCounts(changes, reverse = false) {
+  if (!state.overview?.views) return;
+  const views = { ...state.overview.views };
+  for (const { previous, next } of changes) {
+    if (!previous || !next || previous === next) continue;
+    const from = reverse ? next : previous;
+    const to = reverse ? previous : next;
+    if (Number.isFinite(views[from])) views[from] = Math.max(0, views[from] - 1);
+    if (Number.isFinite(views[to])) views[to]++;
+  }
+  for (const { uncertainBefore, uncertainAfter } of changes) {
+    if (typeof uncertainBefore !== "boolean" || typeof uncertainAfter !== "boolean") continue;
+    if (Number.isFinite(views.uncertain)) views.uncertain = Math.max(0,
+      views.uncertain + (reverse ? Number(uncertainBefore) - Number(uncertainAfter) : Number(uncertainAfter) - Number(uncertainBefore)));
+  }
+  overviewGeneration++;
+  state.overview = { ...state.overview, views };
+  emit("overview", state.overview);
 }
 
 // --- Curation actions ----------------------------------------------------------------------------
@@ -246,13 +292,20 @@ function afterRemoval(removedSelected, successor) {
 }
 
 async function undoStatus(changes) {
+  const countChanges = changes.map(({ id, previous }) => ({
+    id, previous: getItem(id)?.curation_status, next: previous,
+    previousReviewed: getItem(id)?.classification_reviewed,
+    uncertainBefore: getItem(id) ? needsReview(getItem(id)) : false, uncertainAfter: false
+  }));
+  pendingCuration++;
   for (const { id, previous } of changes) {
     const item = getItem(id);
     if (!item) continue;
-    mergeItem({ ...item, curation_status: previous });
+    mergeItem({ ...item, curation_status: previous, classification_reviewed: true });
     if (matchesStatusView(getItem(id), state.filters)) list.restoreRow(getItem(id));
     emit("item", id);
   }
+  adjustOverviewCounts(countChanges);
   if (changes.length === 1 && state.order.includes(changes[0].id)) select(changes[0].id);
   const failures = [];
   await Promise.all(changes.map(async ({ id, previous }) => {
@@ -260,11 +313,27 @@ async function undoStatus(changes) {
       mergeItem(await api.curation(id, { curation_status: previous }));
       emit("item", id);
     } catch (error) {
-      failures.push(error);
+      failures.push({ id, error });
     }
   }));
+  const failed = countChanges.filter(({ id }) => failures.some((entry) => entry.id === id));
+  adjustOverviewCounts(failed, true);
+  const leaving = [];
+  for (const { id, previous, previousReviewed } of failed) {
+    const item = getItem(id);
+    if (!item || !previous) continue;
+    mergeItem({ ...item, curation_status: previous, classification_reviewed: previousReviewed });
+    if (matchesStatusView(getItem(id), state.filters)) list.restoreRow(getItem(id));
+    else if (state.order.includes(id)) leaving.push(id);
+    emit("item", id);
+  }
+  if (leaving.length) {
+    const successor = list.removeRows(leaving);
+    afterRemoval(leaving.includes(state.selectedId), successor);
+  }
+  pendingCuration--;
   scheduleOverview();
-  if (failures.length) toast(`撤销没有全部完成：${errorLabel(failures[0].message)}`, { tone: "error" });
+  if (failures.length) toast(`撤销没有全部完成：${errorLabel(failures[0].error.message)}`, { tone: "error" });
   else toast("已撤销", { tone: "ok" });
 }
 
@@ -273,12 +342,17 @@ async function undoStatus(changes) {
 // leaves, the next one opens: the core of inbox triage.
 async function setStatuses(ids, status, { advance = true } = {}) {
   const changes = ids
-    .map((id) => ({ id, previous: getItem(id)?.curation_status || "inbox" }))
+    .map((id) => ({
+      id, previous: getItem(id)?.curation_status || "inbox",
+      previousReviewed: getItem(id)?.classification_reviewed,
+      uncertainBefore: needsReview(getItem(id))
+    }))
     .filter((change) => getItem(change.id) && change.previous !== status);
   if (!changes.length) return;
+  pendingCuration++;
   const leaving = [];
   for (const { id } of changes) {
-    const next = mergeItem({ ...getItem(id), curation_status: status });
+    const next = mergeItem({ ...getItem(id), curation_status: status, classification_reviewed: true });
     if (state.order.includes(id) && !matchesStatusView(next, state.filters)) leaving.push(id);
     else list.updateRow(id);
     emit("item", id);
@@ -287,6 +361,7 @@ async function setStatuses(ids, status, { advance = true } = {}) {
   const successor = leaving.length ? list.removeRows(leaving) : 0;
   if (advance) afterRemoval(removedSelected, successor);
   else if (removedSelected) detail.showItem(state.selectedId);
+  adjustOverviewCounts(changes.map(({ previous, uncertainBefore }) => ({ previous, next: status, uncertainBefore, uncertainAfter: false })));
 
   const failed = [];
   const queue = changes.slice();
@@ -303,15 +378,17 @@ async function setStatuses(ids, status, { advance = true } = {}) {
     }
   };
   await Promise.all(Array.from({ length: Math.min(4, changes.length) }, worker));
-  scheduleOverview();
   if (failed.length) {
-    for (const { id, previous } of failed) {
-      mergeItem({ ...getItem(id), curation_status: previous });
+    adjustOverviewCounts(failed.map(({ previous, uncertainBefore }) => ({ previous, next: status, uncertainBefore, uncertainAfter: false })), true);
+    for (const { id, previous, previousReviewed } of failed) {
+      mergeItem({ ...getItem(id), curation_status: previous, classification_reviewed: previousReviewed });
       if (matchesStatusView(getItem(id), state.filters)) list.restoreRow(getItem(id));
       emit("item", id);
     }
     toast(`${failed.length} 条没有保存：${errorLabel(failed[0].error?.message)}`, { tone: "error" });
   }
+  pendingCuration--;
+  scheduleOverview();
   const saved = changes.filter((change) => !failed.some((entry) => entry.id === change.id));
   if (!saved.length) return;
   const label = curationLabels[status];
@@ -619,8 +696,15 @@ async function boot() {
   if (state.route.name === "backstage") backstage.showBackstage(true);
   list.reload();
   refreshOverview();
-  setInterval(() => { if (!document.hidden) refreshOverview(); }, OVERVIEW_INTERVAL);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) scheduleOverview(0); });
+  refreshStatus();
+  setInterval(() => {
+    if (document.hidden) return;
+    if (!overviewTimer) refreshOverview();
+    refreshStatus();
+  }, OVERVIEW_INTERVAL);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) { scheduleOverview(0); refreshStatus(); }
+  });
 
   Promise.allSettled([loadV1(), loadV2()]).then(([v1]) => {
     if (v1.status === "rejected") toast("读取标签词表失败，标签将显示原始编号", { tone: "error" });
