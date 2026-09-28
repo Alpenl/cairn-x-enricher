@@ -18,8 +18,8 @@ func TestResponsesClientForcesXSearchAndParsesStructuredOutput(t *testing.T) {
 		if request.Header.Get("Authorization") != "Bearer model-key" {
 			t.Errorf("Authorization = %q", request.Header.Get("Authorization"))
 		}
-		if request.Header.Get("Idempotency-Key") != "cairn-link-42-attempt-3" {
-			t.Errorf("Idempotency-Key = %q", request.Header.Get("Idempotency-Key"))
+		if request.Header.Get("Idempotency-Key") != "" || request.Header.Get("X-Idempotency-Key") != "" {
+			t.Errorf("unexpected transport retry hint: %#v", request.Header)
 		}
 
 		var body map[string]any
@@ -154,8 +154,8 @@ func TestResponsesClientDoesNotTryAnotherPromptAfterHTTPFailure(t *testing.T) {
 			return
 		}
 		sawFallback = true
-		if !strings.Contains(request.Header.Get("Idempotency-Key"), "-post-1") {
-			t.Fatalf("fallback Idempotency-Key = %q", request.Header.Get("Idempotency-Key"))
+		if request.Header.Get("Idempotency-Key") != "" || request.Header.Get("X-Idempotency-Key") != "" {
+			t.Fatalf("unexpected transport retry hint: %#v", request.Header)
 		}
 		writer.Header().Set("Content-Type", "application/json")
 		_, _ = writer.Write([]byte(`{
@@ -182,8 +182,8 @@ func TestResponsesClientDoesNotTryAnotherPromptAfterHTTPFailure(t *testing.T) {
 func TestResponsesClientTransformsTrustedSourceWithoutXSearch(t *testing.T) {
 	sourceText := "这是人工粘贴的原帖原文，包含完整内容。"
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.Header.Get("Idempotency-Key") != "cairn-link-20-attempt-6-source-1" {
-			t.Fatalf("Idempotency-Key = %q", request.Header.Get("Idempotency-Key"))
+		if request.Header.Get("Idempotency-Key") != "" || request.Header.Get("X-Idempotency-Key") != "" {
+			t.Fatalf("unexpected transport retry hint: %#v", request.Header)
 		}
 		var body map[string]any
 		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {

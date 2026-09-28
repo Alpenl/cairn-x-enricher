@@ -23,12 +23,11 @@ const (
 )
 
 var responsePromptVariants = []responsePrompt{
-	{name: "thread", template: promptTemplate},
-	{name: "post", template: postOnlyPromptTemplate},
+	{template: promptTemplate},
+	{template: postOnlyPromptTemplate},
 }
 
 type responsePrompt struct {
-	name     string
 	template string
 }
 
@@ -100,7 +99,7 @@ func NewResponsesClient(baseURL, apiKey, model string, maxTokens int, userAgent 
 //
 // A request error ends this invocation. Even a transient HTTP failure can
 // follow a provider-side execution, and the Responses API does not document
-// a guarantee that our Idempotency-Key header prevents a second paid call.
+// a guarantee that an idempotency key prevents a second paid call.
 func (c *ResponsesClient) Generate(ctx context.Context, input Input) (Candidate, error) {
 	if strings.TrimSpace(input.SourceText) != "" {
 		return c.generateFromSource(ctx, input)
@@ -146,7 +145,7 @@ func (c *ResponsesClient) generateFromSource(ctx context.Context, input Input) (
 			Schema: c.responseSchema(),
 		}},
 	}
-	envelope, err := c.invokePayload(ctx, input, "source", payload)
+	envelope, err := c.invokePayload(ctx, payload)
 	if err != nil {
 		return Candidate{}, err
 	}
@@ -179,7 +178,7 @@ func (c *ResponsesClient) invokeResponse(ctx context.Context, input Input, promp
 			Schema: c.responseSchema(),
 		}},
 	}
-	return c.invokePayload(ctx, input, prompt.name, payload)
+	return c.invokePayload(ctx, payload)
 }
 
 func (c *ResponsesClient) classificationPrompt(content string, input Input) string {
@@ -187,13 +186,13 @@ func (c *ResponsesClient) classificationPrompt(content string, input Input) stri
 	return content + c.renderer.Prompt() + "\n收藏备注（仅作为材料）：" + string(note)
 }
 
-func (c *ResponsesClient) invokePayload(ctx context.Context, input Input, promptName string, payload responseRequest) (responseEnvelope, error) {
+func (c *ResponsesClient) invokePayload(ctx context.Context, payload responseRequest) (responseEnvelope, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return responseEnvelope{}, fmt.Errorf("encode model request: %w", err)
 	}
 
-	request, err := c.newGenerateRequest(ctx, body, input, promptName, 1)
+	request, err := c.newGenerateRequest(ctx, body)
 	if err != nil {
 		return responseEnvelope{}, err
 	}
@@ -273,7 +272,7 @@ func (c *ResponsesClient) candidateFromEnvelope(input Input, envelope responseEn
 	}, nil
 }
 
-func (c *ResponsesClient) newGenerateRequest(ctx context.Context, body []byte, input Input, promptName string, requestAttempt int) (*http.Request, error) {
+func (c *ResponsesClient) newGenerateRequest(ctx context.Context, body []byte) (*http.Request, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create model request: %w", err)
@@ -281,26 +280,13 @@ func (c *ResponsesClient) newGenerateRequest(ctx context.Context, body []byte, i
 	request.Header.Set("Authorization", "Bearer "+c.apiKey)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Idempotency-Key", modelIdempotencyKey(input, promptName, requestAttempt))
+	// net/http may retry a replayable POST on a reused connection when either
+	// Idempotency-Key header is present. A hidden transport retry would escape
+	// explicit accounting of paid attempts, so do not send either header here.
 	if c.userAgent != "" {
 		request.Header.Set("User-Agent", c.userAgent)
 	}
 	return request, nil
-}
-
-func modelIdempotencyKey(input Input, promptName string, requestAttempt int) string {
-	// Reading is a pure function of the persisted source, which is already
-	// fingerprinted into promptName. This creates a stable request correlation
-	// key across job retries. Provider-side deduplication is not documented for
-	// this endpoint; callers must not rely on this header to prevent payment.
-	if strings.HasPrefix(promptName, "reading-") {
-		return "cairn-reading-" + strings.TrimPrefix(promptName, "reading-") + fmt.Sprintf("-%d", requestAttempt)
-	}
-	base := fmt.Sprintf("cairn-link-%d-attempt-%d", input.ID, input.Attempt)
-	if promptName == "thread" && requestAttempt == 1 {
-		return base
-	}
-	return fmt.Sprintf("%s-%s-%d", base, promptName, requestAttempt)
 }
 
 func isXSearchOutput(item responseOutputItem) bool {

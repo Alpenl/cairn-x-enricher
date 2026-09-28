@@ -3,13 +3,16 @@ package enrich
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
+	"sync/atomic"
 	"testing"
 )
 
 // A 502 can arrive after a provider has executed a paid request. Its receipt
-// does not prove that a second POST is free, even with Idempotency-Key set.
+// does not prove that a second POST is free.
 func TestAmbiguousHTTPFailureDoesNotStartAnotherModelRequest(t *testing.T) {
 	for _, operation := range []string{"fetch", "reading", "legacy"} {
 		t.Run(operation, func(t *testing.T) {
@@ -41,6 +44,46 @@ func TestAmbiguousHTTPFailureDoesNotStartAnotherModelRequest(t *testing.T) {
 	}
 }
 
+func TestProviderPOSTDoesNotGetTransportRetryOnReusedConnection(t *testing.T) {
+	var posts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodGet {
+			_, _ = writer.Write([]byte("ready"))
+			return
+		}
+		posts.Add(1)
+		connection, _, err := writer.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Errorf("hijack: %v", err)
+			return
+		}
+		_ = connection.Close() // The provider may have run and charged before the response vanished.
+	}))
+	defer server.Close()
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport}
+	warmRequest, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatalf("create warm request: %v", err)
+	}
+	warm, err := client.Do(warmRequest)
+	if err != nil {
+		t.Fatalf("warm connection: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, warm.Body)
+	_ = warm.Body.Close()
+	var reused atomic.Bool
+	ctx := httptrace.WithClientTrace(context.Background(), &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) { reused.Store(info.Reused) },
+	})
+	model := NewResponsesClient(server.URL, "key", "model", 1024, "", client, testTaxonomy())
+	_, err = model.FetchSource(ctx, Input{ID: 7, URL: "https://x.com/a/status/7", Attempt: 1})
+	if err == nil || !reused.Load() || posts.Load() != 1 {
+		t.Fatalf("reused=%v posts=%d error=%v; want one ambiguous attempt", reused.Load(), posts.Load(), err)
+	}
+}
+
 func TestReadModelHTTPErrorWithEmptyBody(t *testing.T) {
 	response := &http.Response{StatusCode: http.StatusBadGateway, Body: http.NoBody}
 	err := readModelHTTPError(response)
@@ -50,20 +93,6 @@ func TestReadModelHTTPErrorWithEmptyBody(t *testing.T) {
 	}
 	if got := modelErr.Error(); got != "HTTP 502" {
 		t.Fatalf("Error() = %q, want HTTP 502", got)
-	}
-}
-
-func TestReadingCorrelationKeySurvivesJobRetry(t *testing.T) {
-	first := modelIdempotencyKey(Input{ID: 7, Attempt: 1}, "reading-abc123", 1)
-	retried := modelIdempotencyKey(Input{ID: 7, Attempt: 2}, "reading-abc123", 1)
-	if first != retried {
-		t.Fatalf("reading key changed across a job retry: %q vs %q", first, retried)
-	}
-	// The header is a correlation hint. It is not proof of provider-side
-	// deduplication, so the network attempt above remains bounded to one.
-	if modelIdempotencyKey(Input{ID: 7, Attempt: 1}, "post", 1) ==
-		modelIdempotencyKey(Input{ID: 7, Attempt: 2}, "post", 1) {
-		t.Fatal("different legacy attempts must have distinct correlation keys")
 	}
 }
 
