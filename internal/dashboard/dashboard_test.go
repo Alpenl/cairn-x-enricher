@@ -15,6 +15,7 @@ import (
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
+	"github.com/Alpenl/cairn-x-enricher/internal/observability"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
@@ -187,6 +188,25 @@ func TestHandlerServesChineseDashboardAndBookmarkData(t *testing.T) {
 		imageBody: "jpeg-data",
 	}
 	server := New(ctx, startedTracker(), backend, &fakeProcessor{processed: make(chan int64, 1), sources: make(chan sourceProcess, 1)}, testLogger(), 1)
+	statusRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/observability", nil)
+	unavailable := httptest.NewRecorder()
+	server.Handler().ServeHTTP(unavailable, statusRequest)
+	if unavailable.Code != http.StatusServiceUnavailable {
+		t.Fatalf("disabled observability status = %d", unavailable.Code)
+	}
+	server.SetObservabilityStatus(func() observability.Status {
+		return observability.Status{Desired: observability.Policy{Version: 3, Logs: observability.LogOff}, EffectiveLogs: observability.LogOff, AppliedVersion: 3}
+	})
+	status := httptest.NewRecorder()
+	server.Handler().ServeHTTP(status, statusRequest)
+	if status.Code != http.StatusOK || !strings.Contains(status.Body.String(), `"effective_logs":"off"`) || status.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("read-only observability status = %d %q", status.Code, status.Body.String())
+	}
+	write := httptest.NewRecorder()
+	server.Handler().ServeHTTP(write, httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/observability", strings.NewReader(`{"logs":"diagnostic"}`)))
+	if write.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("LAN observability write = %d", write.Code)
+	}
 
 	root := httptest.NewRecorder()
 	server.Handler().ServeHTTP(root, httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil))

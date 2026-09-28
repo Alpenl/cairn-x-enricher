@@ -22,6 +22,7 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/extension"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
+	"github.com/Alpenl/cairn-x-enricher/internal/observability"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
@@ -103,6 +104,7 @@ type Server struct {
 	logger      *slog.Logger
 	jobs        chan manualJob
 	wakeup      chan<- struct{}
+	observation func() observability.Status
 	workers     sync.WaitGroup
 
 	// enqueueMu serialises admission so capacity cannot be oversold.
@@ -188,6 +190,12 @@ func New(
 // SetWakeup connects durable manual submissions to the shared scheduler.
 // It is configured once before the HTTP server starts accepting requests.
 func (s *Server) SetWakeup(wakeup chan<- struct{}) { s.wakeup = wakeup }
+
+// SetObservabilityStatus publishes read-only local state on the LAN dashboard.
+// Writes remain on the separate container-loopback control listener.
+func (s *Server) SetObservabilityStatus(snapshot func() observability.Status) {
+	s.observation = snapshot
+}
 
 // Drain stops admitting new manual work and waits up to timeout for jobs that
 // were already leased to finish. Without this, an in-flight manual job would
@@ -291,6 +299,13 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /healthz", healthHandler)
 	mux.Handle("GET /readyz", healthHandler)
 	mux.Handle("GET /status", healthHandler)
+	mux.HandleFunc("GET /api/observability", func(w http.ResponseWriter, _ *http.Request) {
+		if s.observation == nil {
+			writeError(w, http.StatusServiceUnavailable, "observability_unavailable")
+			return
+		}
+		writeJSON(w, http.StatusOK, s.observation())
+	})
 
 	mux.HandleFunc("GET /api/bookmarks", s.listBookmarks)
 	mux.HandleFunc("GET /api/taxonomy", s.getTaxonomy)

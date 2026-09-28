@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +43,10 @@ type Config struct {
 	MaxJobsPerRun  int
 	HTTPAddr       string
 	LogLevel       string
+	// Optional local-only observability control. An absolute policy path on a
+	// persistent writable volume enables the container-loopback listener.
+	ObservabilityConfigPath  string
+	ObservabilityControlAddr string
 
 	// The bounded semantic extensions are independently opt-in and default
 	// off. A disabled extension is reported as unavailable rather than
@@ -115,16 +120,18 @@ func LoadFor(role Role) (Config, error) {
 // Load reads, applies defaults to, and validates runtime environment settings.
 func baseConfig() Config {
 	return Config{
-		TypesafeBaseURL: valueOrDefault("TYPESAFE_BASE_URL", "https://api.typesafe.ai"),
-		TypesafeAPIKey:  strings.TrimSpace(os.Getenv("TYPESAFE_API_KEY")),
-		TypesafeModel:   valueOrDefault("TYPESAFE_MODEL", "jev-1.13.0"),
-		CairnBaseURL:    valueOrDefault("CAIRN_API_BASE_URL", defaultCairnBaseURL),
-		CairnToken:      strings.TrimSpace(os.Getenv("CAIRN_ENRICHER_TOKEN")),
-		GrokBaseURL:     strings.TrimSpace(os.Getenv("GROK_MODELS_BASE_URL")),
-		GrokAPIKey:      strings.TrimSpace(os.Getenv("XAI_API_KEY")),
-		GrokModel:       valueOrDefault("GROK_MODEL", defaultGrokModel),
-		HTTPAddr:        valueOrDefault("HTTP_ADDR", defaultHTTPAddr),
-		LogLevel:        strings.ToLower(valueOrDefault("LOG_LEVEL", "info")),
+		TypesafeBaseURL:          valueOrDefault("TYPESAFE_BASE_URL", "https://api.typesafe.ai"),
+		TypesafeAPIKey:           strings.TrimSpace(os.Getenv("TYPESAFE_API_KEY")),
+		TypesafeModel:            valueOrDefault("TYPESAFE_MODEL", "jev-1.13.0"),
+		CairnBaseURL:             valueOrDefault("CAIRN_API_BASE_URL", defaultCairnBaseURL),
+		CairnToken:               strings.TrimSpace(os.Getenv("CAIRN_ENRICHER_TOKEN")),
+		GrokBaseURL:              strings.TrimSpace(os.Getenv("GROK_MODELS_BASE_URL")),
+		GrokAPIKey:               strings.TrimSpace(os.Getenv("XAI_API_KEY")),
+		GrokModel:                valueOrDefault("GROK_MODEL", defaultGrokModel),
+		HTTPAddr:                 valueOrDefault("HTTP_ADDR", defaultHTTPAddr),
+		LogLevel:                 strings.ToLower(valueOrDefault("LOG_LEVEL", "info")),
+		ObservabilityConfigPath:  strings.TrimSpace(os.Getenv("CAIRN_OBSERVABILITY_CONFIG_PATH")),
+		ObservabilityControlAddr: valueOrDefault("CAIRN_OBSERVABILITY_CONTROL_ADDR", "127.0.0.1:9090"),
 
 		ExtensionEntities:  boolValue("CAIRN_EXTENSION_ENTITIES"),
 		ExtensionEvidence:  boolValue("CAIRN_EXTENSION_EVIDENCE"),
@@ -265,6 +272,20 @@ func (c Config) validateFor(role Role) error {
 	case "debug", "info", "warn", "error":
 	default:
 		return fmt.Errorf("LOG_LEVEL must be one of debug, info, warn, error")
+	}
+	if role == RoleServe && c.ObservabilityConfigPath != "" {
+		if !filepath.IsAbs(c.ObservabilityConfigPath) {
+			return fmt.Errorf("CAIRN_OBSERVABILITY_CONFIG_PATH must be absolute")
+		}
+		host, port, err := net.SplitHostPort(c.ObservabilityControlAddr)
+		ip := net.ParseIP(host)
+		if err != nil || ip == nil || !ip.IsLoopback() {
+			return fmt.Errorf("CAIRN_OBSERVABILITY_CONTROL_ADDR must bind a literal loopback IP and port")
+		}
+		numericPort, err := strconv.Atoi(port)
+		if err != nil || numericPort < 1 || numericPort > 65535 {
+			return fmt.Errorf("CAIRN_OBSERVABILITY_CONTROL_ADDR must use a valid nonzero port")
+		}
 	}
 	return nil
 }

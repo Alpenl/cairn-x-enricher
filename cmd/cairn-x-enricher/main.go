@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -26,6 +27,7 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 	"github.com/Alpenl/cairn-x-enricher/internal/extension"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
+	"github.com/Alpenl/cairn-x-enricher/internal/observability"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 )
 
@@ -57,9 +59,17 @@ func newRootCommand() *cobra.Command {
 				return err
 			}
 			logger := newLogger(cfg.LogLevel)
+			var observer *observability.Store
+			if cfg.ObservabilityConfigPath != "" {
+				observer, err = observability.Open(cfg.ObservabilityConfigPath, logLevel(cfg.LogLevel))
+				if err != nil {
+					return err
+				}
+				logger = observer.Logger(os.Stderr)
+			}
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
-			return runServe(ctx, cfg, logger)
+			return runServe(ctx, cfg, logger, observer)
 		},
 	})
 
@@ -101,6 +111,7 @@ func newRootCommand() *cobra.Command {
 	once.Flags().IntVar(&maxJobs, "max-jobs", 0, "maximum jobs to claim (default MAX_JOBS_PER_RUN)")
 	root.AddCommand(once)
 	root.AddCommand(newClassifyCommand())
+	root.AddCommand(newObserveCommand())
 	root.AddCommand(newReplayCommand())
 	root.AddCommand(newRefreshSourceCommand())
 	root.AddCommand(newExportDatasetCommand())
@@ -161,7 +172,16 @@ func newRootCommand() *cobra.Command {
 	return root
 }
 
-func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
+func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, observer *observability.Store) error {
+	var controlListener net.Listener
+	if observer != nil {
+		var listenErr error
+		controlListener, listenErr = (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.ObservabilityControlAddr)
+		if listenErr != nil {
+			return fmt.Errorf("listen on observability control loopback: %w", listenErr)
+		}
+		defer func() { _ = controlListener.Close() }()
+	}
 	tracker := health.NewTracker()
 	worker, queue, err := newProcessor(ctx, cfg, tracker, logger)
 	if err != nil {
@@ -169,6 +189,9 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	}
 	management := dashboard.New(ctx, tracker, queue, worker, logger, cfg.MaxConcurrency)
 	management.SetExtensions(worker.Extensions())
+	if observer != nil {
+		management.SetObservabilityStatus(observer.Snapshot)
+	}
 	wakeup := make(chan struct{}, 1)
 	management.SetWakeup(wakeup)
 	server := &http.Server{
@@ -178,6 +201,17 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
+	}
+	var controlServer *http.Server
+	var controlErrors chan error
+	if observer != nil {
+		controlServer = &http.Server{Handler: observer.Handler(), ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
+		controlErrors = make(chan error, 1)
+		go func() {
+			defer processor.RecoverTask(logger, "observability control server")
+			controlErrors <- controlServer.Serve(controlListener)
+		}()
 	}
 
 	serverErrors := make(chan error, 1)
@@ -204,6 +238,10 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 		if !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("health server: %w", err)
 		}
+	case err := <-controlErrors:
+		if !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("observability control server: %w", err)
+		}
 	}
 
 	// Shutdown must fit inside one deadline: the HTTP server drain and the
@@ -220,6 +258,10 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	defer cancel()
 	//nolint:contextcheck // shutdown must outlive the already-cancelled signal context
 	serverErr := server.Shutdown(shutdownCtx)
+	if controlServer != nil {
+		//nolint:contextcheck // Both listeners share the one shutdown deadline.
+		serverErr = errors.Join(serverErr, controlServer.Shutdown(shutdownCtx))
+	}
 	// Drain in-flight jobs even when the HTTP server did not stop cleanly. A
 	// client streaming an image can outlive the HTTP deadline, and returning
 	// early here would abandon leased jobs - the opposite of the intent.
@@ -608,13 +650,17 @@ func isContractFailure(err error) bool {
 }
 
 func newLogger(level string) *slog.Logger {
+	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel(level)}))
+}
+
+func logLevel(level string) slog.Level {
 	levels := map[string]slog.Level{
 		"debug": slog.LevelDebug,
 		"info":  slog.LevelInfo,
 		"warn":  slog.LevelWarn,
 		"error": slog.LevelError,
 	}
-	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: levels[level]}))
+	return levels[level]
 }
 
 // configureClassificationBudget wires persistent admission before workers run.

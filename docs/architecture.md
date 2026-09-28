@@ -18,9 +18,9 @@ pending
 
 ## 关停与 panic 隔离
 
-`SHUTDOWN_TIMEOUT` 是**整个**优雅关停的预算，不是每个阶段的预算：HTTP 停止接受连接与等待在途任务共用同一份 deadline，并且单次定时批处理最多只用其中一半，另一半留给 `runServe` 等这一批结束。两个 compose 文件把 `stop_grace_period` 设为 30s，必须大于 `SHUTDOWN_TIMEOUT`，否则 Docker 会在排空完成前 SIGKILL。
+`SHUTDOWN_TIMEOUT` 是**整个**优雅关停的预算，不是定时批次的执行窗口：HTTP 停止接受连接与等待在途任务共用同一份 deadline。来源和分类分别调度；每次领取调用单独限时，已领取的任务继续受各自阶段时限约束。来源满批且仍有工作时立即接下一批，收到关停信号后停止新领取。两个 compose 文件把 `stop_grace_period` 设为 30s，必须大于 `SHUTDOWN_TIMEOUT`。
 
-排空是 best-effort：单次模型请求受 `REQUEST_TIMEOUT` 约束，可能超出剩余预算。这不是静默失败 —— lease 不会被确认，Worker 会在 lease 过期后重新派发。
+排空是 best-effort：单次模型请求受 `REQUEST_TIMEOUT` 约束，可能超出剩余预算。超时退出时未确认的 lease 由 Worker 在过期后重新派发；供应商结果未知的持久调用账本与跨重启恢复上限仍在 #11 待完成，不能仅凭 lease 重发保证不重复付费。
 
 所有执行任务的 goroutine（定时批处理 worker、人工任务 worker、调度循环、HTTP 服务）都有 `recover` 保护。裸 goroutine 里的 panic 会终止整个进程并连带 HTTP 服务，在 `restart: unless-stopped` 下变成崩溃循环。恢复后 panic 仍会作为批次错误上报并带上堆栈，因此进程存活的同时失败依然可归因、可见。
 
@@ -28,7 +28,11 @@ pending
 
 存活与就绪严格分离。`/healthz` 只表示进程存在，永远返回 `200`，因此 Worker 或模型临时不可达时不会触发重启循环，进程有机会自行恢复。`/readyz` 反映实际可服务状态：启动前置检查未完成或被标记为降级时返回 `503`，`ready_reason` 和 `unhealthy_since` 说明未就绪的原因和起始时间。
 
-启动前置检查包括词表加载和一次模型契约自检，两者都在 HTTP 监听开始之前完成。配置错误因此表现为启动失败，而运行期故障表现为 `/readyz` 503。批次失败本身不会让服务变为未就绪，但明确的配置或上游契约错误（`400/401/403/404`）会把跟踪器标记为降级，需要一次成功的启动级恢复才能清除，以免在配置错误时继续消耗重试次数。
+启动前置检查包括词表加载和一次模型契约自检，两者都在 HTTP 监听开始之前完成。配置错误因此表现为启动失败，而运行期故障表现为 `/readyz` 503。明确的配置或上游契约错误会让对应的来源或分类组件降级；分类熔断在退避到期后只用一条可领取任务探测，成功后只清除分类故障。来源与分类的最近一轮结果分别保存在健康状态中。
+
+## 本地日志热开关
+
+新版本可用 `deploy/nas/compose.observability.yaml` 叠加持久配置卷；当前生产 Compose 仍钉在 v0.6.0，不应用该叠加文件。控制 HTTP 只监听容器内 `127.0.0.1:9090`，不向宿主机或局域网发布。管理员经 SSH 登录 NAS 后执行 `docker exec cairn-x-enricher /cairn-x-enricher observe show` 读取期望版本及实际模式，再用 `observe set-log --mode off|basic|diagnostic --expected-version <版本>` 修改；`diagnostic` 默认 15 分钟，最长 1 小时，到期自动回到进入诊断前的 off 或 basic。配置先写入卷再生效，响应丢失时先重新读取版本。`LOG_LEVEL` 是 basic 的最低日志级别；全局 off 关闭应用 JSON 日志。当前控制只覆盖 Go 日志；指标、链路、跨端版本传播、私有采集器和观察期报告仍按 #20 OBS-01–05 实施，状态接口明确标为不可用。
 
 ## 组件
 
@@ -46,7 +50,7 @@ pending
 | `internal/evaluation` | 共享数据集 schema、只读生产导出及离线评分/校准；服务主路径不执行评估 |
 | `experiments/classification/main` | 显式离线评估 CLI，复用内部评估库 |
 
-人工任务先按 ID 在 Worker 原子领取，再进入本机有界队列。定时与人工获取/阅读增强共享 `MAX_CONCURRENCY` 信号量。Jev 使用额外的一个串行分类 worker，与获取队列并行，拥有独立 lease、重试和输入版本。
+人工请求先在 Worker 持久化，系统空闲时通知来源调度器；领取发生在取得执行容量之后。粘贴原文在返回 accepted 前保存为来源快照。来源获取/阅读受 `MAX_CONCURRENCY` 约束；Jev 分类与补证据恢复各有独立调度循环，不等待来源批次结束。分类拥有独立 lease、预算、重试和输入版本。
 
 ## LLM 契约
 

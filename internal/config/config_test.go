@@ -83,6 +83,21 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 	}
 }
 
+func TestObservabilityWritePortMustStayOnContainerLoopback(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("CAIRN_OBSERVABILITY_CONFIG_PATH", filepath.Join(t.TempDir(), "policy.json"))
+	for _, address := range []string{":9090", "0.0.0.0:9090", "localhost:9090", "127.0.0.1:0"} {
+		t.Setenv("CAIRN_OBSERVABILITY_CONTROL_ADDR", address)
+		if _, err := Load(); err == nil {
+			t.Errorf("unsafe control address %q accepted", address)
+		}
+	}
+	t.Setenv("CAIRN_OBSERVABILITY_CONTROL_ADDR", "127.0.0.1:9090")
+	if _, err := Load(); err != nil {
+		t.Fatalf("literal loopback rejected: %v", err)
+	}
+}
+
 func setRequiredEnv(t *testing.T) {
 	t.Helper()
 	for _, name := range []string{
@@ -96,6 +111,7 @@ func setRequiredEnv(t *testing.T) {
 		"MAX_JOBS_PER_RUN",
 		"HTTP_ADDR",
 		"LOG_LEVEL",
+		"CAIRN_OBSERVABILITY_CONFIG_PATH", "CAIRN_OBSERVABILITY_CONTROL_ADDR",
 		"CAIRN_EXTENSION_MAX_CALLS", "CAIRN_EXTENSION_MAX_CALLS_PER_ITEM",
 		"CAIRN_EXTENSION_MAX_INPUT_TOKENS", "CAIRN_EXTENSION_MAX_INPUT_TOKENS_PER_ITEM", "CAIRN_EXTENSION_TIMEOUT",
 	} {
