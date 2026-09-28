@@ -532,6 +532,9 @@ async function partB(browser) {
   await page.waitForTimeout(900);
   equal("filing updates navigation before an overview request", state.requests.filter((entry) => entry.path === "/api/overview").length, overviewBeforeKeep);
   equal("filing does not request service status", state.requests.filter((entry) => entry.path === "/status").length, statusBeforeKeep);
+  check("filing makes one trailing overview request", await waitFor(() =>
+    state.requests.filter((entry) => entry.path === "/api/overview").length === overviewBeforeKeep + 1, 5500));
+  equal("trailing overview does not request service status", state.requests.filter((entry) => entry.path === "/status").length, statusBeforeKeep);
   equal("the next bookmark opens automatically", await selectedId(), inbox[2]);
   await page.waitForSelector(".toast .toast-action");
   check("the change can be undone from the toast", /撤销/.test(await page.textContent(".toast .toast-action") || ""));
