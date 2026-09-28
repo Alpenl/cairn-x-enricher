@@ -46,6 +46,17 @@ type stageQueue struct {
 	evidenceReadErr        error
 	evidenceRequestStatus  string
 	refreshAcks            int
+	admitCalls             int
+	admitErr               error
+	admitErrAt             int
+}
+
+func (q *stageQueue) AdmitSourceStage(context.Context, int64, string, time.Duration) error {
+	q.admitCalls++
+	if q.admitErrAt == 0 || q.admitCalls == q.admitErrAt {
+		return q.admitErr
+	}
+	return nil
 }
 
 func (q *stageQueue) GetSource(context.Context, int64) (*enrich.Source, error) { return q.source, nil }
@@ -149,10 +160,11 @@ func (q *stageQueue) GetQuestionSpec(context.Context, string) (cairn.StoredQuest
 }
 
 type stageReader struct {
-	fetches  int
-	fail     bool
-	fetchErr error
-	q        *stageQueue
+	fetches    int
+	transforms int
+	fail       bool
+	fetchErr   error
+	q          *stageQueue
 }
 
 func (r *stageReader) FetchSource(context.Context, enrich.Input) (enrich.Source, error) {
@@ -163,6 +175,7 @@ func (r *stageReader) FetchSource(context.Context, enrich.Input) (enrich.Source,
 	return enrich.Source{OriginalText: "saved original", Model: "grok", RelatedLinks: []string{}, ImageURLs: []string{}}, nil
 }
 func (r *stageReader) Transform(_ context.Context, i enrich.Input) (enrich.Result, error) {
+	r.transforms++
 	if r.q.source == nil {
 		return enrich.Result{}, errors.New("reading started before source persisted")
 	}
@@ -170,6 +183,38 @@ func (r *stageReader) Transform(_ context.Context, i enrich.Input) (enrich.Resul
 		return enrich.Result{}, errors.New("reading unavailable")
 	}
 	return enrich.Result{OriginalText: i.SourceText, Summary: "summary"}, nil
+}
+
+func TestShortSourceLeaseDefersWithoutStartingAnotherPaidStage(t *testing.T) {
+	for _, denial := range []int{1, 2} {
+		t.Run(fmt.Sprintf("stage-%d", denial), func(t *testing.T) {
+			q := &stageQueue{fakeQueue: newFakeQueue(), admitErrAt: denial,
+				admitErr: &cairn.APIError{StatusCode: http.StatusConflict, Code: "lease_released"}}
+			r := &stageReader{q: q}
+			p := NewStaged(q, r, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+			job := &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, LeaseToken: "lease"}
+			if err := p.Process(context.Background(), job); !errors.Is(err, ErrJobDeferred) {
+				t.Fatalf("short lease = %v, want deferred", err)
+			}
+			if r.fetches != denial-1 || r.transforms != 0 || len(q.failures) != 0 || len(q.completions) != 0 {
+				t.Fatalf("paid stages/failure after lease release: fetch=%d transform=%d failures=%d completions=%d",
+					r.fetches, r.transforms, len(q.failures), len(q.completions))
+			}
+			if q.admitCalls != denial {
+				t.Fatalf("stage admission calls = %d, want %d", q.admitCalls, denial)
+			}
+		})
+	}
+}
+
+func TestSchedulerDoesNotReportReleasedClaimAsCompletedOrFailed(t *testing.T) {
+	job := &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, LeaseToken: "lease"}
+	q := &stageQueue{fakeQueue: newFakeQueue(job), admitErr: &cairn.APIError{StatusCode: http.StatusConflict, Code: "lease_released"}}
+	p := NewStaged(q, &stageReader{q: q}, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+	stats, err := p.Run(context.Background(), 1)
+	if err != nil || stats.Claimed != 1 || stats.Completed != 0 || stats.Failed != 0 {
+		t.Fatalf("released claim stats = %+v, err=%v", stats, err)
+	}
 }
 
 type stageClassifier struct{ fail bool }

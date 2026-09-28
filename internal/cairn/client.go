@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
@@ -200,7 +201,7 @@ func (e *APIError) Class() enrich.ErrorClass {
 		return enrich.ErrorClassConfiguration
 	case "invalid_classification", "invalid_classification_config", "invalid_source", "invalid_operation_key", "invalid_json":
 		return enrich.ErrorClassContract
-	case "target_changed", "input_changed", "lease_expired", "revision_conflict", "snapshot_conflict", "hidden_value_conflict", "run_stale":
+	case "target_changed", "input_changed", "lease_expired", "lease_released", "lease_conflict", "revision_conflict", "snapshot_conflict", "hidden_value_conflict", "run_stale":
 		return enrich.ErrorClassStale
 	case "already_completed":
 		return enrich.ErrorClassCompleted
@@ -264,6 +265,62 @@ func (c *Client) ClaimByID(ctx context.Context, id int64) (*Job, error) {
 	}
 	defer func() { _ = response.Body.Close() }()
 	return decodeClaimResponse(response)
+}
+
+// VerifySourceLeaseCapability prevents a new consumer from draining attempts
+// against an older Worker that cannot fence paid calls before execution.
+func (c *Client) VerifySourceLeaseCapability(ctx context.Context) error {
+	response, err := c.do(ctx, http.MethodGet, "/api/enrichment/source-lease-capability", nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("source lease admission is unavailable: %w", apiError(response))
+	}
+	var capability struct {
+		Protocol           int  `json:"protocol"`
+		LeaseMS            int  `json:"lease_ms"`
+		PaidStageAdmission bool `json:"paid_stage_admission"`
+	}
+	if err := decodeJSON(response.Body, &capability); err != nil {
+		return fmt.Errorf("decode source lease capability: %w", err)
+	}
+	if capability.Protocol != 1 || capability.LeaseMS != int((15*time.Minute).Milliseconds()) ||
+		!capability.PaidStageAdmission {
+		return errors.New("source lease admission protocol is incompatible")
+	}
+	return nil
+}
+
+// AdmitSourceStage checks the authoritative lease immediately before a paid
+// call. A short lease is conditionally released by the Worker; a claim with no
+// previous paid-stage admission has its attempt refunded there.
+func (c *Client) AdmitSourceStage(ctx context.Context, id int64, leaseToken string, minRemaining time.Duration) error {
+	if id < 1 || leaseToken == "" || minRemaining <= 0 || minRemaining > 15*time.Minute {
+		return errors.New("invalid source stage admission")
+	}
+	response, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/enrichment/jobs/%d/lease-admit", id),
+		map[string]any{"lease_token": leaseToken, "min_remaining_ms": minRemaining.Milliseconds()})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return apiError(response)
+	}
+	var receipt struct {
+		ID          int64  `json:"id"`
+		Status      string `json:"status"`
+		RemainingMS int64  `json:"remaining_ms"`
+	}
+	if err := decodeJSON(response.Body, &receipt); err != nil {
+		return fmt.Errorf("decode source stage admission: %w", err)
+	}
+	if receipt.ID != id || receipt.Status != "admitted" || receipt.RemainingMS <= 0 {
+		return errors.New("source stage admission receipt is invalid")
+	}
+	return nil
 }
 
 // RequestEnrichment persists a priority request. The scheduler will claim it
@@ -574,6 +631,10 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	request.Header.Set("Authorization", "Bearer "+c.token)
+	if path == "/api/enrichment/jobs/claim" ||
+		(strings.HasPrefix(path, "/api/enrichment/jobs/") && strings.HasSuffix(path, "/claim")) {
+		request.Header.Set("X-Cairn-Source-Lease-Admission", "1")
+	}
 	if strings.HasPrefix(path, "/api/enrichment/classifications/") {
 		request.Header.Set("X-Cairn-Classification-Budget", "1")
 	}

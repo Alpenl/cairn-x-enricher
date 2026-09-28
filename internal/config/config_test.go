@@ -64,6 +64,7 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		value string
 	}{
 		{name: "duration", key: "POLL_INTERVAL", value: "soon"},
+		{name: "source timeout exceeds lease", key: "REQUEST_TIMEOUT", value: "15m"},
 		{name: "concurrency", key: "MAX_CONCURRENCY", value: "0"},
 		{name: "tokens", key: "GROK_MAX_OUTPUT_TOKENS", value: "12"},
 		{name: "base URL", key: "GROK_MODELS_BASE_URL", value: "file:///tmp/model"},

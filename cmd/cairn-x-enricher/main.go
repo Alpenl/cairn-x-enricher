@@ -366,6 +366,9 @@ func newProcessor(
 		},
 	}
 	queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, httpClient)
+	if err := queue.VerifySourceLeaseCapability(ctx); err != nil {
+		return nil, nil, fmt.Errorf("verify Worker source lease admission: %w", err)
+	}
 	catalog, legacyCatalog, err := queue.GetClassificationCatalog(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -407,6 +410,7 @@ func newProcessor(
 	}
 	tracker.MarkStarted()
 	worker := processor.NewStaged(queue, model, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
+	worker.SetPaidStageTimeout(cfg.RequestTimeout)
 	fetcher, policy := evidenceFetcher(cfg)
 	extensions, err := extensionService(cfg, classifier)
 	if err != nil {

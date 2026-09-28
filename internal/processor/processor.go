@@ -18,6 +18,10 @@ import (
 
 const maxFailureMessageBytes = 1_800
 
+// ErrJobDeferred means the Worker released a source lease before a paid stage.
+// The durable job remains pending and this claim is neither success nor failure.
+var ErrJobDeferred = errors.New("source job deferred")
+
 // Queue leases work and conditionally stores outcomes.
 type Queue interface {
 	Claim(context.Context) (*cairn.Job, error)
@@ -162,6 +166,9 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 				// Deliveries and failures are reported with the work context so
 				// they still succeed for a job that was already claimed.
 				if err := p.Process(workCtx, job); err != nil {
+					if errors.Is(err, ErrJobDeferred) {
+						continue
+					}
 					failed.Add(1)
 					return
 				}

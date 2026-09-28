@@ -225,6 +225,11 @@ func (c Config) validateFor(role Role) error {
 	needsClassification := role == RoleServe || role == RoleClassify
 
 	if needsReading {
+		// Source leases last 15 minutes. Leave time for the commit and for the
+		// worker to reach each paid stage after claiming.
+		if c.RequestTimeout > 14*time.Minute {
+			return fmt.Errorf("REQUEST_TIMEOUT must not exceed 14m under the 15m source lease")
+		}
 		for name, value := range map[string]string{
 			"GROK_MODELS_BASE_URL": c.GrokBaseURL,
 			"XAI_API_KEY":          c.GrokAPIKey,

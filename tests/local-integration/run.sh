@@ -16,7 +16,7 @@ if [ ! -d "$share_root/worker/node_modules" ]; then
   exit 1
 fi
 
-work_root="$(mktemp -d /tmp/opencode/cairn-local-integration.XXXXXX)"
+work_root="$(mktemp -d "${TMPDIR:-/tmp}/cairn-local-integration.XXXXXX")"
 worker_pid=""
 cleanup() {
   if [ -n "$worker_pid" ] && kill -0 "$worker_pid" 2>/dev/null; then
@@ -56,13 +56,13 @@ start_worker() {
   "vars": { "CAIRN_API_TOKEN": "app", "CAIRN_ENRICHER_TOKEN": "internal" }
 }
 EOF
-  (cd "$share_root/worker" && npx wrangler d1 migrations apply "cairn-share-$name" --local --config "$work/wrangler.jsonc" >"$work/migrations.log" 2>&1) \
+  (cd "$share_root/worker" && ./node_modules/.bin/wrangler d1 migrations apply "cairn-share-$name" --local --config "$work/wrangler.jsonc" >"$work/migrations.log" 2>&1) \
     || { cat "$work/migrations.log"; exit 1; }
   if [ "$name" = "imageprivacy" ]; then
     # A synthetic 1px PNG seeded through the real local R2 CLI. The test
     # creates/deletes its owner through authenticated Worker HTTP.
     python3 -c 'import base64,sys; open(sys.argv[1], "wb").write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM7sAAAAASUVORK5CYII="))' "$work/pixel.png"
-    (cd "$share_root/worker" && npx wrangler r2 object put "cairn-x-enrichment-images-$name/enrichment/1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png" --local --config "$work/wrangler.jsonc" --file "$work/pixel.png" --content-type image/png >"$work/seed-image.log" 2>&1) \
+    (cd "$share_root/worker" && ./node_modules/.bin/wrangler r2 object put "cairn-x-enrichment-images-$name/enrichment/1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png" --local --config "$work/wrangler.jsonc" --file "$work/pixel.png" --content-type image/png >"$work/seed-image.log" 2>&1) \
       || { cat "$work/seed-image.log"; exit 1; }
   fi
   (cd "$share_root/worker" && exec setsid "$share_root/worker/node_modules/.bin/wrangler" dev --local --port "$port" --ip 127.0.0.1 --config "$work/wrangler.jsonc" >"$work/dev.log" 2>&1) &
@@ -109,6 +109,7 @@ run_case() {
 }
 
 run_case lifecycle TestLocalWorkerFullLifecycle
+run_case sourcelease TestLocalWorkerSourceLeaseAdmission
 run_case competition TestLocalWorkerVersionCompetition
 run_case rename TestLocalWorkerDisplayRenameKeepsSemantics
 run_case evidence TestLocalWorkerEvidenceCheckpointAndBoundRead

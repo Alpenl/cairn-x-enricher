@@ -22,6 +22,9 @@ import (
 // StageQueue persists source checkpoints and independent classification leases.
 type StageQueue interface {
 	Queue
+	// AdmitSourceStage fences the current lease before each paid retrieval or
+	// reading call, releasing a short lease without charging an unused attempt.
+	AdmitSourceStage(context.Context, int64, string, time.Duration) error
 	GetSource(context.Context, int64) (*enrich.Source, error)
 	SaveSource(context.Context, int64, string, enrich.Source) error
 	ClaimClassification(context.Context, string, string, string) (*cairn.ClassificationJob, error)
@@ -77,6 +80,7 @@ type stages struct {
 	classifier             Classifier
 	version, model         string
 	classificationDeadline time.Duration
+	paidStageTimeout       time.Duration
 	pause                  *componentPause
 	// extensions is optional. When absent every extension stays off and the
 	// pipeline is identical to the default.
@@ -206,13 +210,39 @@ func (p *componentPause) state() (bool, string, time.Duration) {
 // DefaultClassificationDeadline bounds one already-leased classification so a
 // graceful shutdown cannot wait forever on a detached work context.
 const DefaultClassificationDeadline = 3 * time.Minute
+const defaultPaidStageTimeout = 3 * time.Minute
+const paidStageCommitMargin = 30 * time.Second
 
 // NewStaged creates the production processor with independent semantic work.
 func NewStaged(queue StageQueue, reader SourceReader, classifier Classifier, version, model string, logger *slog.Logger, concurrency int) *Processor {
 	p := New(queue, nil, logger, concurrency)
 	p.stages = &stages{queue: queue, reader: reader, classifier: classifier, version: version, model: model,
-		classificationDeadline: DefaultClassificationDeadline, pause: newComponentPause()}
+		classificationDeadline: DefaultClassificationDeadline, paidStageTimeout: defaultPaidStageTimeout,
+		pause: newComponentPause()}
 	return p
+}
+
+// SetPaidStageTimeout uses the actual provider request deadline for lease
+// admission. The extra margin leaves time to commit a successful response.
+func (p *Processor) SetPaidStageTimeout(timeout time.Duration) {
+	if p.stages != nil && timeout > 0 {
+		p.stages.paidStageTimeout = timeout
+	}
+}
+
+func (p *Processor) admitPaidStage(ctx context.Context, job *cairn.Job, stage string) error {
+	err := p.stages.queue.AdmitSourceStage(ctx, job.ID, job.LeaseToken,
+		p.stages.paidStageTimeout+paidStageCommitMargin)
+	if err == nil {
+		return nil
+	}
+	var apiErr *cairn.APIError
+	if errors.As(err, &apiErr) && (apiErr.Code == "lease_released" || apiErr.Code == "lease_conflict") {
+		p.logger.InfoContext(ctx, "paid stage deferred after source lease check",
+			"link_id", job.ID, "stage", stage, "reason", apiErr.Code)
+		return ErrJobDeferred
+	}
+	return fmt.Errorf("admit %s paid stage: %w", stage, err)
 }
 
 // SetPartialReuse enables the opt-in partial re-evaluation.
@@ -251,6 +281,9 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 	// An explicit refresh intent bypasses both reuse paths: the operator asked
 	// for a real fetch, not for the stored snapshot (R2-06).
 	if manual == "" && job.RefreshEpoch > 0 {
+		if err := p.admitPaidStage(ctx, job, "fetch"); err != nil {
+			return err
+		}
 		fetched, fetchErr := s.reader.FetchSource(ctx, input)
 		if fetchErr != nil {
 			// The old readable content and all human data are kept; the intent is
@@ -294,6 +327,9 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 		}
 	}
 	if source == nil {
+		if err := p.admitPaidStage(ctx, job, "fetch"); err != nil {
+			return err
+		}
 		fetched, fetchErr := s.reader.FetchSource(ctx, input)
 		if fetchErr != nil {
 			return p.reportFailure(ctx, logger, job, failurePathSearch, fetchErr)
@@ -394,6 +430,9 @@ func (p *Processor) finishReading(ctx context.Context, job *cairn.Job, source en
 		if err != nil {
 			return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
 		}
+	}
+	if err := p.admitPaidStage(ctx, job, "reading"); err != nil {
+		return err
 	}
 	result, err := p.stages.reader.Transform(ctx, enrich.Input{ID: job.ID, URL: job.URL, Note: job.Note,
 		Attempt: job.Attempt, SourceText: source.OriginalText, RelatedLinks: source.RelatedLinks})

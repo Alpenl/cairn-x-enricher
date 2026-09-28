@@ -10,6 +10,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 )
 
 func TestClientClaimCompleteAndFail(t *testing.T) {
@@ -19,6 +22,10 @@ func TestClientClaimCompleteAndFail(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("Authorization") != "Bearer test-token" {
 			t.Errorf("Authorization = %q", request.Header.Get("Authorization"))
+		}
+		if strings.HasSuffix(request.URL.Path, "/claim") &&
+			request.Header.Get("X-Cairn-Source-Lease-Admission") != "1" {
+			t.Errorf("source claim omitted lease admission capability")
 		}
 		switch request.URL.Path {
 		case "/api/enrichment/jobs/claim":
@@ -232,6 +239,60 @@ func TestClientEnqueuesDurableManualRequestAndPreservesBackpressure(t *testing.T
 	if !errors.As(err, &apiErr) || apiErr.Code != "manual_queue_full" ||
 		apiErr.StatusCode != http.StatusTooManyRequests || apiErr.RetryAfter != "5" {
 		t.Fatalf("RequestEnrichment(8) = %v", err)
+	}
+}
+
+func TestClientAdmitsPaidSourceStageOnlyWithWorkerReceipt(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requests++
+		if request.URL.Path != "/api/enrichment/jobs/7/lease-admit" {
+			t.Errorf("admission path = %q", request.URL.Path)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil ||
+			body["lease_token"] != "lease-7" || body["min_remaining_ms"] != float64(210000) {
+			t.Errorf("admission body = %#v, error=%v", body, err)
+		}
+		if requests == 2 {
+			writer.WriteHeader(http.StatusConflict)
+			_, _ = writer.Write([]byte(`{"error":"lease_released"}`))
+			return
+		}
+		_, _ = writer.Write([]byte(`{"id":7,"status":"admitted","remaining_ms":500000}`))
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "token", server.Client())
+	if err := client.AdmitSourceStage(context.Background(), 7, "lease-7", 210*time.Second); err != nil {
+		t.Fatalf("AdmitSourceStage() = %v", err)
+	}
+	err := client.AdmitSourceStage(context.Background(), 7, "lease-7", 210*time.Second)
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Code != "lease_released" || apiErr.Class() != enrich.ErrorClassStale {
+		t.Fatalf("short lease = %v", err)
+	}
+}
+
+func TestClientRequiresSourceLeaseContractBeforeScheduling(t *testing.T) {
+	for _, valid := range []bool{false, true} {
+		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			if request.URL.Path != "/api/enrichment/source-lease-capability" ||
+				request.Header.Get("Authorization") != "Bearer token" {
+				t.Errorf("capability request = %s, auth=%q", request.URL.Path, request.Header.Get("Authorization"))
+			}
+			if !valid {
+				writer.WriteHeader(http.StatusNotFound)
+				_, _ = writer.Write([]byte(`{"error":"not_found"}`))
+				return
+			}
+			_, _ = writer.Write([]byte(`{"protocol":1,"lease_ms":900000,"paid_stage_admission":true}`))
+		}))
+		client := NewClient(server.URL, "token", server.Client())
+		err := client.VerifySourceLeaseCapability(context.Background())
+		server.Close()
+		if valid && err != nil || !valid && err == nil {
+			t.Fatalf("valid=%t, VerifySourceLeaseCapability()=%v", valid, err)
+		}
 	}
 }
 
