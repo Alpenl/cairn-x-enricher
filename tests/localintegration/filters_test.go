@@ -63,6 +63,21 @@ func TestLocalWorkerEffectiveClientFilters(t *testing.T) {
 			}
 		}
 	}
+	batch, err := queue.GetV2EffectiveBatch(ctx, ids)
+	if err != nil || len(batch) != len(ids) {
+		t.Fatalf("real Worker effective batch: %d views, %v", len(batch), err)
+	}
+	for _, id := range ids {
+		single, err := queue.GetV2Effective(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var singleValue, batchValue any
+		if json.Unmarshal(single, &singleValue) != nil || json.Unmarshal(batch[id], &batchValue) != nil ||
+			!reflect.DeepEqual(singleValue, batchValue) {
+			t.Fatalf("batch view %d differs from the real single-link view", id)
+		}
+	}
 	management := dashboard.New(ctx, health.NewTracker(), queue, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), 1)
 	defer management.Drain(time.Second)
 	server := httptest.NewServer(management.Handler())

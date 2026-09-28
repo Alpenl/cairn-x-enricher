@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
@@ -356,6 +357,7 @@ const (
 	maxExportLimit     = 500
 	exportPageSize     = 100
 	exportHydrators    = 4
+	exportBatchSize    = 50
 )
 
 // exportMarkdown streams a bounded Markdown export that carries every effective
@@ -391,7 +393,11 @@ func (s *Server) exportMarkdown(writer http.ResponseWriter, request *http.Reques
 		s.writeBackendError(writer, "export bookmarks", 0, err)
 		return
 	}
-	views := s.hydrateExport(request.Context(), items)
+	views, err := s.hydrateExport(request.Context(), items)
+	if err != nil {
+		s.writeBackendError(writer, "export effective views", 0, err)
+		return
+	}
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "# Cairn 收藏导出\n\n生成时间：%s\n\n", exportTimestamp())
 	fmt.Fprintf(&builder, "共 %d 条；导出包含多维有效结果与人工来源，不调用模型。\n\n", len(items))
@@ -413,6 +419,9 @@ func (s *Server) exportMarkdown(writer http.ResponseWriter, request *http.Reques
 			if !view.Projected || view.Stale {
 				partial++
 			}
+		} else {
+			partial++
+			builder.WriteString("- 有效结果：不可用（当前 Worker 未提供 v2 有效视图）\n")
 		}
 		for _, field := range []struct{ label, value string }{
 			{"收藏原因", item.Why}, {"收藏备注", item.Note}, {"AI 标题", item.AITitle}, {"摘要", item.Summary},
@@ -467,30 +476,78 @@ type exportView struct {
 	Stale     bool `json:"stale"`
 }
 
-// hydrateExport reads every bookmark's effective view with bounded
-// concurrency, keeping the list order. A missing or unreadable view leaves
-// that entry nil; it is exported with its summary fields only.
-func (s *Server) hydrateExport(ctx context.Context, items []cairn.Bookmark) []*exportView {
+type batchEffectiveBackend interface {
+	GetV2EffectiveBatch(context.Context, []int64) (map[int64]json.RawMessage, error)
+}
+
+// hydrateExport uses one Worker SQL read per 50 views when available. An old
+// Worker returns 404/405 for the batch endpoint, so the existing per-link path
+// remains usable during the Worker-first rollout.
+func (s *Server) hydrateExport(ctx context.Context, items []cairn.Bookmark) ([]*exportView, error) {
 	views := make([]*exportView, len(items))
 	v2, ok := s.backend.(V2Backend)
 	if !ok || len(items) == 0 {
-		return views
+		return views, nil
 	}
+	if batch, supported := s.backend.(batchEffectiveBackend); supported {
+		for start := 0; start < len(items); start += exportBatchSize {
+			end := min(start+exportBatchSize, len(items))
+			ids := make([]int64, 0, end-start)
+			for _, item := range items[start:end] {
+				ids = append(ids, item.ID)
+			}
+			payloads, err := batch.GetV2EffectiveBatch(ctx, ids)
+			if errors.Is(err, cairn.ErrV2Unsupported) {
+				return s.hydrateExportSingles(ctx, items, v2)
+			}
+			if err != nil {
+				return nil, err
+			}
+			for index := start; index < end; index++ {
+				payload, found := payloads[items[index].ID]
+				if !found {
+					return nil, fmt.Errorf("export effective view %d disappeared; retry export", items[index].ID)
+				}
+				var view exportView
+				if err := json.Unmarshal(payload, &view); err != nil {
+					return nil, fmt.Errorf("decode export effective view: %w", err)
+				}
+				views[index] = &view
+			}
+		}
+		return views, nil
+	}
+	return s.hydrateExportSingles(ctx, items, v2)
+}
+
+// hydrateExportSingles is the compatibility path for older Workers.
+func (s *Server) hydrateExportSingles(ctx context.Context, items []cairn.Bookmark, v2 V2Backend) ([]*exportView, error) {
+	views := make([]*exportView, len(items))
 	next := make(chan int)
 	var wait sync.WaitGroup
+	var unsupported atomic.Int64
+	var firstErr error
+	var errorOnce sync.Once
 	for range min(exportHydrators, len(items)) {
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
 			for index := range next {
 				payload, err := v2.GetV2Effective(ctx, items[index].ID)
+				if errors.Is(err, cairn.ErrV2Unsupported) {
+					unsupported.Add(1)
+					continue
+				}
 				if err != nil {
+					errorOnce.Do(func() { firstErr = err })
 					continue
 				}
 				var view exportView
-				if json.Unmarshal(payload, &view) == nil {
-					views[index] = &view
+				if err := json.Unmarshal(payload, &view); err != nil {
+					errorOnce.Do(func() { firstErr = fmt.Errorf("decode export effective view: %w", err) })
+					continue
 				}
+				views[index] = &view
 			}
 		}()
 	}
@@ -499,7 +556,13 @@ func (s *Server) hydrateExport(ctx context.Context, items []cairn.Bookmark) []*e
 	}
 	close(next)
 	wait.Wait()
-	return views
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	if count := unsupported.Load(); count > 0 && count != int64(len(items)) {
+		return nil, errors.New("some export effective views disappeared; retry export")
+	}
+	return views, nil
 }
 
 func exportTimestamp() string {

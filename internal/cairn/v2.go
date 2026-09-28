@@ -478,3 +478,82 @@ func (c *Client) GetV2Effective(ctx context.Context, id int64) (json.RawMessage,
 	}
 	return payload, nil
 }
+
+// GetV2EffectiveBatch reads up to 50 effective views in one Worker request.
+// The Worker uses one SQLite snapshot for the batch. A 404/405 means an older
+// Worker and lets the export keep using the single-link contract.
+func (c *Client) GetV2EffectiveBatch(ctx context.Context, ids []int64) (map[int64]json.RawMessage, error) {
+	if len(ids) == 0 || len(ids) > 50 {
+		return nil, errors.New("effective batch requires 1 to 50 bookmark IDs")
+	}
+	requested := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		if id < 1 {
+			return nil, errors.New("bookmark ID must be positive")
+		}
+		if _, exists := requested[id]; exists {
+			return nil, errors.New("effective batch has duplicate bookmark IDs")
+		}
+		requested[id] = struct{}{}
+	}
+	response, err := c.do(ctx, http.MethodPost, "/api/v2/links/effective-batch", map[string]any{"ids": ids})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed {
+		return nil, ErrV2Unsupported
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, apiError(response)
+	}
+	var payload struct {
+		Version    int               `json:"version"`
+		Items      []json.RawMessage `json:"items"`
+		MissingIDs []int64           `json:"missing_ids"`
+		D1         struct {
+			Scope       string `json:"scope"`
+			SQLCount    int    `json:"sql_count"`
+			RowsRead    int64  `json:"rows_read"`
+			RowsWritten int64  `json:"rows_written"`
+		} `json:"d1"`
+	}
+	if err := decodeJSON(response.Body, &payload); err != nil {
+		return nil, fmt.Errorf("decode effective batch: %w", err)
+	}
+	if payload.Version != 1 || payload.D1.Scope != "effective_view_only" || payload.D1.SQLCount != 1 ||
+		payload.D1.RowsRead < 0 || payload.D1.RowsWritten < 0 {
+		return nil, errors.New("invalid effective batch contract")
+	}
+	result := make(map[int64]json.RawMessage, len(payload.Items))
+	seen := make(map[int64]struct{}, len(ids))
+	for _, raw := range payload.Items {
+		var item struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &item); err != nil {
+			return nil, fmt.Errorf("decode effective batch item: %w", err)
+		}
+		if _, valid := requested[item.ID]; !valid {
+			return nil, errors.New("effective batch returned an unrequested ID")
+		}
+		if _, duplicate := seen[item.ID]; duplicate {
+			return nil, errors.New("effective batch returned a duplicate ID")
+		}
+		seen[item.ID] = struct{}{}
+		result[item.ID] = raw
+	}
+	for _, id := range payload.MissingIDs {
+		if _, valid := requested[id]; !valid {
+			return nil, errors.New("effective batch reported an unrequested missing ID")
+		}
+		if _, duplicate := seen[id]; duplicate {
+			return nil, errors.New("effective batch repeated an ID")
+		}
+		seen[id] = struct{}{}
+	}
+	if len(seen) != len(ids) {
+		return nil, errors.New("effective batch omitted an ID")
+	}
+	return result, nil
+}
