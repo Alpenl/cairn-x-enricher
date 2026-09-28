@@ -83,6 +83,18 @@ func (s *Store) openAudit() error {
 	if audit.SchemaVersion != controlAuditSchemaVersion || len(audit.Entries) > controlAuditMaxEntries {
 		return errors.New("unsupported observability control audit")
 	}
+	var priorVersion uint64
+	for _, entry := range audit.Entries {
+		if entry.At.IsZero() || entry.Version == 0 || entry.Version < priorVersion ||
+			entry.Signal != "logs" || entry.Actor != "container_loopback" ||
+			(entry.Mode != LogOff && entry.Mode != LogBasic && entry.Mode != LogDiagnostic) ||
+			(entry.Result != "started" && entry.Result != "applied" && entry.Result != "rejected" && entry.Result != "unconfirmed") ||
+			(entry.Mode == LogDiagnostic && entry.DiagnosticUntil.IsZero()) ||
+			(entry.Mode != LogDiagnostic && !entry.DiagnosticUntil.IsZero()) {
+			return errors.New("invalid observability control audit entry")
+		}
+		priorVersion = entry.Version
+	}
 	s.audit = audit
 	return s.PruneAudit()
 }

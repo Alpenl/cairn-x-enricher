@@ -177,17 +177,17 @@ func TestControlAuditCapacityReportsHistoryGap(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	store.audit.Entries = make([]ControlAuditEntry, 1500)
+	store.audit.Entries = make([]ControlAuditEntry, 2200)
 	for index := range store.audit.Entries {
 		store.audit.Entries[index] = ControlAuditEntry{At: now, Version: uint64(index + 1),
-			Signal: "logs", Mode: LogBasic, Actor: strings.Repeat("x", 180), Result: "applied"}
+			Signal: "logs", Mode: LogBasic, Actor: "container_loopback", Result: "applied"}
 	}
-	if err := store.appendAudit(ControlAuditEntry{At: now, Version: 1501,
+	if err := store.appendAudit(ControlAuditEntry{At: now, Version: 2201,
 		Signal: "logs", Mode: LogOff, Actor: "container_loopback", Result: "applied"}); err != nil {
 		t.Fatal(err)
 	}
 	got := store.Audit()
-	if got.TruncatedBeforeVersion == 0 || len(got.Entries) == 0 || got.Entries[len(got.Entries)-1].Version != 1501 {
+	if got.TruncatedBeforeVersion == 0 || len(got.Entries) == 0 || got.Entries[len(got.Entries)-1].Version != 2201 {
 		t.Fatalf("bounded audit did not mark the gap: first removed=%d, retained=%d", got.TruncatedBeforeVersion, len(got.Entries))
 	}
 	info, err := os.Stat(path + ".audit.json")
@@ -197,5 +197,29 @@ func TestControlAuditCapacityReportsHistoryGap(t *testing.T) {
 	reloaded, err := Open(path, slog.LevelInfo)
 	if err != nil || reloaded.Audit().TruncatedBeforeVersion != got.TruncatedBeforeVersion {
 		t.Fatalf("restart lost the truncation marker: %v", err)
+	}
+}
+
+func TestAuditRejectsUnexpectedStoredFieldsBeforeServingThem(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "observability.json")
+	if _, err := Open(path, slog.LevelInfo); err != nil {
+		t.Fatal(err)
+	}
+	stored := `{"schema_version":1,"entries":[{"at":"2026-09-28T00:00:00Z","version":1,` +
+		`"signal":"logs","mode":"off","actor":"private-bookmark-id","result":"applied"}]}`
+	if err := os.WriteFile(path+".audit.json", []byte(stored), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(path, slog.LevelInfo)
+	if err != nil || store.Snapshot().ControlAuditAvailable {
+		t.Fatalf("unsafe stored control history became available: %v", err)
+	}
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://127.0.0.1:9090/v1/observability/audit", nil)
+	request.RemoteAddr = "127.0.0.1:1000"
+	response := httptest.NewRecorder()
+	store.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable || strings.Contains(response.Body.String(), "private-bookmark-id") {
+		t.Fatalf("unsafe audit leaked: %d %s", response.Code, response.Body.String())
 	}
 }
