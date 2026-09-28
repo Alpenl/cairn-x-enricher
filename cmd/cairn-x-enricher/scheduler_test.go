@@ -322,13 +322,13 @@ func (*finiteSourceQueue) Complete(context.Context, int64, cairn.Completion) err
 func (*finiteSourceQueue) Fail(context.Context, int64, string, string) error       { return nil }
 
 func TestSourceSweepFollowsBacklogPastTheOldClaimWindow(t *testing.T) {
-	queue := &finiteSourceQueue{remaining: 3}
+	queue := &finiteSourceQueue{remaining: 4}
 	worker := processor.New(queue, &slowEnricher{hold: 70 * time.Millisecond}, discardLogger(), 1)
 	worker.SetClaimTimeout(20 * time.Millisecond)
 	stats, err := runSourceSweepSafely(context.Background(), worker, config.Config{
 		MaxJobsPerRun: 1, ShutdownTimeout: 100 * time.Millisecond,
 	}, discardLogger())
-	if err != nil || stats.Claimed != 3 || stats.Completed != 3 || stats.Duration < 150*time.Millisecond {
+	if err != nil || stats.Claimed != 4 || stats.Completed != 4 || stats.Duration < 200*time.Millisecond {
 		t.Fatalf("source sweep stopped at a batch window: stats=%+v err=%v", stats, err)
 	}
 }

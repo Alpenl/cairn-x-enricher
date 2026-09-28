@@ -520,16 +520,13 @@ func batchTimeout(cfg config.Config) time.Duration {
 	return timeout
 }
 
-// runSourceSweepSafely follows a full batch immediately while backlog remains.
-// A trigger is capped at three batches; each claim has its own timeout, while
-// shutdown cancellation stops the next claim without cutting off paid work.
+// runSourceSweepSafely follows each full batch immediately while backlog
+// remains. Each claim has its own timeout; shutdown stops new claims without
+// cutting off already leased paid work.
 func runSourceSweepSafely(ctx context.Context, worker *processor.Processor, cfg config.Config, logger *slog.Logger) (stats processor.Stats, err error) {
 	defer processor.RecoverJob(logger, "scheduled source sweep", 0, &err)
 	stats.StartedAt = time.Now().UTC()
-	for range 3 {
-		if ctx.Err() != nil {
-			break
-		}
+	for ctx.Err() == nil {
 		part, runErr := worker.RunSources(ctx, cfg.MaxJobsPerRun)
 		stats.Claimed += part.Claimed
 		stats.Completed += part.Completed
