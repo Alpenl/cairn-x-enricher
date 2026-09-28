@@ -66,6 +66,24 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 		t.Fatalf("source admission lifecycle = %+v, fetches=%d transforms=%d, err=%v",
 			detail, reader.fetches, reader.transforms, err)
 	}
+	// The first completion was committed by Worker.Process. A lost HTTP
+	// response must replay that receipt without running the model again.
+	completion := cairn.Completion{LeaseToken: job.LeaseToken, AITitle: "Lease admission fixture",
+		OriginalLanguage: "en", OriginalText: "Fixture source for lease admission",
+		TranslatedText: "租约准入测试", Summary: "Fixture reading aid", Model: "fixture",
+		RelatedLinks: []string{}, Images: []cairn.ImageRef{}}
+	if err := queue.Complete(ctx, id, completion); err != nil {
+		t.Fatalf("exact completion replay: %v", err)
+	}
+	changed := completion
+	changed.Summary = "different result"
+	var conflict *cairn.APIError
+	if err := queue.Complete(ctx, id, changed); !errors.As(err, &conflict) || conflict.Code != "operation_conflict" {
+		t.Fatalf("different completion reused old receipt: %v", err)
+	}
+	if reader.fetches != 1 || reader.transforms != 1 {
+		t.Fatalf("completion replay ran paid stages: fetches=%d transforms=%d", reader.fetches, reader.transforms)
+	}
 
 	failedID := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
 	failedJob, err := queue.Claim(ctx)

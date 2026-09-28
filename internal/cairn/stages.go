@@ -162,7 +162,8 @@ func (c *Client) GetSource(ctx context.Context, id int64) (*enrich.Source, error
 
 // SaveSource checkpoints retrieval and atomically queues classification.
 func (c *Client) SaveSource(ctx context.Context, id int64, token string, source enrich.Source) error {
-	return c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/jobs/%d/source", id), map[string]any{"lease_token": token, "source": source})
+	return c.retryExactStageWrite(ctx, fmt.Sprintf("/api/enrichment/jobs/%d/source", id),
+		map[string]any{"lease_token": token, "source": source})
 }
 
 // ClaimClassification acquires semantic work independently of retrieval leases.
@@ -614,4 +615,19 @@ func (c *Client) stageWrite(ctx context.Context, path string, body any) error {
 		return apiError(response)
 	}
 	return nil
+}
+
+// retryExactStageWrite repeats one identical Worker commit after an ambiguous
+// transport/5xx failure. These callers have a durable same-lease replay
+// contract; this never invokes a model or creates another paid attempt.
+func (c *Client) retryExactStageWrite(ctx context.Context, path string, body any) error {
+	err := c.stageWrite(ctx, path, body)
+	if err == nil || ctx.Err() != nil {
+		return err
+	}
+	var apiErr *APIError
+	if errors.As(err, &apiErr) && apiErr.StatusCode < http.StatusInternalServerError {
+		return err
+	}
+	return c.stageWrite(ctx, path, body)
 }

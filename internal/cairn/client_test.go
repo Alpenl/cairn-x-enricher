@@ -286,7 +286,7 @@ func TestClientRequiresSourceLeaseContractBeforeScheduling(t *testing.T) {
 				_, _ = writer.Write([]byte(`{"error":"not_found"}`))
 				return
 			}
-			_, _ = writer.Write([]byte(`{"protocol":1,"lease_ms":900000,"paid_stage_admission":true,"provider_result_guard":true}`))
+			_, _ = writer.Write([]byte(`{"protocol":1,"lease_ms":900000,"paid_stage_admission":true,"provider_result_guard":true,"completion_replay":true}`))
 		}))
 		client := NewClient(server.URL, "token", server.Client())
 		err := client.VerifySourceLeaseCapability(context.Background())

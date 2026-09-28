@@ -285,12 +285,13 @@ func (c *Client) VerifySourceLeaseCapability(ctx context.Context) error {
 		LeaseMS             int  `json:"lease_ms"`
 		PaidStageAdmission  bool `json:"paid_stage_admission"`
 		ProviderResultGuard bool `json:"provider_result_guard"`
+		CompletionReplay    bool `json:"completion_replay"`
 	}
 	if err := decodeJSON(response.Body, &capability); err != nil {
 		return fmt.Errorf("decode source lease capability: %w", err)
 	}
 	if capability.Protocol != 1 || capability.LeaseMS != int((15*time.Minute).Milliseconds()) ||
-		!capability.PaidStageAdmission || !capability.ProviderResultGuard {
+		!capability.PaidStageAdmission || !capability.ProviderResultGuard || !capability.CompletionReplay {
 		return errors.New("source lease admission protocol is incompatible")
 	}
 	return nil
@@ -527,15 +528,7 @@ func (c *Client) UpdateCuration(ctx context.Context, id int64, update CurationUp
 // Complete commits a successful result while the supplied lease is current.
 func (c *Client) Complete(ctx context.Context, id int64, completion Completion) error {
 	path := fmt.Sprintf("/api/enrichment/jobs/%d/complete", id)
-	response, err := c.do(ctx, http.MethodPost, path, completion)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusOK {
-		return apiError(response)
-	}
-	return nil
+	return c.retryExactStageWrite(ctx, path, completion)
 }
 
 // StoreImages asks the Worker to fetch validated X media and persist it in R2.
