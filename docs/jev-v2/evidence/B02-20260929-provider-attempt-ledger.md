@@ -14,6 +14,7 @@
 
 - `make verify`：vet、lint、全量 race、457/457 前端检查、构建均通过。
 - 本地真实 Worker/D1 联调：`providerledger`、`sourcelease`、`lifecycle` 均通过；xAI 由本地 HTTP 夹具替代，实际付费调用为 0。
+- 人工原文另有 `manualrestart` 联调：真实 Dashboard HTTP 收到 `accepted` 后，提交进程直接 `os.Exit(0)`；新进程读取完全相同的正文与来源快照，同 operation 重放仍返回原版本，普通调度领取保留该版本。该用例不调用付费模型。
 - 定向测试覆盖凭证先于 POST、同键重放不再次发送、已知响应用量结算、响应丢失不降级、预算拒绝不报模型失败、任务上下文取消后仍退还未用租约，以及人工正文不占来源付费准入。
 
 ## 尚未验收
