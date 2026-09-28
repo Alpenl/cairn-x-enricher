@@ -89,8 +89,38 @@ func (p *Processor) ProcessWithSource(ctx context.Context, job *cairn.Job, sourc
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	return p.processJob(ctx, job, sourceText)
+	return p.processLeasedJob(ctx, job, sourceText)
 }
+
+// processLeasedJob runs while the caller owns one execution slot.
+func (p *Processor) processLeasedJob(ctx context.Context, job *cairn.Job, sourceText string) error {
+	// Already-claimed work may outlive the batch cancellation, but never its
+	// lease or a fixed per-job bound. Paid-stage admission separately reserves
+	// the commit margin; the final Worker write may use the remaining lease.
+	deadline := time.Now().Add(sourceJobMaxDuration)
+	if job.LeaseUntil != "" {
+		leaseUntil, err := time.Parse(time.RFC3339Nano, job.LeaseUntil)
+		if err != nil {
+			return enrich.Classified(fmt.Errorf("invalid source lease deadline: %w", err), enrich.ErrorClassContract)
+		}
+		if time.Until(leaseUntil) <= paidStageCommitMargin {
+			return enrich.Classified(errors.New("source lease has too little time remaining"), enrich.ErrorClassStale)
+		}
+		if leaseUntil.Before(deadline) {
+			deadline = leaseUntil
+		}
+	}
+	if !deadline.After(time.Now()) {
+		return enrich.Classified(errors.New("source lease has too little time remaining"), enrich.ErrorClassStale)
+	}
+	workCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	return p.processJob(workCtx, job, sourceText)
+}
+
+// Worker source leases last 15 minutes. This also bounds malformed older
+// callers that omit the lease timestamp.
+const sourceJobMaxDuration = 15 * time.Minute
 
 // Run processes one bounded source and classification round. The one-shot CLI
 // keeps this combined behavior; serve schedules the two queues independently.
@@ -188,41 +218,56 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 				if claimSlots.Add(1) > int64(maxJobs) {
 					return
 				}
-				requestCtx := claimCtx
-				stopRequest := func() {}
-				if p.claimTimeout > 0 {
-					requestCtx, stopRequest = context.WithTimeout(claimCtx, p.claimTimeout)
+				// Capacity is acquired before the Worker lease. A manual task or
+				// another batch can hold the shared slots without aging a claim.
+				select {
+				case p.slots <- struct{}{}:
+				case <-claimCtx.Done():
+					return
 				}
-				job, err := p.queue.Claim(requestCtx)
-				stopRequest()
-				if err != nil {
-					// A cancelled claim context means the batch was told to stop,
-					// not that the queue failed.
+				more := func() bool {
+					defer func() { <-p.slots }()
 					if claimCtx.Err() != nil {
-						return
+						return false
 					}
-					recordFatal(fmt.Errorf("claim enrichment job: %w", err))
+					requestCtx := claimCtx
+					stopRequest := func() {}
+					if p.claimTimeout > 0 {
+						requestCtx, stopRequest = context.WithTimeout(claimCtx, p.claimTimeout)
+					}
+					job, err := p.queue.Claim(requestCtx)
+					stopRequest()
+					if err != nil {
+						if claimCtx.Err() != nil {
+							return false
+						}
+						recordFatal(fmt.Errorf("claim enrichment job: %w", err))
+						return false
+					}
+					if job == nil {
+						return false
+					}
+					claimed.Add(1)
+					// Already-claimed work may finish after batch cancellation,
+					// within its own lease and per-job deadline.
+					if err := p.processLeasedJob(workCtx, job, ""); err != nil {
+						if errors.Is(err, ErrJobDeferred) {
+							return true
+						}
+						failed.Add(1)
+						if sourceComponentFailure(err) {
+							recordFatal(fmt.Errorf("source component paused: %w", err))
+							return false
+						}
+						// One bad bookmark does not stop unrelated source work.
+						return true
+					}
+					completed.Add(1)
+					return true
+				}()
+				if !more {
 					return
 				}
-				if job == nil {
-					return
-				}
-				claimed.Add(1)
-				// Deliveries and failures are reported with the work context so
-				// they still succeed for a job that was already claimed.
-				if err := p.Process(workCtx, job); err != nil {
-					if errors.Is(err, ErrJobDeferred) {
-						continue
-					}
-					failed.Add(1)
-					if sourceComponentFailure(err) {
-						recordFatal(fmt.Errorf("source component paused: %w", err))
-						return
-					}
-					// One bad bookmark does not stop unrelated source work.
-					continue
-				}
-				completed.Add(1)
 			}
 		}()
 	}

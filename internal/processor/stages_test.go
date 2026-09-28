@@ -242,6 +242,17 @@ func (q *stageQueue) AckSourceRefresh(context.Context, int64, int64, string, str
 	q.refreshAcks++
 	return nil
 }
+
+func TestDetachedStateReportHasDeadlineAfterBatchCancellation(t *testing.T) {
+	batch, stopBatch := context.WithCancel(context.Background())
+	stopBatch()
+	report, stopReport := boundedStateReportContext(batch)
+	defer stopReport()
+	deadline, ok := report.Deadline()
+	if !ok || report.Err() != nil || time.Until(deadline) <= 0 || time.Until(deadline) > stateReportTimeout {
+		t.Fatalf("detached report has no usable bound: deadline=%s present=%t error=%v", deadline, ok, report.Err())
+	}
+}
 func (q *stageQueue) DecideEvidenceRequest(_ context.Context, _ string, body map[string]any) error {
 	q.evidenceDecisions = append(q.evidenceDecisions, body)
 	return nil

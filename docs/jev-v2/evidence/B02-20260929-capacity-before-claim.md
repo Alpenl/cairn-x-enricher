@@ -1,0 +1,9 @@
+# B02: source capacity before lease, with bounded job and state writes (2026-09-29)
+
+`RunSources` now acquires one shared execution slot before asking the Worker to claim a source lease. It holds that slot through the claimed job and releases it on an empty queue, claim error, cancellation, or job exit. A concurrent manual job can therefore occupy capacity without causing a scheduled lease to age while waiting for a slot. The Worker's durable manual-priority ordering remains the source of queue priority.
+
+Every source job has a context deadline no later than its Worker lease expiry and no later than 15 minutes after execution starts. A malformed lease timestamp is a component contract error; a lease with 30 seconds or less remaining is rejected as stale before paid work. Paid-stage admission still requires the provider request timeout plus a 30-second commit margin. Detached refresh acknowledgements and classification failure reports now have a 15-second limit rather than an unbounded context.
+
+The concurrency test holds the only execution slot with a slow manual job and confirms the scheduled queue is not claimed until the slot is released. Deadline tests check that the lease bounds model work and that short or malformed leases never reach the model. The shutdown test now waits for the actual model start before canceling and uses a valid future lease. `make verify` passed (vet, golangci-lint with zero issues, race tests, 488 frontend checks, build); `make test-ablation` passed. These are local fixture tests with no paid provider call or deployment.
+
+Remaining B02-T08 acceptance includes process-restart and real Worker/Go competition under backlog, plus review of refresh acknowledgement failures: those calls are now bounded, but the current refresh path still ignores their returned errors. The full manual-entry, quality, and production performance gates remain open.

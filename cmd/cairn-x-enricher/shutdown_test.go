@@ -163,7 +163,7 @@ func TestSchedulerReturnsOnCancellation(t *testing.T) {
 	tracker.MarkStarted()
 
 	queue := &oneJobQueue{}
-	enricher := &slowEnricher{hold: 300 * time.Millisecond}
+	enricher := &slowEnricher{hold: 300 * time.Millisecond, started: make(chan struct{})}
 	worker := processor.New(queue, enricher, discardLogger(), 1)
 	cfg := config.Config{MaxJobsPerRun: 2, PollInterval: time.Hour, ShutdownTimeout: 5 * time.Second}
 
@@ -173,8 +173,13 @@ func TestSchedulerReturnsOnCancellation(t *testing.T) {
 		runScheduler(ctx, worker, tracker, cfg, discardLogger())
 	}()
 
-	// Let the first batch start, then cancel mid-job.
-	time.Sleep(50 * time.Millisecond)
+	// Cancel only after the model call actually starts; a timer here can race
+	// the scheduler and accidentally cancel before it claims any work.
+	select {
+	case <-enricher.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("scheduler did not start the in-flight job")
+	}
 	cancel()
 
 	if !waitForSignal(done, 5*time.Second) {
@@ -191,12 +196,17 @@ func TestSchedulerReturnsOnCancellation(t *testing.T) {
 // in for an in-flight model call. Run must let it complete rather than
 // interrupting it, so the batch returns shortly after this delay.
 type slowEnricher struct {
-	hold  time.Duration
-	calls atomic.Int64
+	hold        time.Duration
+	calls       atomic.Int64
+	started     chan struct{}
+	startedOnce sync.Once
 }
 
 func (e *slowEnricher) Enrich(context.Context, enrich.Input) (enrich.Result, error) {
 	e.calls.Add(1)
+	if e.started != nil {
+		e.startedOnce.Do(func() { close(e.started) })
+	}
 	time.Sleep(e.hold)
 	return enrich.Result{
 		AITitle: "排空测试使用的中文标题", OriginalLanguage: "en", OriginalText: "s",
@@ -217,7 +227,8 @@ func (q *oneJobQueue) Claim(context.Context) (*cairn.Job, error) {
 		return nil, nil
 	}
 	q.used = true
-	return &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, LeaseToken: "l", LeaseUntil: "u"}, nil
+	return &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, LeaseToken: "l",
+		LeaseUntil: time.Now().Add(15 * time.Minute).Format(time.RFC3339Nano)}, nil
 }
 
 func (q *oneJobQueue) GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error) {

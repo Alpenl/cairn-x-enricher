@@ -213,6 +213,11 @@ func (p *componentPause) state() (bool, string, time.Duration) {
 const DefaultClassificationDeadline = 3 * time.Minute
 const defaultPaidStageTimeout = 3 * time.Minute
 const paidStageCommitMargin = 30 * time.Second
+const stateReportTimeout = 15 * time.Second
+
+func boundedStateReportContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), stateReportTimeout)
+}
 
 // NewStaged creates the production processor with independent semantic work.
 func NewStaged(queue StageQueue, reader SourceReader, classifier Classifier, version, model string, logger *slog.Logger, concurrency int) *Processor {
@@ -253,7 +258,7 @@ func (p *Processor) deferSourceBudget(ctx context.Context, job *cairn.Job, stage
 	}
 	// The budget check may finish as the job context is cancelled. Releasing an
 	// unused lease is a bounded state transition and must still reach the Worker.
-	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	commitCtx, cancel := boundedStateReportContext(ctx)
 	defer cancel()
 	if err := p.stages.queue.DeferSourceBudget(commitCtx, job.ID, job.LeaseToken, stage); err != nil {
 		p.logger.ErrorContext(ctx, "could not defer unused paid stage after budget denial",
@@ -312,15 +317,21 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 			}
 			// The old readable content and all human data are kept; the intent is
 			// consumed so a broken URL cannot loop forever.
-			_ = s.queue.AckSourceRefresh(context.WithoutCancel(ctx), job.ID, job.RefreshEpoch, "failed", boundedError(fetchErr))
+			ackCtx, cancel := boundedStateReportContext(ctx)
+			_ = s.queue.AckSourceRefresh(ackCtx, job.ID, job.RefreshEpoch, "failed", boundedError(fetchErr))
+			cancel()
 			return p.reportFailure(ctx, logger, job, failurePathSearch, fetchErr)
 		}
 		source = &fetched
 		if err = p.saveSourceWithEvidence(ctx, job, *source); err != nil {
-			_ = s.queue.AckSourceRefresh(context.WithoutCancel(ctx), job.ID, job.RefreshEpoch, "failed", boundedError(err))
+			ackCtx, cancel := boundedStateReportContext(ctx)
+			_ = s.queue.AckSourceRefresh(ackCtx, job.ID, job.RefreshEpoch, "failed", boundedError(err))
+			cancel()
 			return p.reportFailure(ctx, logger, job, failurePathSearch, err)
 		}
-		_ = s.queue.AckSourceRefresh(context.WithoutCancel(ctx), job.ID, job.RefreshEpoch, "completed", "")
+		ackCtx, cancel := boundedStateReportContext(ctx)
+		_ = s.queue.AckSourceRefresh(ackCtx, job.ID, job.RefreshEpoch, "completed", "")
+		cancel()
 		logger.InfoContext(ctx, "source refreshed; classification queued")
 		return p.finishReading(ctx, job, *source, nil)
 	}
@@ -590,7 +601,10 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 			if enrich.IsStale(err) {
 				// Superseded input/target: not a semantic failure, and the Worker
 				// already knows. Do not spend an attempt or abort other jobs.
-				if reportErr := s.queue.FailClassification(context.WithoutCancel(ctx), job, "superseded: "+boundedError(err)); reportErr != nil && !enrich.IsStale(reportErr) {
+				reportCtx, stopReport := boundedStateReportContext(ctx)
+				reportErr := s.queue.FailClassification(reportCtx, job, "superseded: "+boundedError(err))
+				stopReport()
+				if reportErr != nil && !enrich.IsStale(reportErr) {
 					return completed, failed, errors.Join(err, reportErr)
 				}
 				continue
@@ -604,7 +618,10 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 				return completed, failed, fmt.Errorf("%w: %w", ErrComponentPaused, err)
 			}
 			failed++
-			if reportErr := s.queue.FailClassification(context.WithoutCancel(ctx), job, boundedError(err)); reportErr != nil {
+			reportCtx, stopReport := boundedStateReportContext(ctx)
+			reportErr := s.queue.FailClassification(reportCtx, job, boundedError(err))
+			stopReport()
+			if reportErr != nil {
 				return completed, failed, errors.Join(err, reportErr)
 			}
 			p.logger.WarnContext(ctx, "classification failed; source retained", "link_id", job.ID, "error", err)
