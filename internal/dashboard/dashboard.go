@@ -868,7 +868,8 @@ func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http
 		s.logger.WarnContext(request.Context(), "manual source save rejected", "link_id", id,
 			"duration_ms", time.Since(started).Milliseconds(), "error", saveErr)
 		status := http.StatusBadGateway
-		if code == "input_changed" || code == "operation_conflict" || code == "not_found" || code == "invalid_source" {
+		if code == "input_changed" || code == "operation_conflict" || code == "lease_conflict" ||
+			code == "not_found" || code == "invalid_source" {
 			status = http.StatusConflict
 		}
 		writeProcessingResult(writer, status, nil, []rejection{{ID: id, Error: code}})
@@ -1147,6 +1148,7 @@ func (s *Server) writeBackendError(writer http.ResponseWriter, operation string,
 func publicErrorCode(err error) string {
 	var apiErr *cairn.APIError
 	if errors.As(err, &apiErr) && (apiErr.Code == "not_found" || apiErr.Code == "job_busy" ||
+		apiErr.Code == "lease_conflict" ||
 		apiErr.Code == "input_changed" || apiErr.Code == "operation_conflict" || apiErr.Code == "invalid_source") {
 		return apiErr.Code
 	}

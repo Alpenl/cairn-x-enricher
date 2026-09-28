@@ -413,25 +413,29 @@ func TestHandlerSavesManualSourceBeforeAcceptance(t *testing.T) {
 }
 
 func TestHandlerDoesNotAcceptOrWakeWhenManualSourceSaveFails(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	backend := &fakeBackend{manualSaveErr: &cairn.APIError{StatusCode: http.StatusConflict, Code: "input_changed"}}
-	server := New(ctx, startedTracker(), backend, &fakeProcessor{processed: make(chan int64, 1),
-		sources: make(chan sourceProcess, 1)}, testLogger(), 1)
-	wakeup := make(chan struct{}, 1)
-	server.SetWakeup(wakeup)
-	request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/bookmarks/20/source",
-		strings.NewReader(`{"original_text":"post","operation_key":"manual-20-1","expected_revision":7}`))
-	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
-	server.Handler().ServeHTTP(response, request)
-	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "input_changed") {
-		t.Fatalf("failed save response = %d %s", response.Code, response.Body.String())
-	}
-	select {
-	case <-wakeup:
-		t.Fatal("failed save woke scheduler")
-	default:
+	for _, code := range []string{"input_changed", "lease_conflict"} {
+		t.Run(code, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			backend := &fakeBackend{manualSaveErr: &cairn.APIError{StatusCode: http.StatusConflict, Code: code}}
+			server := New(ctx, startedTracker(), backend, &fakeProcessor{processed: make(chan int64, 1),
+				sources: make(chan sourceProcess, 1)}, testLogger(), 1)
+			wakeup := make(chan struct{}, 1)
+			server.SetWakeup(wakeup)
+			request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/bookmarks/20/source",
+				strings.NewReader(`{"original_text":"post","operation_key":"manual-20-1","expected_revision":7}`))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			server.Handler().ServeHTTP(response, request)
+			if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), code) {
+				t.Fatalf("failed save response = %d %s", response.Code, response.Body.String())
+			}
+			select {
+			case <-wakeup:
+				t.Fatal("failed save woke scheduler")
+			default:
+			}
+		})
 	}
 }
 
