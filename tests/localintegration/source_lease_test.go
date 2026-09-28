@@ -8,6 +8,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,6 +24,25 @@ type localSourceReader struct {
 }
 
 type localFailedSourceReader struct{ localSourceReader }
+
+type workerRequestRecorder struct {
+	mu     sync.Mutex
+	next   http.RoundTripper
+	routes []string
+}
+
+func (r *workerRequestRecorder) RoundTrip(request *http.Request) (*http.Response, error) {
+	r.mu.Lock()
+	r.routes = append(r.routes, request.Method+" "+request.URL.Path)
+	r.mu.Unlock()
+	return r.next.RoundTrip(request)
+}
+
+func (r *workerRequestRecorder) snapshot() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.routes...)
+}
 
 func (r *localFailedSourceReader) FetchSource(ctx context.Context, input enrich.Input) (enrich.Source, error) {
 	r.fetches++
@@ -80,8 +101,9 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 	base := workerURL(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	recorder := &workerRequestRecorder{next: http.DefaultTransport}
 	queue := cairn.NewClient(base, envOr("CAIRN_ENRICHER_TOKEN", "internal"),
-		&http.Client{Timeout: 10 * time.Second})
+		&http.Client{Timeout: 10 * time.Second, Transport: recorder})
 	if err := queue.VerifySourceLeaseCapability(ctx); err != nil {
 		t.Fatalf("source lease handshake: %v", err)
 	}
@@ -94,9 +116,30 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 	worker := processor.NewStaged(queue, reader, nil, "", "",
 		slog.New(slog.NewJSONHandler(io.Discard, nil)), 1)
 	worker.SetPaidStageTimeout(10 * time.Second)
+	beforeProcess := len(recorder.snapshot())
 	if err := worker.Process(ctx, job); err != nil {
 		t.Fatalf("source processing with two paid-stage admissions: %v", err)
 	}
+	processRoutes := recorder.snapshot()[beforeProcess:]
+	count := func(route string) int {
+		n := 0
+		for _, observed := range processRoutes {
+			if observed == route {
+				n++
+			}
+		}
+		return n
+	}
+	// The old seven-call estimate predates source-lease admission and the
+	// per-network-attempt ledger. Keep the current safe path's full HTTP
+	// budget visible, including its two paid stages.
+	if len(processRoutes) > 12 ||
+		count("POST /api/enrichment/provider-attempts/reserve") != 2 ||
+		count("POST /api/enrichment/provider-attempts/settle") != 2 ||
+		count("POST /api/enrichment/jobs/"+strconv.FormatInt(id, 10)+"/lease-admit") != 2 {
+		t.Fatalf("source request budget or paid-stage accounting changed: %v", processRoutes)
+	}
+	t.Logf("source Worker HTTP calls = %d (budget 12): %v", len(processRoutes), processRoutes)
 	detail, err := queue.GetBookmark(ctx, id)
 	if err != nil || detail.Status != "completed" ||
 		detail.OriginalText != "Fixture source for lease admission" ||

@@ -505,8 +505,15 @@ async function partB(browser) {
   check("the navigation shows live counts", /\d+/.test(await page.textContent("[data-view='inbox'] .nav-count") || ""));
 
   // J/K move through the list and keep the URL shareable.
+  const beforeJRequests = state.requests.length;
   await page.keyboard.press("j");
   await waitFor(async () => (await selectedId()) === inbox[1]);
+  await page.waitForTimeout(350); // let the adjacent prefetch scheduled by this step run
+  const jRequests = state.requests.slice(beforeJRequests);
+  // This fixture exercises the old detail, selection and entities routes.
+  // The combined reading route has its own one-request check below.
+  check("one J step stays within three legacy API requests", jRequests.length <= 3 &&
+    jRequests.every((entry) => entry.path.startsWith("/api/bookmarks/")), JSON.stringify(jRequests));
   equal("J selects the next bookmark", await selectedId(), inbox[1]);
   check("the URL follows the selection", new URL(page.url()).pathname === `/bookmarks/${inbox[1]}`);
   await page.keyboard.press("k");
