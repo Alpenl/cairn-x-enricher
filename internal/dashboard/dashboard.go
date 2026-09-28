@@ -63,6 +63,10 @@ type readingBackend interface {
 	GetReading(context.Context, int64, *int64) (cairn.ReadingSnapshot, error)
 }
 
+type overviewBackend interface {
+	GetOverview(context.Context) (cairn.BookmarkOverview, error)
+}
+
 // V2Backend is the optional multidimensional API. A backend that does not
 // implement it degrades to read-only v1 rather than showing empty data.
 type V2Backend interface {

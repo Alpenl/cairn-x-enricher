@@ -23,6 +23,18 @@ type countingBackend struct {
 	fail    string
 }
 
+type aggregateOverviewBackend struct {
+	countingBackend
+	result cairn.BookmarkOverview
+	err    error
+	calls  int
+}
+
+func (b *aggregateOverviewBackend) GetOverview(context.Context) (cairn.BookmarkOverview, error) {
+	b.calls++
+	return b.result, b.err
+}
+
 func (b *countingBackend) ListBookmarks(_ context.Context, query cairn.BookmarkQuery) (cairn.BookmarkPage, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -89,6 +101,38 @@ func TestOverviewCountsEveryViewWithItsOwnFilter(t *testing.T) {
 	}
 	if backend.calls() != len(overviewViews) {
 		t.Fatalf("calls = %d, want %d", backend.calls(), len(overviewViews))
+	}
+}
+
+func TestOverviewUsesOneAggregateReadAndFallsBackOnlyForOldWorkers(t *testing.T) {
+	backend := &aggregateOverviewBackend{result: cairn.BookmarkOverview{
+		Version: 1, Views: map[string]int{"all": 4, "inbox": 2, "kept": 1, "compiled": 1, "drop": 0, "uncertain": 1},
+		Counts: cairn.BookmarkCounts{Total: 4, Pending: 2, Completed: 1, Unsupported: 1}, Queued: 2,
+	}}
+	server := New(context.Background(), startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+	defer server.Drain(time.Second)
+	code, body := getOverview(t, server.Handler())
+	if code != http.StatusOK || body["queued"] != float64(2) || backend.calls != 1 || backend.countingBackend.calls() != 0 {
+		t.Fatalf("aggregate overview = %d %v; aggregate/list calls %d/%d", code, body,
+			backend.calls, backend.countingBackend.calls())
+	}
+	getOverview(t, server.Handler())
+	if backend.calls != 1 {
+		t.Fatalf("local cache made %d aggregate calls", backend.calls)
+	}
+
+	old := &aggregateOverviewBackend{countingBackend: countingBackend{totals: map[string]int{"all": 4}}, err: cairn.ErrOverviewUnsupported}
+	oldServer := New(context.Background(), startedTracker(), old, &fakeProcessor{}, testLogger(), 1)
+	defer oldServer.Drain(time.Second)
+	if code, _ := getOverview(t, oldServer.Handler()); code != http.StatusOK || old.countingBackend.calls() != len(overviewViews) {
+		t.Fatalf("old Worker fallback = %d; list calls %d", code, old.countingBackend.calls())
+	}
+
+	failing := &aggregateOverviewBackend{err: &cairn.APIError{StatusCode: http.StatusServiceUnavailable, Code: "backend_error"}}
+	failingServer := New(context.Background(), startedTracker(), failing, &fakeProcessor{}, testLogger(), 1)
+	defer failingServer.Drain(time.Second)
+	if code, _ := getOverview(t, failingServer.Handler()); code == http.StatusOK || failing.countingBackend.calls() != 0 {
+		t.Fatalf("temporary aggregate failure downgraded: %d; list calls %d", code, failing.countingBackend.calls())
 	}
 }
 

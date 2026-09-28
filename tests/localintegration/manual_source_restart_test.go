@@ -87,6 +87,10 @@ func TestLocalWorkerManualSourceSurvivesProcessExit(t *testing.T) {
 	if err != nil || len(compact.Items) != 1 || compact.Items[0].ID != id {
 		t.Fatalf("count-free list after restart: %+v %v", compact, err)
 	}
+	overview, err := restarted.GetOverview(ctx)
+	if err != nil || overview.Views["all"] < 1 || overview.Counts.Total != overview.Views["all"] {
+		t.Fatalf("single-snapshot overview after restart: %+v %v", overview, err)
+	}
 	server := dashboard.New(ctx, health.NewTracker(), restarted, neverRunManualSource{},
 		slog.New(slog.NewJSONHandler(io.Discard, nil)), 1)
 	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/bookmarks?limit=1&counts=0", nil)
@@ -95,6 +99,12 @@ func TestLocalWorkerManualSourceSurvivesProcessExit(t *testing.T) {
 	if listResponse.Code != http.StatusOK || strings.Contains(listResponse.Body.String(), `"counts"`) ||
 		!strings.Contains(listResponse.Body.String(), fmt.Sprintf(`"id":%d`, id)) {
 		t.Fatalf("dashboard count-free list failed: %d %s", listResponse.Code, listResponse.Body.String())
+	}
+	overviewResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(overviewResponse, httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/overview", nil))
+	if overviewResponse.Code != http.StatusOK ||
+		!strings.Contains(overviewResponse.Body.String(), fmt.Sprintf(`"all":%d`, overview.Views["all"])) {
+		t.Fatalf("dashboard aggregate overview failed: %d %s", overviewResponse.Code, overviewResponse.Body.String())
 	}
 	identityRequest := httptest.NewRequestWithContext(ctx, http.MethodGet,
 		fmt.Sprintf("/api/bookmarks/%d/identity", id), nil)

@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -55,6 +56,16 @@ func (s *Server) getOverview(writer http.ResponseWriter, request *http.Request) 
 }
 
 func (s *Server) computeOverview(ctx context.Context) (overviewSummary, error) {
+	if backend, ok := s.backend.(overviewBackend); ok {
+		aggregate, err := backend.GetOverview(ctx)
+		if err == nil {
+			return overviewSummary{Views: aggregate.Views, Counts: aggregate.Counts,
+				Attention: aggregate.Attention, Queued: aggregate.Queued}, nil
+		}
+		if !errors.Is(err, cairn.ErrOverviewUnsupported) {
+			return overviewSummary{}, fmt.Errorf("read aggregate overview: %w", err)
+		}
+	}
 	type result struct {
 		counts cairn.BookmarkCounts
 		err    error
