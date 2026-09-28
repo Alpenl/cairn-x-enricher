@@ -102,6 +102,11 @@ function createMock() {
     identityRevision: 1,
     identityReads: 0,
     detailReads: 0,
+    combinedReading: false,
+    readingReads: 0,
+    readingBodyOmissions: 0,
+    selectionReads: 0,
+    entityReads: 0,
     remoteTitle: null,
     holdWhy: false,
     releaseWhy: null
@@ -142,6 +147,20 @@ function startMockServer(state) {
     const cache_identity = { schema_version: 1, content_revision: 1,
       body_revision: state.identityRevision, personal_revision: state.revision,
       latest_decision_id: 0, latest_entity_revision: state.revision };
+    if (url.pathname === "/api/bookmarks/12/reading" && state.combinedReading) {
+      state.readingReads++;
+      const bodyUnchanged = url.searchParams.get("body_revision") === String(state.identityRevision);
+      if (bodyUnchanged) state.readingBodyOmissions++;
+      return send(200, { version: 1, body_unchanged: bodyUnchanged,
+        detail: { ...BOOKMARK, original_text: bodyUnchanged ? null : BOOKMARK.original_text,
+          translated_text: bodyUnchanged ? null : BOOKMARK.translated_text,
+          ai_title: state.remoteTitle || BOOKMARK.ai_title,
+          cache_identity, updated_at: "2026-09-20T00:00:00Z" },
+        selection: { available: true, id: 12, revision: state.revision, selection: state.selection,
+          v1_projection: { topics: state.selection.topics.slice(0, 3), form: state.selection.form, use: state.selection.use } },
+        entities: { id: 12, available: true, state: state.entityState, stale: false,
+          entities: state.entities, human: state.entities, revision: state.revision } });
+    }
     if (url.pathname === "/api/bookmarks/12") {
       state.detailReads++;
       return send(200, { ...BOOKMARK, ai_title: state.remoteTitle || BOOKMARK.ai_title,
@@ -160,6 +179,7 @@ function startMockServer(state) {
     if (url.pathname === "/status") return send(200, { ready: true, build: {} });
     if (url.pathname === "/api/bookmarks/12/v2-selection") {
       if (req.method === "GET") {
+        state.selectionReads++;
         return send(200, { available: true, revision: state.revision, selection: state.selection, v1_projection: { topics: state.selection.topics.slice(0, 3), form: state.selection.form, use: state.selection.use } });
       }
       return send(200, { id: 12, selection: state.selection });
@@ -208,6 +228,7 @@ function startMockServer(state) {
     if (url.pathname === "/api/bookmarks/12/classification-status") return send(200, { status: "completed", attempts: 1, error: null });
     if (url.pathname === "/api/bookmarks/12/entities") {
       if (req.method === "GET") {
+        state.entityReads++;
         return send(200, { available: true, state: state.entityState, stale: false, entities: state.entities, human: state.entities, revision: state.revision });
       }
       state.actions.push({ action: "entity", body });
@@ -732,6 +753,39 @@ async function partD(browser) {
   }
 }
 
+async function partE(browser) {
+  const state = createMock();
+  state.combinedReading = true;
+  const server = await startMockServer(state);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(String(error)));
+  try {
+    await page.clock.install();
+    await page.goto(`${base}/bookmarks/12`, { waitUntil: "networkidle" });
+    await page.waitForSelector("#v2-topics .chip.on");
+    check("combined reading displays the article", (await page.textContent("#detail-title")) === BOOKMARK.ai_title);
+    check("combined reading displays effective tags", (await chipTerms(page, "#v2-topics .chip.on")).includes("llm"));
+    check("one request supplies detail, selection and entities",
+      state.readingReads === 1 && state.detailReads === 0 && state.selectionReads === 0 && state.entityReads === 0,
+      JSON.stringify({ reading: state.readingReads, detail: state.detailReads,
+        selection: state.selectionReads, entities: state.entityReads }));
+    state.revision++;
+    await page.clock.fastForward(16_000);
+    check("a personal revision refresh uses a body-free snapshot", await waitFor(() => state.readingReads >= 2) &&
+      state.readingBodyOmissions === 1 && state.detailReads === 0 && state.selectionReads === 0 && state.entityReads === 0,
+      JSON.stringify({ reading: state.readingReads, omitted: state.readingBodyOmissions,
+        detail: state.detailReads, selection: state.selectionReads, entities: state.entityReads }));
+    await page.click("#original-toggle");
+    check("a body-free refresh keeps the cached original", (await page.textContent("#original")).includes("<script>"));
+    check("combined reading causes no page error", pageErrors.length === 0, pageErrors.join("; "));
+  } finally {
+    await page.close();
+    server.close();
+  }
+}
+
 async function main() {
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ["--no-sandbox"] });
   try {
@@ -739,6 +793,7 @@ async function main() {
     await partB(browser);
     await partC(browser);
     await partD(browser);
+    await partE(browser);
   } finally {
     await browser.close();
   }

@@ -196,12 +196,52 @@ for (const code of ["job_busy", "not_found", "backend_error", "queue_full", "inv
 equal("errorLabel unknown is shown verbatim", errorLabel("brand_new_code"), "brand_new_code");
 {
   const originalFetch = globalThis.fetch;
+  const calls = [];
+  const identity = { schema_version: 1, content_revision: 1, body_revision: 1,
+    personal_revision: 0, latest_decision_id: 0, latest_entity_revision: 0 };
+  const selection = { available: true, id: 700, revision: 0, selection: { topics: ["llm"] } };
+  const entities = { id: 700, revision: 0, state: "not_run", entities: [] };
+  const { mergeItem } = await load("store.js");
+  globalThis.fetch = async (path) => {
+    calls.push(path);
+    const reused = path.includes("body_revision=1");
+    return { ok: true, json: async () => ({ version: 1, body_unchanged: reused,
+      detail: { id: 700, original_text: reused ? null : "one snapshot",
+        translated_text: reused ? null : "translated", cache_identity: identity,
+        why: reused ? "updated elsewhere" : "" }, selection, entities }) };
+  };
+  try {
+    const first = await api.detail(700);
+    mergeItem(first);
+    equal("combined reading returns the article", first.original_text, "one snapshot");
+    equal("combined reading seeds the selection cache", await api.v2Selection(700, identity), selection);
+    equal("combined reading seeds the entity cache", await api.entities(700, identity), entities);
+    check("one Worker read supplies detail, selection and entities", calls.length === 1);
+    const personal = await api.detailFresh(700);
+    equal("unchanged body revision reuses the cached article", personal.original_text, "one snapshot");
+    equal("unchanged body revision retains the translation", personal.translated_text, "translated");
+    check("personal refresh requests the body version instead of the full article",
+      calls.length === 2 && calls[1].endsWith("/reading?body_revision=1"));
+    globalThis.fetch = async (path) => {
+      calls.push(path);
+      return { ok: false, status: 503, json: async () => ({ error: "backend_error" }) };
+    };
+    const failed = await api.detailFresh(700).then(() => null, (error) => error);
+    check("a temporary reading outage does not silently downgrade to separate reads",
+      failed?.message === "backend_error" && calls.length === 3 && calls[2].includes("/reading"));
+  } finally { globalThis.fetch = originalFetch; }
+}
+{
+  const originalFetch = globalThis.fetch;
   const pending = [];
-  globalThis.fetch = (path) => new Promise((resolve) => pending.push({ path, resolve }));
+  globalThis.fetch = (path) => path.endsWith("/reading")
+    ? Promise.resolve({ ok: false, status: 503, json: async () => ({ error: "reading_unsupported" }) })
+    : new Promise((resolve) => pending.push({ path, resolve }));
   const reply = (index, item) => pending[index].resolve({ ok: true, json: async () => item });
   try {
     const prefetch = api.prefetchDetail(701);
     const open = api.detail(701);
+    await new Promise((resolve) => setTimeout(resolve, 0));
     check("prefetch and open share one in-flight detail request", pending.length === 1);
     reply(0, { id: 701, original_text: "same response" });
     equal("shared detail returns the same response", await Promise.all([prefetch, open]),

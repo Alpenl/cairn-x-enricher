@@ -49,6 +49,22 @@ type fakeBackend struct {
 	imageCacheControl     string
 }
 
+func TestReadingRouteValidatesVersionBeforeCheckingOptionalBackend(t *testing.T) {
+	server := New(context.Background(), startedTracker(), &fakeBackend{}, &fakeProcessor{}, testLogger(), 1)
+	defer server.Drain(time.Second)
+	for path, want := range map[string]int{
+		"/api/bookmarks/7/reading?body_revision=x":  http.StatusBadRequest,
+		"/api/bookmarks/7/reading?body_revision=01": http.StatusBadRequest,
+		"/api/bookmarks/7/reading":                  http.StatusServiceUnavailable,
+	} {
+		response := httptest.NewRecorder()
+		server.Handler().ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil))
+		if response.Code != want {
+			t.Errorf("GET %s = %d, want %d", path, response.Code, want)
+		}
+	}
+}
+
 func (b *fakeBackend) ListBookmarks(_ context.Context, query cairn.BookmarkQuery) (cairn.BookmarkPage, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()

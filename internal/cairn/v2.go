@@ -38,10 +38,11 @@ type V2SelectionView struct {
 	RevisedAt         string          `json:"revised_at,omitempty"`
 	V1Only            bool            `json:"v1_only,omitempty"`
 	Revision          int64           `json:"revision"`
-	Available         bool            `json:"-"`
+	Available         bool            `json:"available,omitempty"`
 	V1Projection      V2Selection     `json:"v1_projection,omitempty"`
 	// Empty records which dimensions the human explicitly set empty.
 	Empty          json.RawMessage `json:"empty,omitempty"`
+	State          json.RawMessage `json:"state,omitempty"`
 	Why            string          `json:"why,omitempty"`
 	CurationStatus string          `json:"curation_status,omitempty"`
 }

@@ -59,6 +59,10 @@ type identityBackend interface {
 	GetBookmarkIdentity(context.Context, int64) (cairn.BookmarkIdentity, error)
 }
 
+type readingBackend interface {
+	GetReading(context.Context, int64, *int64) (cairn.ReadingSnapshot, error)
+}
+
 // V2Backend is the optional multidimensional API. A backend that does not
 // implement it degrades to read-only v1 rather than showing empty data.
 type V2Backend interface {
@@ -331,6 +335,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/rerank", s.rerank)
 	mux.HandleFunc("GET /api/bookmarks/{id}", s.getBookmark)
 	mux.HandleFunc("GET /api/bookmarks/{id}/identity", s.getBookmarkIdentity)
+	mux.HandleFunc("GET /api/bookmarks/{id}/reading", s.getReading)
 	mux.HandleFunc("GET /api/images/{key...}", s.getImage)
 	mux.HandleFunc("GET /api/backstage", s.getBackstage)
 	mux.HandleFunc("GET /api/overview", s.getOverview)
@@ -402,6 +407,42 @@ func (s *Server) getBookmarkIdentity(writer http.ResponseWriter, request *http.R
 		return
 	}
 	writeJSON(writer, http.StatusOK, identity)
+}
+
+func (s *Server) getReading(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	var knownBodyRevision *int64
+	if values, present := request.URL.Query()["body_revision"]; present {
+		if len(values) != 1 {
+			writeError(writer, http.StatusBadRequest, "invalid_query")
+			return
+		}
+		parsed, parseErr := strconv.ParseInt(values[0], 10, 64)
+		if parseErr != nil || parsed < 0 || strconv.FormatInt(parsed, 10) != values[0] {
+			writeError(writer, http.StatusBadRequest, "invalid_query")
+			return
+		}
+		knownBodyRevision = &parsed
+	}
+	backend, ok := s.backend.(readingBackend)
+	if !ok {
+		writeError(writer, http.StatusServiceUnavailable, "reading_unsupported")
+		return
+	}
+	reading, err := backend.GetReading(request.Context(), id, knownBodyRevision)
+	if errors.Is(err, cairn.ErrV2Unsupported) {
+		writeError(writer, http.StatusServiceUnavailable, "reading_unsupported")
+		return
+	}
+	if err != nil {
+		s.writeBackendError(writer, "get reading", id, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, reading)
 }
 
 func (s *Server) getTaxonomy(writer http.ResponseWriter, request *http.Request) {

@@ -718,8 +718,11 @@ export function refresh(id) {
 export function reloadRemote(id) {
   const session = sessions.get(id);
   if (!session) return;
-  loadV2(session, { force: true });
-  loadEntities(session, { force: true });
+  // A changed detail already filled the version-keyed caches from one Worker
+  // snapshot. The normal read uses those values and still falls back on older
+  // Workers whose detail route has no combined selection/entity response.
+  loadV2(session);
+  loadEntities(session);
 }
 
 export function toggleEditingAll() {

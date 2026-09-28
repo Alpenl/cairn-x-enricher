@@ -1,5 +1,6 @@
 // Same-origin API client. The browser never holds a Worker token or model key:
 // every call goes to the Go service, which forwards it with its own credentials.
+import { getItem } from "./store.js";
 
 const ERROR_LABELS = Object.freeze({
   job_busy: "这条正在处理中",
@@ -163,6 +164,7 @@ function cached(key, load) {
 // generation so a slow old prefetch cannot put stale text back into the cache.
 const detailFlights = new Map();
 const prefetchedDetails = new Map();
+let readingSupported = null;
 const detailStates = new Map();
 const PREFETCH_MAX_ITEMS = 4;
 const PREFETCH_MAX_BYTES = 2 * 1024 * 1024;
@@ -196,14 +198,28 @@ function invalidateAux(id) {
   if (!auxActive.get(id)) auxEpochs.delete(id);
 }
 
-function readAux(kind, id, identity, { fresh = false } = {}) {
-  const path = `/api/bookmarks/${id}/${kind}`;
+function auxKey(kind, id, identity) {
   const versions = identity && [identity.content_revision, identity.body_revision,
     identity.personal_revision, identity.latest_decision_id, identity.latest_entity_revision];
-  if (identity?.schema_version !== 1 || !versions.every((value) => Number.isSafeInteger(value) && value >= 0)) {
-    return fetchJSON(path);
-  }
-  const key = `${kind}:${id}:${versions.join(":")}`;
+  return identity?.schema_version === 1 && versions.every((value) => Number.isSafeInteger(value) && value >= 0)
+    ? `${kind}:${id}:${versions.join(":")}` : null;
+}
+
+function rememberAux(kind, id, identity, value) {
+  const key = auxKey(kind, id, identity);
+  if (!key) return;
+  const bytes = JSON.stringify(value).length * 2;
+  if (bytes > AUX_MAX_BYTES) return;
+  forgetAux(key);
+  auxCache.set(key, { id, value: structuredClone(value), bytes });
+  auxBytes += bytes;
+  compactAux();
+}
+
+function readAuxDirect(kind, id, identity, { fresh = false } = {}) {
+  const path = `/api/bookmarks/${id}/${kind}`;
+  const key = auxKey(kind, id, identity);
+  if (!key) return fetchJSON(path);
   if (fresh) forgetAux(key);
   else {
     const stored = auxCache.get(key);
@@ -221,13 +237,7 @@ function readAux(kind, id, identity, { fresh = false } = {}) {
   auxActive.set(id, (auxActive.get(id) || 0) + 1);
   flight.promise = fetchJSON(path).then((value) => {
     if (flight.invalidated || (auxEpochs.get(id) || 0) !== epoch) return null;
-    const bytes = JSON.stringify(value).length * 2;
-    if (bytes <= AUX_MAX_BYTES) {
-      forgetAux(key);
-      auxCache.set(key, { id, value: structuredClone(value), bytes });
-      auxBytes += bytes;
-      compactAux();
-    }
+    rememberAux(kind, id, identity, value);
     return value;
   }).finally(() => {
     if (auxFlights.get(key) === flight) auxFlights.delete(key);
@@ -237,6 +247,48 @@ function readAux(kind, id, identity, { fresh = false } = {}) {
   });
   auxFlights.set(key, flight);
   return flight.promise;
+}
+
+function readAux(kind, id, identity, options = {}) {
+  const key = auxKey(kind, id, identity);
+  const loaded = getItem(id);
+  if (options.fresh || readingSupported === false || (key && auxCache.has(key)) ||
+      (loaded?.content_loaded !== false && loaded?.cache_identity &&
+        auxKey(kind, id, loaded.cache_identity) === key)) {
+    return readAuxDirect(kind, id, identity, options);
+  }
+  // Opening a detail already needs the article. Let that single-snapshot read
+  // supply tags and entities too; older Workers fall back to the old routes.
+  return readDetail(id).then((item) => readAuxDirect(kind, id, item?.cache_identity || identity, options));
+}
+
+async function fetchReadingDetail(id) {
+  if (readingSupported === false) return { detail: await fetchJSON(`/api/bookmarks/${id}`) };
+  try {
+    const current = getItem(id);
+    const bodyRevision = current?.content_loaded !== false &&
+      Number.isSafeInteger(current?.cache_identity?.body_revision) && current.cache_identity.body_revision >= 0
+      ? current.cache_identity.body_revision : null;
+    const suffix = bodyRevision === null ? "" : `?body_revision=${bodyRevision}`;
+    const reading = await fetchJSON(`/api/bookmarks/${id}/reading${suffix}`);
+    if (reading?.version !== 1 || reading.detail?.id !== id || !reading.detail.cache_identity ||
+        reading.selection?.available !== true || !reading.entities) throw new APIError("invalid_reading", 502);
+    if (reading.body_unchanged) {
+      if (bodyRevision === null || reading.detail.cache_identity.body_revision !== bodyRevision ||
+          current?.content_loaded === false) throw new APIError("invalid_reading", 502);
+      reading.detail.original_text = current.original_text;
+      reading.detail.translated_text = current.translated_text;
+      reading.detail.content_loaded = true;
+    }
+    readingSupported = true;
+    return reading;
+  } catch (error) {
+    if (![404, 405].includes(error?.status) &&
+        !(error?.status === 503 && error.message === "reading_unsupported")) throw error;
+    const detail = await fetchJSON(`/api/bookmarks/${id}`);
+    readingSupported = false;
+    return { detail };
+  }
 }
 
 function forgetPrefetch(id) {
@@ -272,6 +324,7 @@ function readDetail(id, { prefetch = false, fresh = false } = {}) {
   if (fresh) {
     state.generation++;
     forgetPrefetch(id);
+    invalidateAux(id);
   } else if (!prefetch) {
     const ready = prefetchedDetails.get(id);
     if (ready) {
@@ -288,8 +341,13 @@ function readDetail(id, { prefetch = false, fresh = false } = {}) {
   const flight = { used: !prefetch, generation, promise: null };
   detailStates.set(id, state);
   state.active++;
-  flight.promise = fetchJSON(`/api/bookmarks/${id}`).then((item) => {
+  flight.promise = fetchReadingDetail(id).then(({ detail: item, selection, entities }) => {
     if (state.generation !== generation) return null;
+    if (selection && entities) {
+      invalidateAux(id);
+      rememberAux("v2-selection", id, item.cache_identity, selection);
+      rememberAux("entities", id, item.cache_identity, entities);
+    }
     if (!flight.used) rememberPrefetch(id, item);
     return item;
   }).finally(() => {

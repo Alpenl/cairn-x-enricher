@@ -71,6 +71,18 @@ func TestLocalWorkerManualSourceSurvivesProcessExit(t *testing.T) {
 	if err != nil || identity.CacheIdentity != *detail.CacheIdentity || identity.ID != id {
 		t.Fatalf("small identity differs from detail after restart: %+v %v", identity, err)
 	}
+	reading, err := restarted.GetReading(ctx, id, nil)
+	if err != nil || reading.Detail.OriginalText != restartManualText ||
+		reading.Detail.CacheIdentity == nil || *reading.Detail.CacheIdentity != *detail.CacheIdentity ||
+		reading.Selection.Revision != detail.CacheIdentity.PersonalRevision || !reading.Selection.Available {
+		t.Fatalf("combined reading after restart: %+v %v", reading, err)
+	}
+	knownBodyRevision := detail.CacheIdentity.BodyRevision
+	withoutBody, err := restarted.GetReading(ctx, id, &knownBodyRevision)
+	if err != nil || !withoutBody.BodyUnchanged || withoutBody.Detail.OriginalText != "" ||
+		withoutBody.Detail.CacheIdentity == nil || *withoutBody.Detail.CacheIdentity != *detail.CacheIdentity {
+		t.Fatalf("matching body revision should omit the article: %+v %v", withoutBody, err)
+	}
 	server := dashboard.New(ctx, health.NewTracker(), restarted, neverRunManualSource{},
 		slog.New(slog.NewJSONHandler(io.Discard, nil)), 1)
 	identityRequest := httptest.NewRequestWithContext(ctx, http.MethodGet,
@@ -81,6 +93,16 @@ func TestLocalWorkerManualSourceSurvivesProcessExit(t *testing.T) {
 		strings.Contains(identityResponse.Body.String(), restartManualText) {
 		t.Fatalf("dashboard identity transferred body or failed: %d %s",
 			identityResponse.Code, identityResponse.Body.String())
+	}
+	readingRequest := httptest.NewRequestWithContext(ctx, http.MethodGet,
+		fmt.Sprintf("/api/bookmarks/%d/reading", id), nil)
+	readingResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(readingResponse, readingRequest)
+	if readingResponse.Code != http.StatusOK ||
+		!strings.Contains(readingResponse.Body.String(), restartManualText) ||
+		!strings.Contains(readingResponse.Body.String(), `"available":true`) {
+		t.Fatalf("dashboard combined reading failed: %d %s",
+			readingResponse.Code, readingResponse.Body.String())
 	}
 	source, err := restarted.GetSource(ctx, id)
 	if err != nil || source == nil || source.OriginalText != restartManualText || source.Model != "manual" {
