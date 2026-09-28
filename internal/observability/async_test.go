@@ -25,12 +25,12 @@ func TestAsyncLoggerDrainsStructuredRecords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	logger.WithGroup("task").With("component", "source").Info("admitted", "link_id", 7)
+	logger.WithGroup("task").With("component", "source").Info("manual source persisted", "link_id", 7)
 	if err := closeExporter(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if got := output.String(); !strings.Contains(got, `"msg":"admitted"`) ||
-		!strings.Contains(got, `"task":{"component":"source","link_id":7}`) {
+	if got := output.String(); !strings.Contains(got, `"msg":"manual source persisted"`) ||
+		!strings.Contains(got, `"task":{"component":"source"}`) || strings.Contains(got, "link_id") {
 		t.Fatalf("structured record was not drained: %s", got)
 	}
 	if status := store.Snapshot().LogExporter; status == nil || !status.Closed ||
@@ -182,24 +182,27 @@ func TestAsyncLoggerOnlyExportsSafeFieldsAndErrorClasses(t *testing.T) {
 		t.Fatal(err)
 	}
 	private := "private-source-token-123"
-	logger.With("source_text", private, "component", "source", "status", private).Info("source checkpoint",
+	logger.With("source_text", private, "component", "source", "status", private).Info("manual source persisted",
 		"link_id", 42, "prompt", private, "stack", private,
 		"error", errors.New(private), "request_id", private,
 		"reason", private, "error_code", private)
 	logger.Warn("worker failed", "error", &cairn.APIError{StatusCode: 409, Code: private})
 	logger.Warn("provider failed", "error", &enrich.ModelHTTPError{StatusCode: 502, Type: private})
+	logger.WithGroup(private).With("component", "source").Info(private,
+		"link_id", 73, "request_id", "123e4567-e89b-12d3-a456-426614174000")
 	if err := closeExporter(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	got := output.String()
-	for _, want := range []string{`"component":"source"`, `"link_id":42`,
+	for _, want := range []string{`"component":"source"`, `"msg":"application_event"`,
 		`"error_code":"unknown"`, `"error_code":"worker_http_409_stale"`,
 		`"error_code":"provider_http_502"`} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("safe field %s missing: %s", want, got)
 		}
 	}
-	for _, secret := range []string{private, "source_text", "prompt", "stack", "request_id", "status", "reason"} {
+	for _, secret := range []string{private, "source_text", "prompt", "stack", "link_id",
+		"request_id", "123e4567-e89b-12d3-a456-426614174000", "status", "reason"} {
 		if strings.Contains(got, secret) {
 			t.Fatalf("private field %s leaked: %s", secret, got)
 		}
@@ -218,30 +221,30 @@ func TestAsyncLoggerFollowsLiveMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	logger.Debug("basic-debug")
-	logger.Info("basic-info")
+	logger.Debug("enrichment started")
+	logger.Info("scheduled batch finished")
 	if _, err := store.Update(0, LogDiagnostic, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	logger.Debug("diagnostic-debug")
+	logger.Debug("classification round stopped")
 	now = now.Add(time.Minute)
-	logger.Debug("expired-debug")
-	logger.Info("expired-info")
+	logger.Debug("enrichment completed")
+	logger.Info("manual source persisted")
 	now = now.Add(time.Second)
 	if _, err := store.Update(1, LogOff, 0); err != nil {
 		t.Fatal(err)
 	}
-	logger.Error("off-error")
+	logger.Error("enrichment failed")
 	if err := closeExporter(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	got := output.String()
-	for _, want := range []string{"basic-info", "diagnostic-debug", "expired-info"} {
+	for _, want := range []string{"scheduled batch finished", "classification round stopped", "manual source persisted"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("live mode lost %s: %s", want, got)
 		}
 	}
-	for _, omitted := range []string{"basic-debug", "expired-debug", "off-error"} {
+	for _, omitted := range []string{"enrichment started", "enrichment completed", "enrichment failed"} {
 		if strings.Contains(got, omitted) {
 			t.Fatalf("live mode emitted %s: %s", omitted, got)
 		}

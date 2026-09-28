@@ -684,7 +684,7 @@ func isContractFailure(err error) bool {
 }
 
 func newLogger(level string) *slog.Logger {
-	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel(level)}))
+	return slog.New(observability.SafeJSONHandler(os.Stderr, logLevel(level)))
 }
 
 func logLevel(level string) slog.Level {

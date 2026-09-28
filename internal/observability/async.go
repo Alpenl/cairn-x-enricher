@@ -76,13 +76,7 @@ func (h *asyncLogHandler) Handle(_ context.Context, record slog.Record) error {
 	if h.state.closed {
 		return nil
 	}
-	clean := slog.NewRecord(record.Time, record.Level, record.Message, record.PC)
-	record.Attrs(func(attr slog.Attr) bool {
-		if safe, ok := safeLogAttr(attr); ok {
-			clean.AddAttrs(safe)
-		}
-		return true
-	})
+	clean := safeLogRecord(record)
 	select {
 	case h.state.queue <- logEntry{handler: h.next, record: clean}:
 	default:
@@ -96,7 +90,7 @@ func (h *asyncLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 }
 
 func (h *asyncLogHandler) WithGroup(name string) slog.Handler {
-	return &asyncLogHandler{state: h.state, next: h.next.WithGroup(name)}
+	return &asyncLogHandler{state: h.state, next: h.next.WithGroup(safeLogGroup(name))}
 }
 
 // AsyncLogger installs one optional, bounded JSON exporter. Close drains queued
