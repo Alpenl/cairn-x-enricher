@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ type recordingPaidLedger struct {
 	mu             sync.Mutex
 	reservations   []ProviderAttempt
 	settlements    []ProviderSettlement
+	settlementErr  error
 	authorizations []string
 	seen           map[string]bool
 }
@@ -38,7 +40,7 @@ func (l *recordingPaidLedger) SettleProviderAttempt(_ context.Context, settlemen
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.settlements = append(l.settlements, settlement)
-	return nil
+	return l.settlementErr
 }
 func (l *recordingPaidLedger) AuthorizeProviderFallback(_ context.Context, key string) error {
 	l.mu.Lock()
@@ -92,11 +94,23 @@ func TestPaidSourceAttemptIsReservedBeforePOSTAndSettledWithUsage(t *testing.T) 
 		t.Fatalf("reservation=%+v settlement=%+v", a, s)
 	}
 	if log := diagnostic.String(); !strings.Contains(log, `"event_name":"provider_attempt_reserved"`) ||
+		!strings.Contains(log, `"event_name":"provider_attempt_dispatching"`) ||
+		!strings.Contains(log, `"event_name":"provider_response_headers_received"`) ||
 		!strings.Contains(log, `"event_name":"provider_attempt_responded"`) ||
 		!strings.Contains(log, `"cost_usd_ticks":1234`) ||
 		strings.Contains(log, input.LeaseToken) || strings.Contains(log, input.URL) ||
 		strings.Contains(log, a.OperationKey) || strings.Contains(log, "resp_test_1") {
 		t.Fatalf("paid diagnostic event was incomplete or leaked identity: %s", log)
+	}
+	log := diagnostic.String()
+	for _, pair := range [][2]string{
+		{`"event_name":"provider_attempt_reserved"`, `"event_name":"provider_attempt_dispatching"`},
+		{`"event_name":"provider_attempt_dispatching"`, `"event_name":"provider_response_headers_received"`},
+		{`"event_name":"provider_response_headers_received"`, `"event_name":"provider_attempt_responded"`},
+	} {
+		if strings.Index(log, pair[0]) >= strings.Index(log, pair[1]) {
+			t.Fatalf("provider event order is wrong: %s", log)
+		}
 	}
 	// Re-entering the same leased operation cannot obtain a second permit.
 	_, err = client.FetchSource(context.Background(), input)
@@ -129,9 +143,36 @@ func TestLostProviderResponseLeavesPaidAttemptUnsettledAndStopsFallback(t *testi
 		t.Fatalf("posts=%d reserve=%d settle=%d fallback=%d error=%v", posts.Load(),
 			len(ledger.reservations), len(ledger.settlements), len(ledger.authorizations), err)
 	}
-	if !strings.Contains(diagnostic.String(), `"event_name":"provider_attempt_unknown"`) ||
+	if !strings.Contains(diagnostic.String(), `"event_name":"provider_attempt_dispatching"`) ||
+		strings.Contains(diagnostic.String(), `"event_name":"provider_response_headers_received"`) ||
+		!strings.Contains(diagnostic.String(), `"event_name":"provider_attempt_unknown"`) ||
 		!strings.Contains(diagnostic.String(), `"provider_reason":"network_unknown"`) {
 		t.Fatalf("unknown attempt event missing: %s", diagnostic.String())
+	}
+}
+
+func TestResponseHeadersAreLoggedBeforeFailedSettlement(t *testing.T) {
+	ledger := &recordingPaidLedger{settlementErr: errors.New("private settlement failure")}
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	client := NewResponsesClient(server.URL, "key", "grok-test", 1024, "", server.Client(), testTaxonomy())
+	client.SetPaidAttemptLedger(ledger)
+	var diagnostic bytes.Buffer
+	client.SetLogger(slog.New(slog.NewJSONHandler(&diagnostic, nil)))
+	_, err := client.Transform(context.Background(), Input{ID: 10, SourceText: "source", LeaseToken: "lease-10",
+		ContentRevision: 1, MinRemainingMS: 210_000})
+	if err == nil || len(ledger.settlements) != 1 {
+		t.Fatalf("settlement=%d error=%v", len(ledger.settlements), err)
+	}
+	log := diagnostic.String()
+	if !strings.Contains(log, `"event_name":"provider_response_headers_received"`) ||
+		!strings.Contains(log, `"provider_http_status":503`) ||
+		!strings.Contains(log, `"provider_reason":"settlement_failed"`) ||
+		strings.Contains(log, `"event_name":"provider_attempt_responded"`) ||
+		strings.Contains(log, "private settlement failure") {
+		t.Fatalf("settlement failure event is inaccurate or leaks private error: %s", log)
 	}
 }
 

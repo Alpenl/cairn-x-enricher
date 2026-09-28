@@ -272,6 +272,9 @@ func (c *ResponsesClient) invokePayload(ctx context.Context, input Input, stage,
 		c.logPaidAttempt(ctx, slog.LevelInfo, "provider_attempt_reserved", stage, variant, reserveStarted)
 	}
 	providerStarted := time.Now()
+	// This records entry into the HTTP transport, not proof that the provider
+	// received the request. A transport failure can still have executed remotely.
+	c.logPaidAttempt(ctx, slog.LevelInfo, "provider_attempt_dispatching", stage, variant, providerStarted)
 	response, err := c.httpClient.Do(request)
 	if err != nil {
 		c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_unknown", stage, variant,
@@ -279,6 +282,9 @@ func (c *ResponsesClient) invokePayload(ctx context.Context, input Input, stage,
 		return responseEnvelope{}, operationKey, fmt.Errorf("call model API: %w", err)
 	}
 	defer func() { _ = response.Body.Close() }()
+	// Headers arrived, but the body and the durable settlement are still pending.
+	c.logPaidAttempt(ctx, slog.LevelInfo, "provider_response_headers_received", stage, variant,
+		providerStarted, slog.Int("provider_http_status", response.StatusCode))
 	if response.StatusCode != http.StatusOK {
 		if err := c.settleAttempt(ctx, ProviderSettlement{OperationKey: operationKey,
 			HTTPStatus: response.StatusCode}); err != nil {

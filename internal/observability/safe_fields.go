@@ -133,6 +133,7 @@ func safeLogDimension(key, value string) bool {
 		return oneOf(value, "source", "fetch", "reading", "canary", "classification", "evidence")
 	case "event_name":
 		return oneOf(value, "provider_attempt_reserved", "provider_attempt_denied",
+			"provider_attempt_dispatching", "provider_response_headers_received",
 			"provider_attempt_responded", "provider_attempt_unknown")
 	case "provider_variant":
 		return oneOf(value, "fetch_thread", "fetch_post", "reading", "canary")

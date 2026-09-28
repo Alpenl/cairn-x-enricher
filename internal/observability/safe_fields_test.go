@@ -29,3 +29,24 @@ func TestSafeJSONHandlerFiltersMessagesFieldsAndGroups(t *testing.T) {
 		}
 	}
 }
+
+func TestSafeJSONHandlerKeepsProviderTransportBoundaries(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(SafeJSONHandler(&output, slog.LevelInfo))
+	logger.Info("provider attempt", "event_name", "provider_attempt_dispatching", "stage", "reading",
+		"operation_key", "private-operation")
+	logger.Info("provider attempt", "event_name", "provider_response_headers_received", "stage", "reading",
+		"provider_http_status", 503, "response_id", "private-response")
+	got := output.String()
+	for _, want := range []string{`"event_name":"provider_attempt_dispatching"`,
+		`"event_name":"provider_response_headers_received"`, `"provider_http_status":503`} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("provider boundary field %q missing: %s", want, got)
+		}
+	}
+	for _, private := range []string{"private-operation", "private-response", "operation_key", "response_id"} {
+		if strings.Contains(got, private) {
+			t.Fatalf("private provider field %q leaked: %s", private, got)
+		}
+	}
+}
