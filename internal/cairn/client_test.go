@@ -301,7 +301,7 @@ func TestClientRequiresSourceLeaseContractBeforeScheduling(t *testing.T) {
 				_, _ = writer.Write([]byte(`{"error":"not_found"}`))
 				return
 			}
-			_, _ = writer.Write([]byte(`{"protocol":1,"lease_ms":900000,"paid_stage_admission":true,"provider_result_guard":true,"completion_replay":true,"provider_attempt_ledger":true}`))
+			_, _ = writer.Write([]byte(`{"protocol":1,"lease_ms":900000,"paid_stage_admission":true,"provider_result_guard":true,"completion_replay":true,"provider_attempt_ledger":true,"refresh_source_checkpoint":true}`))
 		}))
 		client := NewClient(server.URL, "token", server.Client())
 		err := client.VerifySourceLeaseCapability(context.Background())
@@ -309,6 +309,17 @@ func TestClientRequiresSourceLeaseContractBeforeScheduling(t *testing.T) {
 		if valid && err != nil || !valid && err == nil {
 			t.Fatalf("valid=%t, VerifySourceLeaseCapability()=%v", valid, err)
 		}
+	}
+}
+
+func TestClientRejectsWorkerWithoutAtomicRefreshCheckpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		_, _ = writer.Write([]byte(`{"protocol":1,"lease_ms":900000,"paid_stage_admission":true,"provider_result_guard":true,"completion_replay":true,"provider_attempt_ledger":true}`))
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "token", server.Client())
+	if err := client.VerifySourceLeaseCapability(context.Background()); err == nil {
+		t.Fatal("old Worker without atomic refresh checkpoint was accepted")
 	}
 }
 

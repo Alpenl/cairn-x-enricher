@@ -112,6 +112,7 @@ run_case() {
 
 run_case lifecycle TestLocalWorkerFullLifecycle
 run_case sourcelease TestLocalWorkerSourceLeaseAdmission
+run_case refreshcheckpoint TestLocalWorkerRefreshCheckpointConsumesIntent
 run_case providerledger TestLocalWorkerProviderAttemptLedger
 run_case providerrecovery TestLocalWorkerProviderReadingRecovery
 run_case manualrestart TestLocalWorkerManualSourceSurvivesProcessExit

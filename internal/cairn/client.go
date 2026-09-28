@@ -281,7 +281,8 @@ func (c *Client) ClaimByID(ctx context.Context, id int64) (*Job, error) {
 }
 
 // VerifySourceLeaseCapability prevents a new consumer from draining attempts
-// against an older Worker that cannot fence paid calls before execution.
+// against an older Worker that cannot fence paid calls or atomically consume
+// a refresh intent with its saved source checkpoint.
 func (c *Client) VerifySourceLeaseCapability(ctx context.Context) error {
 	response, err := c.do(ctx, http.MethodGet, "/api/enrichment/source-lease-capability", nil)
 	if err != nil {
@@ -298,13 +299,14 @@ func (c *Client) VerifySourceLeaseCapability(ctx context.Context) error {
 		ProviderResultGuard   bool `json:"provider_result_guard"`
 		CompletionReplay      bool `json:"completion_replay"`
 		ProviderAttemptLedger bool `json:"provider_attempt_ledger"`
+		RefreshCheckpoint     bool `json:"refresh_source_checkpoint"`
 	}
 	if err := decodeJSON(response.Body, &capability); err != nil {
 		return fmt.Errorf("decode source lease capability: %w", err)
 	}
 	if capability.Protocol != 1 || capability.LeaseMS != int((15*time.Minute).Milliseconds()) ||
 		!capability.PaidStageAdmission || !capability.ProviderResultGuard || !capability.CompletionReplay ||
-		!capability.ProviderAttemptLedger {
+		!capability.ProviderAttemptLedger || !capability.RefreshCheckpoint {
 		return errors.New("source lease admission protocol is incompatible")
 	}
 	return nil

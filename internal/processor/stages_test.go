@@ -47,6 +47,7 @@ type stageQueue struct {
 	evidenceRequestStatus  string
 	recoverEvidenceHook    func(context.Context) ([]cairn.EvidenceExecution, error)
 	refreshAcks            int
+	refreshAckErr          error
 	admitCalls             int
 	admitErr               error
 	admitErrAt             int
@@ -240,7 +241,7 @@ func (q *stageQueue) GetEvidence(context.Context, int64) (json.RawMessage, error
 }
 func (q *stageQueue) AckSourceRefresh(context.Context, int64, int64, string, string) error {
 	q.refreshAcks++
-	return nil
+	return q.refreshAckErr
 }
 
 func TestDetachedStateReportHasDeadlineAfterBatchCancellation(t *testing.T) {
@@ -1006,8 +1007,8 @@ func TestRefreshIntentBypassesSourceCaches(t *testing.T) {
 	if q.source == nil || q.source.OriginalText != "saved original" {
 		t.Fatalf("the fetched source was not saved: %+v", q.source)
 	}
-	if q.refreshAcks != 1 {
-		t.Fatalf("the refresh intent was not consumed: acks=%d", q.refreshAcks)
+	if q.refreshAcks != 0 {
+		t.Fatalf("a saved source checkpoint needs no separate success ack: acks=%d", q.refreshAcks)
 	}
 	// A failing fetch keeps the old readable content and consumes the intent.
 	q.source = &enrich.Source{OriginalText: "old stored text", Model: "stored"}
@@ -1019,8 +1020,20 @@ func TestRefreshIntentBypassesSourceCaches(t *testing.T) {
 	if q.source.OriginalText != "old stored text" {
 		t.Fatalf("a failed refresh must keep the old content: %+v", q.source)
 	}
-	if q.refreshAcks != 2 {
+	if q.refreshAcks != 1 {
 		t.Fatalf("a failed refresh must still consume the intent: acks=%d", q.refreshAcks)
+	}
+}
+
+func TestFailedRefreshAckErrorIsNotSilentlyReportedAsHandled(t *testing.T) {
+	ackErr := errors.New("fixture ack unavailable")
+	q := &stageQueue{fakeQueue: newFakeQueue(), refreshAckErr: ackErr}
+	p := NewStaged(q, &stageReader{q: q, fetchErr: errors.New("fixture fetch failed")},
+		&recordingClassifier{}, "v1", "jev", discardLogger(), 1)
+	err := p.Process(context.Background(), &cairn.Job{ID: 1, URL: "https://x.com/a/status/1",
+		Attempt: 1, RefreshEpoch: 3})
+	if !errors.Is(err, ackErr) || q.refreshAcks != 1 || len(q.failures) != 0 {
+		t.Fatalf("unconfirmed refresh ack was hidden: error=%v acks=%d failures=%v", err, q.refreshAcks, q.failures)
 	}
 }
 

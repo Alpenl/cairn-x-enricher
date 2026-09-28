@@ -53,7 +53,8 @@ type StageQueue interface {
 	GetEvidenceAt(context.Context, int64, int64) (json.RawMessage, error)
 	// GetEvidence detects a missing checkpoint after a source-only success.
 	GetEvidence(context.Context, int64) (json.RawMessage, error)
-	// AckSourceRefresh consumes the one-shot refresh intent.
+	// AckSourceRefresh consumes a failed one-shot fetch intent. A successful
+	// source checkpoint consumes its intent in the Worker's write transaction.
 	AckSourceRefresh(context.Context, int64, int64, string, string) error
 	// DecideEvidenceRequest reports the bounded outcome of an escalation.
 	DecideEvidenceRequest(context.Context, string, map[string]any) error
@@ -318,20 +319,25 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 			// The old readable content and all human data are kept; the intent is
 			// consumed so a broken URL cannot loop forever.
 			ackCtx, cancel := boundedStateReportContext(ctx)
-			_ = s.queue.AckSourceRefresh(ackCtx, job.ID, job.RefreshEpoch, "failed", boundedError(fetchErr))
+			ackErr := s.queue.AckSourceRefresh(ackCtx, job.ID, job.RefreshEpoch, "failed", boundedError(fetchErr))
 			cancel()
+			if ackErr != nil {
+				return errors.Join(fetchErr, fmt.Errorf("acknowledge failed source refresh: %w", ackErr))
+			}
 			return p.reportFailure(ctx, logger, job, failurePathSearch, fetchErr)
 		}
 		source = &fetched
 		if err = p.saveSourceWithEvidence(ctx, job, *source); err != nil {
 			ackCtx, cancel := boundedStateReportContext(ctx)
-			_ = s.queue.AckSourceRefresh(ackCtx, job.ID, job.RefreshEpoch, "failed", boundedError(err))
+			ackErr := s.queue.AckSourceRefresh(ackCtx, job.ID, job.RefreshEpoch, "failed", boundedError(err))
 			cancel()
+			if ackErr != nil {
+				return errors.Join(err, fmt.Errorf("acknowledge failed source refresh: %w", ackErr))
+			}
 			return p.reportFailure(ctx, logger, job, failurePathSearch, err)
 		}
-		ackCtx, cancel := boundedStateReportContext(ctx)
-		_ = s.queue.AckSourceRefresh(ackCtx, job.ID, job.RefreshEpoch, "completed", "")
-		cancel()
+		// The Worker source checkpoint clears this refresh intent atomically.
+		// A separate success ack could lose its response after the source commit.
 		logger.InfoContext(ctx, "source refreshed; classification queued")
 		return p.finishReading(ctx, job, *source, nil)
 	}

@@ -12,7 +12,7 @@ import (
 )
 
 func TestExactSourceAndCompletionCommitsRetryOnlyAmbiguousFailures(t *testing.T) {
-	for _, stage := range []string{"source", "complete"} {
+	for _, stage := range []string{"source", "complete", "refresh-source/ack"} {
 		for _, first := range []string{"lost_response", "server_error", "conflict"} {
 			t.Run(stage+"_"+first, func(t *testing.T) {
 				var bodies [][]byte
@@ -51,11 +51,14 @@ func TestExactSourceAndCompletionCommitsRetryOnlyAmbiguousFailures(t *testing.T)
 				defer server.Close()
 				client := NewClient(server.URL, "token", server.Client())
 				var err error
-				if stage == "source" {
+				switch stage {
+				case "source":
 					err = client.SaveSource(context.Background(), 7, "same-lease", enrich.Source{
 						OriginalText: "same saved content", Model: "fixture", RelatedLinks: []string{}, ImageURLs: []string{},
 					})
-				} else {
+				case "refresh-source/ack":
+					err = client.AckSourceRefresh(context.Background(), 7, 4, "failed", "fixture failure")
+				default:
 					err = client.Complete(context.Background(), 7, Completion{LeaseToken: "same-lease", Summary: "same result"})
 				}
 				if first == "conflict" {

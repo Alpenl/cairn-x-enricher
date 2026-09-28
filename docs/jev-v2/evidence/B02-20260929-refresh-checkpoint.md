@@ -1,0 +1,9 @@
+# B02: refresh checkpoint and failed-fetch acknowledgement (2026-09-29)
+
+The Go consumer now requires the Worker's `refresh_source_checkpoint` capability at startup. On successful source save, the Worker clears the explicit refresh intent in the source transaction, so Go no longer sends a separate success acknowledgement. This removes the window where a saved source could be followed by a lost acknowledgement and then another paid fetch on a later lease.
+
+For a fetch or source-evidence failure, Go still sends the failed-refresh acknowledgement with a 15-second limit. The client retries the identical acknowledgement once after a transport or 5xx ambiguity; a confirmed 4xx is not retried. If the acknowledgement still fails, the processor returns the error and does not report the refresh as fully handled. The Worker operation is idempotent for the same epoch and status.
+
+Go unit tests cover old-Worker rejection, exact acknowledgement replay, and surfacing a failed acknowledgement. `make verify` passed (vet, golangci-lint, race tests, 488 frontend checks, build); `make test-ablation` passed. A real local Worker/D1 integration test dropped the first source-save HTTP response, confirmed the exact Go replay, expired the lease, and checked that a new Go client claimed `refresh_epoch: 0` with the saved source still present. The Worker test also verified transaction rollback and checkpoint replay. No real provider call or deployment occurred.
+
+The Worker must be upgraded before this Go build. The remaining B02-T08 matrix still includes real paid-provider response uncertainty, process restart during each boundary, backlog, and same-load performance measurements.

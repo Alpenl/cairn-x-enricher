@@ -1,0 +1,78 @@
+package localintegration
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
+	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
+)
+
+// Real Go HTTP client, Worker and local D1. Dropping the first source response
+// exercises the exact replay; expiring the lease simulates a process exit.
+func TestLocalWorkerRefreshCheckpointConsumesIntent(t *testing.T) {
+	base := workerURL(t)
+	shareRoot, configPath := os.Getenv("CAIRN_SHARE_ROOT"), os.Getenv("CAIRN_WRANGLER_CONFIG")
+	if shareRoot == "" || configPath == "" {
+		t.Fatal("local D1 fixture configuration is missing")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	queue := cairn.NewClient(base, "internal", &http.Client{Timeout: 10 * time.Second})
+	if err := queue.VerifySourceLeaseCapability(ctx); err != nil {
+		t.Fatal(err)
+	}
+	id := createLink(t, base, "app")
+	if _, err := queue.RefreshSourceWithOperation(ctx, id, "refresh-checkpoint-fixture"); err != nil {
+		t.Fatal(err)
+	}
+	job, err := queue.Claim(ctx)
+	if err != nil || job == nil || job.ID != id || job.RefreshEpoch != 1 {
+		t.Fatalf("refresh claim=%+v error=%v", job, err)
+	}
+	var lost atomic.Bool
+	dropping := &http.Client{Timeout: 10 * time.Second, Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		response, err := http.DefaultTransport.RoundTrip(request)
+		if err != nil {
+			return nil, err
+		}
+		if strings.HasSuffix(request.URL.Path, "/source") && lost.CompareAndSwap(false, true) {
+			_ = response.Body.Close()
+			return nil, io.ErrUnexpectedEOF
+		}
+		return response, nil
+	})}
+	checkpoint := cairn.NewClient(base, "internal", dropping)
+	source := enrich.Source{OriginalText: "refreshed source text", OriginalLanguage: "en",
+		RelatedLinks: []string{}, ImageURLs: []string{}, Model: "fixture"}
+	if err := checkpoint.SaveSource(ctx, id, job.LeaseToken, source); err != nil || !lost.Load() {
+		t.Fatalf("lost-response source replay error=%v dropped=%t", err, lost.Load())
+	}
+	wrangler := filepath.Join(shareRoot, "worker", "node_modules", ".bin", "wrangler")
+	//nolint:gosec // Wrangler and config paths are supplied by this disposable local-integration harness.
+	command := exec.CommandContext(ctx, wrangler, "d1", "execute", "cairn-share-refreshcheckpoint", "--local",
+		"--config", configPath, "--command",
+		fmt.Sprintf("UPDATE links SET enrichment_lease_until='2000-01-01T00:00:00.000Z' WHERE id=%d", id))
+	command.Dir = filepath.Join(shareRoot, "worker")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("expire local D1 lease: %v: %s", err, strings.TrimSpace(string(output)))
+	}
+	restarted := cairn.NewClient(base, "internal", &http.Client{Timeout: 10 * time.Second})
+	stored, err := restarted.GetSource(ctx, id)
+	if err != nil || stored == nil || stored.OriginalText != source.OriginalText {
+		t.Fatalf("stored source=%+v error=%v", stored, err)
+	}
+	next, err := restarted.Claim(ctx)
+	if err != nil || next == nil || next.ID != id || next.RefreshEpoch != 0 {
+		t.Fatalf("next claim repeated paid refresh: %+v error=%v", next, err)
+	}
+}

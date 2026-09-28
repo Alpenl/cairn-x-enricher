@@ -353,7 +353,7 @@ func (c *Client) AckSourceRefresh(ctx context.Context, id, epoch int64, status, 
 	if reason != "" {
 		body["reason"] = reason
 	}
-	return c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/jobs/%d/refresh-source/ack", id), body)
+	return c.retryExactStageWrite(ctx, fmt.Sprintf("/api/enrichment/jobs/%d/refresh-source/ack", id), body)
 }
 
 // RefreshSource schedules a bounded retrieval of the link's source. It is a
