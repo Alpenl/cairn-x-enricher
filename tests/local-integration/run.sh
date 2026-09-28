@@ -110,6 +110,7 @@ run_case() {
 
 run_case lifecycle TestLocalWorkerFullLifecycle
 run_case sourcelease TestLocalWorkerSourceLeaseAdmission
+run_case providerledger TestLocalWorkerProviderAttemptLedger
 run_case competition TestLocalWorkerVersionCompetition
 run_case rename TestLocalWorkerDisplayRenameKeepsSemantics
 run_case evidence TestLocalWorkerEvidenceCheckpointAndBoundRead

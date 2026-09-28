@@ -25,6 +25,7 @@ type StageQueue interface {
 	// AdmitSourceStage fences the current lease before each paid retrieval or
 	// reading call, releasing a short lease without charging an unused attempt.
 	AdmitSourceStage(context.Context, int64, string, string, time.Duration) error
+	DeferSourceBudget(context.Context, int64, string, string) error
 	GetSource(context.Context, int64) (*enrich.Source, error)
 	SaveSource(context.Context, int64, string, enrich.Source) error
 	ClaimClassification(context.Context, string, string, string) (*cairn.ClassificationJob, error)
@@ -246,6 +247,23 @@ func (p *Processor) admitPaidStage(ctx context.Context, job *cairn.Job, stage st
 	return fmt.Errorf("admit %s paid stage: %w", stage, err)
 }
 
+func (p *Processor) deferSourceBudget(ctx context.Context, job *cairn.Job, stage string, cause error) bool {
+	if enrich.ClassOf(cause) != enrich.ErrorClassBudget {
+		return false
+	}
+	// The budget check may finish as the job context is cancelled. Releasing an
+	// unused lease is a bounded state transition and must still reach the Worker.
+	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer cancel()
+	if err := p.stages.queue.DeferSourceBudget(commitCtx, job.ID, job.LeaseToken, stage); err != nil {
+		p.logger.ErrorContext(ctx, "could not defer unused paid stage after budget denial",
+			"link_id", job.ID, "stage", stage, "error", err)
+		return false
+	}
+	p.logger.InfoContext(ctx, "paid stage deferred until next budget window", "link_id", job.ID, "stage", stage)
+	return true
+}
+
 // SetPartialReuse enables the opt-in partial re-evaluation.
 func (p *Processor) SetPartialReuse(enabled bool) {
 	if p.stages != nil {
@@ -276,7 +294,9 @@ func (p *Processor) SetExtensions(service *extension.Service, fetcher *http.Clie
 func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual string) error {
 	s := p.stages
 	logger := p.logger.With("link_id", job.ID, "attempt", job.Attempt)
-	input := enrich.Input{ID: job.ID, URL: job.URL, Note: job.Note, Attempt: job.Attempt, SourceText: manual}
+	input := enrich.Input{ID: job.ID, URL: job.URL, Note: job.Note, Attempt: job.Attempt,
+		LeaseToken: job.LeaseToken, ContentRevision: job.ContentRevision,
+		MinRemainingMS: (s.paidStageTimeout + paidStageCommitMargin).Milliseconds(), SourceText: manual}
 	var source *enrich.Source
 	var err error
 	// An explicit refresh intent bypasses both reuse paths: the operator asked
@@ -287,6 +307,9 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 		}
 		fetched, fetchErr := s.reader.FetchSource(ctx, input)
 		if fetchErr != nil {
+			if p.deferSourceBudget(ctx, job, "fetch", fetchErr) {
+				return ErrJobDeferred
+			}
 			// The old readable content and all human data are kept; the intent is
 			// consumed so a broken URL cannot loop forever.
 			_ = s.queue.AckSourceRefresh(context.WithoutCancel(ctx), job.ID, job.RefreshEpoch, "failed", boundedError(fetchErr))
@@ -328,11 +351,19 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 		}
 	}
 	if source == nil {
-		if err := p.admitPaidStage(ctx, job, "fetch"); err != nil {
-			return err
+		// Caller-supplied text is a free source write. The Worker accepts it
+		// under the current lease without a provider attempt, then reading gets
+		// its own paid admission and permit below.
+		if manual == "" {
+			if err := p.admitPaidStage(ctx, job, "fetch"); err != nil {
+				return err
+			}
 		}
 		fetched, fetchErr := s.reader.FetchSource(ctx, input)
 		if fetchErr != nil {
+			if p.deferSourceBudget(ctx, job, "fetch", fetchErr) {
+				return ErrJobDeferred
+			}
 			return p.reportFailure(ctx, logger, job, failurePathSearch, fetchErr)
 		}
 		source = &fetched
@@ -415,11 +446,23 @@ func EvidenceSnapshot(source enrich.Source, now time.Time) map[string]any {
 
 func (p *Processor) finishReading(ctx context.Context, job *cairn.Job, source enrich.Source, images []cairn.ImageRef) error {
 	logger := p.logger.With("link_id", job.ID, "stage", "reading")
-	if images == nil {
-		detail, err := p.queue.GetBookmark(ctx, job.ID)
-		if err != nil {
-			return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
+	// Source persistence may have advanced the content revision after claim.
+	// Bind the paid reading attempt to the current authoritative revision.
+	detail, err := p.queue.GetBookmark(ctx, job.ID)
+	if err != nil {
+		return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
+	}
+	contentRevision := job.ContentRevision
+	if job.ContentRevision > 0 && (detail.CacheIdentity == nil || detail.CacheIdentity.ContentRevision < 1) {
+		return fmt.Errorf("reading requires an authoritative content revision")
+	}
+	if detail.CacheIdentity != nil {
+		if detail.URL != job.URL || detail.OriginalText != source.OriginalText {
+			return ErrJobDeferred
 		}
+		contentRevision = detail.CacheIdentity.ContentRevision
+	}
+	if images == nil {
 		images = detail.Images
 		if images == nil {
 			images = []cairn.ImageRef{}
@@ -436,8 +479,13 @@ func (p *Processor) finishReading(ctx context.Context, job *cairn.Job, source en
 		return err
 	}
 	result, err := p.stages.reader.Transform(ctx, enrich.Input{ID: job.ID, URL: job.URL, Note: job.Note,
-		Attempt: job.Attempt, SourceText: source.OriginalText, RelatedLinks: source.RelatedLinks})
+		Attempt: job.Attempt, LeaseToken: job.LeaseToken, ContentRevision: contentRevision,
+		MinRemainingMS: (p.stages.paidStageTimeout + paidStageCommitMargin).Milliseconds(),
+		SourceText:     source.OriginalText, RelatedLinks: source.RelatedLinks})
 	if err != nil {
+		if p.deferSourceBudget(ctx, job, "reading", err) {
+			return ErrJobDeferred
+		}
 		return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
 	}
 	// Classification is committed only through its own lease; reading aids cannot overwrite it.

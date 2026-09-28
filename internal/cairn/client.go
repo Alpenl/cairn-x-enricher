@@ -25,13 +25,14 @@ var imageKeyPattern = regexp.MustCompile(`^enrichment/[1-9][0-9]*/[0-9a-f]{64}\.
 
 // Job is one X bookmark leased from the Worker queue.
 type Job struct {
-	ID         int64  `json:"id"`
-	URL        string `json:"url"`
-	Note       string `json:"note"`
-	CreatedAt  string `json:"created_at"`
-	Attempt    int    `json:"attempt"`
-	LeaseToken string `json:"lease_token"`
-	LeaseUntil string `json:"lease_until"`
+	ID              int64  `json:"id"`
+	URL             string `json:"url"`
+	Note            string `json:"note"`
+	CreatedAt       string `json:"created_at"`
+	Attempt         int    `json:"attempt"`
+	LeaseToken      string `json:"lease_token"`
+	LeaseUntil      string `json:"lease_until"`
+	ContentRevision int64  `json:"content_revision"`
 	// RefreshEpoch is non-zero when the operator explicitly requested a source
 	// refresh. The processor must then fetch the source instead of reusing the
 	// stored snapshot (R2-06).
@@ -281,17 +282,19 @@ func (c *Client) VerifySourceLeaseCapability(ctx context.Context) error {
 		return fmt.Errorf("source lease admission is unavailable: %w", apiError(response))
 	}
 	var capability struct {
-		Protocol            int  `json:"protocol"`
-		LeaseMS             int  `json:"lease_ms"`
-		PaidStageAdmission  bool `json:"paid_stage_admission"`
-		ProviderResultGuard bool `json:"provider_result_guard"`
-		CompletionReplay    bool `json:"completion_replay"`
+		Protocol              int  `json:"protocol"`
+		LeaseMS               int  `json:"lease_ms"`
+		PaidStageAdmission    bool `json:"paid_stage_admission"`
+		ProviderResultGuard   bool `json:"provider_result_guard"`
+		CompletionReplay      bool `json:"completion_replay"`
+		ProviderAttemptLedger bool `json:"provider_attempt_ledger"`
 	}
 	if err := decodeJSON(response.Body, &capability); err != nil {
 		return fmt.Errorf("decode source lease capability: %w", err)
 	}
 	if capability.Protocol != 1 || capability.LeaseMS != int((15*time.Minute).Milliseconds()) ||
-		!capability.PaidStageAdmission || !capability.ProviderResultGuard || !capability.CompletionReplay {
+		!capability.PaidStageAdmission || !capability.ProviderResultGuard || !capability.CompletionReplay ||
+		!capability.ProviderAttemptLedger {
 		return errors.New("source lease admission protocol is incompatible")
 	}
 	return nil
@@ -370,7 +373,8 @@ func decodeClaimResponse(response *http.Response) (*Job, error) {
 	if err := decodeJSON(response.Body, &job); err != nil {
 		return nil, fmt.Errorf("decode claim response: %w", err)
 	}
-	if job.ID < 1 || job.URL == "" || job.Attempt < 1 || job.LeaseToken == "" || job.LeaseUntil == "" {
+	if job.ID < 1 || job.URL == "" || job.Attempt < 1 || job.LeaseToken == "" ||
+		job.LeaseUntil == "" || job.ContentRevision < 1 {
 		return nil, errors.New("claim response is missing required fields")
 	}
 	return &job, nil
@@ -631,6 +635,10 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 	if path == "/api/enrichment/jobs/claim" ||
 		(strings.HasPrefix(path, "/api/enrichment/jobs/") && strings.HasSuffix(path, "/claim")) {
 		request.Header.Set("X-Cairn-Source-Lease-Admission", "1")
+		request.Header.Set("X-Cairn-Provider-Attempt-Ledger", "1")
+	}
+	if strings.HasSuffix(path, "/lease-admit") || strings.HasSuffix(path, "/budget-defer") {
+		request.Header.Set("X-Cairn-Provider-Attempt-Ledger", "1")
 	}
 	if strings.HasPrefix(path, "/api/enrichment/classifications/") {
 		request.Header.Set("X-Cairn-Classification-Budget", "1")

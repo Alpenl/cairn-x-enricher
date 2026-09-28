@@ -2,6 +2,8 @@ package localintegration
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log/slog"
@@ -16,23 +18,59 @@ import (
 
 type localSourceReader struct {
 	fetches, transforms int
+	queue               *cairn.Client
 }
 
 type localFailedSourceReader struct{ localSourceReader }
 
-func (r *localFailedSourceReader) FetchSource(context.Context, enrich.Input) (enrich.Source, error) {
+func (r *localFailedSourceReader) FetchSource(ctx context.Context, input enrich.Input) (enrich.Source, error) {
 	r.fetches++
+	if err := r.reserve(ctx, input, "fetch", false); err != nil {
+		return enrich.Source{}, err
+	}
 	return enrich.Source{}, &enrich.ModelHTTPError{StatusCode: http.StatusBadGateway, Type: "upstream_error"}
 }
 
-func (r *localSourceReader) FetchSource(context.Context, enrich.Input) (enrich.Source, error) {
+func (r *localSourceReader) reserve(ctx context.Context, input enrich.Input, stage string, known bool) error {
+	key := sha256.Sum256([]byte(input.LeaseToken + stage + input.URL))
+	hash := sha256.Sum256([]byte("fixture-" + stage))
+	operation := hex.EncodeToString(key[:])
+	variant := "fetch_thread"
+	if stage == "reading" {
+		variant = "reading"
+	}
+	granted, err := r.queue.ReserveProviderAttempt(ctx, enrich.ProviderAttempt{
+		OperationKey: operation, RequestHash: hex.EncodeToString(hash[:]), Model: "fixture",
+		Stage: stage, Variant: variant, AttemptNumber: 1,
+		LinkID: input.ID, LeaseToken: input.LeaseToken, ContentRevision: input.ContentRevision,
+		MinRemainingMS: input.MinRemainingMS,
+	})
+	if err != nil {
+		return err
+	}
+	if !granted {
+		return errors.New("fixture provider attempt was not granted")
+	}
+	if !known {
+		return nil
+	}
+	return r.queue.SettleProviderAttempt(ctx, enrich.ProviderSettlement{OperationKey: operation, HTTPStatus: 200})
+}
+
+func (r *localSourceReader) FetchSource(ctx context.Context, input enrich.Input) (enrich.Source, error) {
 	r.fetches++
+	if err := r.reserve(ctx, input, "fetch", true); err != nil {
+		return enrich.Source{}, err
+	}
 	return enrich.Source{OriginalText: "Fixture source for lease admission", Model: "fixture",
 		RelatedLinks: []string{}, ImageURLs: []string{}}, nil
 }
 
-func (r *localSourceReader) Transform(_ context.Context, input enrich.Input) (enrich.Result, error) {
+func (r *localSourceReader) Transform(ctx context.Context, input enrich.Input) (enrich.Result, error) {
 	r.transforms++
+	if err := r.reserve(ctx, input, "reading", true); err != nil {
+		return enrich.Result{}, err
+	}
 	return enrich.Result{OriginalText: input.SourceText, OriginalLanguage: "en",
 		AITitle: "Lease admission fixture", TranslatedText: "租约准入测试", Summary: "Fixture reading aid",
 		Model: "fixture"}, nil
@@ -52,7 +90,7 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 	if err != nil || job == nil || job.ID != id {
 		t.Fatalf("source claim = %+v, %v", job, err)
 	}
-	reader := &localSourceReader{}
+	reader := &localSourceReader{queue: queue}
 	worker := processor.NewStaged(queue, reader, nil, "", "",
 		slog.New(slog.NewJSONHandler(io.Discard, nil)), 1)
 	worker.SetPaidStageTimeout(10 * time.Second)
@@ -90,7 +128,7 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 	if err != nil || failedJob == nil || failedJob.ID != failedID {
 		t.Fatalf("failed source claim = %+v, %v", failedJob, err)
 	}
-	failedReader := &localFailedSourceReader{}
+	failedReader := &localFailedSourceReader{localSourceReader{queue: queue}}
 	failedWorker := processor.NewStaged(queue, failedReader, nil, "", "",
 		slog.New(slog.NewJSONHandler(io.Discard, nil)), 1)
 	failedWorker.SetPaidStageTimeout(10 * time.Second)

@@ -30,10 +30,10 @@ func TestClientClaimCompleteAndFail(t *testing.T) {
 		switch request.URL.Path {
 		case "/api/enrichment/jobs/claim":
 			writer.Header().Set("Content-Type", "application/json")
-			_, _ = writer.Write([]byte(`{"id":7,"url":"https://x.com/a/status/1","note":"read","created_at":"2026-09-03T00:00:00Z","attempt":2,"lease_token":"lease-7","lease_until":"2026-09-03T00:15:00Z"}`))
+			_, _ = writer.Write([]byte(`{"id":7,"url":"https://x.com/a/status/1","note":"read","created_at":"2026-09-03T00:00:00Z","attempt":2,"lease_token":"lease-7","lease_until":"2026-09-03T00:15:00Z","content_revision":1}`))
 		case "/api/enrichment/jobs/8/claim":
 			writer.Header().Set("Content-Type", "application/json")
-			_, _ = writer.Write([]byte(`{"id":8,"url":"https://x.com/a/status/2","note":"manual","created_at":"2026-09-03T00:00:00Z","attempt":1,"lease_token":"lease-8","lease_until":"2026-09-03T00:15:00Z"}`))
+			_, _ = writer.Write([]byte(`{"id":8,"url":"https://x.com/a/status/2","note":"manual","created_at":"2026-09-03T00:00:00Z","attempt":1,"lease_token":"lease-8","lease_until":"2026-09-03T00:15:00Z","content_revision":1}`))
 		case "/api/enrichment/jobs/7/complete", "/api/enrichment/jobs/7/fail":
 			var body map[string]any
 			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
@@ -286,7 +286,7 @@ func TestClientRequiresSourceLeaseContractBeforeScheduling(t *testing.T) {
 				_, _ = writer.Write([]byte(`{"error":"not_found"}`))
 				return
 			}
-			_, _ = writer.Write([]byte(`{"protocol":1,"lease_ms":900000,"paid_stage_admission":true,"provider_result_guard":true,"completion_replay":true}`))
+			_, _ = writer.Write([]byte(`{"protocol":1,"lease_ms":900000,"paid_stage_admission":true,"provider_result_guard":true,"completion_replay":true,"provider_attempt_ledger":true}`))
 		}))
 		client := NewClient(server.URL, "token", server.Client())
 		err := client.VerifySourceLeaseCapability(context.Background())

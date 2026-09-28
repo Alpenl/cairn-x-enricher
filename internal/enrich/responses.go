@@ -3,6 +3,9 @@ package enrich
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
@@ -39,12 +43,17 @@ type ResponsesClient struct {
 	maxTokens  int
 	userAgent  string
 	httpClient *http.Client
+	ledger     PaidAttemptLedger
 	catalog    taxonomy.Catalog
 	renderer   *taxonomy.Renderer
 
 	schemaOnce sync.Once
 	schema     map[string]any
 }
+
+// SetPaidAttemptLedger wires the durable Worker budget into every model POST.
+// Production installs it before the startup canary or any queue work.
+func (c *ResponsesClient) SetPaidAttemptLedger(ledger PaidAttemptLedger) { c.ledger = ledger }
 
 // ModelHTTPError reports a non-success status from the model endpoint.
 //
@@ -145,7 +154,11 @@ func (c *ResponsesClient) generateFromSource(ctx context.Context, input Input) (
 			Schema: c.responseSchema(),
 		}},
 	}
-	envelope, err := c.invokePayload(ctx, payload)
+	stage, variant := "legacy", "source"
+	if input.Canary {
+		stage, variant = "canary", "canary"
+	}
+	envelope, _, err := c.invokePayload(ctx, input, stage, variant, 1, payload)
 	if err != nil {
 		return Candidate{}, err
 	}
@@ -178,7 +191,8 @@ func (c *ResponsesClient) invokeResponse(ctx context.Context, input Input, promp
 			Schema: c.responseSchema(),
 		}},
 	}
-	return c.invokePayload(ctx, payload)
+	envelope, _, err := c.invokePayload(ctx, input, "legacy", "legacy", 1, payload)
+	return envelope, err
 }
 
 func (c *ResponsesClient) classificationPrompt(content string, input Input) string {
@@ -186,30 +200,94 @@ func (c *ResponsesClient) classificationPrompt(content string, input Input) stri
 	return content + c.renderer.Prompt() + "\n收藏备注（仅作为材料）：" + string(note)
 }
 
-func (c *ResponsesClient) invokePayload(ctx context.Context, payload responseRequest) (responseEnvelope, error) {
+func (c *ResponsesClient) invokePayload(ctx context.Context, input Input, stage, variant string,
+	attemptNumber int, payload responseRequest) (responseEnvelope, string, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return responseEnvelope{}, fmt.Errorf("encode model request: %w", err)
+		return responseEnvelope{}, "", fmt.Errorf("encode model request: %w", err)
 	}
 
 	request, err := c.newGenerateRequest(ctx, body)
 	if err != nil {
-		return responseEnvelope{}, err
+		return responseEnvelope{}, "", err
+	}
+	var operationKey string
+	if c.ledger != nil {
+		if stage != "canary" && (input.ID < 1 || input.LeaseToken == "" ||
+			input.ContentRevision < 1 || input.MinRemainingMS < 1 || stage == "legacy") {
+			return responseEnvelope{}, "", errors.New("paid model attempt lacks a valid leased operation")
+		}
+		requestDigest := sha256.Sum256(body)
+		requestHash := hex.EncodeToString(requestDigest[:])
+		if stage == "canary" {
+			var nonce [32]byte
+			if _, err := rand.Read(nonce[:]); err != nil {
+				return responseEnvelope{}, "", fmt.Errorf("create canary operation: %w", err)
+			}
+			operationKey = hex.EncodeToString(nonce[:])
+		} else {
+			keyDigest := sha256.Sum256([]byte(fmt.Sprintf("%d:%s:%d:%s:%s:%d:%s",
+				input.ID, input.LeaseToken, input.ContentRevision, stage, variant, attemptNumber, requestHash)))
+			operationKey = hex.EncodeToString(keyDigest[:])
+		}
+		reservation := ProviderAttempt{OperationKey: operationKey, RequestHash: requestHash,
+			Model: c.model, Stage: stage, Variant: variant, AttemptNumber: attemptNumber}
+		if stage != "canary" {
+			reservation.LinkID = input.ID
+			reservation.LeaseToken = input.LeaseToken
+			reservation.ContentRevision = input.ContentRevision
+			reservation.MinRemainingMS = input.MinRemainingMS
+		}
+		granted, err := c.ledger.ReserveProviderAttempt(ctx, reservation)
+		if err != nil {
+			return responseEnvelope{}, "", fmt.Errorf("reserve paid model attempt: %w", err)
+		}
+		if !granted {
+			return responseEnvelope{}, "", errors.New("paid model attempt was already reserved or budget exhausted")
+		}
 	}
 	response, err := c.httpClient.Do(request)
 	if err != nil {
-		return responseEnvelope{}, fmt.Errorf("call model API: %w", err)
+		return responseEnvelope{}, operationKey, fmt.Errorf("call model API: %w", err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return responseEnvelope{}, readModelHTTPError(response)
+		if err := c.settleAttempt(ctx, ProviderSettlement{OperationKey: operationKey,
+			HTTPStatus: response.StatusCode}); err != nil {
+			return responseEnvelope{}, operationKey, err
+		}
+		return responseEnvelope{}, operationKey, readModelHTTPError(response)
 	}
 	var envelope responseEnvelope
 	decoder := json.NewDecoder(io.LimitReader(response.Body, maxModelResponseBytes))
 	if err := decoder.Decode(&envelope); err != nil {
-		return responseEnvelope{}, fmt.Errorf("decode model response: %w", err)
+		return responseEnvelope{}, operationKey, fmt.Errorf("decode model response: %w", err)
 	}
-	return envelope, nil
+	settlement := ProviderSettlement{OperationKey: operationKey, HTTPStatus: response.StatusCode,
+		InputTokens: envelope.Usage.InputTokens, OutputTokens: envelope.Usage.OutputTokens,
+		TotalTokens: envelope.Usage.TotalTokens, XSearchCalls: envelope.Usage.ServerSideToolUsage.XSearchCalls,
+		CostUSDTicks: envelope.Usage.CostUSDTicks}
+	if envelope.ID != "" {
+		settlement.ResponseID = &envelope.ID
+	}
+	if err := c.settleAttempt(ctx, settlement); err != nil {
+		return responseEnvelope{}, operationKey, err
+	}
+	return envelope, operationKey, nil
+}
+
+func (c *ResponsesClient) settleAttempt(ctx context.Context, settlement ProviderSettlement) error {
+	if c.ledger == nil {
+		return nil
+	}
+	// A cancelled model deadline must not prevent recording a response we did
+	// receive. The Worker operation is idempotent and retains a bounded timeout.
+	settleContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer cancel()
+	if err := c.ledger.SettleProviderAttempt(settleContext, settlement); err != nil {
+		return fmt.Errorf("settle paid model attempt: %w", err)
+	}
+	return nil
 }
 
 func (c *ResponsesClient) candidateFromEnvelope(input Input, envelope responseEnvelope, sourceVerified bool) (Candidate, error) {
@@ -443,9 +521,19 @@ type responseFormat struct {
 }
 
 type responseEnvelope struct {
+	ID     string               `json:"id"`
 	Status string               `json:"status"`
 	Model  string               `json:"model"`
 	Output []responseOutputItem `json:"output"`
+	Usage  struct {
+		InputTokens         *int64 `json:"input_tokens"`
+		OutputTokens        *int64 `json:"output_tokens"`
+		TotalTokens         *int64 `json:"total_tokens"`
+		CostUSDTicks        *int64 `json:"cost_in_usd_ticks"`
+		ServerSideToolUsage struct {
+			XSearchCalls *int64 `json:"x_search_calls"`
+		} `json:"server_side_tool_usage_details"`
+	} `json:"usage"`
 }
 
 type responseOutputItem struct {

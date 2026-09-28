@@ -50,6 +50,8 @@ type stageQueue struct {
 	admitCalls             int
 	admitErr               error
 	admitErrAt             int
+	deferredStages         []string
+	deferContextErr        error
 }
 
 func (q *stageQueue) AdmitSourceStage(context.Context, int64, string, string, time.Duration) error {
@@ -57,6 +59,11 @@ func (q *stageQueue) AdmitSourceStage(context.Context, int64, string, string, ti
 	if q.admitErrAt == 0 || q.admitCalls == q.admitErrAt {
 		return q.admitErr
 	}
+	return nil
+}
+func (q *stageQueue) DeferSourceBudget(ctx context.Context, _ int64, _ string, stage string) error {
+	q.deferredStages = append(q.deferredStages, stage)
+	q.deferContextErr = ctx.Err()
 	return nil
 }
 
@@ -274,6 +281,65 @@ func (r *stageReader) Transform(_ context.Context, i enrich.Input) (enrich.Resul
 		return enrich.Result{}, errors.New("reading unavailable")
 	}
 	return enrich.Result{OriginalText: i.SourceText, Summary: "summary"}, nil
+}
+
+type budgetStageReader struct {
+	*stageReader
+	deniedStage string
+	cancel      context.CancelFunc
+}
+
+func (r *budgetStageReader) FetchSource(ctx context.Context, input enrich.Input) (enrich.Source, error) {
+	if r.deniedStage == "fetch" {
+		if r.cancel != nil {
+			r.cancel()
+		}
+		return enrich.Source{}, &cairn.APIError{StatusCode: http.StatusTooManyRequests, Code: "budget_exhausted"}
+	}
+	return r.stageReader.FetchSource(ctx, input)
+}
+func (r *budgetStageReader) Transform(ctx context.Context, input enrich.Input) (enrich.Result, error) {
+	if r.deniedStage == "reading" {
+		if r.cancel != nil {
+			r.cancel()
+		}
+		return enrich.Result{}, &cairn.APIError{StatusCode: http.StatusTooManyRequests, Code: "budget_exhausted"}
+	}
+	return r.stageReader.Transform(ctx, input)
+}
+
+func TestPaidBudgetDenialDefersWithoutReportingModelFailure(t *testing.T) {
+	for _, stage := range []string{"fetch", "reading"} {
+		t.Run(stage, func(t *testing.T) {
+			q := &stageQueue{fakeQueue: newFakeQueue()}
+			r := &budgetStageReader{stageReader: &stageReader{q: q}, deniedStage: stage}
+			p := NewStaged(q, r, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+			job := &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", LeaseToken: "lease", Attempt: 1}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			r.cancel = cancel
+			if err := p.Process(ctx, job); !errors.Is(err, ErrJobDeferred) {
+				t.Fatalf("budget denial = %v, want deferred", err)
+			}
+			if len(q.failures) != 0 || len(q.deferredStages) != 1 || q.deferredStages[0] != stage || q.deferContextErr != nil {
+				t.Fatalf("failures=%v deferred=%v context=%v", q.failures, q.deferredStages, q.deferContextErr)
+			}
+		})
+	}
+}
+
+func TestManualSourceDoesNotAdmitAFreeFetchAsPaid(t *testing.T) {
+	q := &stageQueue{fakeQueue: newFakeQueue()}
+	r := &stageReader{q: q}
+	p := NewStaged(q, r, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+	job := &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", LeaseToken: "lease", Attempt: 1}
+	if err := p.ProcessWithSource(context.Background(), job, "pasted original"); err != nil {
+		t.Fatal(err)
+	}
+	if q.admitCalls != 1 || r.fetches != 1 || r.transforms != 1 || len(q.completions) != 1 {
+		t.Fatalf("admissions=%d fetches=%d reading=%d completions=%d",
+			q.admitCalls, r.fetches, r.transforms, len(q.completions))
+	}
 }
 
 func TestShortSourceLeaseDefersWithoutStartingAnotherPaidStage(t *testing.T) {

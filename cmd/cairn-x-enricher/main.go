@@ -484,7 +484,9 @@ func newProcessor(
 		httpClient,
 		catalog,
 	)
-	if _, err := model.Transform(ctx, enrich.Input{URL: "https://x.com/canary/status/0", Attempt: 1, SourceText: "Canary check: validate structured reading aids."}); err != nil {
+	model.SetPaidAttemptLedger(queue)
+	if _, err := model.Transform(ctx, enrich.Input{URL: "https://x.com/canary/status/0", Attempt: 1,
+		SourceText: "Canary check: validate structured reading aids.", Canary: true}); err != nil {
 		// A contract break must fail loudly at startup instead of silently
 		// burning every job's retry budget.
 		return nil, nil, fmt.Errorf("model endpoint contract check failed (check GROK_MODELS_BASE_URL, GROK_MODEL, XAI_API_KEY and strict schema support): %w", err)

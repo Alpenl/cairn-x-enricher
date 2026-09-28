@@ -590,6 +590,8 @@ func claimEnrichmentJob(t *testing.T, base, token string, id int64) string {
 	t.Helper()
 	request, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, fmt.Sprintf("%s/api/enrichment/jobs/%d/claim", base, id), nil)
 	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("X-Cairn-Provider-Attempt-Ledger", "1")
+	request.Header.Set("X-Cairn-Source-Lease-Admission", "1")
 	request.Header.Set("X-Cairn-Classification-Budget", "1")
 	request.Header.Set("Content-Type", "application/json")
 	response, err := http.DefaultClient.Do(request)

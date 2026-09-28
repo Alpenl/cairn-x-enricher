@@ -175,7 +175,7 @@ func TestConcurrentClaimsYieldOneLease(t *testing.T) {
 		if granted.Add(1) == 1 {
 			_ = json.NewEncoder(writer).Encode(map[string]any{
 				"id": 1, "url": "https://x.com/a/status/1", "attempt": 1,
-				"lease_token": "lease-1", "lease_until": "2999-01-01T00:00:00Z",
+				"lease_token": "lease-1", "lease_until": "2999-01-01T00:00:00Z", "content_revision": 1,
 			})
 			return
 		}
