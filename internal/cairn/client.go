@@ -312,6 +312,31 @@ func (c *Client) VerifySourceLeaseCapability(ctx context.Context) error {
 	return nil
 }
 
+// SourceClaimable reports whether a scheduled source claim would find work at
+// this instant. It does not acquire a lease. A one-shot caller that sees false
+// must skip source claiming for that invocation: new work can arrive after the
+// check, and it must never run without the reading contract canary.
+func (c *Client) SourceClaimable(ctx context.Context) (bool, error) {
+	response, err := c.do(ctx, http.MethodGet, "/api/enrichment/source-claimable", nil)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return false, apiError(response)
+	}
+	var result struct {
+		Claimable *bool `json:"claimable"`
+	}
+	if err := decodeJSON(response.Body, &result); err != nil {
+		return false, fmt.Errorf("decode source claimability: %w", err)
+	}
+	if result.Claimable == nil {
+		return false, errors.New("source claimability response omitted claimable")
+	}
+	return *result.Claimable, nil
+}
+
 // AdmitSourceStage checks the authoritative lease immediately before a paid
 // call. A short lease is conditionally released by the Worker; a claim with no
 // previous paid-stage admission has its attempt refunded there.

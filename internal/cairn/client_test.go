@@ -312,6 +312,40 @@ func TestClientRequiresSourceLeaseContractBeforeScheduling(t *testing.T) {
 	}
 }
 
+func TestSourceClaimableRequiresAnAuthenticatedBoolean(t *testing.T) {
+	for _, test := range []struct {
+		name, body string
+		status     int
+		want       bool
+		wantError  bool
+	}{
+		{name: "empty", body: `{"claimable":false}`, want: false},
+		{name: "pending", body: `{"claimable":true}`, want: true},
+		{name: "missing field", body: `{}`, wantError: true},
+		{name: "unknown field", body: `{"claimable":false,"other":1}`, wantError: true},
+		{name: "old Worker", status: http.StatusNotFound, body: `{"error":"not_found"}`, wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				if request.Method != http.MethodGet || request.URL.Path != "/api/enrichment/source-claimable" ||
+					request.Header.Get("Authorization") != "Bearer token" {
+					t.Errorf("claimability request = %s %s, auth=%q", request.Method, request.URL.Path,
+						request.Header.Get("Authorization"))
+				}
+				if test.status != 0 {
+					writer.WriteHeader(test.status)
+				}
+				_, _ = writer.Write([]byte(test.body))
+			}))
+			defer server.Close()
+			got, err := NewClient(server.URL, "token", server.Client()).SourceClaimable(context.Background())
+			if (err != nil) != test.wantError || err == nil && got != test.want {
+				t.Fatalf("SourceClaimable() = %t, %v", got, err)
+			}
+		})
+	}
+}
+
 func TestClientRejectsWorkerWithoutAtomicRefreshCheckpoint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		_, _ = writer.Write([]byte(`{"protocol":1,"lease_ms":900000,"paid_stage_admission":true,"provider_result_guard":true,"completion_replay":true,"provider_attempt_ledger":true}`))

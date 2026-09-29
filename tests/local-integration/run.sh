@@ -138,6 +138,7 @@ run_case filters TestLocalWorkerEffectiveClientFilters
 run_case personal TestLocalWorkerObjectivePersonalBoundary
 
 run_case cli TestLocalWorkerClassifyCLI
+run_case onceempty TestLocalWorkerOnceSkipsEmptySourceCanary
 
 run_case carrier TestLocalWorkerCarrierDefinitionUpgrade
 

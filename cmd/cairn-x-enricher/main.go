@@ -96,7 +96,7 @@ func newRootCommand() *cobra.Command {
 		Use:   "once",
 		Short: "Drain one bounded batch, print JSON stats, and exit",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			cfg, err := config.Load()
+			cfg, err := config.LoadFor(config.RoleClassify)
 			if err != nil {
 				return err
 			}
@@ -109,11 +109,39 @@ func newRootCommand() *cobra.Command {
 			logger := newLogger(cfg.LogLevel)
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
-			worker, _, err := newProcessor(ctx, cfg, health.NewTracker(), logger)
+			// This is a one-shot snapshot. If there is no claimable source now,
+			// this invocation runs only classification. A source arriving after
+			// the check waits for the next invocation; it cannot be claimed
+			// without the reading contract canary.
+			probe := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken,
+				&http.Client{Timeout: cfg.RequestTimeout, CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+					return http.ErrUseLastResponse
+				}})
+			sourceClaimable, probeErr := probe.SourceClaimable(ctx)
+			if probeErr != nil {
+				// Older or temporarily unavailable Workers cannot prove the
+				// source queue empty. Preserve the eager canary in that case.
+				logger.Warn("source claimability check failed; using full startup check",
+					"error", probeErr)
+				sourceClaimable = true
+			}
+			if sourceClaimable {
+				cfg, err = config.LoadFor(config.RoleServe)
+				if err != nil {
+					return err
+				}
+			}
+			worker, _, err := newProcessor(ctx, cfg, health.NewTracker(), logger, sourceClaimable)
 			if err != nil {
 				return err
 			}
-			stats, runErr := worker.Run(ctx, maxJobs)
+			var stats processor.Stats
+			var runErr error
+			if sourceClaimable {
+				stats, runErr = worker.Run(ctx, maxJobs)
+			} else {
+				stats, runErr = worker.RunClassificationsOnly(ctx, maxJobs)
+			}
 			if err := json.NewEncoder(os.Stdout).Encode(stats); err != nil {
 				return fmt.Errorf("write stats: %w", err)
 			}
@@ -204,7 +232,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 		defer func() { _ = controlListener.Close() }()
 	}
 	tracker := health.NewTracker()
-	worker, queue, err := newProcessor(ctx, cfg, tracker, logger)
+	worker, queue, err := newProcessor(ctx, cfg, tracker, logger, true)
 	if err != nil {
 		return err
 	}
@@ -461,6 +489,7 @@ func newProcessor(
 	cfg config.Config,
 	tracker *health.Tracker,
 	logger *slog.Logger,
+	withSource bool,
 ) (*processor.Processor, *cairn.Client, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConns = 20
@@ -473,8 +502,10 @@ func newProcessor(
 		},
 	}
 	queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, httpClient)
-	if err := queue.VerifySourceLeaseCapability(ctx); err != nil {
-		return nil, nil, fmt.Errorf("verify Worker source lease admission: %w", err)
+	if withSource {
+		if err := queue.VerifySourceLeaseCapability(ctx); err != nil {
+			return nil, nil, fmt.Errorf("verify Worker source lease admission: %w", err)
+		}
 	}
 	catalog, legacyCatalog, err := queue.GetClassificationCatalog(ctx)
 	if err != nil {
@@ -483,23 +514,20 @@ func newProcessor(
 	if legacyCatalog {
 		logger.Warn("backend has no v2 taxonomy; running the legacy single-dimension vocabulary")
 	}
-	userAgent := "cairn-x-enricher/" + buildinfo.Version
-	model := enrich.NewResponsesClient(
-		cfg.GrokBaseURL,
-		cfg.GrokAPIKey,
-		cfg.GrokModel,
-		cfg.GrokMaxTokens,
-		userAgent,
-		httpClient,
-		catalog,
-	)
-	model.SetPaidAttemptLedger(queue)
-	model.SetLogger(logger)
-	if _, err := model.Transform(ctx, enrich.Input{URL: "https://x.com/canary/status/0", Attempt: 1,
-		SourceText: "Canary check: validate structured reading aids.", Canary: true}); err != nil {
-		// A contract break must fail loudly at startup instead of silently
-		// burning every job's retry budget.
-		return nil, nil, fmt.Errorf("model endpoint contract check failed (check GROK_MODELS_BASE_URL, GROK_MODEL, XAI_API_KEY and strict schema support): %w", err)
+	var reader processor.SourceReader
+	if withSource {
+		model := enrich.NewResponsesClient(
+			cfg.GrokBaseURL, cfg.GrokAPIKey, cfg.GrokModel, cfg.GrokMaxTokens,
+			"cairn-x-enricher/"+buildinfo.Version, httpClient, catalog,
+		)
+		model.SetPaidAttemptLedger(queue)
+		model.SetLogger(logger)
+		if _, err := model.Transform(ctx, enrich.Input{URL: "https://x.com/canary/status/0", Attempt: 1,
+			SourceText: "Canary check: validate structured reading aids.", Canary: true}); err != nil {
+			// A contract break must fail loudly before a source lease is claimed.
+			return nil, nil, fmt.Errorf("model endpoint contract check failed (check GROK_MODELS_BASE_URL, GROK_MODEL, XAI_API_KEY and strict schema support): %w", err)
+		}
+		reader = model
 	}
 	classifier, err := classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel, httpClient, catalog)
 	if err != nil {
@@ -519,7 +547,7 @@ func newProcessor(
 		logger.Warn("backend has no v2 question-spec endpoint; stored runs will not be replayable")
 	}
 	tracker.MarkStarted()
-	worker := processor.NewStaged(queue, model, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
+	worker := processor.NewStaged(queue, reader, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
 	worker.SetClaimTimeout(batchTimeout(cfg))
 	worker.SetPaidStageTimeout(cfg.RequestTimeout)
 	fetcher, policy := evidenceFetcher(cfg)

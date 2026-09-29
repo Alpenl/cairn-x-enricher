@@ -130,6 +130,17 @@ const sourceJobMaxDuration = 15 * time.Minute
 // holds. Cancelling the work itself would interrupt jobs mid-request and waste
 // their lease, which is exactly what graceful shutdown is trying to avoid.
 func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
+	return p.run(ctx, maxJobs, true)
+}
+
+// RunClassificationsOnly drains the semantic queue for a one-shot invocation
+// whose source queue was observed empty before startup. It never claims a
+// source lease, so it needs neither a Grok credential nor a paid canary.
+func (p *Processor) RunClassificationsOnly(ctx context.Context, maxJobs int) (Stats, error) {
+	return p.run(ctx, maxJobs, false)
+}
+
+func (p *Processor) run(ctx context.Context, maxJobs int, withSource bool) (Stats, error) {
 	started := time.Now().UTC()
 	if maxJobs < 1 {
 		return Stats{StartedAt: started, Duration: time.Since(started)}, nil
@@ -142,7 +153,11 @@ func (p *Processor) Run(ctx context.Context, maxJobs int) (Stats, error) {
 		defer RecoverJob(p.logger, "classification batch", 0, &classificationErr)
 		classified, classificationFailed, classificationErr = p.RunClassifications(ctx, maxJobs)
 	}()
-	stats, sourceErr := p.RunSources(ctx, maxJobs)
+	stats := Stats{StartedAt: started}
+	var sourceErr error
+	if withSource {
+		stats, sourceErr = p.RunSources(ctx, maxJobs)
+	}
 	<-classificationDone
 	stats.Classified, stats.ClassificationFailed = classified, classificationFailed
 	// Unlike serve, the one-shot command has no later evidence tick. Recover

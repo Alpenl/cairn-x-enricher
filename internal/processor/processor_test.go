@@ -109,6 +109,16 @@ type claimProbeQueue struct {
 	once       sync.Once
 }
 
+func TestClassificationOnlyRoundLeavesNewSourceUnclaimed(t *testing.T) {
+	queue := newFakeQueue(&cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1})
+	worker := New(queue, nil, discardLogger(), 1)
+	stats, err := worker.RunClassificationsOnly(context.Background(), 1)
+	if err != nil || stats.HasWork() || len(queue.jobs) != 1 {
+		t.Fatalf("classification-only round claimed a source: stats=%+v jobs=%d error=%v",
+			stats, len(queue.jobs), err)
+	}
+}
+
 func (q *claimProbeQueue) Claim(ctx context.Context) (*cairn.Job, error) {
 	q.once.Do(func() { close(q.firstClaim) })
 	return q.fakeQueue.Claim(ctx)

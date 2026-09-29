@@ -44,8 +44,12 @@ func workerURL(t *testing.T) string {
 // validates the official request shape (map of typed questions, structured
 // state) and answers from the compiled spec, so the real classifier and the
 // real Worker are exercised without a paid call.
-func providerContractServer(t *testing.T, spec classify.QuestionSpec) *httptest.Server {
+func providerContractServer(t *testing.T, spec classify.QuestionSpec, resolvedModels ...string) *httptest.Server {
 	t.Helper()
+	resolvedModel := "jev-pinned-local"
+	if len(resolvedModels) > 0 {
+		resolvedModel = resolvedModels[0]
+	}
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var raw map[string]json.RawMessage
 		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
@@ -90,7 +94,7 @@ func providerContractServer(t *testing.T, spec classify.QuestionSpec) *httptest.
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"model": "jev-pinned-local", "answers": answers,
+			"model": resolvedModel, "answers": answers,
 			"usage": map[string]int{"input_tokens": 123, "output_tokens": 45},
 		})
 	}))
