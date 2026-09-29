@@ -3,6 +3,7 @@ package classify
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -426,6 +427,24 @@ func TestClassifyRejectsTrailingAndDuplicateProviderDataAsContractError(t *testi
 				t.Fatalf("%s class = %s, want contract", name, enrich.ClassOf(err))
 			}
 		})
+	}
+}
+
+func TestClassifyPreservesBoundedProviderRetryHint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("retry-after-ms", "480000")
+		w.Header().Set("Retry-After", "45")
+		w.WriteHeader(529)
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "fixture", "jev-latest", server.Client(), testCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.Classify(context.Background(), Input{OriginalText: "saved source"})
+	var httpErr *enrich.ModelHTTPError
+	if !errors.As(err, &httpErr) || httpErr.RetryAfter != 8*time.Minute || enrich.ClassOf(err) != enrich.ErrorClassTransient {
+		t.Fatalf("overload retry hint = %+v, class = %s, error = %v", httpErr, enrich.ClassOf(err), err)
 	}
 }
 

@@ -30,7 +30,7 @@ type StageQueue interface {
 	SaveSource(context.Context, int64, string, enrich.Source) error
 	ClaimClassification(context.Context, string, string, string) (*cairn.ClassificationJob, error)
 	CompleteClassification(context.Context, *cairn.ClassificationJob, classify.Result) error
-	FailClassification(context.Context, *cairn.ClassificationJob, string) error
+	FailClassification(context.Context, *cairn.ClassificationJob, string, time.Duration) error
 	// SubmitEvidence persists the immutable evidence snapshot a run references.
 	// A backend without the v2 API reports cairn.IsUnsupported.
 	SubmitEvidence(context.Context, int64, any) error
@@ -149,6 +149,10 @@ func (p *componentPause) beginProbe() (allowed, halfOpen bool, remaining time.Du
 // endProbe records the probe outcome. Only a success clears the breaker; a
 // failure extends it with the next backoff step.
 func (p *componentPause) endProbe(success bool, reason string) {
+	p.endProbeWithHint(success, reason, 0)
+}
+
+func (p *componentPause) endProbeWithHint(success bool, reason string, hint time.Duration) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if success {
@@ -160,22 +164,27 @@ func (p *componentPause) endProbe(success bool, reason string) {
 	}
 	// Release ownership and extend the backoff under the same lock: a second
 	// caller must not acquire the expired window between those two actions.
-	p.tripLocked(reason)
+	p.tripLocked(reason, hint)
 }
 
 func (p *componentPause) trip(reason string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.tripLocked(reason)
+	p.tripWithHint(reason, 0)
 }
 
-func (p *componentPause) tripLocked(reason string) {
+func (p *componentPause) tripWithHint(reason string, hint time.Duration) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.tripLocked(reason, hint)
+}
+
+func (p *componentPause) tripLocked(reason string, hint time.Duration) {
 	p.probing = false
 	p.failures++
 	backoff := pauseBaseBackoff << min(p.failures-1, 8)
 	if backoff > pauseMaxBackoff || backoff <= 0 {
 		backoff = pauseMaxBackoff
 	}
+	backoff = max(backoff, min(max(hint, 0), pauseMaxBackoff))
 	p.until = p.now().Add(backoff)
 	p.reason = reason
 }
@@ -556,14 +565,14 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 			s.pause.endProbe(false, reason)
 		}
 	}()
-	settleProbe := func(success bool, reason string) {
+	settleProbe := func(success bool, reason string, hint time.Duration) {
 		if probePending {
-			s.pause.endProbe(success, reason)
+			s.pause.endProbeWithHint(success, reason, hint)
 			probePending = false
 			return
 		}
 		if !success {
-			s.pause.trip(reason)
+			s.pause.tripWithHint(reason, hint)
 		}
 	}
 	for range maxJobs {
@@ -581,7 +590,7 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 			if enrich.PausesComponent(err) {
 				// Trip the breaker so the next poll does not claim and burn
 				// another attempt, then surface the state once.
-				settleProbe(false, err.Error())
+				settleProbe(false, err.Error(), 0)
 				return completed, failed, fmt.Errorf("%w: %w", ErrComponentPaused, err)
 			}
 			return completed, failed, fmt.Errorf("claim classification: %w", err)
@@ -615,7 +624,7 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 				// Superseded input/target: not a semantic failure, and the Worker
 				// already knows. Do not spend an attempt or abort other jobs.
 				reportCtx, stopReport := boundedStateReportContext(ctx)
-				reportErr := s.queue.FailClassification(reportCtx, job, "superseded: "+boundedError(err))
+				reportErr := s.queue.FailClassification(reportCtx, job, "superseded: "+boundedError(err), 0)
 				stopReport()
 				if reportErr != nil && !enrich.IsStale(reportErr) {
 					return completed, failed, errors.Join(err, reportErr)
@@ -627,19 +636,24 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 				// breaker so the next poll does not claim another job. The
 				// current lease is deliberately left to expire rather than marked
 				// failed, so this pause costs one attempt, not one per job.
-				settleProbe(false, err.Error())
+				settleProbe(false, err.Error(), 0)
 				return completed, failed, fmt.Errorf("%w: %w", ErrComponentPaused, err)
 			}
 			// A rate limit, overload or provider transport fault must stop this
 			// batch. Otherwise a single 529 could consume every queued lease and
 			// its budget before the next scheduler tick.
 			providerTransient := providerAttempted && enrich.IsRetryable(err)
+			var providerErr *enrich.ModelHTTPError
+			var retryAfter time.Duration
+			if providerTransient && errors.As(err, &providerErr) {
+				retryAfter = providerErr.RetryAfter
+			}
 			if providerTransient {
-				settleProbe(false, boundedError(err))
+				settleProbe(false, boundedError(err), retryAfter)
 			}
 			failed++
 			reportCtx, stopReport := boundedStateReportContext(ctx)
-			reportErr := s.queue.FailClassification(reportCtx, job, boundedError(err))
+			reportErr := s.queue.FailClassification(reportCtx, job, boundedError(err), retryAfter)
 			stopReport()
 			if reportErr != nil {
 				return completed, failed, errors.Join(err, reportErr)
@@ -651,7 +665,7 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 			continue
 		}
 		// The model stage succeeded: only now may the breaker clear.
-		settleProbe(true, "")
+		settleProbe(true, "", 0)
 		if err := s.queue.CompleteClassification(workCtx, job, result); err != nil {
 			cancel()
 			// The client confirms lost responses by replaying this exact operation.

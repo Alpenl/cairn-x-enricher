@@ -387,7 +387,8 @@ func (c *Client) callProvider(ctx context.Context, body []byte) (wire providerRe
 	defer func() { _ = response.Body.Close() }()
 	call.HTTPStatus = response.StatusCode
 	if response.StatusCode != http.StatusOK {
-		return wire, enrich.ClassifyModelError(&enrich.ModelHTTPError{StatusCode: response.StatusCode})
+		return wire, enrich.ClassifyModelError(&enrich.ModelHTTPError{
+			StatusCode: response.StatusCode, RetryAfter: enrich.ProviderRetryAfter(response.Header, time.Now())})
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
 	if err != nil {
@@ -521,7 +522,8 @@ func (c *Client) Judge(ctx context.Context, state any, questions map[string]Prov
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return nil, enrich.ClassifyModelError(&enrich.ModelHTTPError{StatusCode: response.StatusCode})
+		return nil, enrich.ClassifyModelError(&enrich.ModelHTTPError{
+			StatusCode: response.StatusCode, RetryAfter: enrich.ProviderRetryAfter(response.Header, time.Now())})
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
 	if err != nil {

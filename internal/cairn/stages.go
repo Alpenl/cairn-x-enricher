@@ -335,10 +335,14 @@ func ClassificationOperationKey(job *ClassificationJob) string {
 // FailClassification schedules durable backoff without changing saved content.
 // A stale failure (superseded input or target) is reported with its revision so
 // the Worker can avoid spending the new target's attempt budget.
-func (c *Client) FailClassification(ctx context.Context, job *ClassificationJob, message string) error {
-	return c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/classifications/%d/fail", job.ID), map[string]any{
+func (c *Client) FailClassification(ctx context.Context, job *ClassificationJob, message string, retryAfter time.Duration) error {
+	payload := map[string]any{
 		"lease_token": job.LeaseToken, "revision": job.Revision, "input_revision": job.InputRevision,
-		"target_generation": job.TargetGeneration, "error": message})
+		"target_generation": job.TargetGeneration, "error": message}
+	if retryAfter > 0 {
+		payload["retry_after_ms"] = min(retryAfter.Milliseconds(), enrich.MaxProviderRetryAfter.Milliseconds())
+	}
+	return c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/classifications/%d/fail", job.ID), payload)
 }
 
 // RetryClassification enrolls a historical source or retries an inactive job.

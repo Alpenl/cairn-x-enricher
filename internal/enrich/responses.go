@@ -92,6 +92,7 @@ func (c *ResponsesClient) logPaidAttempt(ctx context.Context, level slog.Level,
 type ModelHTTPError struct {
 	StatusCode int
 	Type       string
+	RetryAfter time.Duration
 }
 
 func (e *ModelHTTPError) Error() string {
@@ -640,6 +641,7 @@ func readModelHTTPError(response *http.Response) error {
 	return &ModelHTTPError{
 		StatusCode: response.StatusCode,
 		Type:       safeProviderType(payload.Error.Type),
+		RetryAfter: ProviderRetryAfter(response.Header, time.Now()),
 	}
 }
 

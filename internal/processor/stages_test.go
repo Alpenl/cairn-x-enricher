@@ -24,35 +24,36 @@ import (
 
 type stageQueue struct {
 	*fakeQueue
-	mu                     sync.Mutex
-	jobPool                int
-	source                 *enrich.Source
-	job                    *cairn.ClassificationJob
-	classificationFailures int
-	classified             int
-	claims                 int
-	claimErr               error
-	completeErr            error
-	evidence               int
-	evidenceErr            error
-	entityState            map[string]any
-	entitySubmissions      int
-	evidenceRequests       int
-	evidenceDecisions      []map[string]any
-	retries                int
-	latestRun              *cairn.StoredRun
-	storedSpec             cairn.StoredQuestionSpec
-	evidenceSnapshot       json.RawMessage
-	evidenceReadErr        error
-	evidenceRequestStatus  string
-	recoverEvidenceHook    func(context.Context) ([]cairn.EvidenceExecution, error)
-	refreshAcks            int
-	refreshAckErr          error
-	admitCalls             int
-	admitErr               error
-	admitErrAt             int
-	deferredStages         []string
-	deferContextErr        error
+	mu                       sync.Mutex
+	jobPool                  int
+	source                   *enrich.Source
+	job                      *cairn.ClassificationJob
+	classificationFailures   int
+	classificationRetryHints []time.Duration
+	classified               int
+	claims                   int
+	claimErr                 error
+	completeErr              error
+	evidence                 int
+	evidenceErr              error
+	entityState              map[string]any
+	entitySubmissions        int
+	evidenceRequests         int
+	evidenceDecisions        []map[string]any
+	retries                  int
+	latestRun                *cairn.StoredRun
+	storedSpec               cairn.StoredQuestionSpec
+	evidenceSnapshot         json.RawMessage
+	evidenceReadErr          error
+	evidenceRequestStatus    string
+	recoverEvidenceHook      func(context.Context) ([]cairn.EvidenceExecution, error)
+	refreshAcks              int
+	refreshAckErr            error
+	admitCalls               int
+	admitErr                 error
+	admitErrAt               int
+	deferredStages           []string
+	deferContextErr          error
 }
 
 func (q *stageQueue) AdmitSourceStage(context.Context, int64, string, string, time.Duration) error {
@@ -98,8 +99,9 @@ func (q *stageQueue) CompleteClassification(context.Context, *cairn.Classificati
 	q.classified++
 	return nil
 }
-func (q *stageQueue) FailClassification(context.Context, *cairn.ClassificationJob, string) error {
+func (q *stageQueue) FailClassification(_ context.Context, _ *cairn.ClassificationJob, _ string, retryAfter time.Duration) error {
 	q.classificationFailures++
+	q.classificationRetryHints = append(q.classificationRetryHints, retryAfter)
 	return nil
 }
 func (q *stageQueue) SubmitEvidence(context.Context, int64, any) error {
@@ -494,7 +496,7 @@ func TestStaleClassificationIsNotAJobFailure(t *testing.T) {
 
 func TestProviderOverloadStopsBatchBeforeDrainingQueuedLeases(t *testing.T) {
 	q := &stageQueue{fakeQueue: newFakeQueue(), jobPool: 5}
-	overload := enrich.ClassifyModelError(&enrich.ModelHTTPError{StatusCode: 529})
+	overload := enrich.ClassifyModelError(&enrich.ModelHTTPError{StatusCode: 529, RetryAfter: 8 * time.Minute})
 	p := NewStaged(q, nil, classifiedClassifier{err: overload}, "v1", "jev", discardLogger(), 1)
 	now := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
 	p.stages.pause.now = func() time.Time { return now }
@@ -502,11 +504,17 @@ func TestProviderOverloadStopsBatchBeforeDrainingQueuedLeases(t *testing.T) {
 	if !errors.Is(err, ErrComponentPaused) || done != 0 || failed != 1 || q.claims != 1 || q.classificationFailures != 1 {
 		t.Fatalf("overload drained queue: done=%d failed=%d claims=%d reports=%d err=%v", done, failed, q.claims, q.classificationFailures, err)
 	}
+	if len(q.classificationRetryHints) != 1 || q.classificationRetryHints[0] != 8*time.Minute {
+		t.Fatalf("provider retry hint was not reported durably: %v", q.classificationRetryHints)
+	}
+	if _, _, remaining := p.ClassificationPaused(); remaining != 8*time.Minute {
+		t.Fatalf("provider hint did not hold local component pause: %s", remaining)
+	}
 	_, _, _ = p.RunClassifications(context.Background(), 5)
 	if q.claims != 1 {
 		t.Fatalf("backoff claimed %d jobs, want one", q.claims)
 	}
-	now = now.Add(time.Minute)
+	now = now.Add(9 * time.Minute)
 	p.stages.classifier = stageClassifier{}
 	done, failed, err = p.RunClassifications(context.Background(), 5)
 	if err != nil || done != 1 || failed != 0 || q.claims != 2 || !p.stages.pause.isHealthy() {

@@ -227,7 +227,7 @@ func TestLocalWorkerEvidenceCheckpointAndBoundRead(t *testing.T) {
 			}
 			// End this intentionally damaged attempt, then retry the actual
 			// Worker job for the next injected transport failure.
-			_ = queue.FailClassification(ctx, leased, "synthetic transport failure")
+			_ = queue.FailClassification(ctx, leased, "synthetic transport failure", 0)
 			if err := queue.RetryClassification(ctx, id); err != nil {
 				t.Fatal(err)
 			}
