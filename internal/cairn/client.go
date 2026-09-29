@@ -309,13 +309,15 @@ func (c *Client) VerifySourceLeaseCapability(ctx context.Context) error {
 		CompletionReplay      bool `json:"completion_replay"`
 		ProviderAttemptLedger bool `json:"provider_attempt_ledger"`
 		RefreshCheckpoint     bool `json:"refresh_source_checkpoint"`
+		SourceComponentGate   bool `json:"source_component_gate"`
 	}
 	if err := decodeJSON(response.Body, &capability); err != nil {
 		return fmt.Errorf("decode source lease capability: %w", err)
 	}
 	if capability.Protocol != 1 || capability.LeaseMS != int((15*time.Minute).Milliseconds()) ||
 		!capability.PaidStageAdmission || !capability.ProviderResultGuard || !capability.CompletionReplay ||
-		!capability.ProviderAttemptLedger || !capability.RefreshCheckpoint {
+		!capability.ProviderAttemptLedger || !capability.RefreshCheckpoint ||
+		!capability.SourceComponentGate {
 		return errors.New("source lease admission protocol is incompatible")
 	}
 	return nil
@@ -693,6 +695,36 @@ func (c *Client) Fail(ctx context.Context, id int64, leaseToken, message string)
 	return nil
 }
 
+// FailSourceStage reports a provider transient with its stage so the Worker
+// can pause only that stage in the same transaction as the leased job failure.
+// A content or contract failure keeps the existing per-job fail contract.
+func (c *Client) FailSourceStage(ctx context.Context, id int64, leaseToken, stage, message string,
+	retryAfter time.Duration, providerTransient bool) error {
+	if stage != "fetch" && stage != "reading" {
+		return errors.New("invalid source failure stage")
+	}
+	if !providerTransient {
+		return c.Fail(ctx, id, leaseToken, message)
+	}
+	fault := "source_transient"
+	if stage == "reading" {
+		fault = "reading_transient"
+	}
+	path := fmt.Sprintf("/api/enrichment/jobs/%d/fail", id)
+	response, err := c.do(ctx, http.MethodPost, path, map[string]any{
+		"lease_token": leaseToken, "error": message, "component_fault": fault,
+		"retry_after_ms": min(max(retryAfter, 0), 10*time.Minute).Milliseconds(),
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return apiError(response)
+	}
+	return nil
+}
+
 func (c *Client) do(ctx context.Context, method, path string, body any) (*http.Response, error) {
 	var reader io.Reader
 	if body != nil {
@@ -711,7 +743,11 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 	if path == "/api/enrichment/jobs/claim" ||
 		(strings.HasPrefix(path, "/api/enrichment/jobs/") && strings.HasSuffix(path, "/claim")) {
 		request.Header.Set("X-Cairn-Source-Lease-Admission", "1")
+		request.Header.Set("X-Cairn-Source-Component-Gate", "1")
 		request.Header.Set("X-Cairn-Provider-Attempt-Ledger", "1")
+	}
+	if path == "/api/enrichment/source-claimable" {
+		request.Header.Set("X-Cairn-Source-Component-Gate", "1")
 	}
 	if strings.HasSuffix(path, "/lease-admit") || strings.HasSuffix(path, "/budget-defer") {
 		request.Header.Set("X-Cairn-Provider-Attempt-Ledger", "1")

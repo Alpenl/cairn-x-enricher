@@ -26,6 +26,7 @@ type StageQueue interface {
 	// AdmitSourceStage fences the current lease before each paid retrieval or
 	// reading call, releasing a short lease without charging an unused attempt.
 	AdmitSourceStage(context.Context, int64, string, string, time.Duration) error
+	FailSourceStage(context.Context, int64, string, string, string, time.Duration, bool) error
 	DeferSourceBudget(context.Context, int64, string, string) error
 	GetSource(context.Context, int64) (*enrich.Source, error)
 	SaveSource(context.Context, int64, string, enrich.Source) error
@@ -296,7 +297,7 @@ func (p *Processor) admitPaidStage(ctx context.Context, job *cairn.Job, stage st
 	}
 	var apiErr *cairn.APIError
 	if errors.As(err, &apiErr) && (apiErr.Code == "lease_released" || apiErr.Code == "lease_conflict" ||
-		apiErr.Code == "provider_result_unknown") {
+		apiErr.Code == "provider_result_unknown" || apiErr.Code == "component_paused") {
 		p.logger.InfoContext(ctx, "paid stage deferred after source lease check",
 			"link_id", job.ID, "stage", stage, "reason", apiErr.Code)
 		return ErrJobDeferred
@@ -319,6 +320,19 @@ func (p *Processor) deferSourceBudget(ctx context.Context, job *cairn.Job, stage
 	}
 	p.logger.InfoContext(ctx, "paid stage deferred until next budget window", "link_id", job.ID, "stage", stage)
 	return true
+}
+
+// The gate can open between paid-stage admission and the provider reservation.
+// No paid call occurred in that case; release the unused lease without
+// converting another job's provider outage into this job's failure.
+func (p *Processor) deferSourceGate(ctx context.Context, job *cairn.Job, stage string, cause error) bool {
+	var apiErr *cairn.APIError
+	if !errors.As(cause, &apiErr) || apiErr.Code != "component_paused" {
+		return false
+	}
+	reportCtx, cancel := boundedStateReportContext(ctx)
+	defer cancel()
+	return errors.Is(p.admitPaidStage(reportCtx, job, stage), ErrJobDeferred)
 }
 
 // SetPartialReuse enables the opt-in partial re-evaluation.
@@ -364,6 +378,9 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 		}
 		fetched, fetchErr := s.reader.FetchSource(ctx, input)
 		if fetchErr != nil {
+			if p.deferSourceGate(ctx, job, "fetch", fetchErr) {
+				return ErrJobDeferred
+			}
 			if p.deferSourceBudget(ctx, job, "fetch", fetchErr) {
 				return ErrJobDeferred
 			}
@@ -375,7 +392,7 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 			if ackErr != nil {
 				return errors.Join(fetchErr, fmt.Errorf("acknowledge failed source refresh: %w", ackErr))
 			}
-			return p.reportFailure(ctx, logger, job, failurePathSearch, fetchErr)
+			return p.reportStageFailure(ctx, logger, job, failurePathSearch, "fetch", fetchErr)
 		}
 		source = &fetched
 		if err = s.queue.SaveSource(ctx, job.ID, job.LeaseToken, *source); err != nil {
@@ -430,10 +447,13 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 		}
 		fetched, fetchErr := s.reader.FetchSource(ctx, input)
 		if fetchErr != nil {
+			if p.deferSourceGate(ctx, job, "fetch", fetchErr) {
+				return ErrJobDeferred
+			}
 			if p.deferSourceBudget(ctx, job, "fetch", fetchErr) {
 				return ErrJobDeferred
 			}
-			return p.reportFailure(ctx, logger, job, failurePathSearch, fetchErr)
+			return p.reportStageFailure(ctx, logger, job, failurePathSearch, "fetch", fetchErr)
 		}
 		source = &fetched
 		if err = p.saveSourceWithEvidence(ctx, job, *source); err != nil {
@@ -552,10 +572,13 @@ func (p *Processor) finishReading(ctx context.Context, job *cairn.Job, source en
 		MinRemainingMS: (p.stages.paidStageTimeout + paidStageCommitMargin).Milliseconds(),
 		SourceText:     source.OriginalText, RelatedLinks: source.RelatedLinks})
 	if err != nil {
+		if p.deferSourceGate(ctx, job, "reading", err) {
+			return ErrJobDeferred
+		}
 		if p.deferSourceBudget(ctx, job, "reading", err) {
 			return ErrJobDeferred
 		}
-		return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
+		return p.reportStageFailure(ctx, logger, job, failurePathRecovered, "reading", err)
 	}
 	language := strings.TrimSpace(source.OriginalLanguage)
 	if language == "" {

@@ -42,6 +42,10 @@ func TestClientClaimCompleteAndFail(t *testing.T) {
 			request.Header.Get("X-Cairn-Source-Lease-Admission") != "1" {
 			t.Errorf("source claim omitted lease admission capability")
 		}
+		if strings.HasSuffix(request.URL.Path, "/claim") &&
+			request.Header.Get("X-Cairn-Source-Component-Gate") != "1" {
+			t.Errorf("source claim omitted component gate capability")
+		}
 		switch request.URL.Path {
 		case "/api/enrichment/jobs/claim":
 			writer.Header().Set("Content-Type", "application/json")
@@ -301,7 +305,7 @@ func TestClientRequiresSourceLeaseContractBeforeScheduling(t *testing.T) {
 				_, _ = writer.Write([]byte(`{"error":"not_found"}`))
 				return
 			}
-			_, _ = writer.Write([]byte(`{"protocol":1,"lease_ms":900000,"paid_stage_admission":true,"provider_result_guard":true,"completion_replay":true,"provider_attempt_ledger":true,"refresh_source_checkpoint":true}`))
+			_, _ = writer.Write([]byte(`{"protocol":1,"lease_ms":900000,"paid_stage_admission":true,"provider_result_guard":true,"completion_replay":true,"provider_attempt_ledger":true,"refresh_source_checkpoint":true,"source_component_gate":true}`))
 		}))
 		client := NewClient(server.URL, "token", server.Client())
 		err := client.VerifySourceLeaseCapability(context.Background())
@@ -309,6 +313,35 @@ func TestClientRequiresSourceLeaseContractBeforeScheduling(t *testing.T) {
 		if valid && err != nil || !valid && err == nil {
 			t.Fatalf("valid=%t, VerifySourceLeaseCapability()=%v", valid, err)
 		}
+	}
+}
+
+func TestSourceStageTransientReportsItsGateWithoutChangingContentFailures(t *testing.T) {
+	var bodies []map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/api/enrichment/jobs/7/fail" {
+			t.Errorf("failure path = %q", request.URL.Path)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Errorf("decode failure: %v", err)
+		}
+		bodies = append(bodies, body)
+		_, _ = writer.Write([]byte(`{"id":7,"status":"failed"}`))
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "token", server.Client())
+	if err := client.FailSourceStage(context.Background(), 7, "lease-7", "fetch", "HTTP 529",
+		12*time.Minute, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.FailSourceStage(context.Background(), 7, "lease-7", "reading", "bad stored content",
+		0, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(bodies) != 2 || bodies[0]["component_fault"] != "source_transient" ||
+		bodies[0]["retry_after_ms"] != float64(600000) || bodies[1]["component_fault"] != nil {
+		t.Fatalf("failure bodies = %#v", bodies)
 	}
 }
 

@@ -399,6 +399,14 @@ func relatedLinks(resultLinks, existingLinks []string) []string {
 }
 
 func (p *Processor) reportFailure(ctx context.Context, logger *slog.Logger, job *cairn.Job, path failurePathLabel, err error) error {
+	return p.reportFailureAtStage(ctx, logger, job, path, "", err)
+}
+
+func (p *Processor) reportStageFailure(ctx context.Context, logger *slog.Logger, job *cairn.Job, path failurePathLabel, stage string, err error) error {
+	return p.reportFailureAtStage(ctx, logger, job, path, stage, err)
+}
+
+func (p *Processor) reportFailureAtStage(ctx context.Context, logger *slog.Logger, job *cairn.Job, path failurePathLabel, stage string, err error) error {
 	if ctx.Err() != nil {
 		logger.WarnContext(ctx, "enrichment interrupted", "error", ctx.Err())
 		return ctx.Err()
@@ -409,7 +417,19 @@ func (p *Processor) reportFailure(ctx context.Context, logger *slog.Logger, job 
 	// content is still missing. It is prefixed rather than suffixed because the
 	// Worker truncates the stored message.
 	message := prefixFailurePath(path, boundedError(err))
-	if reportErr := p.queue.Fail(ctx, job.ID, job.LeaseToken, message); reportErr != nil {
+	var reportErr error
+	if stage != "" {
+		var providerErr *enrich.ModelHTTPError
+		var retryAfter time.Duration
+		if errors.As(err, &providerErr) {
+			retryAfter = providerErr.RetryAfter
+		}
+		reportErr = p.stages.queue.FailSourceStage(ctx, job.ID, job.LeaseToken, stage, message,
+			retryAfter, enrich.IsRetryable(err))
+	} else {
+		reportErr = p.queue.Fail(ctx, job.ID, job.LeaseToken, message)
+	}
+	if reportErr != nil {
 		logger.ErrorContext(ctx, "failed to report enrichment failure", "error", reportErr)
 		return fmt.Errorf("report enrichment failure: %w", reportErr)
 	}

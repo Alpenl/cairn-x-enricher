@@ -54,6 +54,9 @@ type stageQueue struct {
 	admitErrAt               int
 	deferredStages           []string
 	deferContextErr          error
+	failedStage              string
+	failedStageTransient     bool
+	failedStageRetryAfter    time.Duration
 }
 
 func (q *stageQueue) AdmitSourceStage(context.Context, int64, string, string, time.Duration) error {
@@ -62,6 +65,13 @@ func (q *stageQueue) AdmitSourceStage(context.Context, int64, string, string, ti
 		return q.admitErr
 	}
 	return nil
+}
+func (q *stageQueue) FailSourceStage(ctx context.Context, id int64, leaseToken, stage string,
+	message string, retryAfter time.Duration, transient bool) error {
+	q.failedStage = stage
+	q.failedStageRetryAfter = retryAfter
+	q.failedStageTransient = transient
+	return q.Fail(ctx, id, leaseToken, message)
 }
 func (q *stageQueue) DeferSourceBudget(ctx context.Context, _ int64, _ string, stage string) error {
 	q.deferredStages = append(q.deferredStages, stage)
@@ -276,6 +286,7 @@ type stageReader struct {
 	transforms      int
 	fail            bool
 	fetchErr        error
+	transformErr    error
 	readingLanguage string
 	q               *stageQueue
 }
@@ -289,6 +300,9 @@ func (r *stageReader) FetchSource(context.Context, enrich.Input) (enrich.Source,
 }
 func (r *stageReader) Transform(_ context.Context, i enrich.Input) (enrich.Result, error) {
 	r.transforms++
+	if r.transformErr != nil {
+		return enrich.Result{}, r.transformErr
+	}
 	if r.q.source == nil {
 		return enrich.Result{}, errors.New("reading started before source persisted")
 	}
@@ -296,6 +310,33 @@ func (r *stageReader) Transform(_ context.Context, i enrich.Input) (enrich.Resul
 		return enrich.Result{}, errors.New("reading unavailable")
 	}
 	return enrich.Result{OriginalText: i.SourceText, OriginalLanguage: r.readingLanguage, Summary: "summary"}, nil
+}
+
+func TestProviderTransientIsReportedToOnlyItsSourceStage(t *testing.T) {
+	for _, stage := range []string{"fetch", "reading"} {
+		t.Run(stage, func(t *testing.T) {
+			q := &stageQueue{fakeQueue: newFakeQueue()}
+			reader := &stageReader{q: q}
+			providerErr := enrich.Classified(&enrich.ModelHTTPError{
+				StatusCode: 529, RetryAfter: 2 * time.Minute}, enrich.ErrorClassTransient)
+			if stage == "fetch" {
+				reader.fetchErr = providerErr
+			} else {
+				q.source = &enrich.Source{OriginalText: "saved original", RelatedLinks: []string{}}
+				reader.transformErr = providerErr
+			}
+			worker := NewStaged(q, reader, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+			job := &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", LeaseToken: "lease", Attempt: 1}
+			if err := worker.Process(context.Background(), job); !errors.Is(err, providerErr) {
+				t.Fatalf("source error = %v, want provider fault", err)
+			}
+			if q.failedStage != stage || !q.failedStageTransient ||
+				q.failedStageRetryAfter != 2*time.Minute || len(q.failures) != 1 {
+				t.Fatalf("stage=%q transient=%t retry=%s failures=%v",
+					q.failedStage, q.failedStageTransient, q.failedStageRetryAfter, q.failures)
+			}
+		})
+	}
 }
 
 func TestReadingCompletionPreservesSourceTextAndKnownLanguage(t *testing.T) {
