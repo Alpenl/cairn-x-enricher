@@ -170,7 +170,7 @@ type CurationUpdate struct {
 	Status           *string         `json:"curation_status,omitempty"`
 	Classification   json.RawMessage `json:"classification,omitempty"`
 	ExpectedRevision *int64          `json:"expected_revision,omitempty"`
-	OperationKey     string          `json:"operation_key,omitempty"`
+	OperationKey     *string         `json:"operation_key,omitempty"`
 }
 
 // APIError reports a stable error returned by the Cairn Share Worker. Revision

@@ -502,9 +502,9 @@ func (s *Server) updateCuration(writer http.ResponseWriter, request *http.Reques
 		writeError(writer, http.StatusBadRequest, "invalid_curation")
 		return
 	}
-	guardedConfirm := update.ExpectedRevision != nil || update.OperationKey != ""
+	guardedConfirm := update.ExpectedRevision != nil || update.OperationKey != nil
 	if guardedConfirm && (update.ExpectedRevision == nil || *update.ExpectedRevision < 0 ||
-		len(update.OperationKey) == 0 || len(update.OperationKey) > 200 ||
+		update.OperationKey == nil || len(*update.OperationKey) == 0 || len(*update.OperationKey) > 200 ||
 		update.Classification == nil || string(update.Classification) == "null" ||
 		update.Why != nil || update.Status != nil) {
 		writeError(writer, http.StatusBadRequest, "invalid_curation")

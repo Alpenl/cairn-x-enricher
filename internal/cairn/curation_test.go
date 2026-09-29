@@ -92,9 +92,10 @@ func TestUpdateCurationSendsPatchAndValidatesResponse(t *testing.T) {
 		t.Fatalf("detail = %+v", detail)
 	}
 	revision := int64(0)
+	operationKey := "confirm-11"
 	_, err = NewClient(server.URL, "token", server.Client()).UpdateCuration(context.Background(), 11,
 		CurationUpdate{Classification: json.RawMessage(`{"topics":["llm"],"form":"tool","use":"try"}`),
-			ExpectedRevision: &revision, OperationKey: "confirm-11"})
+			ExpectedRevision: &revision, OperationKey: &operationKey})
 	if err != nil || !strings.Contains(body, `"expected_revision":0`) ||
 		!strings.Contains(body, `"operation_key":"confirm-11"`) {
 		t.Fatalf("guarded confirmation was not forwarded: body=%s err=%v", body, err)

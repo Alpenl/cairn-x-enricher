@@ -607,6 +607,7 @@ func TestCurationValidatesEditsAndForwardsFacets(t *testing.T) {
 		{`{"classification":{"topics":["llm"],"form":"tool","use":"try"},"expected_revision":0,"operation_key":"confirm-7"}`, 200},
 		{`{"classification":null,"expected_revision":0,"operation_key":"bad-reset"}`, 400},
 		{`{"classification":{"topics":["llm"],"form":"tool","use":"try"},"expected_revision":0}`, 400},
+		{`{"classification":{"topics":["llm"],"form":"tool","use":"try"},"operation_key":""}`, 400},
 		{`{"why":"ok","classification":{"topics":["llm"],"form":"tool","use":"try"},"expected_revision":0,"operation_key":"bad-mixed"}`, 400},
 		{`{"classification":null}`, 200},
 		{`{"classification":{"topics":["invented"],"form":"tool","use":"try"}}`, 400},
@@ -634,7 +635,8 @@ func TestCurationValidatesEditsAndForwardsFacets(t *testing.T) {
 	guardedResponse := httptest.NewRecorder()
 	server.Handler().ServeHTTP(guardedResponse, guarded)
 	if guardedResponse.Code != http.StatusOK || backend.curation.ExpectedRevision == nil ||
-		*backend.curation.ExpectedRevision != 0 || backend.curation.OperationKey != "confirm-7" {
+		*backend.curation.ExpectedRevision != 0 || backend.curation.OperationKey == nil ||
+		*backend.curation.OperationKey != "confirm-7" {
 		t.Fatalf("guarded confirmation was not forwarded: status=%d update=%+v", guardedResponse.Code, backend.curation)
 	}
 	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/bookmarks?view=summary&curation_status=kept&topic=llm&form=tool&use=try&source=x&uncertain=true&since=2026-09-01T00:00:00Z", nil)
