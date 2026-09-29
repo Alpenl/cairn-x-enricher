@@ -111,6 +111,7 @@ run_case() {
 }
 
 run_case lifecycle TestLocalWorkerFullLifecycle
+run_case halfopen TestLocalWorkerHalfOpenClaimFaultsAndIndependentSource
 run_case sourcelease TestLocalWorkerSourceLeaseAdmission
 run_case refreshcheckpoint TestLocalWorkerRefreshCheckpointConsumesIntent
 run_case refreshcrash TestLocalWorkerRefreshCheckpointSurvivesProcessExit
