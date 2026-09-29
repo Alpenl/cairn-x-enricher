@@ -39,13 +39,81 @@ PY
 
 start_worker() {
   local name="$1" port="$2" work="$3"
+  local entry="$share_root/worker/src/index.ts"
   mkdir -p "$work"
   cp -r "$share_root/worker/migrations" "$work/migrations"
+  if [[ "$name" == completionrace* ]]; then
+    # A local-only entrypoint injects scheduling after the real Worker's final
+    # preflight. Production code and its deployed entrypoint remain untouched.
+    entry="$work/entry.ts"
+    cat > "$entry" <<EOF
+import worker from "$share_root/worker/src/index.ts";
+
+export default {
+  scheduled: worker.scheduled,
+  async fetch(request: Request, env: any): Promise<Response> {
+    const diagnostic = request.method === "GET" &&
+      new URL(request.url).pathname.match(/^\\/__test__\\/completion-race\\/(\\d+)$/);
+    if (diagnostic && request.headers.get("Authorization") === "Bearer " + env.CAIRN_ENRICHER_TOKEN) {
+      const id = Number(diagnostic[1]);
+      const [job, link, projection, runs, decisions, operations] = await Promise.all([
+        env.DB.prepare("SELECT status FROM classification_jobs WHERE link_id=?").bind(id).first(),
+        env.DB.prepare("SELECT classification FROM links WHERE id=?").bind(id).first(),
+        env.DB.prepare("SELECT effective FROM current_projections WHERE link_id=?").bind(id).first(),
+        env.DB.prepare("SELECT COUNT(*) AS n FROM classification_runs WHERE link_id=?").bind(id).first(),
+        env.DB.prepare("SELECT COUNT(*) AS n FROM classification_decisions WHERE link_id=?").bind(id).first(),
+        env.DB.prepare("SELECT COUNT(*) AS n FROM classification_operations WHERE link_id=?").bind(id).first()
+      ]);
+      return Response.json({ status: job?.status, classification: link?.classification,
+        projection: projection?.effective ?? null, runs: runs?.n, decisions: decisions?.n,
+        operations: operations?.n });
+    }
+    const match = request.method === "POST" &&
+      new URL(request.url).pathname.match(/^\\/api\\/enrichment\\/classifications\\/(\\d+)\\/complete$/);
+    const change = request.headers.get("X-Cairn-Test-Completion-Race");
+    if (!match || !["target", "content", "lease"].includes(change ?? ""))
+      return worker.fetch(request, env);
+    const id = Number(match[1]);
+    let batches = 0;
+    const db = new Proxy(env.DB, {
+      get(target, property) {
+        if (property === "batch") return async (statements: D1PreparedStatement[]) => {
+          batches++;
+          if (batches === 1) {
+            if (change === "content") {
+              await target.prepare("UPDATE links SET content_revision=content_revision+1 WHERE id=?").bind(id).run();
+            } else if (change === "lease") {
+              await target.prepare("UPDATE classification_jobs SET lease_until='2000-01-01' WHERE link_id=?").bind(id).run();
+            } else {
+              await target.batch([
+                target.prepare(\`INSERT INTO classification_targets
+                  (generation,spec_id,spec_hash,taxonomy_version,policy_version,requested_model,protocol,created_at,note)
+                  SELECT s.generation+1,t.spec_id,t.spec_hash,t.taxonomy_version,
+                    'r3-race',t.requested_model,t.protocol,
+                    strftime('%Y-%m-%dT%H:%M:%fZ','now'),'integration target race'
+                  FROM classification_target_state s JOIN classification_targets t ON t.generation=s.generation WHERE s.id=1\`),
+                target.prepare("UPDATE classification_target_state SET generation=generation+1,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=1")
+              ]);
+            }
+          }
+          return target.batch(statements);
+        };
+        const value = Reflect.get(target, property);
+        return typeof value === "function" ? value.bind(target) : value;
+      }
+    });
+    const response = await worker.fetch(request, { ...env, DB: db });
+    response.headers.set("X-Cairn-Test-Barrier-Batches", String(batches));
+    return response;
+  }
+};
+EOF
+  fi
   cat > "$work/wrangler.jsonc" <<EOF
 {
   "\$schema": "$share_root/worker/node_modules/wrangler/config-schema.json",
   "name": "cairn-share-$name",
-  "main": "$share_root/worker/src/index.ts",
+  "main": "$entry",
   "compatibility_date": "2026-08-26",
   "d1_databases": [
     { "binding": "DB", "database_name": "cairn-share-$name", "database_id": "$name" }
@@ -103,6 +171,7 @@ run_case() {
     CAIRN_WORKER_URL="http://127.0.0.1:$port" \
     CAIRN_WRANGLER_CONFIG="$work/wrangler.jsonc" \
     CAIRN_SHARE_ROOT="$share_root" \
+    CAIRN_RACE_CHANGE="${name#completionrace}" \
     CAIRN_APP_TOKEN=app \
     CAIRN_ENRICHER_TOKEN=internal \
     go test ./tests/localintegration/ -run "$test_name" -count=1 -v
@@ -111,6 +180,9 @@ run_case() {
 }
 
 run_case lifecycle TestLocalWorkerFullLifecycle
+run_case completionracecontent TestLocalWorkerCompletionPreflightRace
+run_case completionracelease TestLocalWorkerCompletionPreflightRace
+run_case completionracetarget TestLocalWorkerCompletionPreflightRace
 run_case halfopen TestLocalWorkerHalfOpenClaimFaultsAndIndependentSource
 run_case retryafter TestLocalWorkerProviderRetryHintSurvivesProcessorRestart
 run_case sourcelease TestLocalWorkerSourceLeaseAdmission

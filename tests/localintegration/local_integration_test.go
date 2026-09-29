@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -382,6 +383,148 @@ func TestLocalWorkerFullLifecycle(t *testing.T) {
 		t.Fatal("deletion caused a model call")
 	}
 	t.Log("HTTP deletion and exact retry removed a real source/classification/replay/human-curation history; actual Go reads cannot recover the deleted source or runs; zero deletion model calls")
+}
+
+// The request comes from the real Go classifier/client through HTTP. A
+// temporary local Worker entrypoint moves the D1 identity immediately after
+// the Worker's last preflight read and before its completion batch. This joins
+// the Go recovery path and the actual Worker/D1 atomicity path in one test.
+func TestLocalWorkerCompletionPreflightRace(t *testing.T) {
+	base := workerURL(t)
+	change := os.Getenv("CAIRN_RACE_CHANGE")
+	if change != "content" && change != "lease" && change != "target" {
+		t.Fatal("CAIRN_RACE_CHANGE must be content, lease or target")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	appToken := envOr("CAIRN_APP_TOKEN", "app")
+	enricherToken := envOr("CAIRN_ENRICHER_TOKEN", "internal")
+	catalog := taxonomy.Catalog{
+		Version: "2026-09-20.1",
+		Topics: []taxonomy.Term{
+			{ID: "llm", Label: "LLM", Description: "大语言模型", Active: true},
+			{ID: "eval", Label: "评估", Description: "模型评估", Active: true},
+		},
+		Forms:            []taxonomy.Term{{ID: "method", Label: "方法", Description: "方法", Active: true}},
+		Uses:             []taxonomy.Term{{ID: "try", Label: "待试", Description: "待试", Active: true}},
+		ContentFunctions: []taxonomy.Term{{ID: "method", Label: "方法", Description: "方法", Active: true}},
+		Carriers:         []taxonomy.Term{{ID: "single_post", Label: "单帖", Description: "单帖", Active: true}},
+		Affordances:      []taxonomy.Term{{ID: "practice", Label: "可实践", Description: "可实践", Active: true}},
+	}
+	provider := providerContractServer(t, mustSpec(t, catalog))
+	defer provider.Close()
+	var modelCalls atomic.Int64
+	providerHTTP := provider.Client()
+	providerTransport := providerHTTP.Transport
+	providerHTTP.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		modelCalls.Add(1)
+		return providerTransport.RoundTrip(request)
+	})
+	classifier, err := classify.NewClient(provider.URL, "local-key", "jev-latest", providerHTTP, catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	queue := cairn.NewClient(base, enricherToken, &http.Client{Timeout: 30 * time.Second})
+	id := createLink(t, base, appToken)
+	lease := claimEnrichmentJob(t, base, enricherToken, id)
+	source := enrich.Source{OriginalText: "A practical guide to evaluating large language models.",
+		OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "local-fetch"}
+	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
+		t.Fatalf("save source: %v", err)
+	}
+	if err := queue.SubmitEvidence(ctx, id, processor.EvidenceSnapshot(source, time.Now())); err != nil {
+		t.Fatalf("submit evidence: %v", err)
+	}
+	if err := queue.PutQuestionSpec(ctx, classifier.Spec()); err != nil {
+		t.Fatalf("register question spec: %v", err)
+	}
+	switchTarget(t, base, enricherToken, classifier)
+	job, err := queue.ClaimClassification(ctx, classifier.SpecID(), catalog.Version, "jev-latest")
+	if err != nil || job == nil {
+		t.Fatalf("claim classification: job=%+v err=%v", job, err)
+	}
+	type raceState struct {
+		Status         string  `json:"status"`
+		Classification *string `json:"classification"`
+		Projection     *string `json:"projection"`
+		Runs           int     `json:"runs"`
+		Decisions      int     `json:"decisions"`
+		Operations     int     `json:"operations"`
+	}
+	readState := func() raceState {
+		request, _ := http.NewRequestWithContext(ctx, http.MethodGet,
+			fmt.Sprintf("%s/__test__/completion-race/%d", base, id), nil)
+		request.Header.Set("Authorization", "Bearer "+enricherToken)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatalf("read local D1 race state: %v", err)
+		}
+		defer func() { _ = response.Body.Close() }()
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("read local D1 race state status = %d", response.StatusCode)
+		}
+		var state raceState
+		if err := json.NewDecoder(response.Body).Decode(&state); err != nil {
+			t.Fatalf("decode local D1 race state: %v", err)
+		}
+		return state
+	}
+	baseline := readState()
+	if baseline.Status != "processing" || baseline.Runs != 0 || baseline.Decisions != 0 || baseline.Operations != 0 {
+		t.Fatalf("unexpected pre-completion D1 state: %+v", baseline)
+	}
+	result, err := classifier.Classify(ctx, job.Input)
+	if err != nil {
+		t.Fatalf("classify: %v", err)
+	}
+	var barrierBatches string
+	var completionCalls int
+	raceHTTP := &http.Client{Timeout: 30 * time.Second, Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/complete") {
+			completionCalls++
+			if completionCalls == 1 {
+				request.Header.Set("X-Cairn-Test-Completion-Race", change)
+			}
+		}
+		response, err := http.DefaultTransport.RoundTrip(request)
+		if err == nil && request.Header.Get("X-Cairn-Test-Completion-Race") != "" {
+			barrierBatches = response.Header.Get("X-Cairn-Test-Barrier-Batches")
+		}
+		return response, err
+	})}
+	raceQueue := cairn.NewClient(base, enricherToken, raceHTTP)
+	err = raceQueue.CompleteClassification(ctx, job, result)
+	var apiErr *cairn.APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusConflict || apiErr.Code == "already_completed" {
+		t.Fatalf("completion after %s race = %v, want non-success conflict", change, err)
+	}
+	if completionCalls != 1 || barrierBatches != "1" || modelCalls.Load() != 1 {
+		t.Fatalf("race barrier: completion calls=%d batches=%q model calls=%d", completionCalls, barrierBatches, modelCalls.Load())
+	}
+	// A retry of the exact same operation must still conflict. A forged
+	// success receipt would turn this into a 200 even though the lease lost.
+	err = raceQueue.CompleteClassification(ctx, job, result)
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusConflict || apiErr.Code == "already_completed" {
+		t.Fatalf("same-operation retry after %s race = %v", change, err)
+	}
+	if completionCalls != 2 || modelCalls.Load() != 1 {
+		t.Fatalf("replay caused work: completion calls=%d model calls=%d", completionCalls, modelCalls.Load())
+	}
+	state := readState()
+	if state.Status != "processing" || state.Classification != nil ||
+		state.Runs != 0 || state.Decisions != 0 || state.Operations != 0 ||
+		(state.Projection == nil) != (baseline.Projection == nil) ||
+		(state.Projection != nil && *state.Projection != *baseline.Projection) {
+		t.Fatalf("%s race left a successful D1 side effect: before=%+v after=%+v", change, baseline, state)
+	}
+	runs, err := queue.GetRuns(ctx, id)
+	if err != nil || len(runs) != 0 {
+		t.Fatalf("stale completion left runs=%d err=%v", len(runs), err)
+	}
+	decision, err := queue.GetLatestDecision(ctx, id)
+	if err != nil || decision != nil {
+		t.Fatalf("stale completion left decision=%+v err=%v", decision, err)
+	}
 }
 
 // TestLocalWorkerVersionCompetition is the real SC01/SC02 regression: after a
