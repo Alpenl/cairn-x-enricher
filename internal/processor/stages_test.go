@@ -492,6 +492,28 @@ func TestStaleClassificationIsNotAJobFailure(t *testing.T) {
 	}
 }
 
+func TestProviderOverloadStopsBatchBeforeDrainingQueuedLeases(t *testing.T) {
+	q := &stageQueue{fakeQueue: newFakeQueue(), jobPool: 5}
+	overload := enrich.ClassifyModelError(&enrich.ModelHTTPError{StatusCode: 529})
+	p := NewStaged(q, nil, classifiedClassifier{err: overload}, "v1", "jev", discardLogger(), 1)
+	now := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
+	p.stages.pause.now = func() time.Time { return now }
+	done, failed, err := p.RunClassifications(context.Background(), 5)
+	if !errors.Is(err, ErrComponentPaused) || done != 0 || failed != 1 || q.claims != 1 || q.classificationFailures != 1 {
+		t.Fatalf("overload drained queue: done=%d failed=%d claims=%d reports=%d err=%v", done, failed, q.claims, q.classificationFailures, err)
+	}
+	_, _, _ = p.RunClassifications(context.Background(), 5)
+	if q.claims != 1 {
+		t.Fatalf("backoff claimed %d jobs, want one", q.claims)
+	}
+	now = now.Add(time.Minute)
+	p.stages.classifier = stageClassifier{}
+	done, failed, err = p.RunClassifications(context.Background(), 5)
+	if err != nil || done != 1 || failed != 0 || q.claims != 2 || !p.stages.pause.isHealthy() {
+		t.Fatalf("half-open recovery: done=%d failed=%d claims=%d err=%v", done, failed, q.claims, err)
+	}
+}
+
 func TestAlreadyCompletedDoesNotConfirmThisOperation(t *testing.T) {
 	q := &stageQueue{fakeQueue: newFakeQueue(), job: &cairn.ClassificationJob{ID: 1}}
 	q.completeErr = enrich.Classified(errors.New("already completed"), enrich.ErrorClassCompleted)

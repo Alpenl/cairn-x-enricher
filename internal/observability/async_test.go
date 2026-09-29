@@ -195,7 +195,7 @@ func TestAsyncLoggerOnlyExportsSafeFieldsAndErrorClasses(t *testing.T) {
 	}
 	got := output.String()
 	for _, want := range []string{`"component":"source"`, `"msg":"application_event"`,
-		`"error_code":"unknown"`, `"error_code":"worker_http_409_stale"`,
+		`"error_code":"unknown"`, `"error_code":"worker_http_409_contract"`,
 		`"error_code":"provider_http_502"`} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("safe field %s missing: %s", want, got)

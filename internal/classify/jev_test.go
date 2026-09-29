@@ -383,7 +383,8 @@ func TestClassifyClassifiesProviderFailuresByStatus(t *testing.T) {
 		{http.StatusUnprocessableEntity, enrich.ErrorClassContract},
 		{http.StatusTooManyRequests, enrich.ErrorClassTransient},
 		{http.StatusServiceUnavailable, enrich.ErrorClassTransient},
-		{http.StatusConflict, enrich.ErrorClassStale},
+		{529, enrich.ErrorClassTransient},
+		{http.StatusConflict, enrich.ErrorClassContract},
 	}
 	for _, testCase := range cases {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

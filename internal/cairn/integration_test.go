@@ -219,6 +219,11 @@ func TestAPIErrorClassificationIsExhaustive(t *testing.T) {
 			t.Errorf("%s = %s, want %s", code, got, want)
 		}
 	}
+	for _, status := range []int{http.StatusInternalServerError, 529, 599} {
+		if got := enrich.ClassOf(&APIError{StatusCode: status}); got != enrich.ErrorClassTransient {
+			t.Errorf("HTTP %d = %s, want transient", status, got)
+		}
+	}
 }
 
 // TestNoOperationKeyStillCommitsForLegacyConsumers keeps old clients working.
@@ -241,11 +246,11 @@ func TestNoOperationKeyStillCommitsForLegacyConsumers(t *testing.T) {
 	}
 }
 
-// TestStaleDetectionUsesTypedClassNotStatusAlone ensures a bare 409 is not
-// silently treated as success.
+// TestStaleDetectionUsesTypedClassNotStatusAlone ensures a bare 409 cannot
+// masquerade as a superseded input or a successful replay.
 func TestStaleDetectionUsesTypedClassNotStatusAlone(t *testing.T) {
-	if enrich.ClassOf(&APIError{StatusCode: http.StatusConflict}) != enrich.ErrorClassStale {
-		t.Fatal("a bare 409 must be stale")
+	if enrich.ClassOf(&APIError{StatusCode: http.StatusConflict}) != enrich.ErrorClassContract {
+		t.Fatal("a bare 409 must require contract investigation")
 	}
 	if !errors.Is(ErrV2Unsupported, ErrV2Unsupported) {
 		t.Fatal("sentinel must be comparable")

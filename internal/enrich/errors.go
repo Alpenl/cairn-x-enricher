@@ -1,6 +1,7 @@
 package enrich
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/http"
@@ -80,6 +81,9 @@ func ClassOf(err error) ErrorClass {
 	if errors.As(err, &classified) {
 		return classified.Class
 	}
+	if errors.Is(err, context.Canceled) {
+		return ErrorClassStale
+	}
 	// Errors from other packages can classify themselves without this package
 	// importing them (the Cairn API client returns typed Worker codes).
 	var self interface{ Class() ErrorClass }
@@ -104,9 +108,9 @@ func IsRetryable(err error) bool { return ClassOf(err) == ErrorClassTransient }
 // changed target rather than a model or source failure.
 func IsStale(err error) bool { return ClassOf(err) == ErrorClassStale }
 
-// ClassifyModelError converts a provider HTTP failure into a class. The mapping
-// is explicit per status instead of a single "5xx means retry" rule because a
-// 409 has several meanings and a 400/401/422 must not consume every attempt.
+// ClassifyModelError converts a provider HTTP failure into a class. All 5xx
+// responses are transient, including the provider's documented 529 overload;
+// 409 and the client-error statuses require separate handling.
 func ClassifyModelError(err error) error {
 	if err == nil {
 		return nil
@@ -117,20 +121,26 @@ func ClassifyModelError(err error) error {
 	}
 	var modelErr *ModelHTTPError
 	if errors.As(err, &modelErr) {
+		if modelErr.StatusCode >= http.StatusInternalServerError && modelErr.StatusCode <= 599 {
+			return classify(ErrorClassTransient, err)
+		}
 		switch modelErr.StatusCode {
 		case http.StatusUnauthorized, http.StatusForbidden, http.StatusPaymentRequired:
 			return classify(ErrorClassConfiguration, err)
 		case http.StatusBadRequest, http.StatusUnprocessableEntity, http.StatusUnsupportedMediaType:
 			return classify(ErrorClassContract, err)
 		case http.StatusConflict:
-			return classify(ErrorClassStale, err)
-		case http.StatusRequestTimeout, http.StatusTooManyRequests,
-			http.StatusInternalServerError, http.StatusBadGateway,
-			http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+			// The provider does not document a stale-input meaning for 409.
+			// Without a typed reason it cannot release a leased job as superseded.
+			return classify(ErrorClassContract, err)
+		case http.StatusRequestTimeout, http.StatusTooManyRequests:
 			return classify(ErrorClassTransient, err)
 		default:
 			return classify(ErrorClassUnknown, err)
 		}
+	}
+	if errors.Is(err, context.Canceled) {
+		return classify(ErrorClassStale, err)
 	}
 	var netErr net.Error
 	if errors.As(err, &netErr) || errors.Is(err, net.ErrClosed) || isTransportMessage(err) {

@@ -62,12 +62,11 @@ func TestIsContractFailureSeesWrappedErrors(t *testing.T) {
 	}
 }
 
-// A stale/conflict response and a rejected internal token must be distinguished:
-// the conflict is a superseded job (do not drop readiness), the rejected token
-// is a configuration fault (drop readiness).
+// A typed stale conflict and an undocumented model conflict have different
+// meanings. Only the typed lease conflict proves that the job was superseded.
 func TestIsContractFailureDistinguishesStaleFromMisconfiguration(t *testing.T) {
-	if isContractFailure(&enrich.ModelHTTPError{StatusCode: http.StatusConflict}) {
-		t.Error("a model conflict must not be treated as a contract failure")
+	if !isContractFailure(&enrich.ModelHTTPError{StatusCode: http.StatusConflict}) {
+		t.Error("an undocumented model conflict must be treated as a contract failure")
 	}
 	if isContractFailure(&cairn.APIError{StatusCode: http.StatusConflict, Code: "lease_conflict"}) {
 		t.Error("a lease conflict must not be treated as a contract failure")

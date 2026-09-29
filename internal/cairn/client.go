@@ -224,15 +224,19 @@ func (e *APIError) Class() enrich.ErrorClass {
 	case "operation_conflict", "spec_conflict", "spec_hash_mismatch", "invalid_override", "invalid_automatic", "run_spec_mismatch", "run_model_mismatch", "run_not_succeeded", "unknown_run":
 		return enrich.ErrorClassContract
 	}
+	if e.StatusCode >= http.StatusInternalServerError && e.StatusCode <= 599 {
+		return enrich.ErrorClassTransient
+	}
 	switch e.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden, http.StatusPaymentRequired:
 		return enrich.ErrorClassConfiguration
 	case http.StatusBadRequest, http.StatusUnprocessableEntity, http.StatusUnsupportedMediaType:
 		return enrich.ErrorClassContract
 	case http.StatusConflict:
-		return enrich.ErrorClassStale
-	case http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusInternalServerError,
-		http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		// A bare 409 has no proof that this job was superseded. Typed Worker
+		// reason codes above decide whether the conflict is stale or fatal.
+		return enrich.ErrorClassContract
+	case http.StatusRequestTimeout, http.StatusTooManyRequests:
 		return enrich.ErrorClassTransient
 	default:
 		return enrich.ErrorClassUnknown

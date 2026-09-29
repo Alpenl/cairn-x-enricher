@@ -131,9 +131,9 @@ func TestAPIErrorClassMapping(t *testing.T) {
 			t.Errorf("APIError{%s}.Class() = %s, want %s", testCase.code, got, testCase.class)
 		}
 	}
-	// A bare 409 without a typed code must not be silently treated as success.
-	if got := enrich.ClassOf(&APIError{StatusCode: http.StatusConflict}); got != enrich.ErrorClassStale {
-		t.Errorf("bare 409 class = %s, want stale", got)
+	// A bare 409 cannot prove that the input or lease became stale.
+	if got := enrich.ClassOf(&APIError{StatusCode: http.StatusConflict}); got != enrich.ErrorClassContract {
+		t.Errorf("bare 409 class = %s, want contract", got)
 	}
 	// 401 is a configuration problem, not a transient retry.
 	if got := enrich.ClassOf(&APIError{StatusCode: http.StatusUnauthorized}); got != enrich.ErrorClassConfiguration {

@@ -1,6 +1,7 @@
 package enrich
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/http"
@@ -21,13 +22,15 @@ func TestModelErrorClassificationSeparatesOperatorResponses(t *testing.T) {
 		{http.StatusPaymentRequired, ErrorClassConfiguration},
 		{http.StatusBadRequest, ErrorClassContract},
 		{http.StatusUnprocessableEntity, ErrorClassContract},
-		{http.StatusConflict, ErrorClassStale},
+		{http.StatusConflict, ErrorClassContract},
 		{http.StatusRequestTimeout, ErrorClassTransient},
 		{http.StatusTooManyRequests, ErrorClassTransient},
 		{http.StatusInternalServerError, ErrorClassTransient},
 		{http.StatusBadGateway, ErrorClassTransient},
 		{http.StatusServiceUnavailable, ErrorClassTransient},
 		{http.StatusGatewayTimeout, ErrorClassTransient},
+		{529, ErrorClassTransient}, // TypeSafe's documented overloaded response.
+		{599, ErrorClassTransient},
 	}
 	for _, testCase := range cases {
 		err := ClassifyModelError(&ModelHTTPError{StatusCode: testCase.status})
@@ -52,10 +55,10 @@ func TestConfigurationAndContractPauseTheComponent(t *testing.T) {
 	}
 }
 
-func TestStaleIsNotAJobFailure(t *testing.T) {
+func TestUndocumentedProviderConflictCannotReleaseAJobAsStale(t *testing.T) {
 	err := ClassifyModelError(&ModelHTTPError{StatusCode: http.StatusConflict})
-	if !IsStale(err) || IsRetryable(err) {
-		t.Fatalf("conflict class = %q, retryable=%v", ClassOf(err), IsRetryable(err))
+	if ClassOf(err) != ErrorClassContract || IsStale(err) || IsRetryable(err) {
+		t.Fatalf("conflict class = %q, stale=%v retryable=%v", ClassOf(err), IsStale(err), IsRetryable(err))
 	}
 }
 
@@ -65,5 +68,19 @@ func TestTransportFaultsAreTransient(t *testing.T) {
 	}
 	if !IsRetryable(ClassifyModelError(errors.New("Post \"https://api\": server closed connection"))) {
 		t.Fatal("closed connection must be transient")
+	}
+}
+
+func TestCanceledWorkIsStaleButTimeoutIsTransient(t *testing.T) {
+	for _, err := range []error{context.Canceled, errors.Join(errors.New("provider stopped"), context.Canceled)} {
+		if got := ClassOf(err); got != ErrorClassStale {
+			t.Errorf("canceled work class = %s, want stale", got)
+		}
+		if got := ClassOf(ClassifyModelError(err)); got != ErrorClassStale {
+			t.Errorf("canceled model call class = %s, want stale", got)
+		}
+	}
+	if got := ClassOf(ClassifyModelError(context.DeadlineExceeded)); got != ErrorClassTransient {
+		t.Errorf("timed out model call class = %s, want transient", got)
 	}
 }

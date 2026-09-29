@@ -600,8 +600,10 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		// about to succeed, but the deadline stops an unbounded drain.
 		workCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.classificationDeadline)
 		var result classify.Result
+		providerAttempted := false
 		err = p.attachBoundEvidence(workCtx, job)
 		if err == nil {
+			providerAttempted = true
 			result, err = p.classifyJob(workCtx, job)
 		}
 		if err != nil {
@@ -628,6 +630,13 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 				settleProbe(false, err.Error())
 				return completed, failed, fmt.Errorf("%w: %w", ErrComponentPaused, err)
 			}
+			// A rate limit, overload or provider transport fault must stop this
+			// batch. Otherwise a single 529 could consume every queued lease and
+			// its budget before the next scheduler tick.
+			providerTransient := providerAttempted && enrich.IsRetryable(err)
+			if providerTransient {
+				settleProbe(false, boundedError(err))
+			}
 			failed++
 			reportCtx, stopReport := boundedStateReportContext(ctx)
 			reportErr := s.queue.FailClassification(reportCtx, job, boundedError(err))
@@ -636,6 +645,9 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 				return completed, failed, errors.Join(err, reportErr)
 			}
 			p.logger.WarnContext(ctx, "classification failed; source retained", "link_id", job.ID, "error", err)
+			if providerTransient {
+				return completed, failed, fmt.Errorf("%w: %w", ErrComponentPaused, err)
+			}
 			continue
 		}
 		// The model stage succeeded: only now may the breaker clear.

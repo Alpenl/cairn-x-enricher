@@ -117,6 +117,9 @@ func TestLocalWorkerHalfOpenClaimFaultsAndIndependentSource(t *testing.T) {
 	if err := firstQueue.PutQuestionSpec(ctx, classifier.Spec()); err != nil {
 		t.Fatal(err)
 	}
+	if err := secondQueue.PutQuestionSpec(ctx, classifier.Spec()); err != nil {
+		t.Fatal(err)
+	}
 	switchTarget(t, base, token, classifier)
 
 	// The first saved source stays eligible for classification while its source
@@ -141,13 +144,16 @@ func TestLocalWorkerHalfOpenClaimFaultsAndIndependentSource(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	first := processor.NewStaged(firstQueue, reader, classifier, catalog.Version, "jev-latest", logger, 1)
 	second := processor.NewStaged(secondQueue, nil, classifier, catalog.Version, "jev-latest", logger, 1)
+	var initialFaults []error
 	for _, p := range []*processor.Processor{first, second} {
 		if _, _, err := p.RunClassifications(ctx, 5); !errors.Is(err, processor.ErrComponentPaused) {
 			t.Fatalf("HTTP 401 did not pause classification: %v", err)
+		} else {
+			initialFaults = append(initialFaults, err)
 		}
 	}
 	if firstFault.count() != 1 || secondFault.count() != 1 || modelCalls.Load() != 0 {
-		t.Fatalf("initial fault consumed work: claims=%d/%d model=%d", firstFault.count(), secondFault.count(), modelCalls.Load())
+		t.Fatalf("initial fault consumed work: claims=%d/%d model=%d errors=%v", firstFault.count(), secondFault.count(), modelCalls.Load(), initialFaults)
 	}
 	for _, p := range []*processor.Processor{first, second} {
 		if _, _, err := p.RunClassifications(ctx, 5); !errors.Is(err, processor.ErrComponentPaused) {
