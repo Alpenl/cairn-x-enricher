@@ -38,6 +38,9 @@ type Job struct {
 	// refresh. The processor must then fetch the source instead of reusing the
 	// stored snapshot (R2-06).
 	RefreshEpoch int64 `json:"refresh_epoch,omitempty"`
+	// SourceComponent is returned only to consumers that declare the staged
+	// source gate capability. It is fixed when the lease is acquired.
+	SourceComponent string `json:"source_component,omitempty"`
 }
 
 // Completion is the validated enrichment payload written back to Cairn Share.
@@ -275,6 +278,35 @@ func (c *Client) Claim(ctx context.Context) (*Job, error) {
 	return decodeClaimResponse(response)
 }
 
+// ClaimAllowed excludes an instance's locally paused paid stage before the
+// Worker takes a lease. Other instances may still claim that stage.
+func (c *Client) ClaimAllowed(ctx context.Context, source, reading bool) (*Job, error) {
+	if !source && !reading {
+		return nil, nil
+	}
+	mask := "both"
+	if !source {
+		mask = "reading"
+	} else if !reading {
+		mask = "source"
+	}
+	response, err := c.doWithHeaders(ctx, http.MethodPost, "/api/enrichment/jobs/claim", nil,
+		map[string]string{"X-Cairn-Source-Stage-Pause": "1", "X-Cairn-Source-Stage-Mask": mask})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	job, err := decodeClaimResponse(response)
+	if err != nil || job == nil {
+		return job, err
+	}
+	if job.SourceComponent != "source" && job.SourceComponent != "reading" ||
+		job.SourceComponent == "source" && !source || job.SourceComponent == "reading" && !reading {
+		return nil, errors.New("source claim returned an excluded or unknown component")
+	}
+	return job, nil
+}
+
 // ClaimByID atomically leases a selected X bookmark for a manual run.
 func (c *Client) ClaimByID(ctx context.Context, id int64) (*Job, error) {
 	if id < 1 {
@@ -310,6 +342,7 @@ func (c *Client) VerifySourceLeaseCapability(ctx context.Context) error {
 		ProviderAttemptLedger bool `json:"provider_attempt_ledger"`
 		RefreshCheckpoint     bool `json:"refresh_source_checkpoint"`
 		SourceComponentGate   bool `json:"source_component_gate"`
+		SourceStagePause      bool `json:"source_stage_pause"`
 	}
 	if err := decodeJSON(response.Body, &capability); err != nil {
 		return fmt.Errorf("decode source lease capability: %w", err)
@@ -317,7 +350,7 @@ func (c *Client) VerifySourceLeaseCapability(ctx context.Context) error {
 	if capability.Protocol != 1 || capability.LeaseMS != int((15*time.Minute).Milliseconds()) ||
 		!capability.PaidStageAdmission || !capability.ProviderResultGuard || !capability.CompletionReplay ||
 		!capability.ProviderAttemptLedger || !capability.RefreshCheckpoint ||
-		!capability.SourceComponentGate {
+		!capability.SourceComponentGate || !capability.SourceStagePause {
 		return errors.New("source lease admission protocol is incompatible")
 	}
 	return nil
@@ -726,6 +759,11 @@ func (c *Client) FailSourceStage(ctx context.Context, id int64, leaseToken, stag
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body any) (*http.Response, error) {
+	return c.doWithHeaders(ctx, method, path, body, nil)
+}
+
+func (c *Client) doWithHeaders(ctx context.Context, method, path string, body any,
+	extraHeaders map[string]string) (*http.Response, error) {
 	var reader io.Reader
 	if body != nil {
 		payload, err := json.Marshal(body)
@@ -749,7 +787,8 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 	if path == "/api/enrichment/source-claimable" {
 		request.Header.Set("X-Cairn-Source-Component-Gate", "1")
 	}
-	if strings.HasSuffix(path, "/lease-admit") || strings.HasSuffix(path, "/budget-defer") {
+	if strings.HasSuffix(path, "/lease-admit") || strings.HasSuffix(path, "/budget-defer") ||
+		strings.HasSuffix(path, "/local-defer") {
 		request.Header.Set("X-Cairn-Provider-Attempt-Ledger", "1")
 	}
 	if strings.HasPrefix(path, "/api/enrichment/classifications/") {
@@ -761,6 +800,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 	request.Header.Set("Accept", "application/json")
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
+	}
+	for name, value := range extraHeaders {
+		request.Header.Set(name, value)
 	}
 
 	response, err := c.httpClient.Do(request)

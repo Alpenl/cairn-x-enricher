@@ -28,6 +28,7 @@ type StageQueue interface {
 	AdmitSourceStage(context.Context, int64, string, string, time.Duration) error
 	FailSourceStage(context.Context, int64, string, string, string, time.Duration, bool) error
 	DeferSourceBudget(context.Context, int64, string, string) error
+	DeferSourceStage(context.Context, int64, string, string) error
 	GetSource(context.Context, int64) (*enrich.Source, error)
 	SaveSource(context.Context, int64, string, enrich.Source) error
 	ClaimClassification(context.Context, string, string, string) (*cairn.ClassificationJob, error)
@@ -86,6 +87,8 @@ type stages struct {
 	classificationDeadline time.Duration
 	paidStageTimeout       time.Duration
 	pause                  *componentPause
+	sourcePause            *componentPause
+	readingPause           *componentPause
 	// extensions is optional. When absent every extension stays off and the
 	// pipeline is identical to the default.
 	extensions  *extension.Service
@@ -115,6 +118,8 @@ type componentPause struct {
 	failures int
 	// probing is set while one half-open probe owns the recovery attempt.
 	probing bool
+	// epoch prevents an older successful probe from clearing a newer fault.
+	epoch uint64
 }
 
 const (
@@ -132,20 +137,64 @@ func newComponentPause() *componentPause {
 // a configuration fault cannot be probed by draining the business queue
 // (R2-09).
 func (p *componentPause) beginProbe() (allowed, halfOpen bool, remaining time.Duration) {
+	allowed, halfOpen, _, remaining = p.beginStageProbe()
+	return allowed, halfOpen, remaining
+}
+
+func (p *componentPause) beginStageProbe() (allowed, halfOpen bool, epoch uint64, remaining time.Duration) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.until.IsZero() {
-		return true, false, 0
+		return true, false, p.epoch, 0
 	}
 	if remaining := p.until.Sub(p.now()); remaining > 0 {
-		return false, false, remaining
+		return false, false, p.epoch, remaining
 	}
 	if p.probing {
 		// Another caller owns the single probe for this window.
-		return false, false, pauseBaseBackoff
+		return false, false, p.epoch, pauseBaseBackoff
 	}
 	p.probing = true
-	return true, true, 0
+	return true, true, p.epoch, 0
+}
+
+func (p *componentPause) releaseStageProbe(epoch uint64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.epoch == epoch && p.probing {
+		p.probing = false
+	}
+}
+
+func (p *componentPause) currentStageProbe(epoch uint64) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.epoch == epoch && p.probing
+}
+
+func (p *componentPause) finishStageProbe(epoch uint64, success bool, reason string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.epoch != epoch || !p.probing {
+		return
+	}
+	if success {
+		p.epoch++
+		p.until = time.Time{}
+		p.reason = ""
+		p.failures = 0
+		p.probing = false
+		return
+	}
+	p.tripLocked(reason, 0)
+}
+
+func (p *componentPause) tripStage(reason string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.until.IsZero() || p.probing {
+		p.tripLocked(reason, 0)
+	}
 }
 
 // endProbe records the probe outcome. Only a success clears the breaker; a
@@ -180,6 +229,7 @@ func (p *componentPause) tripWithHint(reason string, hint time.Duration) {
 }
 
 func (p *componentPause) tripLocked(reason string, hint time.Duration) {
+	p.epoch++
 	p.probing = false
 	p.failures++
 	backoff := pauseBaseBackoff << min(p.failures-1, 8)
@@ -235,6 +285,30 @@ func (p *Processor) ClassificationPaused() (bool, string, time.Duration) {
 	return p.stages.pause.state()
 }
 
+// SourceStagePaused reports this process's provider configuration/contract
+// pause. Other instances keep their own state and can continue claiming.
+func (p *Processor) SourceStagePaused(stage string) (bool, string, time.Duration) {
+	if p.stages == nil {
+		return false, "", 0
+	}
+	pause := p.stages.pauseFor(stage)
+	if pause == nil {
+		return false, "", 0
+	}
+	return pause.state()
+}
+
+func (s *stages) pauseFor(stage string) *componentPause {
+	switch stage {
+	case "source", "fetch":
+		return s.sourcePause
+	case "reading":
+		return s.readingPause
+	default:
+		return nil
+	}
+}
+
 // isHealthy reports whether the breaker is currently closed.
 func (p *componentPause) isHealthy() bool {
 	p.mu.Lock()
@@ -277,7 +351,7 @@ func NewStaged(queue StageQueue, reader SourceReader, classifier Classifier, ver
 	p := New(queue, nil, logger, concurrency)
 	p.stages = &stages{queue: queue, reader: reader, classifier: classifier, version: version, model: model,
 		classificationDeadline: DefaultClassificationDeadline, paidStageTimeout: defaultPaidStageTimeout,
-		pause: newComponentPause()}
+		pause: newComponentPause(), sourcePause: newComponentPause(), readingPause: newComponentPause()}
 	return p
 }
 
@@ -289,7 +363,22 @@ func (p *Processor) SetPaidStageTimeout(timeout time.Duration) {
 	}
 }
 
-func (p *Processor) admitPaidStage(ctx context.Context, job *cairn.Job, stage string) error {
+func (p *Processor) admitPaidStage(ctx context.Context, job *cairn.Job, stage string,
+	probe *sourceStageProbe) error {
+	pause := p.stages.pauseFor(stage)
+	paused, _, _ := pause.state()
+	component := stage
+	if component == "fetch" {
+		component = "source"
+	}
+	if paused && (probe == nil || probe.stage != component || !pause.currentStageProbe(probe.epoch)) {
+		reportCtx, cancel := boundedStateReportContext(ctx)
+		defer cancel()
+		if err := p.stages.queue.DeferSourceStage(reportCtx, job.ID, job.LeaseToken, stage); err != nil {
+			return fmt.Errorf("defer locally paused %s stage: %w", stage, err)
+		}
+		return ErrJobDeferred
+	}
 	err := p.stages.queue.AdmitSourceStage(ctx, job.ID, job.LeaseToken, stage,
 		p.stages.paidStageTimeout+paidStageCommitMargin)
 	if err == nil {
@@ -332,7 +421,7 @@ func (p *Processor) deferSourceGate(ctx context.Context, job *cairn.Job, stage s
 	}
 	reportCtx, cancel := boundedStateReportContext(ctx)
 	defer cancel()
-	return errors.Is(p.admitPaidStage(reportCtx, job, stage), ErrJobDeferred)
+	return errors.Is(p.admitPaidStage(reportCtx, job, stage, nil), ErrJobDeferred)
 }
 
 // SetPartialReuse enables the opt-in partial re-evaluation.
@@ -362,7 +451,8 @@ func (p *Processor) SetExtensions(service *extension.Service, fetcher *http.Clie
 	p.stages.fetchPolicy = policy
 }
 
-func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual string) error {
+func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual string,
+	probe *sourceStageProbe) error {
 	s := p.stages
 	logger := p.logger.With("link_id", job.ID, "attempt", job.Attempt)
 	input := enrich.Input{ID: job.ID, URL: job.URL, Note: job.Note, Attempt: job.Attempt,
@@ -373,7 +463,7 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 	// An explicit refresh intent bypasses both reuse paths: the operator asked
 	// for a real fetch, not for the stored snapshot (R2-06).
 	if manual == "" && job.RefreshEpoch > 0 {
-		if err := p.admitPaidStage(ctx, job, "fetch"); err != nil {
+		if err := p.admitPaidStage(ctx, job, "fetch", probe); err != nil {
 			return err
 		}
 		fetched, fetchErr := s.reader.FetchSource(ctx, input)
@@ -400,6 +490,7 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 			// lost. Only the Worker can consume the refresh intent on success.
 			return p.reportFailure(ctx, logger, job, failurePathSearch, err)
 		}
+		probe.succeed("source")
 		if err = p.persistSourceEvidence(ctx, job.ID, *source); err != nil {
 			// The refreshed source is durable already. A failed snapshot write
 			// must not turn that successful refresh into a failed fetch.
@@ -408,7 +499,7 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 		// The Worker source checkpoint clears this refresh intent atomically.
 		// A separate success ack could lose its response after the source commit.
 		logger.InfoContext(ctx, "source refreshed; classification queued")
-		return p.finishReading(ctx, job, *source, nil)
+		return p.finishReading(ctx, job, *source, nil, probe)
 	}
 	// Explicit manual text replaces a snapshot. Ordinary reruns reuse it.
 	if manual == "" {
@@ -432,7 +523,7 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 				if err = p.saveSourceWithEvidence(ctx, job, *source); err != nil {
 					return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
 				}
-				return p.finishReading(ctx, job, *source, detail.Images)
+				return p.finishReading(ctx, job, *source, detail.Images, probe)
 			}
 		}
 	}
@@ -441,7 +532,7 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 		// under the current lease without a provider attempt, then reading gets
 		// its own paid admission and permit below.
 		if manual == "" {
-			if err := p.admitPaidStage(ctx, job, "fetch"); err != nil {
+			if err := p.admitPaidStage(ctx, job, "fetch", probe); err != nil {
 				return err
 			}
 		}
@@ -459,11 +550,14 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 		if err = p.saveSourceWithEvidence(ctx, job, *source); err != nil {
 			return p.reportFailure(ctx, logger, job, failurePathSearch, err)
 		}
+		if manual == "" {
+			probe.succeed("source")
+		}
 		logger.InfoContext(ctx, "source saved; classification queued")
 	} else if err = p.ensureSourceEvidence(ctx, job.ID, *source); err != nil {
 		return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
 	}
-	return p.finishReading(ctx, job, *source, nil)
+	return p.finishReading(ctx, job, *source, nil, probe)
 }
 
 // saveSourceWithEvidence persists the source and then its immutable objective
@@ -533,7 +627,8 @@ func EvidenceSnapshot(source enrich.Source, now time.Time) map[string]any {
 	}
 }
 
-func (p *Processor) finishReading(ctx context.Context, job *cairn.Job, source enrich.Source, images []cairn.ImageRef) error {
+func (p *Processor) finishReading(ctx context.Context, job *cairn.Job, source enrich.Source,
+	images []cairn.ImageRef, probe *sourceStageProbe) error {
 	logger := p.logger.With("link_id", job.ID, "stage", "reading")
 	// Source persistence may have advanced the content revision after claim.
 	// Bind the paid reading attempt to the current authoritative revision.
@@ -564,7 +659,7 @@ func (p *Processor) finishReading(ctx context.Context, job *cairn.Job, source en
 			return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
 		}
 	}
-	if err := p.admitPaidStage(ctx, job, "reading"); err != nil {
+	if err := p.admitPaidStage(ctx, job, "reading", probe); err != nil {
 		return err
 	}
 	result, err := p.stages.reader.Transform(ctx, enrich.Input{ID: job.ID, URL: job.URL, Note: job.Note,
@@ -591,6 +686,7 @@ func (p *Processor) finishReading(ctx context.Context, job *cairn.Job, source en
 	if err != nil {
 		return fmt.Errorf("save reading aids: %w", err)
 	}
+	probe.succeed("reading")
 	return nil
 }
 

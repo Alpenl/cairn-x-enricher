@@ -78,6 +78,11 @@ func (q *stageQueue) DeferSourceBudget(ctx context.Context, _ int64, _ string, s
 	q.deferContextErr = ctx.Err()
 	return nil
 }
+func (q *stageQueue) DeferSourceStage(ctx context.Context, _ int64, _ string, stage string) error {
+	q.deferredStages = append(q.deferredStages, stage)
+	q.deferContextErr = ctx.Err()
+	return nil
+}
 
 func (q *stageQueue) GetSource(context.Context, int64) (*enrich.Source, error) { return q.source, nil }
 func (q *stageQueue) SaveSource(_ context.Context, id int64, _ string, s enrich.Source) error {

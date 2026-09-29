@@ -393,9 +393,16 @@ func runSourceScheduler(ctx context.Context, worker *processor.Processor, tracke
 		stats, err := runSourceSweepSafely(ctx, worker, cfg, logger)
 		tracker.Record(stats, err)
 		if err != nil && isContractFailure(err) {
-			tracker.MarkComponentDegraded("source", err.Error())
+			tracker.MarkComponentDegraded("source_runtime", err.Error())
 		} else if err == nil && stats.Completed > 0 {
-			tracker.MarkComponentRecovered("source")
+			tracker.MarkComponentRecovered("source_runtime")
+		}
+		for _, stage := range []string{"source", "reading"} {
+			if paused, reason, _ := worker.SourceStagePaused(stage); paused {
+				tracker.MarkComponentDegraded(stage, reason)
+			} else {
+				tracker.MarkComponentRecovered(stage)
+			}
 		}
 		attributes := []any{"stage", "source", "claimed", stats.Claimed, "completed", stats.Completed, "failed", stats.Failed, "duration_ms", stats.Duration.Milliseconds()}
 		if err != nil {

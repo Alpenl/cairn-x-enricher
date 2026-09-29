@@ -176,6 +176,34 @@ func (c *Client) DeferSourceBudget(ctx context.Context, id int64, leaseToken, st
 	return nil
 }
 
+// DeferSourceStage returns an unused stage lease after this process pauses its
+// provider configuration. Another instance may claim it immediately.
+func (c *Client) DeferSourceStage(ctx context.Context, id int64, leaseToken, stage string) error {
+	if id < 1 || leaseToken == "" || (stage != "fetch" && stage != "reading") {
+		return errors.New("invalid local source stage deferral")
+	}
+	response, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/enrichment/jobs/%d/local-defer", id),
+		map[string]string{"lease_token": leaseToken, "stage": stage})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return apiError(response)
+	}
+	var receipt struct {
+		ID     int64  `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := decodeJSON(response.Body, &receipt); err != nil {
+		return fmt.Errorf("decode local source stage deferral: %w", err)
+	}
+	if receipt.ID != id || receipt.Status != "deferred" {
+		return errors.New("local source stage deferral receipt is invalid")
+	}
+	return nil
+}
+
 // ReserveProviderAttempt returns true only for the one call allowed to send a
 // provider POST. Replaying a lost Worker response can never grant it again.
 func (c *Client) ReserveProviderAttempt(ctx context.Context, attempt enrich.ProviderAttempt) (bool, error) {

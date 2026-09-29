@@ -1,0 +1,11 @@
+# B02-T07: instance-local source and reading pauses
+
+The scheduler now checks its own source and reading configuration pauses before claiming a Worker lease. A source contract/configuration fault pauses only this Go process's source stage; stored-source reading remains available. The reverse also holds. An expired backoff permits one half-open stage probe; a successful source checkpoint or reading completion closes only that stage's pause. An older probe cannot erase a newer fault. A recovered worker panic extends the pause instead of leaving it permanently half-open.
+
+The Worker candidate query applies the stage mask before leasing. The mask and `source_component` claim field require the new `X-Cairn-Source-Stage-Pause` opt-in, preserving strict old-client claim responses during a Worker-first rollout. Startup requires the Worker's `source_stage_pause` capability. When another goroutine pauses a stage after a lease was claimed, Go asks Worker to release an unused stage lease. Worker refuses this release if its paid-attempt ledger contains a reservation for that stage, including an unresolved one. A previous paid source stage keeps its attempt count.
+
+The Worker also refuses to turn a transient fault reported before any matching provider reservation into a shared supplier outage. It releases the unused lease, refunds an unspent attempt, and reports `provider_attempt_missing`; Go stops that round on the contract error.
+
+Validation: `make verify` with the current Node and Go toolchains; `go test` covering stage isolation, one-probe recovery, old-probe fencing, recovered panic and old-Worker capability rejection; Worker stage-claim/lease tests and TypeScript checking. A real local Go→Worker/D1 integration confirms the faulty Go instance keeps reading while a healthy instance claims waiting source work. No paid supplier request or remote migration was made.
+
+Remaining limits: pauses live in each Go process, so a restart can make one new failing attempt before rediscovery. A fault already in flight on another goroutine may reach paid admission before that goroutine observes the pause. A paid reservation is never silently released. Production observation, fault-rate evidence across repeated restarts, and the full B02-T07/SC acceptance remain open.

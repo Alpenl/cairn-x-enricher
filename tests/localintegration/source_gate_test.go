@@ -18,6 +18,13 @@ import (
 )
 
 type localTransientSourceReader struct{ localSourceReader }
+type localContractSourceReader struct{ localSourceReader }
+
+func (r *localContractSourceReader) FetchSource(context.Context, enrich.Input) (enrich.Source, error) {
+	r.fetches++
+	return enrich.Source{}, enrich.Classified(errors.New("fixture source contract rejected"),
+		enrich.ErrorClassContract)
+}
 
 func (r *localTransientSourceReader) FetchSource(ctx context.Context, input enrich.Input) (enrich.Source, error) {
 	r.fetches++
@@ -89,5 +96,63 @@ func TestLocalWorkerSourceGateKeepsReadingAvailable(t *testing.T) {
 	waiting, err := queue.GetBookmark(ctx, waitingID)
 	if err != nil || waiting.Attempts != 0 {
 		t.Fatalf("source fault consumed a waiting attempt: %+v %v", waiting, err)
+	}
+}
+
+func TestLocalWorkerInstanceStagePauseDoesNotBlockHealthyInstance(t *testing.T) {
+	base := workerURL(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	queue := cairn.NewClient(base, envOr("CAIRN_ENRICHER_TOKEN", "internal"),
+		&http.Client{Timeout: 10 * time.Second})
+	if err := queue.VerifySourceLeaseCapability(ctx); err != nil {
+		t.Fatal(err)
+	}
+	firstID := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
+	first, err := queue.Claim(ctx)
+	if err != nil || first == nil || first.ID != firstID {
+		t.Fatalf("initial source claim = %+v, %v", first, err)
+	}
+	badReader := &localContractSourceReader{localSourceReader{queue: queue}}
+	bad := processor.NewStaged(queue, badReader, nil, "", "",
+		slog.New(slog.NewJSONHandler(io.Discard, nil)), 1)
+	bad.SetPaidStageTimeout(10 * time.Second)
+	if err := bad.Process(ctx, first); !enrich.PausesComponent(err) || badReader.fetches != 1 {
+		t.Fatalf("contract fixture did not pause local source: fetches=%d err=%v", badReader.fetches, err)
+	}
+	if paused, _, _ := bad.SourceStagePaused("source"); !paused {
+		t.Fatal("source stage is not paused after contract fault")
+	}
+	waitingID := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
+	readingID := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
+	detail, err := queue.GetBookmark(ctx, readingID)
+	if err != nil || detail.CacheIdentity == nil {
+		t.Fatalf("manual reading revision = %+v, %v", detail.CacheIdentity, err)
+	}
+	if _, err := queue.SaveManualSource(ctx, readingID, fmt.Sprintf("local-stage-%d", readingID),
+		detail.CacheIdentity.ContentRevision, "Already stored source for reading"); err != nil {
+		t.Fatal(err)
+	}
+	stats, err := bad.RunSources(ctx, 3)
+	if err != nil || stats.Completed != 1 || stats.Claimed != 1 || badReader.fetches != 1 ||
+		badReader.transforms != 1 {
+		t.Fatalf("paused source blocked reading: %+v fetches=%d transforms=%d err=%v",
+			stats, badReader.fetches, badReader.transforms, err)
+	}
+	waiting, err := queue.GetBookmark(ctx, waitingID)
+	if err != nil || waiting.Attempts != 0 {
+		t.Fatalf("bad instance consumed waiting source: %+v %v", waiting, err)
+	}
+	goodReader := &localSourceReader{queue: queue}
+	good := processor.NewStaged(queue, goodReader, nil, "", "",
+		slog.New(slog.NewJSONHandler(io.Discard, nil)), 1)
+	good.SetPaidStageTimeout(10 * time.Second)
+	stats, err = good.RunSources(ctx, 1)
+	if err != nil || stats.Completed != 1 || goodReader.fetches != 1 || goodReader.transforms != 1 {
+		t.Fatalf("healthy instance could not fetch: %+v fetches=%d transforms=%d err=%v",
+			stats, goodReader.fetches, goodReader.transforms, err)
+	}
+	if paused, _, _ := bad.SourceStagePaused("source"); !paused {
+		t.Fatal("another instance's success cleared a local configuration fault")
 	}
 }

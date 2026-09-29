@@ -22,6 +22,45 @@ const maxFailureMessageBytes = 1_800
 // The durable job remains pending and this claim is neither success nor failure.
 var ErrJobDeferred = errors.New("source job deferred")
 
+type localStageFault struct {
+	stage string
+	cause error
+}
+
+func (e *localStageFault) Error() string { return e.cause.Error() }
+func (e *localStageFault) Unwrap() error { return e.cause }
+
+type sourceStageProbe struct {
+	stage string
+	epoch uint64
+	gate  *componentPause
+	done  bool
+}
+
+func (p *sourceStageProbe) succeed(stage string) {
+	if p == nil || p.done || p.stage != stage {
+		return
+	}
+	p.gate.finishStageProbe(p.epoch, true, "")
+	p.done = true
+}
+
+func (p *sourceStageProbe) release() {
+	if p == nil || p.done {
+		return
+	}
+	p.gate.releaseStageProbe(p.epoch)
+	p.done = true
+}
+
+func (p *sourceStageProbe) fail(err error) {
+	if p == nil || p.done {
+		return
+	}
+	p.gate.finishStageProbe(p.epoch, false, boundedError(err))
+	p.done = true
+}
+
 // Queue leases work and conditionally stores outcomes.
 type Queue interface {
 	Claim(context.Context) (*cairn.Job, error)
@@ -29,6 +68,10 @@ type Queue interface {
 	StoreImages(context.Context, int64, string, []string) ([]cairn.ImageRef, error)
 	Complete(context.Context, int64, cairn.Completion) error
 	Fail(context.Context, int64, string, string) error
+}
+
+type sourceStageClaimer interface {
+	ClaimAllowed(context.Context, bool, bool) (*cairn.Job, error)
 }
 
 // Stats summarizes one bounded processing batch.
@@ -94,6 +137,11 @@ func (p *Processor) ProcessWithSource(ctx context.Context, job *cairn.Job, sourc
 
 // processLeasedJob runs while the caller owns one execution slot.
 func (p *Processor) processLeasedJob(ctx context.Context, job *cairn.Job, sourceText string) error {
+	return p.processLeasedJobWithProbe(ctx, job, sourceText, nil)
+}
+
+func (p *Processor) processLeasedJobWithProbe(ctx context.Context, job *cairn.Job,
+	sourceText string, probe *sourceStageProbe) error {
 	// Already-claimed work may outlive the batch cancellation, but never its
 	// lease or a fixed per-job bound. Paid-stage admission separately reserves
 	// the commit margin; the final Worker write may use the remaining lease.
@@ -115,7 +163,7 @@ func (p *Processor) processLeasedJob(ctx context.Context, job *cairn.Job, source
 	}
 	workCtx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
-	return p.processJob(workCtx, job, sourceText)
+	return p.processJobWithProbe(workCtx, job, sourceText, probe)
 }
 
 // Worker source leases last 15 minutes. This also bounds malformed older
@@ -250,9 +298,37 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 					if p.claimTimeout > 0 {
 						requestCtx, stopRequest = context.WithTimeout(claimCtx, p.claimTimeout)
 					}
-					job, err := p.queue.Claim(requestCtx)
+					sourceAllowed, readingAllowed := true, true
+					var sourceHalf, readingHalf bool
+					var sourceEpoch, readingEpoch uint64
+					if p.stages != nil {
+						sourceAllowed, sourceHalf, sourceEpoch, _ = p.stages.sourcePause.beginStageProbe()
+						readingAllowed, readingHalf, readingEpoch, _ = p.stages.readingPause.beginStageProbe()
+					}
+					releaseUnclaimed := func() {
+						if sourceHalf {
+							p.stages.sourcePause.releaseStageProbe(sourceEpoch)
+						}
+						if readingHalf {
+							p.stages.readingPause.releaseStageProbe(readingEpoch)
+						}
+					}
+					if !sourceAllowed && !readingAllowed {
+						stopRequest()
+						return false
+					}
+					var job *cairn.Job
+					var err error
+					if staged, ok := p.queue.(sourceStageClaimer); ok {
+						job, err = staged.ClaimAllowed(requestCtx, sourceAllowed, readingAllowed)
+					} else if sourceAllowed && readingAllowed && !sourceHalf && !readingHalf {
+						job, err = p.queue.Claim(requestCtx)
+					} else {
+						err = errors.New("source queue does not support stage-filtered claims")
+					}
 					stopRequest()
 					if err != nil {
+						releaseUnclaimed()
 						if claimCtx.Err() != nil {
 							return false
 						}
@@ -260,16 +336,52 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 						return false
 					}
 					if job == nil {
+						releaseUnclaimed()
 						return false
 					}
+					var probe *sourceStageProbe
+					if sourceHalf {
+						if job.SourceComponent == "source" {
+							probe = &sourceStageProbe{stage: "source", epoch: sourceEpoch, gate: p.stages.sourcePause}
+						} else {
+							p.stages.sourcePause.releaseStageProbe(sourceEpoch)
+						}
+					}
+					if readingHalf {
+						if job.SourceComponent == "reading" {
+							probe = &sourceStageProbe{stage: "reading", epoch: readingEpoch, gate: p.stages.readingPause}
+						} else {
+							p.stages.readingPause.releaseStageProbe(readingEpoch)
+						}
+					}
+					// The outer worker recovers panics. Unwind this claim's probe first
+					// so a recovered worker cannot strand its half-open stage forever.
+					defer func() {
+						if probe != nil && !probe.done {
+							probe.fail(errors.New("source stage probe interrupted"))
+						}
+					}()
 					claimed.Add(1)
 					// Already-claimed work may finish after batch cancellation,
 					// within its own lease and per-job deadline.
-					if err := p.processLeasedJob(workCtx, job, ""); err != nil {
+					err = p.processLeasedJobWithProbe(workCtx, job, "", probe)
+					if probe != nil && !probe.done {
+						if err == nil || errors.Is(err, ErrJobDeferred) || enrich.IsStale(err) ||
+							enrich.ClassOf(err) == enrich.ErrorClassBudget {
+							probe.release()
+						} else {
+							probe.fail(err)
+						}
+					}
+					if err != nil {
 						if errors.Is(err, ErrJobDeferred) {
 							return true
 						}
 						failed.Add(1)
+						var stageFault *localStageFault
+						if errors.As(err, &stageFault) {
+							return true
+						}
 						if sourceComponentFailure(err) {
 							recordFatal(fmt.Errorf("source component paused: %w", err))
 							return false
@@ -306,9 +418,10 @@ func sourceComponentFailure(err error) bool {
 	return errors.As(err, &apiErr) && !enrich.IsStale(err) && apiErr.Class() != enrich.ErrorClassCompleted
 }
 
-func (p *Processor) processJob(ctx context.Context, job *cairn.Job, sourceText string) error {
+func (p *Processor) processJobWithProbe(ctx context.Context, job *cairn.Job,
+	sourceText string, probe *sourceStageProbe) error {
 	if p.stages != nil {
-		return p.processStages(ctx, job, strings.TrimSpace(sourceText))
+		return p.processStages(ctx, job, strings.TrimSpace(sourceText), probe)
 	}
 	logger := p.logger.With("link_id", job.ID, "attempt", job.Attempt)
 	logger.InfoContext(ctx, "enrichment started")
@@ -434,6 +547,15 @@ func (p *Processor) reportFailureAtStage(ctx context.Context, logger *slog.Logge
 		return fmt.Errorf("report enrichment failure: %w", reportErr)
 	}
 	logger.WarnContext(ctx, "enrichment failed", "error", message)
+	if stage != "" && p.stages != nil {
+		class := enrich.ClassOf(err)
+		var apiErr *cairn.APIError
+		if (class == enrich.ErrorClassConfiguration || class == enrich.ErrorClassContract) &&
+			!errors.As(err, &apiErr) {
+			p.stages.pauseFor(stage).tripStage(boundedError(err))
+			return &localStageFault{stage: stage, cause: err}
+		}
+	}
 	return err
 }
 
