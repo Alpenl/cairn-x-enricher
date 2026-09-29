@@ -1,13 +1,17 @@
 package processor
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
+	"github.com/Alpenl/cairn-x-enricher/internal/observability"
 )
 
 type localPauseQueue struct {
@@ -52,7 +56,9 @@ func TestLocalSourceContractPauseSkipsOnlySourceAndRecoversOnOneProbe(t *testing
 	q := &localPauseQueue{stageQueue: base, storedID: 2, storedSource: base.source}
 	providerFault := enrich.Classified(errors.New("bad source schema"), enrich.ErrorClassContract)
 	reader := &stageReader{q: base, fetchErr: providerFault}
-	p := NewStaged(q, reader, nil, "", "", discardLogger(), 1)
+	var logs bytes.Buffer
+	p := NewStaged(q, reader, nil, "", "",
+		slog.New(observability.SafeJSONHandler(&logs, slog.LevelDebug)), 1)
 	now := time.Date(2026, 9, 29, 1, 0, 0, 0, time.UTC)
 	p.stages.sourcePause.now = func() time.Time { return now }
 	stats, err := p.RunSources(context.Background(), 3)
@@ -66,6 +72,11 @@ func TestLocalSourceContractPauseSkipsOnlySourceAndRecoversOnOneProbe(t *testing
 	}
 	if paused, _, _ := p.SourceStagePaused("reading"); paused {
 		t.Fatal("source contract fault paused reading")
+	}
+	if !strings.Contains(logs.String(), `"event_name":"local_stage_paused"`) ||
+		!strings.Contains(logs.String(), `"event_name":"claim_skipped_local_pause"`) ||
+		strings.Contains(logs.String(), "bad source schema") {
+		t.Fatalf("stage event is missing or exported a private error: %s", logs.String())
 	}
 	base.jobs = append(base.jobs,
 		&cairn.Job{ID: 3, URL: url, LeaseToken: "source-3", Attempt: 1, SourceComponent: "source"})
@@ -86,6 +97,10 @@ func TestLocalSourceContractPauseSkipsOnlySourceAndRecoversOnOneProbe(t *testing
 	if paused, _, _ := p.SourceStagePaused("source"); paused {
 		t.Fatal("successful source checkpoint did not close the local probe")
 	}
+	if !strings.Contains(logs.String(), `"event_name":"stage_probe_started"`) ||
+		!strings.Contains(logs.String(), `"event_name":"stage_probe_succeeded"`) {
+		t.Fatalf("probe lifecycle events are missing: %s", logs.String())
+	}
 }
 
 func TestNewerLocalFaultCannotBeClearedByOldProbe(t *testing.T) {
@@ -99,9 +114,29 @@ func TestNewerLocalFaultCannotBeClearedByOldProbe(t *testing.T) {
 		t.Fatal("stage did not offer a bounded half-open probe")
 	}
 	pause.tripStage("newer contract fault")
-	pause.finishStageProbe(epoch, true, "")
+	probe := &sourceStageProbe{stage: "source", epoch: epoch, gate: pause}
+	probe.succeed("source")
+	if probe.outcome != "stage_probe_superseded" {
+		t.Fatalf("old probe outcome = %q", probe.outcome)
+	}
 	if paused, reason, _ := pause.state(); !paused || reason != "newer contract fault" {
 		t.Fatalf("old probe cleared newer fault: paused=%t reason=%q", paused, reason)
+	}
+}
+
+func TestLocalConfigurationPauseSurvivesFailureReportOutage(t *testing.T) {
+	job := &cairn.Job{ID: 7, URL: "https://x.com/u/status/7", LeaseToken: "lease-7",
+		Attempt: 1, SourceComponent: "source"}
+	q := &stageQueue{fakeQueue: newFakeQueue(job)}
+	q.failErr = errors.New("worker failure report unavailable")
+	reader := &stageReader{q: q, fetchErr: enrich.Classified(errors.New("private provider response"),
+		enrich.ErrorClassConfiguration)}
+	p := NewStaged(q, reader, nil, "", "", discardLogger(), 1)
+	if err := p.Process(context.Background(), job); err == nil {
+		t.Fatal("failure report outage was hidden")
+	}
+	if paused, _, _ := p.SourceStagePaused("source"); !paused {
+		t.Fatal("local configuration pause was lost with the failure report")
 	}
 }
 
@@ -110,7 +145,9 @@ func TestRecoveredWorkerPanicReleasesLocalStageProbe(t *testing.T) {
 		URL: "https://x.com/u/status/panic", LeaseToken: "source-9", Attempt: 1,
 		SourceComponent: "source"})}
 	q := &localPauseQueue{stageQueue: base}
-	p := NewStaged(q, &panickingSourceReader{&stageReader{q: base}}, nil, "", "", discardLogger(), 1)
+	var logs bytes.Buffer
+	p := NewStaged(q, &panickingSourceReader{&stageReader{q: base}}, nil, "", "",
+		slog.New(observability.SafeJSONHandler(&logs, slog.LevelDebug)), 1)
 	now := time.Date(2026, 9, 29, 3, 0, 0, 0, time.UTC)
 	p.stages.sourcePause.now = func() time.Time { return now }
 	p.stages.sourcePause.tripStage("original fault")
@@ -124,6 +161,9 @@ func TestRecoveredWorkerPanicReleasesLocalStageProbe(t *testing.T) {
 	}
 	if p.stages.sourcePause.probing {
 		t.Fatal("recovered worker stranded the half-open stage probe")
+	}
+	if !strings.Contains(logs.String(), `"event_name":"stage_probe_failed"`) {
+		t.Fatalf("recovered panic has no failed probe event: %s", logs.String())
 	}
 }
 

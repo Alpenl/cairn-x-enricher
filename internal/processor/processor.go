@@ -31,26 +31,37 @@ func (e *localStageFault) Error() string { return e.cause.Error() }
 func (e *localStageFault) Unwrap() error { return e.cause }
 
 type sourceStageProbe struct {
-	stage string
-	epoch uint64
-	gate  *componentPause
-	done  bool
+	stage   string
+	epoch   uint64
+	gate    *componentPause
+	done    bool
+	outcome string
 }
 
 func (p *sourceStageProbe) succeed(stage string) {
 	if p == nil || p.done || p.stage != stage {
 		return
 	}
-	p.gate.finishStageProbe(p.epoch, true, "")
+	applied := p.gate.finishStageProbe(p.epoch, true, "")
 	p.done = true
+	if applied {
+		p.outcome = "stage_probe_succeeded"
+	} else {
+		p.outcome = "stage_probe_superseded"
+	}
 }
 
 func (p *sourceStageProbe) release() {
 	if p == nil || p.done {
 		return
 	}
-	p.gate.releaseStageProbe(p.epoch)
+	applied := p.gate.releaseStageProbe(p.epoch)
 	p.done = true
+	if applied {
+		p.outcome = "stage_probe_released"
+	} else {
+		p.outcome = "stage_probe_superseded"
+	}
 }
 
 func (p *sourceStageProbe) fail(err error) {
@@ -59,6 +70,7 @@ func (p *sourceStageProbe) fail(err error) {
 	}
 	p.gate.finishStageProbe(p.epoch, false, boundedError(err))
 	p.done = true
+	p.outcome = "stage_probe_failed"
 }
 
 // Queue leases work and conditionally stores outcomes.
@@ -248,6 +260,8 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 	var completed atomic.Int64
 	var failed atomic.Int64
 	var claimSlots atomic.Int64
+	var sourceSkipLogged atomic.Bool
+	var readingSkipLogged atomic.Bool
 	var firstErr error
 	var errOnce sync.Once
 	var workers sync.WaitGroup
@@ -304,6 +318,14 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 					if p.stages != nil {
 						sourceAllowed, sourceHalf, sourceEpoch, _ = p.stages.sourcePause.beginStageProbe()
 						readingAllowed, readingHalf, readingEpoch, _ = p.stages.readingPause.beginStageProbe()
+						if !sourceAllowed && sourceSkipLogged.CompareAndSwap(false, true) {
+							p.logger.InfoContext(claimCtx, "source stage event",
+								"event_name", "claim_skipped_local_pause", "stage", "source")
+						}
+						if !readingAllowed && readingSkipLogged.CompareAndSwap(false, true) {
+							p.logger.InfoContext(claimCtx, "source stage event",
+								"event_name", "claim_skipped_local_pause", "stage", "reading")
+						}
 					}
 					releaseUnclaimed := func() {
 						if sourceHalf {
@@ -354,11 +376,19 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 							p.stages.readingPause.releaseStageProbe(readingEpoch)
 						}
 					}
+					if probe != nil {
+						p.logger.InfoContext(workCtx, "source stage event",
+							"event_name", "stage_probe_started", "stage", probe.stage)
+					}
 					// The outer worker recovers panics. Unwind this claim's probe first
 					// so a recovered worker cannot strand its half-open stage forever.
 					defer func() {
 						if probe != nil && !probe.done {
 							probe.fail(errors.New("source stage probe interrupted"))
+						}
+						if probe != nil {
+							p.logger.InfoContext(workCtx, "source stage event",
+								"event_name", probe.outcome, "stage", probe.stage)
 						}
 					}()
 					claimed.Add(1)
@@ -530,6 +560,25 @@ func (p *Processor) reportFailureAtStage(ctx context.Context, logger *slog.Logge
 	// content is still missing. It is prefixed rather than suffixed because the
 	// Worker truncates the stored message.
 	message := prefixFailurePath(path, boundedError(err))
+	var localFault bool
+	if stage != "" && p.stages != nil {
+		class := enrich.ClassOf(err)
+		var apiErr *cairn.APIError
+		if (class == enrich.ErrorClassConfiguration || class == enrich.ErrorClassContract) &&
+			!errors.As(err, &apiErr) {
+			localFault = true
+			pause := p.stages.pauseFor(stage)
+			if pause.tripStage(boundedError(err)) {
+				_, _, remaining := pause.state()
+				component := stage
+				if component == "fetch" {
+					component = "source"
+				}
+				p.logger.WarnContext(ctx, "source stage event", "event_name", "local_stage_paused",
+					"stage", component, "error_class", string(class), "backoff_ms", remaining.Milliseconds())
+			}
+		}
+	}
 	var reportErr error
 	if stage != "" {
 		var providerErr *enrich.ModelHTTPError
@@ -547,14 +596,8 @@ func (p *Processor) reportFailureAtStage(ctx context.Context, logger *slog.Logge
 		return fmt.Errorf("report enrichment failure: %w", reportErr)
 	}
 	logger.WarnContext(ctx, "enrichment failed", "error", message)
-	if stage != "" && p.stages != nil {
-		class := enrich.ClassOf(err)
-		var apiErr *cairn.APIError
-		if (class == enrich.ErrorClassConfiguration || class == enrich.ErrorClassContract) &&
-			!errors.As(err, &apiErr) {
-			p.stages.pauseFor(stage).tripStage(boundedError(err))
-			return &localStageFault{stage: stage, cause: err}
-		}
+	if localFault {
+		return &localStageFault{stage: stage, cause: err}
 	}
 	return err
 }

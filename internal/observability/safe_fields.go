@@ -67,6 +67,7 @@ var numericLogFields = map[string]bool{
 	"schema_version": true, "provider_http_status": true,
 	"input_tokens": true, "output_tokens": true, "total_tokens": true,
 	"x_search_calls": true, "cost_usd_ticks": true,
+	"backoff_ms": true,
 }
 
 // stdout may be copied to a backend that cannot delete one bookmark's
@@ -93,7 +94,7 @@ func safeLogMessage(message string) string {
 		"draining manual jobs", "shutdown drain timed out; unfinished jobs keep their lease and will be retried",
 		"get image returned unsafe content type", "truncated image response", "stream image response",
 		"manual request rejected", "manual source save rejected", "manual source persisted",
-		"manual enrichment failed", "manual enrichment completed":
+		"manual enrichment failed", "manual enrichment completed", "source stage event":
 		return message
 	default:
 		return "application_event"
@@ -134,7 +135,11 @@ func safeLogDimension(key, value string) bool {
 	case "event_name":
 		return oneOf(value, "provider_attempt_reserved", "provider_attempt_denied",
 			"provider_attempt_dispatching", "provider_response_headers_received",
-			"provider_attempt_responded", "provider_attempt_unknown")
+			"provider_attempt_responded", "provider_attempt_unknown",
+			"local_stage_paused", "stage_probe_started", "stage_probe_succeeded",
+			"stage_probe_failed", "stage_probe_released", "stage_probe_superseded",
+			"claim_skipped_local_pause",
+			"local_defer_succeeded", "local_defer_failed")
 	case "provider_variant":
 		return oneOf(value, "fetch_thread", "fetch_post", "reading", "canary")
 	case "provider_reason":

@@ -158,12 +158,14 @@ func (p *componentPause) beginStageProbe() (allowed, halfOpen bool, epoch uint64
 	return true, true, p.epoch, 0
 }
 
-func (p *componentPause) releaseStageProbe(epoch uint64) {
+func (p *componentPause) releaseStageProbe(epoch uint64) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.epoch == epoch && p.probing {
 		p.probing = false
+		return true
 	}
+	return false
 }
 
 func (p *componentPause) currentStageProbe(epoch uint64) bool {
@@ -172,11 +174,11 @@ func (p *componentPause) currentStageProbe(epoch uint64) bool {
 	return p.epoch == epoch && p.probing
 }
 
-func (p *componentPause) finishStageProbe(epoch uint64, success bool, reason string) {
+func (p *componentPause) finishStageProbe(epoch uint64, success bool, reason string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.epoch != epoch || !p.probing {
-		return
+		return false
 	}
 	if success {
 		p.epoch++
@@ -184,17 +186,20 @@ func (p *componentPause) finishStageProbe(epoch uint64, success bool, reason str
 		p.reason = ""
 		p.failures = 0
 		p.probing = false
-		return
+		return true
 	}
 	p.tripLocked(reason, 0)
+	return true
 }
 
-func (p *componentPause) tripStage(reason string) {
+func (p *componentPause) tripStage(reason string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.until.IsZero() || p.probing {
 		p.tripLocked(reason, 0)
+		return true
 	}
+	return false
 }
 
 // endProbe records the probe outcome. Only a success clears the breaker; a
@@ -375,8 +380,12 @@ func (p *Processor) admitPaidStage(ctx context.Context, job *cairn.Job, stage st
 		reportCtx, cancel := boundedStateReportContext(ctx)
 		defer cancel()
 		if err := p.stages.queue.DeferSourceStage(reportCtx, job.ID, job.LeaseToken, stage); err != nil {
+			p.logger.WarnContext(ctx, "source stage event", "event_name", "local_defer_failed",
+				"stage", component, "error", err)
 			return fmt.Errorf("defer locally paused %s stage: %w", stage, err)
 		}
+		p.logger.InfoContext(ctx, "source stage event", "event_name", "local_defer_succeeded",
+			"stage", component)
 		return ErrJobDeferred
 	}
 	err := p.stages.queue.AdmitSourceStage(ctx, job.ID, job.LeaseToken, stage,
