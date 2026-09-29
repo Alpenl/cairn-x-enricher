@@ -327,14 +327,15 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 			return p.reportFailure(ctx, logger, job, failurePathSearch, fetchErr)
 		}
 		source = &fetched
-		if err = p.saveSourceWithEvidence(ctx, job, *source); err != nil {
-			ackCtx, cancel := boundedStateReportContext(ctx)
-			ackErr := s.queue.AckSourceRefresh(ackCtx, job.ID, job.RefreshEpoch, "failed", boundedError(err))
-			cancel()
-			if ackErr != nil {
-				return errors.Join(err, fmt.Errorf("acknowledge failed source refresh: %w", ackErr))
-			}
+		if err = s.queue.SaveSource(ctx, job.ID, job.LeaseToken, *source); err != nil {
+			// A failed checkpoint may still have committed before its response was
+			// lost. Only the Worker can consume the refresh intent on success.
 			return p.reportFailure(ctx, logger, job, failurePathSearch, err)
+		}
+		if err = p.persistSourceEvidence(ctx, job.ID, *source); err != nil {
+			// The refreshed source is durable already. A failed snapshot write
+			// must not turn that successful refresh into a failed fetch.
+			return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
 		}
 		// The Worker source checkpoint clears this refresh intent atomically.
 		// A separate success ack could lose its response after the source commit.

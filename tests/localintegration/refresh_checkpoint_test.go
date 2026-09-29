@@ -58,6 +58,15 @@ func TestLocalWorkerRefreshCheckpointConsumesIntent(t *testing.T) {
 	if err := checkpoint.SaveSource(ctx, id, job.LeaseToken, source); err != nil || !lost.Load() {
 		t.Fatalf("lost-response source replay error=%v dropped=%t", err, lost.Load())
 	}
+	// A late failure ack from a previous process must be an idempotent no-op
+	// after the checkpoint has consumed the matching refresh intent.
+	if err := queue.AckSourceRefresh(ctx, id, job.RefreshEpoch, "failed", "snapshot unavailable"); err != nil {
+		t.Fatalf("late refresh ack: %v", err)
+	}
+	detail, err := queue.GetBookmark(ctx, id)
+	if err != nil || detail.Error != "" || detail.OriginalText != source.OriginalText {
+		t.Fatalf("late ack changed saved refresh: detail=%+v error=%v", detail, err)
+	}
 	wrangler := filepath.Join(shareRoot, "worker", "node_modules", ".bin", "wrangler")
 	//nolint:gosec // Wrangler and config paths are supplied by this disposable local-integration harness.
 	command := exec.CommandContext(ctx, wrangler, "d1", "execute", "cairn-share-refreshcheckpoint", "--local",

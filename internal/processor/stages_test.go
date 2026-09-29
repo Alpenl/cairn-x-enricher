@@ -991,6 +991,31 @@ func TestSourceCheckpointRetryRepairsMissingSnapshotWithoutFetch(t *testing.T) {
 	}
 }
 
+func TestRefreshedSourceSnapshotFailureDoesNotAcknowledgeFailedFetch(t *testing.T) {
+	q := &stageQueue{fakeQueue: newFakeQueue(), evidenceErr: errors.New("snapshot unavailable")}
+	r := &stageReader{q: q}
+	p := NewStaged(q, r, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+	job := &cairn.Job{ID: 1, URL: "https://x.com/synthetic/status/42", Attempt: 1, RefreshEpoch: 3}
+	if err := p.Process(context.Background(), job); err == nil {
+		t.Fatal("expected snapshot write failure")
+	}
+	if q.source == nil || q.source.OriginalText != "saved original" || q.refreshAcks != 0 ||
+		q.failures[job.ID] != "[recovered_source] persist evidence snapshot: snapshot unavailable" {
+		t.Fatalf("saved refresh was misreported: source=%+v acks=%d failure=%q",
+			q.source, q.refreshAcks, q.failures[job.ID])
+	}
+	q.evidenceErr = nil
+	job.Attempt = 2
+	job.RefreshEpoch = 0 // The Worker consumed it with the successful source write.
+	if err := p.Process(context.Background(), job); err != nil {
+		t.Fatal(err)
+	}
+	if r.fetches != 1 || q.refreshAcks != 0 || q.evidence != 2 || len(q.completions) != 1 {
+		t.Fatalf("retry did not repair saved refresh: fetches=%d acks=%d snapshots=%d completions=%d",
+			r.fetches, q.refreshAcks, q.evidence, len(q.completions))
+	}
+}
+
 // TestRefreshIntentBypassesSourceCaches is the R2-06 regression: an explicit
 // refresh must fetch, not reuse the stored snapshot or the legacy saved text.
 func TestRefreshIntentBypassesSourceCaches(t *testing.T) {
