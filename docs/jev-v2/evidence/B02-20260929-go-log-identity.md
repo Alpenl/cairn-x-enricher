@@ -1,0 +1,5 @@
+# OBS-02: Go log identity and UTC timestamps
+
+Both Go product JSON handlers now add the same process-wide instance ID, fixed service name and record schema version before task-specific groups. A valid build commit is added when available; development builds with `Commit=none` omit it. The instance ID changes on process restart. Record timestamps are converted to UTC before export. Application call sites cannot overwrite these trusted fields, and the existing private-field filter still removes bookmark, operation, lease and provider-response identifiers from the platform log stream.
+
+The optional asynchronous handler constructs the fixed fields once, not per event. Logging off still exits at the gate before record filtering and JSON serialization. Tests cover UTC conversion, root fields under a task group, spoofed fields, build commit validation, async output, and privacy filtering. This is only a local log-schema improvement: it does not provide a deletable private correlation store, metrics, traces, collector delivery proof, performance baseline, or a production observation report.

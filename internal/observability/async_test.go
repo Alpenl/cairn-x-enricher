@@ -30,7 +30,9 @@ func TestAsyncLoggerDrainsStructuredRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := output.String(); !strings.Contains(got, `"msg":"manual source persisted"`) ||
-		!strings.Contains(got, `"task":{"component":"source"}`) || strings.Contains(got, "link_id") {
+		!strings.Contains(got, `"task":{"component":"source"}`) ||
+		!strings.Contains(got, `"service":"cairn-x-enricher"`) ||
+		!strings.Contains(got, `"schema_version":1`) || strings.Contains(got, "link_id") {
 		t.Fatalf("structured record was not drained: %s", got)
 	}
 	if status := store.Snapshot().LogExporter; status == nil || !status.Closed ||

@@ -112,7 +112,7 @@ func (s *Store) AsyncLogger(writer io.Writer, capacity int) (*slog.Logger, func(
 			}
 		}
 	}()
-	base := slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: slog.LevelDebug})
+	base := slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: slog.LevelDebug}).WithAttrs(logIdentity)
 	logger := slog.New(&logGate{store: s, next: &asyncLogHandler{state: state, next: base}})
 	return logger, state.close, nil
 }

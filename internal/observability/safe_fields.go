@@ -14,7 +14,7 @@ import (
 // SafeJSONHandler applies the same privacy boundary to commands that run
 // without the optional asynchronous observability exporter.
 func SafeJSONHandler(writer io.Writer, level slog.Level) slog.Handler {
-	return &safeLogHandler{next: slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: level})}
+	return &safeLogHandler{next: slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: level}).WithAttrs(logIdentity)}
 }
 
 type safeLogHandler struct {
@@ -38,7 +38,7 @@ func (h *safeLogHandler) WithGroup(name string) slog.Handler {
 }
 
 func safeLogRecord(record slog.Record) slog.Record {
-	clean := slog.NewRecord(record.Time, record.Level, safeLogMessage(record.Message), record.PC)
+	clean := slog.NewRecord(record.Time.UTC(), record.Level, safeLogMessage(record.Message), record.PC)
 	record.Attrs(func(attr slog.Attr) bool {
 		if safe, ok := safeLogAttr(attr); ok {
 			clean.AddAttrs(safe)
@@ -112,6 +112,12 @@ func safeLogAttrs(attrs []slog.Attr) []slog.Attr {
 }
 
 func safeLogAttr(attr slog.Attr) (slog.Attr, bool) {
+	// The handler owns these fields, so a call site cannot spoof the build,
+	// process or record schema used during a later reconciliation.
+	switch attr.Key {
+	case "schema_version", "service", "build_sha", "instance_id":
+		return slog.Attr{}, false
+	}
 	if attr.Key == "error" {
 		return slog.String("error_code", safeErrorCode(attr.Value.Any())), true
 	}
