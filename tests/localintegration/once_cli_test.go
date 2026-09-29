@@ -71,6 +71,26 @@ func TestLocalWorkerOnceSkipsEmptySourceCanary(t *testing.T) {
 		}
 		return stdout.Bytes(), nil
 	}
+	runServe := func(extra ...string) error {
+		t.Helper()
+		command := exec.CommandContext(ctx, binary, "serve") // #nosec G204 -- isolated binary and fixed arguments.
+		command.Dir = work
+		command.Env = append(append([]string(nil), commonEnv...), extra...)
+		var stderr bytes.Buffer
+		command.Stderr = &stderr
+		err := command.Run()
+		if err != nil {
+			return fmt.Errorf("%w: %s", err, stderr.String())
+		}
+		return nil
+	}
+	if err := runServe(); err == nil || grokCalls.Load() != 0 {
+		t.Fatalf("serve accepted a missing Grok key: err=%v grok_calls=%d", err, grokCalls.Load())
+	}
+	if err := runServe("GROK_MODELS_BASE_URL="+grok.URL, "XAI_API_KEY=fixture", "GROK_MODEL=grok-test"); err == nil || grokCalls.Load() != 1 {
+		t.Fatalf("serve skipped empty-queue canary: err=%v grok_calls=%d", err, grokCalls.Load())
+	}
+	grokCalls.Store(0)
 	stdout, err := run()
 	if err != nil {
 		t.Fatalf("empty once with no Grok credential: %v", err)

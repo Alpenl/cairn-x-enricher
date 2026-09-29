@@ -24,4 +24,4 @@ CAIRN_SHARE_ROOT=/path/to/cairn-share \
 
 Worker 的 `source-lease-admit` 测试还确认：只读预查使用内部令牌，不获取租约；已领且未过期的任务返回不可领，过期可重新领取的任务返回可领，付费结果未决的任务返回不可领。`claim-plan` 测试直接对生产候选 SQL 在 2,000 条合成收藏上执行查询计划与读取量检查，非空和空队列的 `rows_read` 都小于 20。Go 客户端单元测试要求认证、严格布尔响应，旧 Worker 的 404 不会被误认作空队列。处理器单元测试证明仅分类轮次不会领取随后出现的来源任务。
 
-最终检查：Worker 38 个测试文件、386 项测试，`npm run typecheck` 和 `npm run deploy:dry-run` 通过；Go `make verify` 与 `make test-ablation` 通过。以上为本地夹具证据，未部署，未触发真实 Grok 或 TypeSafe 付费调用。#11 B02-T09 中组件暂停等其余验收仍未完成。
+最终检查：Worker 38 个测试文件、386 项测试，`npm run typecheck` 和 `npm run deploy:dry-run` 通过；Go `make verify` 与 `make test-ablation` 通过。以上为本地夹具证据，未部署，未触发真实 Grok 或 TypeSafe 付费调用。B02-T09 的完整命令职责与组件暂停矩阵见 [cli-roles.md](B02-20260929-cli-roles.md)。
