@@ -22,7 +22,7 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
 )
 
-const restartManualText = "A complete manually pasted source survives an abrupt process exit."
+const restartManualText = " A complete manually pasted source survives an abrupt process exit. "
 
 type neverRunManualSource struct{}
 

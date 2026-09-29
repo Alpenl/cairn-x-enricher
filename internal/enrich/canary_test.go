@@ -99,6 +99,33 @@ func TestDecodeStrictJSONRejectsTrailingData(t *testing.T) {
 	}
 }
 
+func TestModelEnvelopeRejectsDataHiddenAfterResponseLimit(t *testing.T) {
+	valid := `{"status":"completed","model":"grok-test","output":[]}`
+	for name, payload := range map[string]string{
+		"oversized valid prefix": valid + strings.Repeat(" ", maxModelResponseBytes),
+		"second response":        valid + valid,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var envelope responseEnvelope
+			if err := decodeModelEnvelope(strings.NewReader(payload), &envelope); err == nil {
+				t.Fatal("model envelope accepted trailing or truncated response bytes")
+			}
+		})
+	}
+}
+
+func TestBoundedModelJSONRejectsAmbiguousNestedFieldsAndExcessDepth(t *testing.T) {
+	for _, payload := range []string{
+		`{"outer":{"value":1,"value":2}}`,
+		strings.Repeat("[", 65) + "1" + strings.Repeat("]", 65),
+	} {
+		var decoded any
+		if err := decodeBoundedModelJSON(payload, &decoded); err == nil {
+			t.Fatal("accepted ambiguous or excessively nested model JSON")
+		}
+	}
+}
+
 func TestStructuredOutputDecodeIsBounded(t *testing.T) {
 	// A model that ignores max_output_tokens must not be able to make the
 	// process allocate unbounded memory while decoding the payload.

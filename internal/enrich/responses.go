@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
@@ -298,8 +299,7 @@ func (c *ResponsesClient) invokePayload(ctx context.Context, input Input, stage,
 		return responseEnvelope{}, operationKey, readModelHTTPError(response)
 	}
 	var envelope responseEnvelope
-	decoder := json.NewDecoder(io.LimitReader(response.Body, maxModelResponseBytes))
-	if err := decoder.Decode(&envelope); err != nil {
+	if err := decodeModelEnvelope(response.Body, &envelope); err != nil {
 		c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_unknown", stage, variant,
 			providerStarted, slog.Int("provider_http_status", response.StatusCode),
 			slog.String("provider_reason", "decode_failed"))
@@ -390,7 +390,7 @@ func (c *ResponsesClient) candidateFromEnvelope(input Input, envelope responseEn
 	}
 	// The structured payload is model output and therefore untrusted; bound
 	// it so a runaway response cannot be decoded into unbounded memory.
-	if err := decodeStrictJSON(io.LimitReader(strings.NewReader(outputTexts[0]), maxModelOutputBytes), &wire); err != nil {
+	if err := decodeBoundedModelJSON(outputTexts[0], &wire); err != nil {
 		return Candidate{}, fmt.Errorf("decode structured model output: %w", err)
 	}
 	model := strings.TrimSpace(envelope.Model)
@@ -523,6 +523,96 @@ func decodeStrictJSON(reader io.Reader, target any) error {
 		return errors.New("trailing JSON data")
 	}
 	return nil
+}
+
+// A LimitReader alone can make a valid JSON prefix look complete while hiding
+// an oversized suffix. Check the actual length before decoding model text.
+func decodeBoundedModelJSON(text string, target any) error {
+	if len(text) > maxModelOutputBytes {
+		return fmt.Errorf("model output exceeds %d bytes", maxModelOutputBytes)
+	}
+	if !utf8.ValidString(text) {
+		return errors.New("model output is not valid UTF-8")
+	}
+	if err := rejectDuplicateJSONKeys(strings.NewReader(text)); err != nil {
+		return err
+	}
+	return decodeStrictJSON(strings.NewReader(text), target)
+}
+
+func rejectDuplicateJSONKeys(reader io.Reader) error {
+	decoder := json.NewDecoder(reader)
+	var value func(int) error
+	value = func(depth int) error {
+		if depth > 64 {
+			return errors.New("model JSON nesting is too deep")
+		}
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		delimiter, ok := token.(json.Delim)
+		if !ok {
+			return nil
+		}
+		switch delimiter {
+		case '{':
+			seen := make(map[string]struct{})
+			for decoder.More() {
+				keyToken, err := decoder.Token()
+				if err != nil {
+					return err
+				}
+				key, ok := keyToken.(string)
+				if !ok {
+					return errors.New("invalid JSON object key")
+				}
+				if _, exists := seen[key]; exists {
+					return fmt.Errorf("duplicate JSON key %q", key)
+				}
+				seen[key] = struct{}{}
+				if err := value(depth + 1); err != nil {
+					return err
+				}
+			}
+		case '[':
+			for decoder.More() {
+				if err := value(depth + 1); err != nil {
+					return err
+				}
+			}
+		default:
+			return errors.New("invalid JSON delimiter")
+		}
+		_, err = decoder.Token()
+		return err
+	}
+	if err := value(0); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		return errors.New("trailing JSON data")
+	}
+	return nil
+}
+
+func decodeModelEnvelope(reader io.Reader, target *responseEnvelope) error {
+	body, err := io.ReadAll(io.LimitReader(reader, maxModelResponseBytes+1))
+	if err != nil {
+		return err
+	}
+	if len(body) > maxModelResponseBytes {
+		return fmt.Errorf("model response exceeds %d bytes", maxModelResponseBytes)
+	}
+	if !utf8.Valid(body) {
+		return errors.New("model response is not valid UTF-8")
+	}
+	if err := rejectDuplicateJSONKeys(bytes.NewReader(body)); err != nil {
+		return err
+	}
+	// Unmarshal rejects a second JSON value or non-whitespace bytes after the
+	// envelope; a streaming single Decode would accept either.
+	return json.Unmarshal(body, target)
 }
 
 func readModelHTTPError(response *http.Response) error {

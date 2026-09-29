@@ -302,8 +302,8 @@ export function pasteSource(id) {
       {
         id: "submit-source", label: "提交生成", primary: true,
         run: async () => {
-          const text = textarea.value.trim();
-          if (!text) {
+          const text = textarea.value;
+          if (!text.trim()) {
             toast("原文不能为空", { tone: "error" });
             textarea.focus();
             return false;

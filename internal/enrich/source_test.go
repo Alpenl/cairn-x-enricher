@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -84,6 +85,15 @@ func TestSourceRequiresSearchEvidence(t *testing.T) {
 	}
 }
 
+func TestManualSourceKeepsExactInput(t *testing.T) {
+	client := NewResponsesClient("https://unused.example", "fixture", "grok-test", 1024, "", nil, testTaxonomy())
+	original := " \n人工原文\n "
+	source, err := client.FetchSource(context.Background(), Input{SourceText: original})
+	if err != nil || source.OriginalText != original {
+		t.Fatalf("manual source changed: %q, %v", source.OriginalText, err)
+	}
+}
+
 // TestReadingContractIsIndependentAndStrict pins the B02-T03/T04 contract: the
 // reading pass decodes only reading fields, rejects source echo, and never
 // falls back to defaults on malformed or trailing output.
@@ -107,6 +117,7 @@ func TestReadingContractIsIndependentAndStrict(t *testing.T) {
 		"missing summary":    `{"ai_title":"用于测试的阅读标题","original_language":"en","translated_text":"译文"}`,
 		"trailing content":   valid + `{"extra":true}`,
 		"non-json":           `not json`,
+		"duplicate field":    valid[:len(valid)-1] + `,"summary":"另一个摘要"}`,
 		"unknown source key": `{"ai_title":"用于测试的阅读标题","original_language":"en","translated_text":"译文","summary":"摘要","original_text":"模型重写的原文"}`,
 		"unknown tag key":    `{"ai_title":"用于测试的阅读标题","original_language":"en","translated_text":"译文","summary":"摘要","classification":{"topics":[]}}`,
 	} {
@@ -122,5 +133,64 @@ func TestReadingContractIsIndependentAndStrict(t *testing.T) {
 		TranslatedText: "译文", Summary: "摘要", Model: "grok",
 	}); err == nil {
 		t.Fatal("reading accepted a mutated original text")
+	}
+}
+
+func TestReadingRejectsValidJSONHiddenInsideOversizedOutput(t *testing.T) {
+	valid := `{"ai_title":"用于测试的阅读标题","original_language":"en","translated_text":"译文","summary":"摘要"}`
+	envelope := responseEnvelope{Status: "completed", Model: "grok-test", Output: []responseOutputItem{
+		{Type: "message", Content: []responseOutputContent{{Type: "output_text",
+			Text: valid + strings.Repeat(" ", maxModelOutputBytes)}}},
+	}}
+	if _, err := decodeReading(envelope, "grok"); err == nil {
+		t.Fatal("reading accepted a valid JSON prefix followed by hidden oversized output")
+	}
+}
+
+func TestTransformPreservesLongSourceExactly(t *testing.T) {
+	prefix, suffix := " \n", "\n末尾 "
+	source := prefix + strings.Repeat("x", maxOriginalTextLength-len(prefix)-len(suffix)) + suffix
+	if len(source) != maxOriginalTextLength {
+		t.Fatalf("fixture source length = %d", len(source))
+	}
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		calls++
+		var payload struct {
+			Input []struct {
+				Content string `json:"content"`
+			} `json:"input"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || len(payload.Input) != 1 {
+			t.Errorf("decode reading request: %v", err)
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		start := strings.LastIndex(payload.Input[0].Content, "\n{")
+		if start < 0 {
+			t.Error("reading request omitted source state")
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var state map[string]string
+		if err := json.Unmarshal([]byte(payload.Input[0].Content[start+1:]), &state); err != nil ||
+			state["original_text"] != source {
+			t.Errorf("reading request did not include the exact long source: %v", err)
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		reading := `{"ai_title":"用于验证长文保留的中文标题","original_language":"fr","translated_text":"长文完整译文","summary":"长文摘要"}`
+		_ = json.NewEncoder(writer).Encode(map[string]any{"status": "completed", "model": "grok-test",
+			"output": []any{map[string]any{"type": "message", "content": []any{
+				map[string]any{"type": "output_text", "text": reading}}}}})
+	}))
+	defer server.Close()
+	client := NewResponsesClient(server.URL, "fixture", "grok-test", 1024, "", server.Client(), testTaxonomy())
+	result, err := client.Transform(context.Background(), Input{SourceText: source})
+	if err != nil || result.OriginalText != source || calls != 1 {
+		t.Fatalf("long source changed or rejected: bytes=%d calls=%d error=%v", len(result.OriginalText), calls, err)
+	}
+	if _, err := client.Transform(context.Background(), Input{SourceText: source + "x"}); err == nil || calls != 1 {
+		t.Fatalf("oversized source reached provider: calls=%d error=%v", calls, err)
 	}
 }

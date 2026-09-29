@@ -270,11 +270,12 @@ func (q *stageQueue) GetQuestionSpec(context.Context, string) (cairn.StoredQuest
 }
 
 type stageReader struct {
-	fetches    int
-	transforms int
-	fail       bool
-	fetchErr   error
-	q          *stageQueue
+	fetches         int
+	transforms      int
+	fail            bool
+	fetchErr        error
+	readingLanguage string
+	q               *stageQueue
 }
 
 func (r *stageReader) FetchSource(context.Context, enrich.Input) (enrich.Source, error) {
@@ -292,7 +293,26 @@ func (r *stageReader) Transform(_ context.Context, i enrich.Input) (enrich.Resul
 	if r.fail {
 		return enrich.Result{}, errors.New("reading unavailable")
 	}
-	return enrich.Result{OriginalText: i.SourceText, Summary: "summary"}, nil
+	return enrich.Result{OriginalText: i.SourceText, OriginalLanguage: r.readingLanguage, Summary: "summary"}, nil
+}
+
+func TestReadingCompletionPreservesSourceTextAndKnownLanguage(t *testing.T) {
+	source := &enrich.Source{OriginalText: " \nsource with significant edges\n ", OriginalLanguage: "en",
+		RelatedLinks: []string{"https://example.com/related"},
+		ImageURLs:    []string{"https://pbs.twimg.com/media/source-image"}, Model: "source"}
+	q := &stageQueue{fakeQueue: newFakeQueue(), source: source}
+	r := &stageReader{q: q, readingLanguage: "fr"}
+	p := NewStaged(q, r, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+	job := &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, LeaseToken: "lease"}
+	if err := p.Process(context.Background(), job); err != nil {
+		t.Fatal(err)
+	}
+	got := q.completions[job.ID]
+	if got.OriginalText != source.OriginalText || got.OriginalLanguage != "en" ||
+		len(got.RelatedLinks) != 1 || got.RelatedLinks[0] != source.RelatedLinks[0] ||
+		len(got.Images) != 1 || len(q.imageURLs[job.ID]) != 1 || q.imageURLs[job.ID][0] != source.ImageURLs[0] {
+		t.Fatalf("reading completion lost authoritative source fields: %+v", got)
+	}
 }
 
 type budgetStageReader struct {

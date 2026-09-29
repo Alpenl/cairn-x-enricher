@@ -993,8 +993,8 @@ func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http
 		writeError(writer, http.StatusBadRequest, "invalid_json")
 		return
 	}
-	sourceText := strings.TrimSpace(body.OriginalText)
-	if sourceText == "" || len(sourceText) > maxSourceLength || body.OperationKey == "" ||
+	sourceText := body.OriginalText
+	if strings.TrimSpace(sourceText) == "" || len(sourceText) > maxSourceLength || body.OperationKey == "" ||
 		len(body.OperationKey) > 200 || body.ExpectedRevision == nil || *body.ExpectedRevision < 0 {
 		writeProcessingResult(writer, http.StatusConflict, nil, []rejection{{ID: id, Error: "invalid_source"}})
 		return

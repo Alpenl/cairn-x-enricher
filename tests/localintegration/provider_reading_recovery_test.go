@@ -20,6 +20,13 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 )
 
+func longReadingSource() string {
+	const limit = 100_000
+	prefix, suffix := " \n中文", "\n末尾 "
+	remaining := limit - len(prefix) - len(suffix)
+	return prefix + strings.Repeat("汉", remaining/3) + strings.Repeat("x", remaining%3) + suffix
+}
+
 // This uses the real Go Responses adapter and Worker/D1 over HTTP. The local
 // provider fixture stores its result; only the external provider is simulated.
 func TestLocalWorkerProviderReadingRecovery(t *testing.T) {
@@ -41,7 +48,7 @@ func TestLocalWorkerProviderReadingRecovery(t *testing.T) {
 	providerBody := map[string]any{
 		"object": "response", "id": responseID, "status": "completed", "model": "grok-test",
 		"output": []any{map[string]any{"type": "message", "content": []any{map[string]any{
-			"type": "output_text", "text": `{"ai_title":"用于验证阅读恢复的中文标题","original_language":"en","translated_text":"夹具译文","summary":"夹具摘要"}`}}}},
+			"type": "output_text", "text": `{"ai_title":"用于验证阅读恢复的中文标题","original_language":"fr","translated_text":"夹具译文","summary":"夹具摘要"}`}}}},
 		"usage": map[string]any{"input_tokens": 100, "output_tokens": 20, "total_tokens": 120,
 			"cost_in_usd_ticks": 1234},
 	}
@@ -69,8 +76,11 @@ func TestLocalWorkerProviderReadingRecovery(t *testing.T) {
 	if err != nil || job == nil || job.ID != id {
 		t.Fatalf("claim=%+v err=%v", job, err)
 	}
-	source := enrich.Source{OriginalText: "Persisted primary source", OriginalLanguage: "en",
-		RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
+	source := enrich.Source{OriginalText: longReadingSource(), OriginalLanguage: "en",
+		RelatedLinks: []string{"https://example.com/related"}, ImageURLs: []string{}, Model: "manual"}
+	if len(source.OriginalText) != 100_000 {
+		t.Fatalf("long source bytes=%d", len(source.OriginalText))
+	}
 	if err := queue.SaveSource(ctx, id, job.LeaseToken, source); err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +119,7 @@ func TestLocalWorkerProviderReadingRecovery(t *testing.T) {
 		t.Fatal("settled reading permit is missing")
 	}
 	operator := cairn.NewClient(base, "operator", httpClient)
-	readingResult := enrich.ReadingResult{AITitle: "用于验证阅读恢复的中文标题", OriginalLanguage: "en",
+	readingResult := enrich.ReadingResult{AITitle: "用于验证阅读恢复的中文标题", OriginalLanguage: "fr",
 		TranslatedText: "夹具译文", Summary: "夹具摘要", Model: "grok-test"}
 	if _, err := operator.RecoverProviderReading(ctx, operationKey, responseID, "ops@example.org",
 		readingResult); err == nil {
@@ -149,6 +159,7 @@ func TestLocalWorkerProviderReadingRecovery(t *testing.T) {
 	}
 	after, err := newQueue.GetBookmark(ctx, id)
 	if err != nil || after.Status != "completed" || after.OriginalText != source.OriginalText ||
+		after.OriginalLanguage != "en" || len(after.RelatedURLs) != 1 || after.RelatedURLs[0] != source.RelatedLinks[0] ||
 		after.TranslatedText != "夹具译文" || after.PaidCallUnresolved || posts.Load() != 1 || gets.Load() != 1 {
 		t.Fatalf("after recovery=%+v posts=%d gets=%d err=%v", after, posts.Load(), gets.Load(), err)
 	}
@@ -184,7 +195,7 @@ func TestLocalWorkerProviderReadingCrashHelper(t *testing.T) {
 	result, err := model.Transform(ctx, enrich.Input{ID: linkID,
 		URL: os.Getenv("CAIRN_RECOVERY_JOB_URL"), Attempt: attempt,
 		LeaseToken: os.Getenv("CAIRN_RECOVERY_LEASE"), ContentRevision: revision,
-		MinRemainingMS: 210_000, SourceText: "Persisted primary source", RelatedLinks: []string{}})
+		MinRemainingMS: 210_000, SourceText: longReadingSource(), RelatedLinks: []string{"https://example.com/related"}})
 	if err != nil || result.TranslatedText != "夹具译文" {
 		t.Fatalf("paid reading=%+v err=%v", result, err)
 	}

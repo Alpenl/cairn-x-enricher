@@ -506,9 +506,13 @@ func (p *Processor) finishReading(ctx context.Context, job *cairn.Job, source en
 		}
 		return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
 	}
+	language := strings.TrimSpace(source.OriginalLanguage)
+	if language == "" {
+		language = result.OriginalLanguage
+	}
 	// Classification is committed only through its own lease; reading aids cannot overwrite it.
 	err = p.queue.Complete(ctx, job.ID, cairn.Completion{LeaseToken: job.LeaseToken, AITitle: result.AITitle,
-		OriginalLanguage: result.OriginalLanguage, OriginalText: source.OriginalText, TranslatedText: result.TranslatedText,
+		OriginalLanguage: language, OriginalText: source.OriginalText, TranslatedText: result.TranslatedText,
 		Summary: result.Summary, RelatedLinks: source.RelatedLinks, Images: images, Model: result.Model})
 	if err != nil {
 		return fmt.Errorf("save reading aids: %w", err)

@@ -505,7 +505,7 @@ func TestHandlerSavesManualSourceBeforeAcceptance(t *testing.T) {
 		t.Fatalf("POST /api/bookmarks/20/source status = %d, body = %s", response.Code, response.Body.String())
 	}
 
-	if backend.manualSourceText != "人工粘贴原文" || backend.manualOperationKey != "manual-20-1" || backend.manualExpectedRevision != 7 {
+	if backend.manualSourceText != " 人工粘贴原文 " || backend.manualOperationKey != "manual-20-1" || backend.manualExpectedRevision != 7 {
 		t.Fatalf("manual source save = %q, %q, %d", backend.manualSourceText, backend.manualOperationKey, backend.manualExpectedRevision)
 	}
 	select {

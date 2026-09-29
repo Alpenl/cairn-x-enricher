@@ -57,8 +57,8 @@ function attentionRow(item) {
   cancel.addEventListener("click", () => { form.hidden = true; });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const text = textarea.value.trim();
-    if (!text) {
+    const text = textarea.value;
+    if (!text.trim()) {
       toast("原文不能为空", { tone: "error" });
       return;
     }
