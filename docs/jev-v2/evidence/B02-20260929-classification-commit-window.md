@@ -20,12 +20,14 @@ probe while the first process can still submit its result. Expired probes can
 still be replaced after a crash; stale probe completion cannot close the new
 gate.
 
-Local regression: `TestClassificationCommitKeepsDeadlineAfterInference`
-observes the actual processor's classifier and Worker completion contexts.
-It checks the thirty-second deadline difference and that cancelling the
-inference context leaves completion usable. The Worker classification gate
-test checks that the claimed probe remains owned beyond the five-minute work
-deadline. No paid provider call or remote deployment was made.
+Local regressions observe the actual processor's classifier and Worker
+completion contexts. `TestClassificationCommitKeepsDeadlineAfterInference`
+checks the thirty-second deadline difference;
+`TestClassificationResultAtInferenceCutoffCanStillCommit` returns a parsed
+result exactly as inference is cancelled and verifies completion still has a
+live context. The Worker classification gate test checks that the claimed
+probe remains owned beyond the five-minute work deadline. No paid provider
+call or remote deployment was made.
 
 The broader B02-T08 matrix remains open: production latency calibration,
 provider-result-unknown recovery, rolling binaries, shutdown and long-running

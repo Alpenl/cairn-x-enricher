@@ -1170,6 +1170,29 @@ func TestClassificationCommitKeepsDeadlineAfterInference(t *testing.T) {
 	}
 }
 
+type cutoffClassifier struct{}
+
+func (cutoffClassifier) SpecID() string { return "classify-v1" }
+func (cutoffClassifier) Classify(ctx context.Context, _ classify.Input) (classify.Result, error) {
+	<-ctx.Done()
+	// A response may arrive at the same boundary that cancels the HTTP
+	// context. Its parsed result must still have a live completion context.
+	return classify.Result{}, nil
+}
+
+func TestClassificationResultAtInferenceCutoffCanStillCommit(t *testing.T) {
+	queue := &deadlineCompletionQueue{stageQueue: &stageQueue{
+		fakeQueue: newFakeQueue(), job: &cairn.ClassificationJob{ID: 1},
+	}}
+	worker := NewStaged(queue, nil, cutoffClassifier{}, "v1", "jev", discardLogger(), 1)
+	worker.stages.classificationDeadline = classificationCommitMargin + 30*time.Millisecond
+	completed, failed, err := worker.RunClassifications(context.Background(), 1)
+	if err != nil || completed != 1 || failed != 0 || queue.ctxErr != nil {
+		t.Fatalf("result at cutoff: completed=%d failed=%d error=%v completion context=%v",
+			completed, failed, err, queue.ctxErr)
+	}
+}
+
 func TestBoundEvidenceFailureNeverFallsBackToPlainText(t *testing.T) {
 	good := `{"blocks":[{"id":"p","role":"primary","text":"bound material"}],"retrieval":"manual","truncation":{"truncated":false}}`
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(good)))
