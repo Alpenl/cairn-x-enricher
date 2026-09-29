@@ -1128,6 +1128,48 @@ func (c *recordingClassifier) Classify(_ context.Context, input classify.Input) 
 	return classify.Result{}, nil
 }
 
+type deadlineClassifier struct{ deadline time.Time }
+
+func (*deadlineClassifier) SpecID() string { return "classify-v1" }
+func (c *deadlineClassifier) Classify(ctx context.Context, _ classify.Input) (classify.Result, error) {
+	c.deadline, _ = ctx.Deadline()
+	return classify.Result{}, nil
+}
+
+type deadlineCompletionQueue struct {
+	*stageQueue
+	deadline time.Time
+	ctxErr   error
+}
+
+func (q *deadlineCompletionQueue) CompleteClassification(ctx context.Context, job *cairn.ClassificationJob, result classify.Result) error {
+	q.deadline, _ = ctx.Deadline()
+	q.ctxErr = ctx.Err()
+	return q.stageQueue.CompleteClassification(ctx, job, result)
+}
+
+func TestClassificationCommitKeepsDeadlineAfterInference(t *testing.T) {
+	queue := &deadlineCompletionQueue{stageQueue: &stageQueue{
+		fakeQueue: newFakeQueue(), job: &cairn.ClassificationJob{ID: 1},
+	}}
+	classifier := &deadlineClassifier{}
+	worker := NewStaged(queue, nil, classifier, "v1", "jev", discardLogger(), 1)
+	completed, failed, err := worker.RunClassifications(context.Background(), 1)
+	if err != nil || completed != 1 || failed != 0 {
+		t.Fatalf("classification completed=%d failed=%d error=%v", completed, failed, err)
+	}
+	if classifier.deadline.IsZero() || queue.deadline.IsZero() || queue.ctxErr != nil {
+		t.Fatalf("inference deadline=%s completion deadline=%s completion context=%v",
+			classifier.deadline, queue.deadline, queue.ctxErr)
+	}
+	if got := queue.deadline.Sub(classifier.deadline); got != classificationCommitMargin {
+		t.Fatalf("completion has %s after inference, want %s", got, classificationCommitMargin)
+	}
+	if remaining := time.Until(queue.deadline); remaining < DefaultClassificationDeadline-time.Second {
+		t.Fatalf("completion deadline already consumed: %s remains", remaining)
+	}
+}
+
 func TestBoundEvidenceFailureNeverFallsBackToPlainText(t *testing.T) {
 	good := `{"blocks":[{"id":"p","role":"primary","text":"bound material"}],"retrieval":"manual","truncation":{"truncated":false}}`
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(good)))

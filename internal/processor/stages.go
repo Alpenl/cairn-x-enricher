@@ -255,9 +255,14 @@ func (p *componentPause) state() (bool, string, time.Duration) {
 	return true, p.reason, remaining
 }
 
-// DefaultClassificationDeadline bounds one already-leased classification so a
-// graceful shutdown cannot wait forever on a detached work context.
-const DefaultClassificationDeadline = 3 * time.Minute
+// DefaultClassificationDeadline bounds one leased job while leaving time
+// after inference for the Worker completion or failure write. A successful
+// response at the provider deadline must not inherit a cancelled commit
+// context.
+// The extra ninety seconds covers snapshot reads, budget admission and local
+// decoding before the at-most-three-minute provider request.
+const DefaultClassificationDeadline = 5 * time.Minute
+const classificationCommitMargin = 30 * time.Second
 const defaultPaidStageTimeout = 3 * time.Minute
 const paidStageCommitMargin = 30 * time.Second
 const stateReportTimeout = 15 * time.Second
@@ -656,16 +661,19 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		// An already acquired lease finishes under its own bounded deadline.
 		// WithoutCancel keeps shutdown from tearing down a paid inference that is
 		// about to succeed, but the deadline stops an unbounded drain.
-		workCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.classificationDeadline)
+		workCtx, cancelWork := context.WithTimeout(context.WithoutCancel(ctx), s.classificationDeadline)
+		workDeadline, _ := workCtx.Deadline()
+		inferenceCtx, cancelInference := context.WithDeadline(workCtx, workDeadline.Add(-classificationCommitMargin))
 		var result classify.Result
 		providerAttempted := false
-		err = p.attachBoundEvidence(workCtx, job)
+		err = p.attachBoundEvidence(inferenceCtx, job)
 		if err == nil {
 			providerAttempted = true
-			result, err = p.classifyJob(workCtx, job)
+			result, err = p.classifyJob(inferenceCtx, job)
 		}
+		cancelInference()
 		if err != nil {
-			cancel()
+			cancelWork()
 			if len(result.RawJudgments.Calls) > 0 {
 				p.logger.WarnContext(ctx, "classification inference attempt failed; no inference fallback", "link_id", job.ID, "provider_calls", result.RawJudgments.Calls)
 			}
@@ -716,14 +724,14 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		// The model stage succeeded: only now may the breaker clear.
 		settleProbe(true, "", 0)
 		if err := s.queue.CompleteClassification(workCtx, job, result); err != nil {
-			cancel()
+			cancelWork()
 			// The client confirms lost responses by replaying this exact operation.
 			// Generic already_completed can refer to unrelated work and is not an
 			// acknowledgment; never run extensions after an unconfirmed commit.
 			failed++
 			return completed, failed, fmt.Errorf("save classification: %w", err)
 		}
-		cancel()
+		cancelWork()
 		completed++
 		p.runExtensions(ctx, job)
 	}

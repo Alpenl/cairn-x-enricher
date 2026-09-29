@@ -271,7 +271,7 @@ func (c Config) validateFor(role Role) error {
 
 	if needsClassification {
 		if c.TypesafeRequestTimeout > 3*time.Minute {
-			return fmt.Errorf("TYPESAFE_REQUEST_TIMEOUT must not exceed the 3m classification job deadline")
+			return fmt.Errorf("TYPESAFE_REQUEST_TIMEOUT must not exceed the 3m provider request ceiling")
 		}
 		for name, value := range map[string]string{
 			"TYPESAFE_API_KEY": c.TypesafeAPIKey,
