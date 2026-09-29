@@ -483,7 +483,7 @@ func TestAlreadyCompletedDoesNotConfirmThisOperation(t *testing.T) {
 }
 
 func TestHalfOpenProbeAlwaysReleasesWithoutInventingRecovery(t *testing.T) {
-	for _, scenario := range []string{"claim_transient", "model_transient", "cancelled", "zero_jobs", "empty_queue", "model_success"} {
+	for _, scenario := range []string{"claim_503", "claim_network", "model_transient", "cancel_before_probe", "zero_jobs", "empty_queue", "model_success"} {
 		t.Run(scenario, func(t *testing.T) {
 			q := &stageQueue{fakeQueue: newFakeQueue()}
 			p := NewStaged(q, nil, stageClassifier{}, "v1", "jev", discardLogger(), 1)
@@ -495,12 +495,14 @@ func TestHalfOpenProbeAlwaysReleasesWithoutInventingRecovery(t *testing.T) {
 			defer cancel()
 			maxJobs := 5
 			switch scenario {
-			case "claim_transient":
-				q.claimErr = enrich.Classified(errors.New("claim unavailable"), enrich.ErrorClassTransient)
+			case "claim_503":
+				q.claimErr = enrich.Classified(&cairn.APIError{StatusCode: http.StatusServiceUnavailable}, enrich.ErrorClassTransient)
+			case "claim_network":
+				q.claimErr = enrich.Classified(io.ErrUnexpectedEOF, enrich.ErrorClassTransient)
 			case "model_transient":
 				q.jobPool = 5
 				p.stages.classifier = classifiedClassifier{err: enrich.Classified(errors.New("provider overloaded"), enrich.ErrorClassTransient)}
-			case "cancelled":
+			case "cancel_before_probe":
 				cancel()
 			case "zero_jobs":
 				maxJobs = 0
@@ -531,6 +533,107 @@ func TestHalfOpenProbeAlwaysReleasesWithoutInventingRecovery(t *testing.T) {
 				t.Fatalf("subsequent probe failed to recover: done=%d failed=%d err=%v", done, failed, err)
 			}
 		})
+	}
+}
+
+type cancelledProbeQueue struct {
+	*stageQueue
+	started chan struct{}
+	once    sync.Once
+}
+
+func (q *cancelledProbeQueue) ClaimClassification(ctx context.Context, _, _, _ string) (*cairn.ClassificationJob, error) {
+	q.once.Do(func() { close(q.started) })
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestHalfOpenProbeReleasesAfterClaimIsCancelled(t *testing.T) {
+	base := &stageQueue{fakeQueue: newFakeQueue()}
+	queue := &cancelledProbeQueue{stageQueue: base, started: make(chan struct{})}
+	p := NewStaged(queue, nil, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+	now := time.Date(2026, 9, 22, 0, 0, 0, 0, time.UTC)
+	p.stages.pause.now = func() time.Time { return now }
+	p.stages.pause.trip("model authentication failed")
+	now = now.Add(time.Hour)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, _, err := p.RunClassifications(ctx, 5)
+		done <- err
+	}()
+	select {
+	case <-queue.started:
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("half-open claim did not start")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancelled claim error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("cancelled half-open claim did not return")
+	}
+	p.stages.pause.mu.Lock()
+	probing := p.stages.pause.probing
+	p.stages.pause.mu.Unlock()
+	if probing || p.stages.pause.isHealthy() {
+		t.Fatal("cancelled claim kept probe ownership or cleared the model fault")
+	}
+	// The next bounded probe can still recover once its backoff expires.
+	p.stages.queue = base
+	base.job = &cairn.ClassificationJob{ID: 1}
+	now = now.Add(time.Hour)
+	doneCount, failed, err := p.RunClassifications(context.Background(), 5)
+	if err != nil || doneCount != 1 || failed != 0 || !p.stages.pause.isHealthy() {
+		t.Fatalf("probe after cancellation: done=%d failed=%d err=%v", doneCount, failed, err)
+	}
+}
+
+func TestPersistentClassification401DoesNotStopSourceWork(t *testing.T) {
+	base := newFakeQueue()
+	q := &stageQueue{fakeQueue: base,
+		claimErr: enrich.Classified(&cairn.APIError{StatusCode: http.StatusUnauthorized, Code: "configuration_error"},
+			enrich.ErrorClassConfiguration)}
+	r := &stageReader{q: q}
+	p := NewStaged(q, r, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+	now := time.Date(2026, 9, 22, 0, 0, 0, 0, time.UTC)
+	p.stages.pause.now = func() time.Time { return now }
+	if _, _, err := p.RunClassifications(context.Background(), 5); !errors.Is(err, ErrComponentPaused) {
+		t.Fatalf("first 401 did not pause classification: %v", err)
+	}
+	_, _, firstBackoff := p.ClassificationPaused()
+	for range 3 {
+		if _, _, err := p.RunClassifications(context.Background(), 5); !errors.Is(err, ErrComponentPaused) {
+			t.Fatalf("classification resumed before backoff: %v", err)
+		}
+	}
+	if q.claims != 1 {
+		t.Fatalf("paused classification claimed %d times", q.claims)
+	}
+	previousBackoff := firstBackoff
+	for probe := 2; probe <= 3; probe++ {
+		now = now.Add(previousBackoff + time.Second)
+		if _, _, err := p.RunClassifications(context.Background(), 5); !errors.Is(err, ErrComponentPaused) {
+			t.Fatalf("half-open 401 probe %d did not extend pause: %v", probe, err)
+		}
+		_, _, backoff := p.ClassificationPaused()
+		if q.claims != probe || backoff <= previousBackoff {
+			t.Fatalf("probe %d: claims=%d backoff=%s previous=%s", probe, q.claims, backoff, previousBackoff)
+		}
+		previousBackoff = backoff
+	}
+	base.jobs = []*cairn.Job{{ID: 7, URL: "https://x.com/synthetic/status/7", LeaseToken: "lease"}}
+	stats, err := p.RunSources(context.Background(), 1)
+	if err != nil || stats.Completed != 1 || r.fetches != 1 || r.transforms != 1 || len(base.completions) != 1 {
+		t.Fatalf("classification fault blocked source or reading: stats=%+v fetches=%d transforms=%d completions=%d err=%v",
+			stats, r.fetches, r.transforms, len(base.completions), err)
+	}
+	if p.stages.pause.isHealthy() || q.claims != 3 {
+		t.Fatal("source completion incorrectly cleared the classification fault")
 	}
 }
 
