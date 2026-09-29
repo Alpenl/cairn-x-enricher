@@ -443,33 +443,7 @@ func TestLocalWorkerCompletionPreflightRace(t *testing.T) {
 	if err != nil || job == nil {
 		t.Fatalf("claim classification: job=%+v err=%v", job, err)
 	}
-	type raceState struct {
-		Status         string  `json:"status"`
-		Classification *string `json:"classification"`
-		Projection     *string `json:"projection"`
-		Runs           int     `json:"runs"`
-		Decisions      int     `json:"decisions"`
-		Operations     int     `json:"operations"`
-	}
-	readState := func() raceState {
-		request, _ := http.NewRequestWithContext(ctx, http.MethodGet,
-			fmt.Sprintf("%s/__test__/completion-race/%d", base, id), nil)
-		request.Header.Set("Authorization", "Bearer "+enricherToken)
-		response, err := http.DefaultClient.Do(request)
-		if err != nil {
-			t.Fatalf("read local D1 race state: %v", err)
-		}
-		defer func() { _ = response.Body.Close() }()
-		if response.StatusCode != http.StatusOK {
-			t.Fatalf("read local D1 race state status = %d", response.StatusCode)
-		}
-		var state raceState
-		if err := json.NewDecoder(response.Body).Decode(&state); err != nil {
-			t.Fatalf("decode local D1 race state: %v", err)
-		}
-		return state
-	}
-	baseline := readState()
+	baseline := readCompletionRaceState(ctx, t, base, enricherToken, id)
 	if baseline.Status != "processing" || baseline.Runs != 0 || baseline.Decisions != 0 || baseline.Operations != 0 {
 		t.Fatalf("unexpected pre-completion D1 state: %+v", baseline)
 	}
@@ -510,7 +484,7 @@ func TestLocalWorkerCompletionPreflightRace(t *testing.T) {
 	if completionCalls != 2 || modelCalls.Load() != 1 {
 		t.Fatalf("replay caused work: completion calls=%d model calls=%d", completionCalls, modelCalls.Load())
 	}
-	state := readState()
+	state := readCompletionRaceState(ctx, t, base, enricherToken, id)
 	if state.Status != "processing" || state.Classification != nil ||
 		state.Runs != 0 || state.Decisions != 0 || state.Operations != 0 ||
 		(state.Projection == nil) != (baseline.Projection == nil) ||

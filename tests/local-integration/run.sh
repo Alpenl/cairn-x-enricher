@@ -6,6 +6,10 @@
 # Each test function runs against its own fresh Worker/D1 so target-generation
 # state from one scenario cannot leak into another.
 set -euo pipefail
+# This runner uses only local workerd/D1. Wrangler telemetry and its npm
+# version check would add unrelated network dependencies after migration.
+export WRANGLER_SEND_METRICS=false
+export npm_config_registry=http://127.0.0.1:9
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 enricher_root="$(cd "$here/../.." && pwd)"
@@ -161,9 +165,11 @@ stop_worker() {
 run_case() {
   local name="$1" test_name="$2"
   if [ -n "${CAIRN_INTEGRATION_CASE:-}" ] && [ "$CAIRN_INTEGRATION_CASE" != "$name" ]; then return; fi
-  local port work
+  local port work race_change
   port="$(free_port)"
   work="$work_root/$name"
+  race_change="${name#completionrace}"
+  race_change="${race_change#processor}"
   echo "== $test_name: starting worker on 127.0.0.1:$port =="
   start_worker "$name" "$port" "$work"
   (
@@ -171,7 +177,7 @@ run_case() {
     CAIRN_WORKER_URL="http://127.0.0.1:$port" \
     CAIRN_WRANGLER_CONFIG="$work/wrangler.jsonc" \
     CAIRN_SHARE_ROOT="$share_root" \
-    CAIRN_RACE_CHANGE="${name#completionrace}" \
+    CAIRN_RACE_CHANGE="$race_change" \
     CAIRN_APP_TOKEN=app \
     CAIRN_ENRICHER_TOKEN=internal \
     go test ./tests/localintegration/ -run "$test_name" -count=1 -v
@@ -183,6 +189,11 @@ run_case lifecycle TestLocalWorkerFullLifecycle
 run_case completionracecontent TestLocalWorkerCompletionPreflightRace
 run_case completionracelease TestLocalWorkerCompletionPreflightRace
 run_case completionracetarget TestLocalWorkerCompletionPreflightRace
+run_case completionraceprocessorsuccess TestLocalWorkerProcessorCompletionPreflightRace
+run_case completionraceprocessorcontent TestLocalWorkerProcessorCompletionPreflightRace
+run_case completionraceprocessortarget TestLocalWorkerProcessorCompletionPreflightRace
+run_case completionraceprocessorcancelcontent TestLocalWorkerProcessorCompletionPreflightRace
+run_case completioncrash TestLocalWorkerClassificationCompletionSurvivesProcessExit
 run_case halfopen TestLocalWorkerHalfOpenClaimFaultsAndIndependentSource
 run_case retryafter TestLocalWorkerProviderRetryHintSurvivesProcessorRestart
 run_case sourcelease TestLocalWorkerSourceLeaseAdmission
