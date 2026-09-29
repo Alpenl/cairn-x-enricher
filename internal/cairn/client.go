@@ -166,9 +166,11 @@ func (q BookmarkQuery) NeedsFilterContract() bool {
 
 // CurationUpdate applies explicit human edits; a null classification restores AI suggestions.
 type CurationUpdate struct {
-	Why            *string         `json:"why,omitempty"`
-	Status         *string         `json:"curation_status,omitempty"`
-	Classification json.RawMessage `json:"classification,omitempty"`
+	Why              *string         `json:"why,omitempty"`
+	Status           *string         `json:"curation_status,omitempty"`
+	Classification   json.RawMessage `json:"classification,omitempty"`
+	ExpectedRevision *int64          `json:"expected_revision,omitempty"`
+	OperationKey     string          `json:"operation_key,omitempty"`
 }
 
 // APIError reports a stable error returned by the Cairn Share Worker. Revision

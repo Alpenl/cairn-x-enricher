@@ -86,10 +86,12 @@ function createMock() {
       topics: ["llm", "eng", "eval", "design"], content_functions: ["tool", "method", "data"],
       carriers: ["author_continuation"], affordances: ["practice"], form: "method", use: "try"
     },
+    curation: { why: "", status: "inbox", reviewed: false },
     requests: [],
     modelCalls: 0,
     xSearchCalls: 0,
     operations: new Map(),
+    curationOperations: new Map(),
     // Test controls: delay the next override response so a rapid second action
     // is genuinely in flight, and force the next CAS check to conflict.
     delayNextMs: 0,
@@ -109,7 +111,9 @@ function createMock() {
     entityReads: 0,
     remoteTitle: null,
     holdWhy: false,
-    releaseWhy: null
+    releaseWhy: null,
+    failNextCuration: false,
+    loseNextCurationResponse: false
   };
 }
 
@@ -147,12 +151,14 @@ function startMockServer(state) {
     const cache_identity = { schema_version: 1, content_revision: 1,
       body_revision: state.identityRevision, personal_revision: state.revision,
       latest_decision_id: 0, latest_entity_revision: state.revision };
+    const curated = { ...BOOKMARK, why: state.curation.why, curation_status: state.curation.status,
+      classification_reviewed: state.curation.reviewed };
     if (url.pathname === "/api/bookmarks/12/reading" && state.combinedReading) {
       state.readingReads++;
       const bodyUnchanged = url.searchParams.get("body_revision") === String(state.identityRevision);
       if (bodyUnchanged) state.readingBodyOmissions++;
       return send(200, { version: 1, body_unchanged: bodyUnchanged,
-        detail: { ...BOOKMARK, original_text: bodyUnchanged ? null : BOOKMARK.original_text,
+        detail: { ...curated, original_text: bodyUnchanged ? null : BOOKMARK.original_text,
           translated_text: bodyUnchanged ? null : BOOKMARK.translated_text,
           ai_title: state.remoteTitle || BOOKMARK.ai_title,
           cache_identity, updated_at: "2026-09-20T00:00:00Z" },
@@ -163,7 +169,7 @@ function startMockServer(state) {
     }
     if (url.pathname === "/api/bookmarks/12") {
       state.detailReads++;
-      return send(200, { ...BOOKMARK, ai_title: state.remoteTitle || BOOKMARK.ai_title,
+      return send(200, { ...curated, ai_title: state.remoteTitle || BOOKMARK.ai_title,
         cache_identity, updated_at: "2026-09-20T00:00:00Z" });
     }
     if (url.pathname === "/api/bookmarks/12/identity") {
@@ -211,6 +217,10 @@ function startMockServer(state) {
       }
       if (body.action === "reject") state.selection[body.field] = state.selection[body.field].filter((id) => id !== body.term);
       if (body.action === "set_empty") state.selection[body.field] = [];
+      // The Worker projects a human override to links.curation. A successful
+      // edit makes the bookmark reviewed, so the redundant confirm action
+      // disappears when the detail refresh completes.
+      state.curation.reviewed = true;
       state.revision += 1;
       const response = { id: 12, field: body.field, term: body.term, action: body.action, revision: state.revision, replayed: false };
       state.operations.set(key, response);
@@ -253,16 +263,41 @@ function startMockServer(state) {
     }
     if (url.pathname === "/api/bookmarks/12/curation") {
       state.requests.push({ path: url.pathname, body });
+      if (state.failNextCuration) {
+        state.failNextCuration = false;
+        return send(503, { error: "backend_error" });
+      }
+      if (body.operation_key && state.curationOperations.has(body.operation_key)) {
+        return send(200, state.curationOperations.get(body.operation_key));
+      }
+      if (body.expected_revision !== undefined && body.expected_revision !== state.revision) {
+        return send(409, { error: "revision_conflict", revision: state.revision });
+      }
       if (state.holdWhy && "why" in body) {
         await new Promise((resolve) => { state.releaseWhy = resolve; });
       }
-      return send(200, { ...BOOKMARK, why: body.why ?? "", curation_status: body.curation_status ?? "inbox", classification_reviewed: "classification" in body });
+      if ("why" in body) state.curation.why = body.why;
+      if ("curation_status" in body) state.curation.status = body.curation_status;
+      if ("classification" in body) {
+        state.curation.reviewed = body.classification !== null;
+        state.revision += 1;
+      }
+      const updated = { ...BOOKMARK, why: state.curation.why, curation_status: state.curation.status,
+        classification_reviewed: state.curation.reviewed,
+        cache_identity: { schema_version: 1, content_revision: 1, body_revision: state.identityRevision,
+          personal_revision: state.revision, latest_decision_id: 0, latest_entity_revision: state.revision } };
+      if (body.operation_key) state.curationOperations.set(body.operation_key, updated);
+      if (state.loseNextCurationResponse) {
+        state.loseNextCurationResponse = false;
+        return send(503, { error: "response_lost" });
+      }
+      return send(200, updated);
     }
     if (url.pathname === "/api/bookmarks") {
       state.listQueries.push(Object.fromEntries(url.searchParams));
       const filtered = url.searchParams.has("topics") || url.searchParams.has("content_functions");
       return send(200, {
-        items: filtered ? [] : [{ ...BOOKMARK, content_loaded: false, original_text: undefined, translated_text: undefined }],
+        items: filtered ? [] : [{ ...curated, content_loaded: false, original_text: undefined, translated_text: undefined }],
         counts: { total: filtered ? 0 : 1 }, next_before_id: null,
         ...(state.oldFilterBackend ? {} : { filter_contract_version: 1 })
       });
@@ -415,13 +450,9 @@ async function partA(browser) {
   check("an unauthorized write-back explains itself instead of silently failing", /未授权/.test(await page.textContent("#v2-replay-result") || ""));
   check("no model or X Search call happened", state.modelCalls === 0 && state.xSearchCalls === 0);
 
-  // 12. An explicit "确认标签" is the only other way tags are sent.
-  const beforeConfirm = state.requests.length;
-  await page.click("#confirm-classification");
-  await waitFor(() => state.requests.slice(beforeConfirm).some((entry) => entry.path.endsWith("/curation")));
-  const confirm = state.requests.slice(beforeConfirm).find((entry) => entry.path.endsWith("/curation"));
-  equal("explicit confirmation sends the AI topics", confirm?.body.classification?.topics, ["llm", "eng", "eval"]);
-  check("explicit confirmation sends no status or reason", confirm && !("why" in confirm.body) && !("curation_status" in confirm.body));
+  // 12. An explicit override is already a human review, so confirming the old
+  // AI selection after it would undo the edit.
+  check("an explicit override hides redundant AI confirmation", await waitFor(() => page.isHidden("#confirm-classification")));
 
   // 13. Keyboard reachability and narrow viewports.
   check("tag chips are keyboard focusable", await page.evaluate(() => {
@@ -809,6 +840,152 @@ async function partE(browser) {
   }
 }
 
+// The first save of an unreviewed bookmark, a failed save and its retry must
+// keep reason/status independent from the explicit tag confirmation action.
+async function partF(browser) {
+  const state = createMock();
+  const server = await startMockServer(state);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(String(error)));
+  const curationRequests = () => state.requests.filter((entry) => entry.path.endsWith("/curation"));
+  try {
+    await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
+    await page.waitForSelector("#confirm-classification:visible");
+    equal("unreviewed bookmark starts without a curation write", curationRequests().length, 0);
+    await page.fill("#curation-why", "首次只保存原因");
+    await page.press("#curation-why", "Enter");
+    check("first reason save reaches Worker", await waitFor(() => curationRequests().length === 1));
+    equal("first reason save sends only why", curationRequests()[0]?.body, { why: "首次只保存原因" });
+    check("first reason save leaves AI tags unconfirmed", await page.isVisible("#confirm-classification"));
+
+    state.failNextCuration = true;
+    await page.fill("#curation-why", "网络失败后保留的原因");
+    await page.press("#curation-why", "Enter");
+    check("failed reason save is reported", await waitFor(async () =>
+      (await page.textContent("#save-state") || "").includes("保存失败")));
+    equal("failed reason save keeps the draft", await page.inputValue("#curation-why"), "网络失败后保留的原因");
+    equal("failed reason save sends only why", curationRequests()[1]?.body, { why: "网络失败后保留的原因" });
+    await page.press("#curation-why", "Enter");
+    check("retry sends the saved draft again", await waitFor(() => curationRequests().length === 3));
+    equal("reason retry still sends only why", curationRequests()[2]?.body, { why: "网络失败后保留的原因" });
+    check("reason retry succeeds without confirming tags", await waitFor(async () =>
+      (await page.textContent("#save-state") || "").includes("已保存")) && await page.isVisible("#confirm-classification"));
+
+    await page.click("#status-seg button[data-status='kept']");
+    check("status-only save reaches Worker", await waitFor(() => curationRequests().length === 4));
+    equal("status-only save omits reason and tags", curationRequests()[3]?.body, { curation_status: "kept" });
+    await page.click("#confirm-classification");
+    check("explicit confirm sends a separate curation request", await waitFor(() => curationRequests().length === 5));
+    equal("explicit confirm sends guarded classification", Object.keys(curationRequests()[4]?.body || {}).sort(),
+      ["classification", "expected_revision", "operation_key"]);
+    check("explicit confirm uses the displayed revision", curationRequests()[4]?.body.expected_revision === 3);
+    check("reviewed bookmark hides the confirm action", await waitFor(() => page.isHidden("#confirm-classification")));
+    await page.fill("#curation-why", "确认后只改原因");
+    await page.press("#curation-why", "Enter");
+    check("reviewed bookmark saves reason separately", await waitFor(() => curationRequests().length === 6));
+    equal("reviewed reason save still omits tags", curationRequests()[5]?.body, { why: "确认后只改原因" });
+    await page.click("#status-seg button[data-status='compiled']");
+    check("reviewed bookmark saves status separately", await waitFor(() => curationRequests().length === 7));
+    equal("reviewed status save still omits tags", curationRequests()[6]?.body, { curation_status: "compiled" });
+    check("ordinary saves retain reviewed state", state.curation.reviewed && await page.isHidden("#confirm-classification"));
+    const beforeEdit = overrides(state).length;
+    await page.click("#v2-topics .chip.on[data-term='llm']");
+    check("explicit tag edit uses its own override", await waitFor(() => overrides(state).length === beforeEdit + 1));
+    check("tag edit never resends the old confirmed selection", curationRequests().length === 7);
+    check("first save, failure and confirmation cause no model call", state.modelCalls === 0 && state.xSearchCalls === 0);
+    check("first save and retry cause no page error", pageErrors.length === 0, pageErrors.join("; "));
+  } finally {
+    await page.close();
+    server.close();
+  }
+}
+
+// A v2 edit can commit before the detail read updates the v1 projection. In
+// that window the old AI confirmation must stay unavailable, including through
+// the keyboard shortcut and a failed override that is later discarded.
+async function partG(browser) {
+  const state = createMock();
+  const server = await startMockServer(state);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const curationRequests = () => state.requests.filter((entry) => entry.path.endsWith("/curation"));
+  try {
+    await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
+    await page.waitForSelector("#confirm-classification:visible");
+    state.delayNextMs = 400;
+    await page.click("#v2-topics .chip.on[data-term='eng']");
+    check("pending override immediately hides stale AI confirmation", await page.isHidden("#confirm-classification"));
+    await page.keyboard.press("a");
+    equal("confirmation shortcut cannot race a pending override", curationRequests().length, 0);
+    check("override eventually commits", await waitFor(() => state.curation.reviewed));
+    check("committed override leaves confirmation hidden", await waitFor(() => page.isHidden("#confirm-classification")));
+    equal("committed override does not send legacy classification", curationRequests().length, 0);
+
+    // A rejected edit remains blocked until the user explicitly discards it.
+    // Once fresh detail arrives, the original unreviewed confirmation returns.
+    state.curation.reviewed = false;
+    state.forceConflict = true;
+    await page.click("#v2-topics .chip.on[data-term='llm']");
+    check("conflicted edit exposes discard", await waitFor(() => page.isVisible("#v2-conflict [data-conflict='discard']")));
+    check("blocked edit keeps confirmation hidden", await page.isHidden("#confirm-classification"));
+    await page.click("#v2-conflict [data-conflict='discard']");
+    check("discard restores confirmation after fresh detail", await waitFor(() => page.isVisible("#confirm-classification")));
+    equal("discard never confirms tags", curationRequests().length, 0);
+  } finally {
+    await page.close();
+    server.close();
+  }
+}
+
+async function partH(browser) {
+  const state = createMock();
+  const server = await startMockServer(state);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const confirms = () => state.requests.filter((entry) => entry.path.endsWith("/curation") && "classification" in entry.body);
+  try {
+    await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
+    await page.waitForSelector("#confirm-classification:visible");
+    state.loseNextCurationResponse = true;
+    await page.click("#confirm-classification");
+    check("lost confirm response is shown as a failure", await waitFor(async () =>
+      (await page.textContent("#save-state") || "").includes("确认失败")));
+    check("failed confirmation keeps its action available", await page.isVisible("#confirm-classification"));
+    await page.click("#confirm-classification");
+    check("confirmation retry reaches Worker", await waitFor(() => confirms().length === 2));
+    equal("confirmation retry reuses the operation key", confirms()[1]?.body.operation_key, confirms()[0]?.body.operation_key);
+    equal("one logical confirmation is stored", state.curationOperations.size, 1);
+    check("replayed confirmation is shown as reviewed", await waitFor(() => page.isHidden("#confirm-classification")));
+  } finally {
+    await page.close();
+    server.close();
+  }
+}
+
+async function partI(browser) {
+  const state = createMock();
+  const server = await startMockServer(state);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const confirms = () => state.requests.filter((entry) => entry.path.endsWith("/curation") && "classification" in entry.body);
+  try {
+    await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
+    await page.waitForSelector("#confirm-classification:visible");
+    // Another client committed before this tab could confirm its old view.
+    state.revision += 1;
+    state.curation.reviewed = true;
+    await page.click("#confirm-classification");
+    check("stale confirmation reaches the version guard", await waitFor(() => confirms().length === 1));
+    check("conflict refreshes the reviewed state", await waitFor(() => page.isHidden("#confirm-classification")));
+    equal("stale confirmation did not append another write", state.curationOperations.size, 0);
+  } finally {
+    await page.close();
+    server.close();
+  }
+}
+
 async function main() {
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ["--no-sandbox"] });
   try {
@@ -817,6 +994,10 @@ async function main() {
     await partC(browser);
     await partD(browser);
     await partE(browser);
+    await partF(browser);
+    await partG(browser);
+    await partH(browser);
+    await partI(browser);
   } finally {
     await browser.close();
   }

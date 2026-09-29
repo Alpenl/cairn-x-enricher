@@ -41,8 +41,9 @@ function sessionFor(id) {
     session = {
       id,
       why: { dirty: false, timer: 0, saving: false, error: false },
-      v1: { selection: null, dirty: false, timer: 0, saving: false },
-      v2: { status: "idle", selection: null, automatic: null, revision: 0, queue: [], inFlight: false, blocked: null, readEpoch: 0 },
+      v1: { selection: null, dirty: false, timer: 0, saving: false, confirmPending: null },
+      v2: { status: "idle", selection: null, automatic: null, revision: 0, queue: [], inFlight: false,
+        blocked: null, awaitingDetail: false, awaitingFromRevision: 0, readEpoch: 0 },
       entities: { status: "idle", payload: null, revision: 0, readEpoch: 0 },
       editing: new Set(),
       saveState: ""
@@ -206,6 +207,7 @@ function toggleV1(session, dimension, term) {
     selection[dimension.key] = selection[dimension.key] === term ? "" : term;
   }
   session.v1.dirty = true;
+  session.v1.confirmPending = null;
   setSaveState(session, "未保存");
   renderTags();
   scheduleV1Save(session);
@@ -215,26 +217,56 @@ function toggleV1(session, dimension, term) {
 export async function confirmTags(id, { quiet = false } = {}) {
   const item = getItem(id);
   if (!item || item.classification_reviewed) return false;
+  const session = sessionFor(id);
+  // A pending v2 edit may already have changed the effective selection. The
+  // old AI projection must not be confirmed over that edit while the detail
+  // read is still catching up with the committed override.
+  if (session.v1.saving || session.v2.awaitingDetail || session.v2.queue.length || session.v2.inFlight || session.v2.blocked) {
+    if (!quiet) toast("请等标签修改保存完成后再确认", { tone: "error" });
+    return false;
+  }
   const selection = v1Selection(item);
   if (!selection.topics.length && !selection.form && !selection.use) {
     if (!quiet) toast("这条还没有可确认的 AI 标签", { tone: "error" });
     return false;
   }
-  const session = sessionFor(id);
+  const revision = item.cache_identity?.personal_revision;
+  const pending = session.v1.confirmPending;
+  const intent = JSON.stringify(selection);
+  const request = Number.isSafeInteger(revision)
+    ? pending && pending.revision === revision && pending.intent === intent ? pending
+      : { revision, intent, key: newOperationKey(`confirm-tags-${id}`) }
+    : null;
+  session.v1.confirmPending = request;
+  session.v1.saving = true;
   setSaveState(session, "保存中…");
   try {
-    const updated = await api.curation(id, { classification: selection });
+    const updated = await api.curation(id, { classification: selection,
+      ...(request ? { expected_revision: request.revision, operation_key: request.key } : {}) });
     mergeItem(updated);
     session.v1.selection = null;
     session.v1.dirty = false;
+    session.v1.confirmPending = null;
     setSaveState(session, "已确认标签");
     emit("item", id);
     if (vocab.v2Available && session.v2.status === "ready") loadV2(session, { force: true });
     return true;
   } catch (error) {
+    if (error?.message === "revision_conflict") {
+      session.v1.confirmPending = null;
+      try {
+        mergeItem(await api.detail(id));
+        emit("item", id);
+        if (session.id === currentId) renderTags();
+      } catch {
+        // The next visible-detail check can refresh the stale row.
+      }
+    }
     setSaveState(session, `确认失败：${errorLabel(error.message)}`, { error: true });
     if (!quiet) toast(`确认标签失败：${errorLabel(error.message)}`, { tone: "error" });
     throw error;
+  } finally {
+    session.v1.saving = false;
   }
 }
 
@@ -311,13 +343,16 @@ function applyLocal(session, { field, term, action }) {
 
 export function enqueueOverride(id, field, term, action) {
   const session = sessionFor(id);
+  session.v1.confirmPending = null;
   if (session.v2.blocked) {
     setSaveState(session, "请先处理下面的保存问题（重试或放弃修改），再继续编辑。", { error: true });
     return;
   }
   const entry = { key: newOperationKey(`v2-${id}`), field, term, action };
+  if (!session.v2.awaitingDetail) session.v2.awaitingFromRevision = session.v2.revision;
   applyLocal(session, entry);
   session.v2.queue.push(entry);
+  session.v2.awaitingDetail = true;
   if (session.id === currentId) {
     renderTags();
     els.section.setAttribute("aria-busy", "true");
@@ -348,7 +383,9 @@ async function pump(session) {
     // The v1 projection, review state and list row follow the new decision.
     try {
       mergeItem(await api.detail(session.id));
+      session.v2.awaitingDetail = false;
       emit("item", session.id);
+      if (session.id === currentId) renderTags();
     } catch {
       // The tags are saved; a stale row is refreshed by the next read.
     }
@@ -401,6 +438,14 @@ function renderConflict(session) {
     renderConflict(session);
     setSaveState(session, "");
     await loadV2(session, { force: true });
+    try {
+      mergeItem(await api.detail(session.id));
+      session.v2.awaitingDetail = false;
+      emit("item", session.id);
+      if (session.id === currentId) renderTags();
+    } catch {
+      // Keep confirmation disabled until a later detail read catches up.
+    }
   });
   clear(holder, icon("alert", 16), h("p", message), h("div.conflict-actions", retry, discard));
 }
@@ -593,7 +638,7 @@ function renderFoot(session, item, compact = false) {
   const classification = item?.classification;
   const hasSuggestions = Boolean(classification?.topics?.length || classification?.form || classification?.use);
   const usingV2 = session.v2.status === "ready";
-  els.confirm.hidden = reviewed || !hasSuggestions;
+  els.confirm.hidden = reviewed || !hasSuggestions || session.v2.awaitingDetail;
   // In the multidimensional editor every field has its own reset; the global
   // v1 reset only restores topics/form/use and would read as "undo all".
   els.reset.hidden = !reviewed || usingV2;
@@ -709,6 +754,11 @@ export function refresh(id) {
   const session = sessionFor(id);
   const item = getItem(id);
   if (!item) return;
+  if (session.v2.awaitingDetail && !session.v2.inFlight && !session.v2.queue.length &&
+      Number(item.cache_identity?.personal_revision) > session.v2.awaitingFromRevision &&
+      Number(item.cache_identity?.personal_revision) >= session.v2.revision) {
+    session.v2.awaitingDetail = false;
+  }
   const first = els.section.hidden;
   els.section.hidden = false;
   renderWhy(session, item, { switched: first && !session.why.dirty && !session.why.saving });
