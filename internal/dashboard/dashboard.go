@@ -297,12 +297,12 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	// Every page route serves the same application shell; the client router
 	// renders the library, a bookmark or the backstage view from the URL.
-	mux.HandleFunc("GET /{$}", func(writer http.ResponseWriter, _ *http.Request) {
-		servePage(writer, appShell)
+	mux.HandleFunc("GET /{$}", func(writer http.ResponseWriter, request *http.Request) {
+		servePage(writer, request, appShell)
 	})
 	mux.HandleFunc("GET /bookmarks/{id}", serveReader)
-	mux.HandleFunc("GET /backstage", func(writer http.ResponseWriter, _ *http.Request) {
-		servePage(writer, appShell)
+	mux.HandleFunc("GET /backstage", func(writer http.ResponseWriter, request *http.Request) {
+		servePage(writer, request, appShell)
 	})
 	mux.HandleFunc("GET /assets/{path...}", serveWebAsset)
 
@@ -344,7 +344,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/overview", s.getOverview)
 	mux.HandleFunc("POST /api/bookmarks/process", s.processBookmarks)
 	mux.HandleFunc("POST /api/bookmarks/{id}/source", s.processBookmarkSource)
-	return mux
+	return compressAPIResponses(mux)
 }
 
 func serveReader(writer http.ResponseWriter, request *http.Request) {
@@ -352,17 +352,25 @@ func serveReader(writer http.ResponseWriter, request *http.Request) {
 		http.NotFound(writer, request)
 		return
 	}
-	servePage(writer, appShell)
+	servePage(writer, request, appShell)
 }
 
-func servePage(writer http.ResponseWriter, content []byte) {
+func servePage(writer http.ResponseWriter, request *http.Request, content []byte) {
+	appendVary(writer.Header(), "Accept-Encoding")
+	if acceptsGzip(request) && len(appShellGzip) > 0 {
+		content = appShellGzip
+		writer.Header().Set("Content-Encoding", "gzip")
+	}
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+	writer.Header().Set("Content-Length", strconv.Itoa(len(content)))
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.Header().Set("Content-Security-Policy", "default-src 'none'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 	writer.Header().Set("Referrer-Policy", "no-referrer")
 	writer.Header().Set("X-Content-Type-Options", "nosniff")
 	writer.WriteHeader(http.StatusOK)
-	_, _ = writer.Write(content)
+	if request.Method != http.MethodHead {
+		_, _ = writer.Write(content)
+	}
 }
 
 func (s *Server) listBookmarks(writer http.ResponseWriter, request *http.Request) {
