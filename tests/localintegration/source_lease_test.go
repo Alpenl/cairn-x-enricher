@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -24,6 +25,7 @@ type localSourceReader struct {
 }
 
 type localFailedSourceReader struct{ localSourceReader }
+type localFailedReadingReader struct{ localSourceReader }
 
 type workerRequestRecorder struct {
 	mu     sync.Mutex
@@ -60,6 +62,14 @@ func (r *localFailedSourceReader) FetchSource(ctx context.Context, input enrich.
 		return enrich.Source{}, err
 	}
 	return enrich.Source{}, &enrich.ModelHTTPError{StatusCode: http.StatusBadGateway, Type: "upstream_error"}
+}
+
+func (r *localFailedReadingReader) Transform(ctx context.Context, input enrich.Input) (enrich.Result, error) {
+	r.transforms++
+	if err := r.reserve(ctx, input, "reading", true); err != nil {
+		return enrich.Result{}, err
+	}
+	return enrich.Result{}, errors.New("fixture reading validation failed")
 }
 
 func (r *localSourceReader) reserve(ctx context.Context, input enrich.Input, stage string, known bool) error {
@@ -144,6 +154,7 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 	detail, err := queue.GetBookmark(ctx, id)
 	if err != nil || detail.Status != "completed" ||
 		detail.OriginalText != "Fixture source for lease admission" ||
+		detail.Classification != nil ||
 		reader.fetches != 1 || reader.transforms != 1 {
 		t.Fatalf("source admission lifecycle = %+v, fetches=%d transforms=%d, err=%v",
 			detail, reader.fetches, reader.transforms, err)
@@ -165,6 +176,43 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 	}
 	if reader.fetches != 1 || reader.transforms != 1 {
 		t.Fatalf("completion replay ran paid stages: fetches=%d transforms=%d", reader.fetches, reader.transforms)
+	}
+	// Personal changes must preserve the saved objective source and reading.
+	// The source queue should stay empty, and no provider stage should run.
+	request, err := http.NewRequestWithContext(ctx, http.MethodPatch,
+		base+"/api/links/"+strconv.FormatInt(id, 10), strings.NewReader(`{"note":"private annotation changed"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+envOr("CAIRN_APP_TOKEN", "app"))
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("note-only update HTTP %d", response.StatusCode)
+	}
+	why, status := "my reason", "kept"
+	if _, err := queue.UpdateCuration(ctx, id, cairn.CurationUpdate{Why: &why, Status: &status}); err != nil {
+		t.Fatalf("why/status update: %v", err)
+	}
+	personal, err := queue.GetBookmark(ctx, id)
+	if err != nil || personal.CacheIdentity == nil || detail.CacheIdentity == nil ||
+		personal.CacheIdentity.ContentRevision != detail.CacheIdentity.ContentRevision ||
+		personal.OriginalText != detail.OriginalText || personal.TranslatedText != detail.TranslatedText ||
+		personal.Summary != detail.Summary || personal.Note != "private annotation changed" ||
+		personal.Why != why || personal.CurationStatus != status || personal.Classification != nil {
+		t.Fatalf("personal edit changed objective content: before=%+v after=%+v err=%v", detail, personal, err)
+	}
+	saved, err := queue.GetSource(ctx, id)
+	if err != nil || saved == nil || saved.OriginalText != detail.OriginalText {
+		t.Fatalf("personal edit removed source checkpoint: %+v %v", saved, err)
+	}
+	if claimed, err := queue.Claim(ctx); err != nil || claimed != nil || reader.fetches != 1 || reader.transforms != 1 {
+		t.Fatalf("personal edit requeued paid source work: claim=%+v fetches=%d reading=%d err=%v",
+			claimed, reader.fetches, reader.transforms, err)
 	}
 
 	failedID := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
@@ -203,4 +251,37 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 	if claimed, err := queue.Claim(ctx); err != nil || claimed != nil {
 		t.Fatalf("possibly paid call was claimed again: %+v, %v", claimed, err)
 	}
+
+	readingID := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
+	readingJob, err := queue.Claim(ctx)
+	if err != nil || readingJob == nil || readingJob.ID != readingID {
+		t.Fatalf("reading-failure source claim: %+v %v", readingJob, err)
+	}
+	readingFailure := &localFailedReadingReader{localSourceReader{queue: queue}}
+	readingWorker := processor.NewStaged(queue, readingFailure, nil, "", "",
+		slog.New(slog.NewJSONHandler(io.Discard, nil)), 1)
+	readingWorker.SetPaidStageTimeout(10 * time.Second)
+	if err := readingWorker.Process(ctx, readingJob); err == nil ||
+		readingFailure.fetches != 1 || readingFailure.transforms != 1 {
+		t.Fatalf("reading fixture did not fail after saving source: fetches=%d reading=%d err=%v",
+			readingFailure.fetches, readingFailure.transforms, err)
+	}
+	retained, err := queue.GetSource(ctx, readingID)
+	if err != nil || retained == nil || retained.OriginalText != "Fixture source for lease admission" {
+		t.Fatalf("reading failure lost durable source: %+v %v", retained, err)
+	}
+	failedReading, err := queue.GetBookmark(ctx, readingID)
+	if err != nil || failedReading.Status != "failed" || !failedReading.PaidCallUnresolved ||
+		failedReading.PaidStage != "reading" || failedReading.OriginalText != retained.OriginalText {
+		t.Fatalf("reading failure lost source or paid uncertainty: %+v %v", failedReading, err)
+	}
+	if retryJob, err := queue.ClaimByID(ctx, readingID); retryJob != nil || err == nil {
+		t.Fatalf("unresolved paid reading was reclaimed: %+v %v", retryJob, err)
+	} else {
+		var apiErr *cairn.APIError
+		if !errors.As(err, &apiErr) || apiErr.Code != "job_busy" {
+			t.Fatalf("reading retry failed for the wrong reason: %v", err)
+		}
+	}
+	t.Log("personal edits kept one source/reading attempt and no new source lease; failed reading kept the source and blocked a duplicate paid attempt")
 }
