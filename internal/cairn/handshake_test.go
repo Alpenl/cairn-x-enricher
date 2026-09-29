@@ -2,6 +2,7 @@ package cairn
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,51 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 )
+
+func TestRegisteredSpecHashAndGenerationGuardBeforeClaim(t *testing.T) {
+	const specID = "classify-test"
+	const specHash = "local-hash"
+	serverHash := "other-hash"
+	claims := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v2/question-specs":
+			_, _ = w.Write([]byte(`{}`))
+		case "/api/enrichment/classifications/target":
+			_, _ = fmt.Fprintf(w, `{"target":{"generation":7,"spec_id":%q,"spec_hash":%q,"taxonomy_version":"v1","policy_version":%q,"requested_model":"jev-test","protocol":"v2"},"supported":true}`, specID, serverHash, classify.PolicyVersion)
+		case "/api/enrichment/classifications/claim":
+			claims++
+			var body struct {
+				ExpectedGeneration int `json:"expected_generation"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ExpectedGeneration != 7 {
+				t.Errorf("claim expected_generation = %d, decode error = %v", body.ExpectedGeneration, err)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "token", server.Client())
+	_, err := client.ClaimClassification(context.Background(), specID, "v1", "jev-test")
+	if !enrich.PausesComponent(err) || claims != 0 {
+		t.Fatalf("unregistered spec claimed: error=%v claims=%d", err, claims)
+	}
+	if err := client.PutQuestionSpec(context.Background(), classify.QuestionSpec{SpecID: specID, SpecVersion: 1, TaxonomyVersion: "v1", SemanticHash: specHash}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.ClaimClassification(context.Background(), specID, "v1", "jev-test")
+	if !enrich.PausesComponent(err) || claims != 0 {
+		t.Fatalf("mismatched registered spec claimed: error=%v claims=%d", err, claims)
+	}
+	serverHash = specHash
+	job, err := client.ClaimClassification(context.Background(), specID, "v1", "jev-test")
+	if err != nil || job != nil || claims != 1 {
+		t.Fatalf("matching registered spec: job=%v error=%v claims=%d", job, err, claims)
+	}
+}
 
 func TestHandshakeDeclaresCapabilitiesAndReportsSupport(t *testing.T) {
 	var gotQuery string
@@ -126,6 +172,7 @@ func TestBudgetedConsumerRequiresServerProtocolBeforeClaim(t *testing.T) {
 			}))
 			defer server.Close()
 			client := NewClient(server.URL, "fixture", server.Client())
+			client.registeredSpecHashes = map[string]string{"fixture": "hash"}
 			if err := client.SetClassificationBudgetLimits(classify.DefaultCallBudgetLimits()); err != nil {
 				t.Fatal(err)
 			}

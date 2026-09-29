@@ -41,13 +41,19 @@ func newClassifyCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if id > 0 {
-			if err := queue.RetryClassification(ctx, id); err != nil {
-				return err
-			}
+		if err := queue.PutQuestionSpec(ctx, client.Spec()); err != nil {
+			return fmt.Errorf("register classification question spec: %w", err)
 		}
 		if err := configureClassificationBudget(cfg, queue, client); err != nil {
 			return err
+		}
+		if id > 0 {
+			if _, err := queue.ClassificationReady(ctx, client.SpecID(), catalog.Version, cfg.TypesafeModel); err != nil {
+				return err
+			}
+			if err := queue.RetryClassification(ctx, id); err != nil {
+				return err
+			}
 		}
 		worker := processor.NewStaged(queue, nil, client, catalog.Version, cfg.TypesafeModel, newLogger(cfg.LogLevel), 1)
 		extensions, err := extensionService(cfg, client)

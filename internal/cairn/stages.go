@@ -172,19 +172,17 @@ func (c *Client) SaveSource(ctx context.Context, id int64, token string, source 
 // is returned as a classified configuration error so the caller pauses the
 // component instead of burning the queue's attempts.
 func (c *Client) ClaimClassification(ctx context.Context, specID, version, model string) (*ClassificationJob, error) {
-	handshake, err := c.Handshake(ctx, ClassificationCapabilities(specID, version, model))
+	target, err := c.ClassificationReady(ctx, specID, version, model)
 	if err != nil {
 		return nil, err
 	}
-	if !handshake.Supported {
-		return nil, enrich.Classified(fmt.Errorf("classification target %q generation %d is not supported by this consumer", handshake.Target.SpecID, handshake.Target.Generation), enrich.ErrorClassConfiguration)
-	}
 	payload := map[string]any{
-		"protocol":          "v2",
-		"spec_ids":          []string{handshake.Target.SpecID},
-		"taxonomy_versions": []string{handshake.Target.TaxonomyVersion},
-		"policy_versions":   []string{handshake.Target.PolicyVersion},
-		"models":            []string{handshake.Target.RequestedModel},
+		"protocol":            "v2",
+		"expected_generation": target.Generation,
+		"spec_ids":            []string{specID},
+		"taxonomy_versions":   []string{version},
+		"policy_versions":     []string{classify.PolicyVersion},
+		"models":              []string{model},
 	}
 	if c.classificationBudget != nil {
 		payload["budget_limits"] = *c.classificationBudget
@@ -207,7 +205,31 @@ func (c *Client) ClaimClassification(ctx context.Context, specID, version, model
 	if job.ID < 1 || job.Revision < 1 || job.LeaseToken == "" || job.OriginalText == "" {
 		return nil, fmt.Errorf("invalid classification job")
 	}
+	if job.TargetGeneration != target.Generation || job.SpecID != target.SpecID {
+		return nil, enrich.Classified(errors.New("classification claim is bound to a different target"), enrich.ErrorClassStale)
+	}
 	return &job, nil
+}
+
+// ClassificationReady checks the Worker's active target against this build's
+// registered spec before a manual retry or a lease can change queue state.
+func (c *Client) ClassificationReady(ctx context.Context, specID, version, model string) (ClassificationTarget, error) {
+	handshake, err := c.Handshake(ctx, ClassificationCapabilities(specID, version, model))
+	if err != nil {
+		return ClassificationTarget{}, err
+	}
+	target := handshake.Target
+	c.specMu.RLock()
+	expectedHash := c.registeredSpecHashes[specID]
+	c.specMu.RUnlock()
+	if !handshake.Supported || target.Protocol != "v2" || target.SpecID != specID ||
+		target.TaxonomyVersion != version || target.PolicyVersion != classify.PolicyVersion ||
+		target.RequestedModel != model || expectedHash == "" || target.SpecHash != expectedHash {
+		return ClassificationTarget{}, enrich.Classified(
+			fmt.Errorf("classification target %q generation %d is not supported by this consumer", target.SpecID, target.Generation),
+			enrich.ErrorClassConfiguration)
+	}
+	return target, nil
 }
 
 // ClassificationCapabilities describes the single target this build supports.
@@ -495,7 +517,16 @@ func (c *Client) PutQuestionSpec(ctx context.Context, spec classify.QuestionSpec
 		return fmt.Errorf("encode question spec: %w", err)
 	}
 	body["spec_hash"] = spec.SemanticHash
-	return c.stageWrite(ctx, "/api/v2/question-specs", body)
+	if err := c.stageWrite(ctx, "/api/v2/question-specs", body); err != nil {
+		return err
+	}
+	c.specMu.Lock()
+	if c.registeredSpecHashes == nil {
+		c.registeredSpecHashes = make(map[string]string)
+	}
+	c.registeredSpecHashes[spec.SpecID] = spec.SemanticHash
+	c.specMu.Unlock()
+	return nil
 }
 
 // StoredDecision retains every input run of a policy replay. Older Workers only

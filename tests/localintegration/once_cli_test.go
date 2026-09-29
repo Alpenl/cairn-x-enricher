@@ -120,6 +120,29 @@ func TestLocalWorkerOnceSkipsEmptySourceCanary(t *testing.T) {
 	if stored, err := queue.GetLatestRun(ctx, classificationID); err != nil || stored == nil {
 		t.Fatalf("classification-only once did not persist a run: %v %v", stored, err)
 	}
+	// The same entrypoint must pause classification on an incompatible target
+	// without consuming the saved source's classification attempt.
+	mismatchID := createLink(t, base, "app")
+	mismatchLease := claimEnrichmentJob(t, base, "internal", mismatchID)
+	if err := queue.SaveSource(ctx, mismatchID, mismatchLease, source); err != nil {
+		t.Fatal(err)
+	}
+	if err := queue.SubmitEvidence(ctx, mismatchID, processor.EvidenceSnapshot(source, time.Now())); err != nil {
+		t.Fatal(err)
+	}
+	switchTarget(t, base, "internal", classifier, "jev-other")
+	before, err := queue.GetClassificationStatus(ctx, mismatchID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(); err == nil {
+		t.Fatal("once accepted incompatible classification target")
+	}
+	after, err := queue.GetClassificationStatus(ctx, mismatchID)
+	if err != nil || !bytes.Equal(before, after) || grokCalls.Load() != 0 {
+		t.Fatalf("once mismatch mutated job or called Grok: before=%s after=%s calls=%d error=%v", before, after, grokCalls.Load(), err)
+	}
+	switchTarget(t, base, "internal", classifier, "jev-1.13.0")
 	id := createLink(t, base, "app")
 	claimable, err := queue.SourceClaimable(ctx)
 	if err != nil || !claimable {

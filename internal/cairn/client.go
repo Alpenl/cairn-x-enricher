@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
@@ -242,6 +243,8 @@ type Client struct {
 	token                string
 	httpClient           *http.Client
 	classificationBudget *classify.CallBudgetLimits
+	specMu               sync.RWMutex
+	registeredSpecHashes map[string]string
 }
 
 // NewClient creates a client for the Worker's internal enrichment API.

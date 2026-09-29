@@ -450,7 +450,11 @@ func TestLocalWorkerVersionCompetition(t *testing.T) {
 	}
 	// An in-flight completion loses to a target switch: the old result must not
 	// overwrite the new projection.
-	switchTarget(t, base, enricherToken, mustClassifier(t))
+	nextClassifier := mustClassifier(t)
+	if err := queue.PutQuestionSpec(ctx, nextClassifier.Spec()); err != nil {
+		t.Fatal(err)
+	}
+	switchTarget(t, base, enricherToken, nextClassifier)
 	rejected := queue.CompleteClassification(ctx, legacyClaim, classify.Result{
 		Classification: taxonomy.Classification{Selection: taxonomy.Selection{Topics: []string{"eval"}, Form: "case", Use: "try"},
 			Entities: []string{}, TaxonomyVersion: "2026-09-20.1", DiscardedTags: []string{}},

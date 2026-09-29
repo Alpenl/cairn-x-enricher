@@ -138,6 +138,25 @@ func TestLocalWorkerClassifyCLI(t *testing.T) {
 			t.Fatalf("CLI result %s error=%v", stdout.String(), err)
 		}
 	}
+	// A compiled CLI must reject an active target with another model before
+	// --id can requeue a job or a provider call can start.
+	switchTarget(t, base, token, classifier, "jev-other")
+	before, err := queue.GetClassificationStatus(ctx, ids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	mismatch := exec.CommandContext(ctx, binary, "classify", "--id", strconv.FormatInt(ids[0], 10), "--max-jobs", "1") // #nosec G204 -- fixed binary and test id.
+	mismatch.Dir = work
+	mismatch.Env = []string{"PATH=" + os.Getenv("PATH"), "CAIRN_API_BASE_URL=" + base, "CAIRN_ENRICHER_TOKEN=" + token,
+		"TYPESAFE_BASE_URL=" + provider.URL, "TYPESAFE_API_KEY=fixture", "TYPESAFE_MODEL=jev-1.13.0", "LOG_LEVEL=error"}
+	if output, runErr := mismatch.CombinedOutput(); runErr == nil {
+		t.Fatalf("classify --id accepted incompatible target: %s", output)
+	}
+	after, err := queue.GetClassificationStatus(ctx, ids[0])
+	if err != nil || !bytes.Equal(before, after) || calls.Load() != 0 {
+		t.Fatalf("incompatible target mutated job or called provider: before=%s after=%s calls=%d error=%v", before, after, calls.Load(), err)
+	}
+	switchTarget(t, base, token, classifier, "jev-1.13.0")
 	execute(1, 0)
 	count := 0
 	for _, id := range ids {
