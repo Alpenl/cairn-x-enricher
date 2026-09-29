@@ -27,6 +27,9 @@ func TestRegisteredSpecHashAndGenerationGuardBeforeClaim(t *testing.T) {
 			_, _ = fmt.Fprintf(w, `{"target":{"generation":7,"spec_id":%q,"spec_hash":%q,"taxonomy_version":"v1","policy_version":%q,"requested_model":"jev-test","protocol":"v2"},"supported":true}`, specID, serverHash, classify.PolicyVersion)
 		case "/api/enrichment/classifications/claim":
 			claims++
+			if r.Header.Get("X-Cairn-Classification-Gate") != "1" {
+				t.Error("claim omitted the shared-gate capability header")
+			}
 			var body struct {
 				ExpectedGeneration int `json:"expected_generation"`
 			}

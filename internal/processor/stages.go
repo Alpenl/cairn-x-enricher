@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,7 +31,7 @@ type StageQueue interface {
 	SaveSource(context.Context, int64, string, enrich.Source) error
 	ClaimClassification(context.Context, string, string, string) (*cairn.ClassificationJob, error)
 	CompleteClassification(context.Context, *cairn.ClassificationJob, classify.Result) error
-	FailClassification(context.Context, *cairn.ClassificationJob, string, time.Duration) error
+	FailClassification(context.Context, *cairn.ClassificationJob, string, time.Duration, bool) error
 	// SubmitEvidence persists the immutable evidence snapshot a run references.
 	// A backend without the v2 API reports cairn.IsUnsupported.
 	SubmitEvidence(context.Context, int64, any) error
@@ -187,6 +188,42 @@ func (p *componentPause) tripLocked(reason string, hint time.Duration) {
 	backoff = max(backoff, min(max(hint, 0), pauseMaxBackoff))
 	p.until = p.now().Add(backoff)
 	p.reason = reason
+}
+
+// observeShared caches the Worker's authoritative cooldown. It avoids another
+// target handshake and claim on every scheduler tick while a different Go
+// process owns the provider gate. It does not increment local fault history.
+func (p *componentPause) observeShared(remaining time.Duration) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.probing = false
+	if remaining < time.Second {
+		remaining = time.Second
+	}
+	sharedUntil := p.now().Add(min(remaining, pauseMaxBackoff))
+	if sharedUntil.After(p.until) {
+		p.until = sharedUntil
+	}
+	p.reason = "shared classification provider cooldown"
+}
+
+// An empty queue is not a provider probe. Keep the fault open but let a new
+// eligible job be tested on the next scheduler tick after backoff expiry.
+func (p *componentPause) releaseEmptyProbe() {
+	p.mu.Lock()
+	p.probing = false
+	p.mu.Unlock()
+}
+
+func workerRetryAfter(value string) time.Duration {
+	seconds, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || seconds < 1 {
+		return time.Second
+	}
+	if seconds >= int64(pauseMaxBackoff/time.Second) {
+		return pauseMaxBackoff
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 // ClassificationPaused reports the component pause for health reporting.
@@ -587,6 +624,14 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		job, err := s.queue.ClaimClassification(claimCtx, s.classifier.SpecID(), s.version, s.model)
 		stopClaim()
 		if err != nil {
+			var apiErr *cairn.APIError
+			if errors.As(err, &apiErr) && apiErr.Code == "component_paused" {
+				// Another process owns the shared provider cooldown or its one
+				// half-open probe. No classification attempt was consumed.
+				s.pause.observeShared(workerRetryAfter(apiErr.RetryAfter))
+				probePending = false
+				return completed, failed, fmt.Errorf("%w: %w", ErrComponentPaused, err)
+			}
 			if enrich.PausesComponent(err) {
 				// Trip the breaker so the next poll does not claim and burn
 				// another attempt, then surface the state once.
@@ -598,8 +643,12 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		// A reachable Worker says nothing about the provider configuration: a
 		// claim success must not clear a model-side breaker (R2-09).
 		if job == nil {
-			// Empty only proves Worker reachability. The deferred settlement
-			// preserves the provider failure and schedules another bounded probe.
+			// No model call occurred. Preserve the provider fault without adding
+			// a second backoff that would delay a newly eligible candidate.
+			if probePending {
+				s.pause.releaseEmptyProbe()
+				probePending = false
+			}
 			break
 		}
 		// The evaluation consumes exactly the snapshot the lease was bound to,
@@ -624,7 +673,7 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 				// Superseded input/target: not a semantic failure, and the Worker
 				// already knows. Do not spend an attempt or abort other jobs.
 				reportCtx, stopReport := boundedStateReportContext(ctx)
-				reportErr := s.queue.FailClassification(reportCtx, job, "superseded: "+boundedError(err), 0)
+				reportErr := s.queue.FailClassification(reportCtx, job, "superseded: "+boundedError(err), 0, false)
 				stopReport()
 				if reportErr != nil && !enrich.IsStale(reportErr) {
 					return completed, failed, errors.Join(err, reportErr)
@@ -653,7 +702,7 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 			}
 			failed++
 			reportCtx, stopReport := boundedStateReportContext(ctx)
-			reportErr := s.queue.FailClassification(reportCtx, job, boundedError(err), retryAfter)
+			reportErr := s.queue.FailClassification(reportCtx, job, boundedError(err), retryAfter, providerTransient)
 			stopReport()
 			if reportErr != nil {
 				return completed, failed, errors.Join(err, reportErr)

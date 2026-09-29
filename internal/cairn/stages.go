@@ -92,6 +92,8 @@ type ClassificationJob struct {
 	Attempt          int    `json:"attempt"`
 	LeaseToken       string `json:"lease_token"`
 	LeaseUntil       string `json:"lease_until"`
+	ComponentEpoch   int64  `json:"component_epoch,omitempty"`
+	ComponentProbe   bool   `json:"component_probe,omitempty"`
 	// RelatedLinks are the stored source links, used only by the opt-in
 	// evidence escalation to find a real material gap.
 	RelatedLinks []string `json:"related_links,omitempty"`
@@ -335,12 +337,15 @@ func ClassificationOperationKey(job *ClassificationJob) string {
 // FailClassification schedules durable backoff without changing saved content.
 // A stale failure (superseded input or target) is reported with its revision so
 // the Worker can avoid spending the new target's attempt budget.
-func (c *Client) FailClassification(ctx context.Context, job *ClassificationJob, message string, retryAfter time.Duration) error {
+func (c *Client) FailClassification(ctx context.Context, job *ClassificationJob, message string, retryAfter time.Duration, providerTransient bool) error {
 	payload := map[string]any{
 		"lease_token": job.LeaseToken, "revision": job.Revision, "input_revision": job.InputRevision,
 		"target_generation": job.TargetGeneration, "error": message}
 	if retryAfter > 0 {
 		payload["retry_after_ms"] = min(retryAfter.Milliseconds(), enrich.MaxProviderRetryAfter.Milliseconds())
+	}
+	if providerTransient {
+		payload["component_fault"] = "provider_transient"
 	}
 	return c.stageWrite(ctx, fmt.Sprintf("/api/enrichment/classifications/%d/fail", job.ID), payload)
 }

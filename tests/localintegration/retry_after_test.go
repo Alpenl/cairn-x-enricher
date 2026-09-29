@@ -54,6 +54,18 @@ func TestLocalWorkerProviderRetryHintSurvivesProcessorRestart(t *testing.T) {
 	if err := queue.SubmitEvidence(ctx, id, processor.EvidenceSnapshot(source, time.Now())); err != nil {
 		t.Fatal(err)
 	}
+	// A second eligible bookmark proves that the pause is component-wide, not
+	// merely the failed job's persisted next_retry_at.
+	created := postJSON(ctx, t, base+"/api/links", envOr("CAIRN_APP_TOKEN", "app"),
+		map[string]any{"url": "https://x.com/local/status/2", "note": ""})
+	secondID := int64(created["id"].(float64))
+	secondLease := claimEnrichmentJob(t, base, token, secondID)
+	if err := queue.SaveSource(ctx, secondID, secondLease, source); err != nil {
+		t.Fatal(err)
+	}
+	if err := queue.SubmitEvidence(ctx, secondID, processor.EvidenceSnapshot(source, time.Now())); err != nil {
+		t.Fatal(err)
+	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	first := processor.NewStaged(queue, nil, classifier, catalog.Version, "jev-latest", logger, 1)
 	started := time.Now()
@@ -80,12 +92,22 @@ func TestLocalWorkerProviderRetryHintSurvivesProcessorRestart(t *testing.T) {
 	if err != nil || state.Status != "failed" || state.Attempts != 1 || retryAt.Sub(started) < 8*time.Minute {
 		t.Fatalf("durable retry hint = %+v, parsed=%v, err=%v", state, retryAt, err)
 	}
-	// A new Go processor has no local pause state; the Worker must still refuse
-	// to release another paid classification lease before the persisted time.
+	// A new Go processor has no local pause state; the Worker must also refuse
+	// the *other* eligible job before the shared provider cooldown ends.
 	restarted := processor.NewStaged(queue, nil, classifier, catalog.Version, "jev-latest", logger, 1)
 	done, failed, err = restarted.RunClassifications(ctx, 1)
-	if err != nil || done != 0 || failed != 0 || calls.Load() != 1 {
+	if !errors.Is(err, processor.ErrComponentPaused) || done != 0 || failed != 0 || calls.Load() != 1 {
 		t.Fatalf("restart ignored durable retry: done=%d failed=%d calls=%d err=%v", done, failed, calls.Load(), err)
 	}
-	t.Log("real Worker/D1 persisted TypeSafe 529 Retry-After across a new Go processor; one local provider call")
+	secondRaw, err := queue.GetClassificationStatus(ctx, secondID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var secondState struct {
+		Attempts int `json:"attempts"`
+	}
+	if err := json.Unmarshal(secondRaw, &secondState); err != nil || secondState.Attempts != 0 {
+		t.Fatalf("shared cooldown consumed the other job: %+v %v", secondState, err)
+	}
+	t.Log("real Worker/D1 persisted TypeSafe 529 cooldown across a new Go processor and another eligible job; one local provider call")
 }

@@ -99,7 +99,7 @@ func (q *stageQueue) CompleteClassification(context.Context, *cairn.Classificati
 	q.classified++
 	return nil
 }
-func (q *stageQueue) FailClassification(_ context.Context, _ *cairn.ClassificationJob, _ string, retryAfter time.Duration) error {
+func (q *stageQueue) FailClassification(_ context.Context, _ *cairn.ClassificationJob, _ string, retryAfter time.Duration, _ bool) error {
 	q.classificationFailures++
 	q.classificationRetryHints = append(q.classificationRetryHints, retryAfter)
 	return nil
@@ -640,6 +640,47 @@ func TestHalfOpenProbeReleasesAfterClaimIsCancelled(t *testing.T) {
 	doneCount, failed, err := p.RunClassifications(context.Background(), 5)
 	if err != nil || doneCount != 1 || failed != 0 || !p.stages.pause.isHealthy() {
 		t.Fatalf("probe after cancellation: done=%d failed=%d err=%v", doneCount, failed, err)
+	}
+}
+
+func TestSharedClassificationCooldownSuppressesRepeatedWorkerPolls(t *testing.T) {
+	q := &stageQueue{fakeQueue: newFakeQueue(),
+		claimErr: &cairn.APIError{StatusCode: http.StatusServiceUnavailable, Code: "component_paused", RetryAfter: "480"}}
+	p := NewStaged(q, nil, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+	now := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
+	p.stages.pause.now = func() time.Time { return now }
+	if _, _, err := p.RunClassifications(context.Background(), 5); !errors.Is(err, ErrComponentPaused) {
+		t.Fatalf("shared gate was not reported: %v", err)
+	}
+	if paused, _, remaining := p.ClassificationPaused(); !paused || remaining != 8*time.Minute {
+		t.Fatalf("shared cooldown was not cached: paused=%t remaining=%s", paused, remaining)
+	}
+	for range 3 {
+		if _, _, err := p.RunClassifications(context.Background(), 5); !errors.Is(err, ErrComponentPaused) {
+			t.Fatalf("shared gate cache was ignored: %v", err)
+		}
+	}
+	if q.claims != 1 {
+		t.Fatalf("shared cooldown polled Worker %d times", q.claims)
+	}
+}
+
+func TestEmptyHalfOpenQueueKeepsFaultButDoesNotDelayNextCandidate(t *testing.T) {
+	q := &stageQueue{fakeQueue: newFakeQueue()}
+	p := NewStaged(q, nil, stageClassifier{}, "v1", "jev", discardLogger(), 1)
+	now := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
+	p.stages.pause.now = func() time.Time { return now }
+	p.stages.pause.trip("provider overloaded")
+	now = now.Add(pauseBaseBackoff)
+	if done, failed, err := p.RunClassifications(context.Background(), 5); err != nil || done != 0 || failed != 0 {
+		t.Fatalf("empty probe: done=%d failed=%d err=%v", done, failed, err)
+	}
+	if p.stages.pause.isHealthy() {
+		t.Fatal("empty queue cleared provider failure")
+	}
+	q.job = &cairn.ClassificationJob{ID: 1}
+	if done, failed, err := p.RunClassifications(context.Background(), 5); err != nil || done != 1 || failed != 0 {
+		t.Fatalf("new candidate waited through another backoff: done=%d failed=%d err=%v", done, failed, err)
 	}
 }
 

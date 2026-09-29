@@ -719,6 +719,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 	if strings.HasPrefix(path, "/api/enrichment/classifications/") {
 		request.Header.Set("X-Cairn-Classification-Budget", "1")
 	}
+	if path == "/api/enrichment/classifications/claim" {
+		request.Header.Set("X-Cairn-Classification-Gate", "1")
+	}
 	request.Header.Set("Accept", "application/json")
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
