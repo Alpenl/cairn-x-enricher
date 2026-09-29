@@ -74,6 +74,35 @@ func TestPaidAttemptEventsKeepOnlySafeDimensions(t *testing.T) {
 	}
 }
 
+func TestLocalStageEventRespectsHotOffAndPrivateFieldFilter(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "observability.json"), slog.LevelInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	logger, closeExporter, err := store.AsyncLogger(&output, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logger.Warn("source stage event", "event_name", "local_stage_paused", "stage", "source",
+		"error_class", "configuration", "backoff_ms", 30_000,
+		"lease_token", "private-lease", "error", errors.New("private provider body"))
+	if _, err := store.Update(0, LogOff, 0); err != nil {
+		t.Fatal(err)
+	}
+	logger.Warn("source stage event", "event_name", "local_defer_failed", "stage", "source")
+	if err := closeExporter(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	log := output.String()
+	if !strings.Contains(log, `"event_name":"local_stage_paused"`) ||
+		!strings.Contains(log, `"backoff_ms":30000`) ||
+		strings.Contains(log, `"event_name":"local_defer_failed"`) ||
+		strings.Contains(log, "private-") || strings.Contains(log, "lease_token") {
+		t.Fatalf("local stage event violated policy or privacy filter: %s", log)
+	}
+}
+
 type blockedWriter struct {
 	once    sync.Once
 	entered chan struct{}
