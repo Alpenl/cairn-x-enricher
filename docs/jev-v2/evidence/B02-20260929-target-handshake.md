@@ -11,9 +11,10 @@
 ## 验证
 
 - Worker `npm test`：39 文件、393 项通过；`npm run typecheck` 与 `npm run deploy:dry-run` 通过。新增回归覆盖未注册/错误 hash 不能激活、历史坏目标令握手 unsupported 且不领取、握手后切目标不消耗 attempt。
-- Go `make verify`：vet、lint、race、前端 488 项检查和构建通过。单测核对未注册或不同 hash 的本地规格在 claim 前暂停，匹配时 claim 携带 generation。
+- Go `make verify`：vet、lint、race、前端 488 项检查和构建通过；`make test-ablation` 通过。单测核对未注册或不同 hash 的本地规格在 claim 前暂停，匹配时 claim 携带 generation。
 - 真实本地 Worker/D1：`CAIRN_INTEGRATION_CASE=cli` 验证编译后的 `classify --id` 在不兼容目标下不改 classification job、不请求模型；恢复正确目标后正常分类和显式重试。`onceempty` 验证保存来源在不兼容目标下不消耗 attempt，恢复后可继续。`competition` 验证先注册规格后的版本竞争；`lifecycle` 和 `manualrestart` 复验已有跨阶段及人工来源恢复场景。
+- `CAIRN_INTEGRATION_CASE=servetarget` 让真实编译后的 `serve` 接受已持久化的人工原文，然后持续运行：目标模型不兼容时，分类任务前后状态完全相同，TypeSafe 请求为 0；切回兼容目标后，保持既定约 30 秒退避，到期的下一轮只调用一次本地模型夹具，保存匹配的 spec ID/hash 与原文。Grok 只执行一次启动 canary，受控持有的来源阅读租约没有被重新领取。该用例约 31 秒通过。最初夹具沿用旧阅读输出，带 `original_text` 时被严格 decoder 正确拒绝；改为当前仅含阅读字段的合同后通过。
 
 ## 仍需组合验收
 
-本证据没有模拟运行中的 `serve` 遇到目标变化，也没有覆盖新旧 Worker/Go 版本组合、生产数据迁移和长时间负载。B02-T05 与 B01-T02/T03 的总复选框暂不据此勾选，跨端组合仍由 #16 验收。
+本证据覆盖 B02-T05 原任务列出的 `serve`、`once`、`classify`、人工来源、目标权威性和不消耗 attempt 的本地路径，可签收该子项。新旧 Worker/Go 版本组合、生产数据迁移和长时间负载尚未覆盖；B01-T02/T03 的全合同及 #16 跨端总验收仍开放。

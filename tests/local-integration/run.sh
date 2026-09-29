@@ -139,6 +139,7 @@ run_case personal TestLocalWorkerObjectivePersonalBoundary
 
 run_case cli TestLocalWorkerClassifyCLI
 run_case onceempty TestLocalWorkerOnceSkipsEmptySourceCanary
+run_case servetarget TestLocalWorkerServeTargetSwitchWithManualSource
 
 run_case carrier TestLocalWorkerCarrierDefinitionUpgrade
 
