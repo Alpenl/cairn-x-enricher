@@ -20,7 +20,7 @@ pending
 
 `SHUTDOWN_TIMEOUT` 是**整个**优雅关停的预算，不是定时批次的执行窗口：HTTP 停止接受连接与等待在途任务共用同一份 deadline。来源和分类分别调度；每次领取调用单独限时，已领取的任务继续受各自阶段时限约束。来源满批且仍有工作时立即接下一批，收到关停信号后停止新领取。两个 compose 文件把 `stop_grace_period` 设为 30s，必须大于 `SHUTDOWN_TIMEOUT`。
 
-排空是 best-effort：单次模型请求受 `REQUEST_TIMEOUT` 约束，可能超出剩余预算。超时退出时未确认的 lease 由 Worker 在过期后重新派发；供应商结果未知的持久调用账本与跨重启恢复上限仍在 #11 待完成，不能仅凭 lease 重发保证不重复付费。
+排空是 best-effort：Worker、Grok 获取、阅读和 TypeSafe 使用独立 HTTP 客户端，分别受 `WORKER_REQUEST_TIMEOUT`、`GROK_FETCH_TIMEOUT`、`GROK_READING_TIMEOUT`、`TYPESAFE_REQUEST_TIMEOUT` 约束；`REQUEST_TIMEOUT` 是未单独设置时的旧配置回退。默认 Worker 20 秒，其余阶段 3 分钟。获取/阅读时限必须留在 15 分钟来源 lease 内；获取时限仍需按生产 p99 校准。模型调用可能超出关停剩余预算；供应商结果未知时由持久调用账本阻断盲目重发，不能仅凭 lease 过期推断未计费。
 
 来源存档和阅读完成提交在网络故障或 Worker 5xx 后只重发一次相同请求体，不再发起模型调用。来源写入使用相同租约与内容，重复存档不增加内容版本；阅读完成由 Worker 的 `0039` 回执在同一 D1 事务中提交，已完成的相同租约与内容返回原回执，不同内容返回冲突。回执只保存租约和载荷的摘要、收藏 ID、完成时间；删除收藏会级联删除。新 Go 启动时要求 Worker 声明 `completion_replay` 能力，因此发布顺序为先迁移/部署 Worker，再升级 Go。这只解决提交响应丢失；供应商请求本身没有响应时，仍需 #11 的逐次付费账本与有权限的恢复决策。
 

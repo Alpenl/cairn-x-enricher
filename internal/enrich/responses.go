@@ -39,16 +39,17 @@ type responsePrompt struct {
 
 // ResponsesClient implements the xAI-specific Responses wire protocol.
 type ResponsesClient struct {
-	endpoint   string
-	apiKey     string
-	model      string
-	maxTokens  int
-	userAgent  string
-	httpClient *http.Client
-	ledger     PaidAttemptLedger
-	logger     *slog.Logger
-	catalog    taxonomy.Catalog
-	renderer   *taxonomy.Renderer
+	endpoint          string
+	apiKey            string
+	model             string
+	maxTokens         int
+	userAgent         string
+	httpClient        *http.Client
+	readingHTTPClient *http.Client
+	ledger            PaidAttemptLedger
+	logger            *slog.Logger
+	catalog           taxonomy.Catalog
+	renderer          *taxonomy.Renderer
 
 	schemaOnce sync.Once
 	schema     map[string]any
@@ -57,6 +58,14 @@ type ResponsesClient struct {
 // SetPaidAttemptLedger wires the durable Worker budget into every model POST.
 // Production installs it before the startup canary or any queue work.
 func (c *ResponsesClient) SetPaidAttemptLedger(ledger PaidAttemptLedger) { c.ledger = ledger }
+
+// SetReadingHTTPClient isolates reading requests from source retrieval. Set it
+// during construction, before concurrent requests begin.
+func (c *ResponsesClient) SetReadingHTTPClient(client *http.Client) {
+	if client != nil {
+		c.readingHTTPClient = client
+	}
+}
 
 // SetLogger attaches the optional, dynamically controlled diagnostic exporter.
 // Provider accounting remains in the Worker ledger when logging is off.
@@ -276,7 +285,13 @@ func (c *ResponsesClient) invokePayload(ctx context.Context, input Input, stage,
 	// This records entry into the HTTP transport, not proof that the provider
 	// received the request. A transport failure can still have executed remotely.
 	c.logPaidAttempt(ctx, slog.LevelInfo, "provider_attempt_dispatching", stage, variant, providerStarted)
-	response, err := c.httpClient.Do(request)
+	httpClient := c.httpClient
+	if stage == "reading" || stage == "canary" {
+		if c.readingHTTPClient != nil {
+			httpClient = c.readingHTTPClient
+		}
+	}
+	response, err := httpClient.Do(request)
 	if err != nil {
 		c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_unknown", stage, variant,
 			providerStarted, slog.String("provider_reason", "network_unknown"))

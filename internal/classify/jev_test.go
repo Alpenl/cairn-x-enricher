@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
@@ -425,6 +426,22 @@ func TestClassifyRejectsTrailingAndDuplicateProviderDataAsContractError(t *testi
 				t.Fatalf("%s class = %s, want contract", name, enrich.ClassOf(err))
 			}
 		})
+	}
+}
+
+func TestClassifyProviderTransportTimeoutIsTransient(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "fixture", "jev-latest", &http.Client{Timeout: 30 * time.Millisecond}, testCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.Classify(context.Background(), Input{OriginalText: "saved source"})
+	if enrich.ClassOf(err) != enrich.ErrorClassTransient {
+		t.Fatalf("provider timeout class = %s, want transient: %v", enrich.ClassOf(err), err)
 	}
 }
 

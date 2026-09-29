@@ -114,9 +114,7 @@ func newRootCommand() *cobra.Command {
 			// the check waits for the next invocation; it cannot be claimed
 			// without the reading contract canary.
 			probe := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken,
-				&http.Client{Timeout: cfg.RequestTimeout, CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-					return http.ErrUseLastResponse
-				}})
+				upstreamHTTPClient(cfg.WorkerRequestTimeout))
 			sourceClaimable, probeErr := probe.SourceClaimable(ctx)
 			if probeErr != nil {
 				// Older or temporarily unavailable Workers cannot prove the
@@ -491,17 +489,7 @@ func newProcessor(
 	logger *slog.Logger,
 	withSource bool,
 ) (*processor.Processor, *cairn.Client, error) {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.MaxIdleConns = 20
-	transport.MaxIdleConnsPerHost = 10
-	httpClient := &http.Client{
-		Timeout:   cfg.RequestTimeout,
-		Transport: transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-	queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, httpClient)
+	queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, upstreamHTTPClient(cfg.WorkerRequestTimeout))
 	if withSource {
 		if err := queue.VerifySourceLeaseCapability(ctx); err != nil {
 			return nil, nil, fmt.Errorf("verify Worker source lease admission: %w", err)
@@ -518,8 +506,9 @@ func newProcessor(
 	if withSource {
 		model := enrich.NewResponsesClient(
 			cfg.GrokBaseURL, cfg.GrokAPIKey, cfg.GrokModel, cfg.GrokMaxTokens,
-			"cairn-x-enricher/"+buildinfo.Version, httpClient, catalog,
+			"cairn-x-enricher/"+buildinfo.Version, upstreamHTTPClient(cfg.GrokFetchTimeout), catalog,
 		)
+		model.SetReadingHTTPClient(upstreamHTTPClient(cfg.GrokReadingTimeout))
 		model.SetPaidAttemptLedger(queue)
 		model.SetLogger(logger)
 		if _, err := model.Transform(ctx, enrich.Input{URL: "https://x.com/canary/status/0", Attempt: 1,
@@ -529,7 +518,8 @@ func newProcessor(
 		}
 		reader = model
 	}
-	classifier, err := classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel, httpClient, catalog)
+	classifier, err := classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel,
+		upstreamHTTPClient(cfg.TypesafeRequestTimeout), catalog)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -549,7 +539,7 @@ func newProcessor(
 	tracker.MarkStarted()
 	worker := processor.NewStaged(queue, reader, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
 	worker.SetClaimTimeout(batchTimeout(cfg))
-	worker.SetPaidStageTimeout(cfg.RequestTimeout)
+	worker.SetPaidStageTimeout(max(cfg.GrokFetchTimeout, cfg.GrokReadingTimeout))
 	fetcher, policy := evidenceFetcher(cfg)
 	extensions, err := extensionService(cfg, classifier)
 	if err != nil {

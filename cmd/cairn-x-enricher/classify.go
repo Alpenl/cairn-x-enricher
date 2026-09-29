@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os/signal"
 	"syscall"
 
@@ -28,8 +27,7 @@ func newClassifyCommand() *cobra.Command {
 		}
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
-		httpClient := &http.Client{Timeout: cfg.RequestTimeout, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
-		queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, httpClient)
+		queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, upstreamHTTPClient(cfg.WorkerRequestTimeout))
 		catalog, legacyCatalog, err := queue.GetClassificationCatalog(ctx)
 		if err != nil {
 			return err
@@ -37,7 +35,8 @@ func newClassifyCommand() *cobra.Command {
 		if legacyCatalog {
 			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "backend has no v2 taxonomy; using the legacy classification vocabulary")
 		}
-		client, err := classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel, httpClient, catalog)
+		client, err := classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel,
+			upstreamHTTPClient(cfg.TypesafeRequestTimeout), catalog)
 		if err != nil {
 			return err
 		}

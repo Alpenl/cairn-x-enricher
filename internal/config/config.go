@@ -32,6 +32,12 @@ type Config struct {
 	GrokMaxTokens   int
 	PollInterval    time.Duration
 	RequestTimeout  time.Duration
+	// Separate deadlines prevent a stalled Worker call from inheriting the
+	// provider deadline. REQUEST_TIMEOUT remains the legacy fallback.
+	WorkerRequestTimeout   time.Duration
+	GrokFetchTimeout       time.Duration
+	GrokReadingTimeout     time.Duration
+	TypesafeRequestTimeout time.Duration
 
 	// ShutdownTimeout bounds the total graceful shutdown: the HTTP server
 	// drain and the in-flight work drain share this one budget, so it must
@@ -205,6 +211,18 @@ func (c *Config) readNumbers() error {
 	if c.RequestTimeout, err = durationValue("REQUEST_TIMEOUT", 3*time.Minute); err != nil {
 		return err
 	}
+	if c.WorkerRequestTimeout, err = durationValue("WORKER_REQUEST_TIMEOUT", min(c.RequestTimeout, 20*time.Second)); err != nil {
+		return err
+	}
+	if c.GrokFetchTimeout, err = durationValue("GROK_FETCH_TIMEOUT", c.RequestTimeout); err != nil {
+		return err
+	}
+	if c.GrokReadingTimeout, err = durationValue("GROK_READING_TIMEOUT", min(c.RequestTimeout, 3*time.Minute)); err != nil {
+		return err
+	}
+	if c.TypesafeRequestTimeout, err = durationValue("TYPESAFE_REQUEST_TIMEOUT", min(c.RequestTimeout, 3*time.Minute)); err != nil {
+		return err
+	}
 	if c.ShutdownTimeout, err = durationValue("SHUTDOWN_TIMEOUT", 15*time.Second); err != nil {
 		return err
 	}
@@ -234,8 +252,8 @@ func (c Config) validateFor(role Role) error {
 	if needsReading {
 		// Source leases last 15 minutes. Leave time for the commit and for the
 		// worker to reach each paid stage after claiming.
-		if c.RequestTimeout > 14*time.Minute {
-			return fmt.Errorf("REQUEST_TIMEOUT must not exceed 14m under the 15m source lease")
+		if c.GrokFetchTimeout > 14*time.Minute || c.GrokReadingTimeout > 14*time.Minute {
+			return fmt.Errorf("GROK_FETCH_TIMEOUT and GROK_READING_TIMEOUT must not exceed 14m under the 15m source lease")
 		}
 		for name, value := range map[string]string{
 			"GROK_MODELS_BASE_URL": c.GrokBaseURL,
@@ -252,6 +270,9 @@ func (c Config) validateFor(role Role) error {
 	}
 
 	if needsClassification {
+		if c.TypesafeRequestTimeout > 3*time.Minute {
+			return fmt.Errorf("TYPESAFE_REQUEST_TIMEOUT must not exceed the 3m classification job deadline")
+		}
 		for name, value := range map[string]string{
 			"TYPESAFE_API_KEY": c.TypesafeAPIKey,
 			"TYPESAFE_MODEL":   c.TypesafeModel,

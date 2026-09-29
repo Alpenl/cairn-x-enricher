@@ -43,6 +43,10 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.PollInterval != 5*time.Minute {
 		t.Fatalf("PollInterval = %s", cfg.PollInterval)
 	}
+	if cfg.WorkerRequestTimeout != 20*time.Second || cfg.GrokFetchTimeout != 3*time.Minute ||
+		cfg.GrokReadingTimeout != 3*time.Minute || cfg.TypesafeRequestTimeout != 3*time.Minute {
+		t.Fatalf("unexpected upstream timeouts: %+v", cfg)
+	}
 	if cfg.MaxConcurrency != 2 || cfg.MaxJobsPerRun != 100 {
 		t.Fatalf("unexpected processing defaults: %+v", cfg)
 	}
@@ -65,6 +69,9 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 	}{
 		{name: "duration", key: "POLL_INTERVAL", value: "soon"},
 		{name: "source timeout exceeds lease", key: "REQUEST_TIMEOUT", value: "15m"},
+		{name: "independent fetch timeout exceeds lease", key: "GROK_FETCH_TIMEOUT", value: "15m"},
+		{name: "independent reading timeout exceeds lease", key: "GROK_READING_TIMEOUT", value: "15m"},
+		{name: "classification timeout exceeds job", key: "TYPESAFE_REQUEST_TIMEOUT", value: "4m"},
 		{name: "concurrency", key: "MAX_CONCURRENCY", value: "0"},
 		{name: "tokens", key: "GROK_MAX_OUTPUT_TOKENS", value: "12"},
 		{name: "base URL", key: "GROK_MODELS_BASE_URL", value: "file:///tmp/model"},
@@ -106,6 +113,7 @@ func setRequiredEnv(t *testing.T) {
 		"GROK_MAX_OUTPUT_TOKENS",
 		"POLL_INTERVAL",
 		"REQUEST_TIMEOUT",
+		"WORKER_REQUEST_TIMEOUT", "GROK_FETCH_TIMEOUT", "GROK_READING_TIMEOUT", "TYPESAFE_REQUEST_TIMEOUT",
 		"SHUTDOWN_TIMEOUT",
 		"MAX_CONCURRENCY",
 		"MAX_JOBS_PER_RUN",
@@ -123,6 +131,22 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("TYPESAFE_API_KEY", "test-typesafe-key")
 	t.Setenv("TYPESAFE_BASE_URL", "")
 	t.Setenv("TYPESAFE_MODEL", "")
+}
+
+func TestUpstreamTimeoutOverridesAreIndependent(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("REQUEST_TIMEOUT", "90s")
+	t.Setenv("WORKER_REQUEST_TIMEOUT", "11s")
+	t.Setenv("GROK_READING_TIMEOUT", "2m")
+	t.Setenv("TYPESAFE_REQUEST_TIMEOUT", "45s")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.WorkerRequestTimeout != 11*time.Second || cfg.GrokFetchTimeout != 90*time.Second ||
+		cfg.GrokReadingTimeout != 2*time.Minute || cfg.TypesafeRequestTimeout != 45*time.Second {
+		t.Fatalf("upstream timeout override leaked across clients: %+v", cfg)
+	}
 }
 
 func TestExtensionLimitsCanOnlyTightenTheDeploymentCeiling(t *testing.T) {
