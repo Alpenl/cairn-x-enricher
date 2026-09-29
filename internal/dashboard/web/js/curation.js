@@ -343,6 +343,10 @@ function applyLocal(session, { field, term, action }) {
 
 export function enqueueOverride(id, field, term, action) {
   const session = sessionFor(id);
+  if (session.v1.saving) {
+    setSaveState(session, "请等标签确认完成后再修改", { error: true });
+    return;
+  }
   session.v1.confirmPending = null;
   if (session.v2.blocked) {
     setSaveState(session, "请先处理下面的保存问题（重试或放弃修改），再继续编辑。", { error: true });

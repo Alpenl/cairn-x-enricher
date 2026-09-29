@@ -113,7 +113,8 @@ function createMock() {
     holdWhy: false,
     releaseWhy: null,
     failNextCuration: false,
-    loseNextCurationResponse: false
+    loseNextCurationResponse: false,
+    delayNextCurationMs: 0
   };
 }
 
@@ -272,6 +273,11 @@ function startMockServer(state) {
       }
       if (body.expected_revision !== undefined && body.expected_revision !== state.revision) {
         return send(409, { error: "revision_conflict", revision: state.revision });
+      }
+      if (state.delayNextCurationMs > 0) {
+        const delay = state.delayNextCurationMs;
+        state.delayNextCurationMs = 0;
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
       if (state.holdWhy && "why" in body) {
         await new Promise((resolve) => { state.releaseWhy = resolve; });
@@ -986,6 +992,27 @@ async function partI(browser) {
   }
 }
 
+async function partJ(browser) {
+  const state = createMock();
+  const server = await startMockServer(state);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  try {
+    await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
+    await page.waitForSelector("#confirm-classification:visible");
+    state.delayNextCurationMs = 2000;
+    await page.click("#confirm-classification");
+    check("confirmation is in flight", await waitFor(() => state.requests.some((entry) =>
+      entry.path.endsWith("/curation") && "classification" in entry.body)));
+    await page.click("#v2-topics .chip.on[data-term='eng']");
+    equal("tag edit waits for the pending confirmation", overrides(state).length, 0);
+    check("confirmation eventually completes", await waitFor(() => page.isHidden("#confirm-classification")));
+  } finally {
+    await page.close();
+    server.close();
+  }
+}
+
 async function main() {
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ["--no-sandbox"] });
   try {
@@ -998,6 +1025,7 @@ async function main() {
     await partG(browser);
     await partH(browser);
     await partI(browser);
+    await partJ(browser);
   } finally {
     await browser.close();
   }
