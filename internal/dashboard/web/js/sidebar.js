@@ -16,6 +16,8 @@ let openGroups = new Set();
 let countsSignature = "";
 let tagCounts = {};
 let countsEpoch = 0;
+let countsTimer = 0;
+let countsController = null;
 
 try {
   const saved = JSON.parse(localStorage.getItem(OPEN_KEY) || "null");
@@ -216,10 +218,17 @@ export function renderSidebar() {
       countsSignature = signature;
       tagCounts = {};
       const epoch = ++countsEpoch;
-      api.tagCounts(apiParams(state.filters, state.search)).then((counts) => {
-        if (epoch !== countsEpoch || counts.available === false) return;
-        tagCounts = counts; renderFacets();
-      }).catch(() => {});
+      clearTimeout(countsTimer);
+      countsController?.abort();
+      const params = apiParams(state.filters, state.search);
+      countsTimer = setTimeout(() => {
+        countsTimer = 0;
+        countsController = new AbortController();
+        api.tagCounts(params, countsController.signal).then((counts) => {
+          if (epoch !== countsEpoch || counts.available === false) return;
+          tagCounts = counts; renderFacets();
+        }).catch(() => {});
+      }, 160);
     }
   }
   renderViews();
@@ -242,4 +251,5 @@ export function initSidebar(options) {
   on("overview", () => { renderViews(); renderService(); });
   on("taxonomy", renderSidebar);
   on("tags:changed", () => { countsSignature = ""; renderSidebar(); });
+  on("library:changed", () => { countsSignature = ""; renderSidebar(); });
 }

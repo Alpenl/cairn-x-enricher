@@ -41,6 +41,11 @@ export const state = {
 
 // mergeItem keeps the richest copy: a summary row never erases full text that
 // a detail read already delivered.
+function libraryFacts(item) {
+  return JSON.stringify([item.status, item.enriched_at, item.curation_status, item.classification_reviewed,
+    item.classification, item.custom_tags, item.why, item.note, item.ai_title, item.summary, item.url, item.source]);
+}
+
 export function mergeItem(incoming) {
   if (!incoming || !incoming.id) return null;
   const previous = state.items.get(incoming.id);
@@ -54,6 +59,12 @@ export function mergeItem(incoming) {
     };
   }
   state.items.set(incoming.id, merged);
+  const identityChanged = previous?.cache_identity && merged.cache_identity &&
+    ["content_revision", "personal_revision", "latest_decision_id", "latest_entity_revision"].some((key) =>
+      previous.cache_identity[key] !== merged.cache_identity[key]);
+  // Loading full text alone does not change a filtered list. New tags, human
+  // curation or server revisions do, including changes found by detail polling.
+  if (previous && (identityChanged || libraryFacts(previous) !== libraryFacts(merged))) emit("library:changed", incoming.id);
   return merged;
 }
 

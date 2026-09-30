@@ -29,6 +29,8 @@ let overviewGeneration = 0;
 let pendingCuration = 0;
 let healthState = "ok";
 let overviewState = "ok";
+let prefetchTimer = 0;
+let prefetchIdle = 0;
 
 // --- URLs & routing ----------------------------------------------------------------
 
@@ -94,15 +96,33 @@ function toggleFocus() {
 
 // --- Selection -------------------------------------------------------------------------
 
+function cancelPrefetch() {
+  clearTimeout(prefetchTimer);
+  if (prefetchIdle && window.cancelIdleCallback) window.cancelIdleCallback(prefetchIdle);
+  prefetchTimer = 0;
+  prefetchIdle = 0;
+}
+
 function prefetch(id) {
   const item = getItem(id);
   if (!item || item.content_loaded !== false) return;
-  const idle = window.requestIdleCallback || ((callback) => setTimeout(callback, 300));
-  idle(() => api.prefetchDetail(id).then(mergeItem).catch(() => {}));
+  const selected = state.selectedId;
+  const query = querySuffix();
+  const load = () => {
+    prefetchIdle = 0;
+    if (state.loading || selected !== state.selectedId || query !== querySuffix() || !state.order.includes(id) || !api.prefetchAvailable()) return;
+    api.prefetchDetail(id).then(mergeItem).catch(() => {});
+  };
+  prefetchTimer = setTimeout(() => {
+    prefetchTimer = 0;
+    if (window.requestIdleCallback) prefetchIdle = window.requestIdleCallback(load, { timeout: 1000 });
+    else load();
+  }, 300);
 }
 
-function select(id, { fromList = false, scroll = true } = {}) {
+function select(id, { fromList = false, scroll = true, prefetchNext = true } = {}) {
   if (!id) return;
+  cancelPrefetch();
   const narrow = state.layout === "narrow";
   state.selectedId = id;
   list.markSelected(id, { scroll });
@@ -113,7 +133,7 @@ function select(id, { fromList = false, scroll = true } = {}) {
   state.route = { name: "bookmark", id };
   applyRouteClasses();
   const index = state.order.indexOf(id);
-  if (index >= 0 && state.order[index + 1]) prefetch(state.order[index + 1]);
+  if (prefetchNext && index >= 0 && state.order[index + 1]) prefetch(state.order[index + 1]);
   if (fromList && !narrow) byId("detail-scroll").scrollTop = 0;
 }
 
@@ -146,6 +166,7 @@ function closeDetail() {
 // --- Filters -----------------------------------------------------------------------------
 
 function setFilters(filters, search = state.search, { push = false } = {}) {
+  cancelPrefetch();
   state.filters = filters;
   state.search = search;
   if (byId("search").value.trim() !== search) byId("search").value = search;
@@ -157,7 +178,7 @@ function setFilters(filters, search = state.search, { push = false } = {}) {
   backstage.showBackstage(false);
   state.checked.clear();
   sidebar.renderSidebar();
-  list.reload();
+  list.reload({ reuse: true });
   if (state.layout !== "wide") setSidebarOpen(false);
 }
 
@@ -554,7 +575,7 @@ function onPopState() {
   }
   backstage.showBackstage(false);
   sidebar.renderSidebar();
-  if (querySuffix() !== previousQuery) list.reload();
+  if (querySuffix() !== previousQuery) { cancelPrefetch(); list.reload({ reuse: true }); }
   if (state.route.name === "bookmark") {
     state.selectedId = state.route.id;
     list.markSelected(state.selectedId);
@@ -631,7 +652,7 @@ async function boot() {
       return;
     }
     if (state.layout === "narrow") return;
-    if (state.order[0]) select(state.order[0], { scroll: false });
+    if (state.order[0]) select(state.order[0], { scroll: false, prefetchNext: false });
     else {
       state.selectedId = 0;
       detail.showItem(0);
