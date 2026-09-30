@@ -47,6 +47,11 @@ async function waitFor(predicate, timeoutMs = 5000) {
   return false;
 }
 
+async function openCuration(page) {
+  await page.locator("#curate > summary").waitFor();
+  if (!await page.locator("#curate").evaluate((node) => node.open)) await page.locator("#curate > summary").click();
+}
+
 // --- Part A: focused curation mock ------------------------------------------------
 
 function taxonomyV2() {
@@ -324,12 +329,13 @@ async function partA(browser) {
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(String(error)));
   await page.goto(`${base}/bookmarks/12`, { waitUntil: "networkidle" });
+  await openCuration(page);
 
   // 1. The multidimensional editor renders every effective topic; the fourth
   // is folded for list cards, never deleted.
   await page.waitForSelector("#v2-topics .chip.on");
   equal("all four effective topics are rendered as selected", await chipTerms(page, "#v2-topics .chip.on"), ["llm", "eng", "eval", "design"]);
-  check("fourth topic is folded, not deleted", /另外 1 个/.test(await page.textContent("#v2-folded-note") || ""));
+  check("additional topics are folded, not deleted", /其余标签仍然保留/.test(await page.textContent("#v2-folded-note") || ""));
 
   // 2. content_functions multi-select and the carrier are independent.
   equal("content functions are independently selected", (await chipTerms(page, "#v2-content_functions .chip.on")).sort(), ["data", "method", "tool"]);
@@ -398,6 +404,7 @@ async function partA(browser) {
 
   // 9. A reload starts a new action identity.
   await page.reload({ waitUntil: "networkidle" });
+  await openCuration(page);
   await page.waitForSelector("#v2-topics .chip.on[data-term='eval']");
   const beforeReload = overrides(state).length;
   await page.click("#v2-topics .chip.on[data-term='eval']");
@@ -477,12 +484,15 @@ async function partA(browser) {
   // 14. The library carries every dimension through requests and URLs.
   const latestQuery = () => state.listQueries.at(-1);
   await page.goto(`${base}/?topic=design&content_functions=method,data&carriers=single&affordances=practice&entity_state=failed`, { waitUntil: "networkidle" });
-  await page.waitForSelector("[data-facet='topics'][data-value='llm']");
+  await page.waitForSelector("[data-facet='topics'][data-value='llm']", { state: "attached" });
   equal("legacy topic URL becomes the full topic filter", latestQuery().topics, "design");
   equal("library filter negotiation is explicit", latestQuery().filter_contract_version, "1");
   equal("URL restores selected function values", await page.$$eval("[data-facet='content_functions'][aria-pressed='true']", (nodes) => nodes.map((node) => node.dataset.value)), ["method", "data"]);
   const toggleFacet = async (key, value) => {
     const group = page.locator(`details[data-group='${key}']`);
+    await group.evaluate((node) => {
+      for (let parent = node.parentElement; parent; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true;
+    });
     if (!await group.evaluate((node) => node.open)) await group.locator("summary").click();
     const before = state.listQueries.length;
     await page.click(`[data-facet='${key}'][data-value='${value}']`);
@@ -742,6 +752,7 @@ async function partC(browser) {
   const curationRequests = () => state.requests.filter((entry) => entry.path.endsWith("/curation"));
   const item = state.items.find((entry) => entry.classification && !entry.classification_reviewed && entry.curation_status === "inbox");
   await page.goto(`${base}/bookmarks/${item.id}`, { waitUntil: "networkidle" });
+  await openCuration(page);
   await page.waitForSelector("#v1-topics .chip.on");
   check("the v1 editor replaces the multidimensional one", await page.isVisible("#v1-topics") && !(await page.$("#v2-topics")));
   check("the capability gap is explained, not hidden", /多维词表暂不可用/.test(await page.textContent("#facets") || ""));
@@ -778,6 +789,7 @@ async function partD(browser) {
   try {
     await page.clock.install();
     await page.goto(`${base}/bookmarks/12`, { waitUntil: "networkidle" });
+    await openCuration(page);
     check("visible detail initially loads its body", await waitFor(() => state.detailReads > 0));
     const initialReads = state.detailReads;
     state.identityRevision++;
@@ -824,6 +836,7 @@ async function partE(browser) {
   try {
     await page.clock.install();
     await page.goto(`${base}/bookmarks/12`, { waitUntil: "networkidle" });
+    await openCuration(page);
     await page.waitForSelector("#v2-topics .chip.on");
     check("combined reading displays the article", (await page.textContent("#detail-title")) === BOOKMARK.ai_title);
     check("combined reading displays effective tags", (await chipTerms(page, "#v2-topics .chip.on")).includes("llm"));
@@ -858,6 +871,7 @@ async function partF(browser) {
   const curationRequests = () => state.requests.filter((entry) => entry.path.endsWith("/curation"));
   try {
     await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
+    await openCuration(page);
     await page.waitForSelector("#confirm-classification:visible");
     equal("unreviewed bookmark starts without a curation write", curationRequests().length, 0);
     await page.fill("#curation-why", "首次只保存原因");
@@ -919,6 +933,7 @@ async function partG(browser) {
   const curationRequests = () => state.requests.filter((entry) => entry.path.endsWith("/curation"));
   try {
     await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
+    await openCuration(page);
     await page.waitForSelector("#confirm-classification:visible");
     state.delayNextMs = 400;
     await page.click("#v2-topics .chip.on[data-term='eng']");
@@ -953,6 +968,7 @@ async function partH(browser) {
   const confirms = () => state.requests.filter((entry) => entry.path.endsWith("/curation") && "classification" in entry.body);
   try {
     await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
+    await openCuration(page);
     await page.waitForSelector("#confirm-classification:visible");
     state.loseNextCurationResponse = true;
     await page.click("#confirm-classification");
@@ -978,6 +994,7 @@ async function partI(browser) {
   const confirms = () => state.requests.filter((entry) => entry.path.endsWith("/curation") && "classification" in entry.body);
   try {
     await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
+    await openCuration(page);
     await page.waitForSelector("#confirm-classification:visible");
     // Another client committed before this tab could confirm its old view.
     state.revision += 1;
@@ -999,6 +1016,7 @@ async function partJ(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
   try {
     await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
+    await openCuration(page);
     await page.waitForSelector("#confirm-classification:visible");
     state.delayNextCurationMs = 2000;
     await page.click("#confirm-classification");

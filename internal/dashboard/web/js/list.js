@@ -4,7 +4,7 @@ import { api, errorLabel, imagePath } from "./api.js";
 import { append, byId, clear, h, highlightInto } from "./dom.js";
 import {
   bucketLabel, curationShort, displaySummary, displayTitle, formatFull, highlightRanges, isWorking,
-  listTime, needsReview, searchExcerpt, searchTerms, sourceLabels
+  listTime, searchExcerpt, searchTerms, sourceLabels
 } from "./format.js";
 import { icon } from "./icons.js";
 import { activeView, apiParams, facetFilterCount, needsFilterContract, splitList, VIEWS } from "./query.js";
@@ -49,7 +49,7 @@ function textWithHighlights(tag, text, terms) {
 function statusBadge(item) {
   const status = item.curation_status || "inbox";
   const view = activeView(state.filters);
-  if (view === status) return null;
+  if (view === status || status === "inbox") return null;
   return h("span.badge.status-badge", { dataset: { status } }, h("i.dot"), curationShort[status] || status);
 }
 
@@ -64,15 +64,21 @@ function processBadge(item) {
 function rowMeta(item) {
   const topics = item.classification?.topics || [];
   const resources = item.classification?.resource_kinds || [];
+  const custom = Array.isArray(item.custom_tags) ? item.custom_tags : [];
+  const labels = [
+    ...topics.map((id) => ({ label: termLabel("topics", id), kind: "topic" })),
+    ...resources.map((id) => ({ label: termLabel("resource_kinds", id), kind: "resource" })),
+    ...custom.map((tag) => ({ label: tag.label || tag.id, kind: "custom" }))
+  ];
+  const visible = topics.length && resources.length ? [labels[0], labels[topics.length]] : labels.slice(0, 2);
+  const hidden = labels.filter((label) => !visible.includes(label));
   return h("div.row-meta",
     statusBadge(item),
     processBadge(item),
-    ...topics.slice(0, 2).map((topic) => h("span.tag", termLabel("topics", topic))),
-    ...resources.slice(0, 1).map((term) => h("span.tag.tag-resource", termLabel("resource_kinds", term))),
-    topics.length > 2 || resources.length > 1 ? h("span.tag-more", `+${topics.length + resources.length - Math.min(topics.length, 2) - Math.min(resources.length, 1)}`) : null,
+    ...visible.map((tag) => h("span.tag", { class: tag.kind === "resource" ? "tag-resource" : tag.kind === "custom" ? "tag-custom" : "" }, tag.label)),
+    hidden.length ? h("span.tag-more", { title: hidden.map((tag) => tag.label).join(" / "), "aria-label": `另有 ${hidden.length} 个标签` }, `+${hidden.length}`) : null,
     // Most bookmarks come from X, so only a different source is worth a label.
-    item.source && item.source !== "x" ? h("span.row-source", sourceLabels[item.source] || item.source) : null,
-    needsReview(item) && item.status === "completed" ? h("span.badge.badge-review", "待确认") : null
+    item.source && item.source !== "x" ? h("span.row-source", sourceLabels[item.source] || item.source) : null
   );
 }
 
@@ -95,8 +101,7 @@ export function renderRow(item) {
   if (title.raw) titleNode.classList.add("raw");
   const top = h("div.row-top", titleNode,
     h("time.row-time", { dateTime: item.created_at || "", title: formatFull(item.created_at) }, listTime(item.created_at)));
-  const summaryNode = textWithHighlights("p.row-summary", summary.text, terms);
-  if (summary.wait) summaryNode.classList.add("wait");
+  const summaryNode = summary.wait ? null : textWithHighlights("p.row-summary", summary.text, terms);
   const personal = item.why || item.note;
   const personalNode = personal
     ? h("p.row-why", { class: item.why ? "" : "note" }, icon(item.why ? "quote" : "pencil", 12), textWithHighlights("span", personal, terms))
@@ -254,14 +259,12 @@ function renderEmpty() {
     hint = "试试更短的关键词，或换一种说法。";
     if (view !== "all") actions.push(h("button.btn", { type: "button", onclick: () => hooks.searchEverywhere() }, icon("search", 14), "在全部收藏中搜索"));
   } else if (facets > 0) {
-    title = "没有符合筛选条件的收藏";
-    hint = "同一类中的多个选项任一匹配即可，不同类需要同时满足。";
+    title = "暂无匹配收藏";
   } else if (view === "inbox") {
     title = "收件箱已清空";
     hint = "新收藏会自动出现在这里。";
   } else if (view === "uncertain") {
-    title = "没有待确认的分类";
-    hint = "所有 AI 标签都已确认或修改过。";
+    title = "暂无待确认分类";
   }
   if (facets > 0) actions.push(h("button.btn", { type: "button", onclick: () => hooks.clearFacets() }, "清除筛选"));
   clear(els.empty, h("div.empty-icon", icon(view === "inbox" && !facets && !state.search ? "check" : "search", 22)),

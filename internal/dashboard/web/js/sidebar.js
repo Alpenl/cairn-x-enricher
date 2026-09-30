@@ -4,15 +4,15 @@ import { api } from "./api.js";
 import { byId, clear, h } from "./dom.js";
 import { icon } from "./icons.js";
 import {
-  apiParams, activeView, dateInputFromSince, sinceDaysAgo, sinceFromDateInput, sinceLabel, splitList, VIEWS
+  apiParams, activeView, dateInputFromSince, facetFilterCount, sinceDaysAgo, sinceFromDateInput, sinceLabel, splitList, VIEWS
 } from "./query.js";
 import { on, state } from "./store.js";
 import { ENTITY_STATES, V2_DIMENSIONS, vocab } from "./taxonomy.js";
 
-const OPEN_KEY = "cairn.facets.open";
+const OPEN_KEY = "cairn.facets.open.v2";
 const els = {};
 let hooks = {};
-let openGroups = new Set(["topics", "resource_kinds"]);
+let openGroups = new Set();
 let countsSignature = "";
 let tagCounts = {};
 let countsEpoch = 0;
@@ -51,23 +51,33 @@ function renderViews() {
 
 // --- Facets -------------------------------------------------------------------------
 
-function facetChip(key, value, label, selected, { title } = {}) {
+function facetChip(key, value, label, selected, { title, count } = {}) {
   return h("button.facet-chip", {
     type: "button", dataset: { facet: key, value }, "aria-pressed": String(selected), title: title || label,
     onclick: () => hooks.toggleFilter(key, value)
-  }, label);
+  }, h("span.facet-chip-label", label), Number.isFinite(count) ? h("span.facet-chip-count", String(count)) : null);
 }
 
 function group(id, label, content, { selectedCount = 0, hint } = {}) {
-  const open = openGroups.has(id) || selectedCount > 0;
+  const open = openGroups.has(id);
   const details = h("details.facet-group", { dataset: { group: id }, open });
   const summary = h("summary.facet-summary", icon("chevronRight", 14, "facet-caret"), h("span", label),
-    selectedCount ? h("span.facet-badge", String(selectedCount)) : null);
+    selectedCount ? h("span.facet-badge", { title: `${label}已有 ${selectedCount} 项筛选` }, `${selectedCount} 已选`) : null);
   details.append(summary, h("div.facet-body", hint ? h("p.facet-hint", hint) : null, content));
-  details.addEventListener("toggle", () => {
+  const remember = () => {
     if (details.open) openGroups.add(id);
     else openGroups.delete(id);
     persistOpen();
+  };
+  summary.addEventListener("click", (event) => {
+    event.preventDefault();
+    details.open = !details.open;
+    // Native toggle events are deferred; keep a click followed by navigation
+    // from losing the user's choice before the asynchronous event is delivered.
+    remember();
+  });
+  details.addEventListener("toggle", () => {
+    if (details.isConnected) remember();
   });
   return details;
 }
@@ -80,17 +90,17 @@ function vocabularyGroup(key, label, terms) {
     known.add(term.id);
     if ((term.active === false || term.deprecated) && !selected.has(term.id)) continue;
     const count = (tagCounts[key] || []).find((entry) => entry.id === term.id)?.count;
-    chips.append(facetChip(key, term.id, `${term.label || term.id}${term.active === false || term.deprecated ? "（已停用）" : ""}${Number.isFinite(count) ? ` ${count}` : ""}`, selected.has(term.id)));
+    chips.append(facetChip(key, term.id, `${term.label || term.id}${term.active === false || term.deprecated ? "（已停用）" : ""}`, selected.has(term.id), { count }));
   }
   // A saved URL never silently loses an unknown requested ID.
   for (const id of selected) if (!known.has(id)) chips.append(facetChip(key, id, `${id}（词表不可用）`, true));
   const modeKey = ({ topics: "topics_mode", resource_kinds: "resource_mode", custom_tags: "custom_mode" })[key];
-  if (modeKey && vocab.tagSystemAvailable !== false) {
+  if (modeKey && selected.size >= 2 && vocab.tagSystemAvailable !== false) {
     const mode = h("select.facet-mode", { "aria-label": `${label}匹配方式`, value: state.filters[modeKey] || "any" },
       h("option", { value: "any" }, "匹配任一"), h("option", { value: "all" }, "全部匹配"));
     mode.value = state.filters[modeKey] || "any";
     mode.addEventListener("change", () => hooks.setFilter(modeKey, mode.value === "all" ? "all" : ""));
-    return group(key, label, h("div", chips, mode), { selectedCount: selected.size, hint: "同组默认任一匹配；跨组同时满足。" });
+    return group(key, label, h("div", chips, mode), { selectedCount: selected.size });
   }
   return group(key, label, chips, { selectedCount: selected.size });
 }
@@ -98,6 +108,8 @@ function vocabularyGroup(key, label, terms) {
 function singleGroup(key, label, options) {
   const chips = h("div.facet-chips");
   for (const [value, text] of options) chips.append(facetChip(key, value, text, state.filters[key] === value));
+  const selected = state.filters[key];
+  if (selected && !options.some(([value]) => value === selected)) chips.append(facetChip(key, selected, `${selected}（不可用）`, true));
   return group(key, label, chips, { selectedCount: state.filters[key] ? 1 : 0 });
 }
 
@@ -116,7 +128,8 @@ function timeGroup() {
   }
   const input = h("input.facet-date#filter-since", { type: "date", value: dateInputFromSince(since), "aria-label": "收藏起始日期" });
   input.addEventListener("change", () => hooks.setFilter("since", sinceFromDateInput(input.value)));
-  const body = h("div", chips, h("label.facet-date-row", h("span", "起始日期"), input));
+  const body = h("div", chips, h("label.facet-date-row", h("span", "起始日期"), input),
+    since ? h("button.link-btn", { type: "button", onclick: () => hooks.setFilter("since", "") }, "清除日期") : null);
   return group("since", "收藏时间", body, { selectedCount: since ? 1 : 0 });
 }
 
@@ -130,32 +143,41 @@ function uncertainToggle() {
 
 export function renderFacets() {
   const groups = [];
+  const more = [];
+  let moreSelected = 0;
   if (vocab.v2Available && vocab.v2) {
     for (const dimension of V2_DIMENSIONS.filter((entry) => entry.key === "topics" || entry.key === "resource_kinds")) {
       if (Array.isArray(vocab.v2[dimension.key])) groups.push(vocabularyGroup(dimension.key, dimension.label, vocab.v2[dimension.key]));
     }
     if (vocab.custom.length || state.filters.custom_tags) groups.push(vocabularyGroup("custom_tags", "自定义标记", vocab.custom));
     const secondary = V2_DIMENSIONS.filter((entry) => !["topics", "resource_kinds"].includes(entry.key));
-    const advanced = h("div", secondary.map((dimension) => vocabularyGroup(dimension.key, dimension.label, vocab.v2[dimension.key] || [])));
-    groups.push(group("advanced", "更多内容属性", advanced, { selectedCount: secondary.reduce((count, entry) => count + splitList(state.filters[entry.key]).length, 0) }));
+    more.push(...secondary.map((dimension) => vocabularyGroup(dimension.key, dimension.label, vocab.v2[dimension.key] || [])));
+    moreSelected += secondary.reduce((count, entry) => count + splitList(state.filters[entry.key]).length, 0);
   }
-  groups.push(singleGroup("source", "来源", [["x", "X"], ["wechat", "公众号"], ["other", "其他网页"]]));
-  groups.push(timeGroup());
+  more.push(singleGroup("source", "来源", [["x", "X"], ["wechat", "公众号"], ["other", "其他网页"]]), timeGroup());
+  moreSelected += (state.filters.source ? 1 : 0) + (state.filters.since ? 1 : 0);
   if (vocab.v2Available) {
-    groups.push(vocabularyGroup("entity_state", "实体状态", ENTITY_STATES.map((entry) => ({ id: entry.id, label: entry.label, active: true }))));
+    more.push(vocabularyGroup("entity_state", "实体状态", ENTITY_STATES.map((entry) => ({ id: entry.id, label: entry.label, active: true }))));
+    moreSelected += splitList(state.filters.entity_state).length;
   }
   if (vocab.v1 && vocab.v2Available) {
     const legacy = h("div.facet-legacy",
       h("p.facet-hint", "旧版单选分类，仅在需要兼容旧标签时使用。"),
-      h("div.facet-subhead", "形态"), h("div.facet-chips", (vocab.v1.forms || []).map((term) => facetChip("form", term.id, term.label, state.filters.form === term.id))),
-      h("div.facet-subhead", "用途"), h("div.facet-chips", (vocab.v1.uses || []).map((term) => facetChip("use", term.id, term.label, state.filters.use === term.id))));
-    groups.push(group("legacy", "旧版形态 / 用途", legacy, { selectedCount: (state.filters.form ? 1 : 0) + (state.filters.use ? 1 : 0) }));
+      singleGroup("form", "形态", (vocab.v1.forms || []).map((term) => [term.id, term.label])),
+      singleGroup("use", "用途", (vocab.v1.uses || []).map((term) => [term.id, term.label])));
+    const selectedCount = (state.filters.form ? 1 : 0) + (state.filters.use ? 1 : 0);
+    more.push(group("legacy", "旧版形态 / 用途", legacy, { selectedCount }));
+    moreSelected += selectedCount;
   }
+  const uncertain = uncertainToggle();
+  if (uncertain) more.push(uncertain);
+  if (state.filters.uncertain === "true" && activeView(state.filters) !== "uncertain") moreSelected++;
+  groups.push(group("more", "更多筛选", h("div.facet-secondary", more), { selectedCount: moreSelected }));
   const notices = [];
   if (vocab.v2Available === false) {
     notices.push(h("p.facet-notice#filter-capability", icon("alert", 14), "多维词表暂不可用：服务端未启用多维分类，只能按状态、来源和时间筛选。"));
   }
-  clear(els.facets, uncertainToggle(), ...notices, ...groups);
+  clear(els.facets, ...notices, ...groups);
 }
 
 // --- Service status ---------------------------------------------------------------------
@@ -202,8 +224,7 @@ export function renderSidebar() {
   }
   renderViews();
   renderFacets();
-  const count = [...els.facets.querySelectorAll(".facet-chip[aria-pressed='true']")].length + (state.filters.uncertain === "true" && activeView(state.filters) !== "uncertain" ? 1 : 0);
-  els.clear.hidden = count === 0;
+  els.clear.hidden = facetFilterCount(state.filters) === 0;
 }
 
 export function initSidebar(options) {

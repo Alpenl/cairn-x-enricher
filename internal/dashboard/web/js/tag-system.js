@@ -25,6 +25,12 @@ function loadCatalog() {
 }
 export function hasUnsavedTagWork() { return [...sessions.values()].some((session) => session.queue.length || session.saving || session.blocked); }
 export function tagSystemReady(id) { return sessionFor(id).status === "ready"; }
+export function tagSystemOverview(id) {
+  const session = sessions.get(id);
+  if (session?.status !== "ready") return null;
+  const payload = session.draft || session.payload;
+  return { selection: payload.selection, custom_tags: payload.custom_tags || [], blocked: Boolean(session.blocked) };
+}
 export function showTagSystem(id) {
   currentID = id;
   const session = sessionFor(id);
@@ -123,7 +129,7 @@ function tagMenu(session, field, term, anchor) {
     { label: "替换为其他标签", icon: "pencil", run: () => openPicker(session, { field, from: term }) },
     { label: "恢复这个标签的自动判断", icon: "refresh", disabled: !human && !rejectedTags(payload, field).includes(term), run: () => queue(session, [{ action: "reset", tag_ref: tagRef(field, term) }]) }
   ];
-  openMenu(anchor, options);
+  openMenu(anchor, options, { onClose: () => anchor.focus({ preventScroll: true }) });
 }
 function effectiveChip(session, field, term) {
   const label = termLabel(field, term);
@@ -142,7 +148,7 @@ function groupMenu(session, field, label, anchor) {
     { label: "这一组恢复自动", hint: "解除本组全部人工决定", run: async () => {
       if (await confirmAction({ title: `${label}恢复自动`, message: "会解除本组采用、排除和关闭自动新增的人工决定，使用最新自动结果。", confirmLabel: "恢复这一组" })) queue(session, [{ action: "reset_group", dimension: field }]);
     } }
-  ]);
+  ], { onClose: () => anchor.focus({ preventScroll: true }) });
 }
 function conflictView(session) {
   const blocked = session.blocked;
@@ -174,14 +180,22 @@ export function renderTagSystem(id) {
   byId("reset-classification").hidden = true;
   byId("review-state").textContent = "";
   byId("v2-conflict").hidden = true;
-  if (session.status === "loading") { holder.replaceChildren(h("p.tag-system-status", { role: "status" }, "正在读取标签…")); return true; }
+  if (session.status === "loading") {
+    holder.replaceChildren(h("p.tag-system-status", { role: "status" }, "正在读取标签…"));
+    emit("tag-system:render", id);
+    return true;
+  }
   if (session.status === "error") {
     holder.replaceChildren(h("p.tag-system-status", { role: "alert" }, session.error), h("button.btn.btn-sm", { type: "button", onclick: () => load(session) }, "重试读取标签"));
+    emit("tag-system:render", id);
     return true;
   }
   const active = document.activeElement;
-  const focusLabel = holder.contains(active) ? active.getAttribute("aria-label") : null;
-  const focusClass = holder.contains(active) ? active.className : null;
+  const savedFocus = holder.contains(active) ? {
+    id: active.id, label: active.getAttribute("aria-label"), className: active.className, text: active.textContent,
+    value: active instanceof HTMLInputElement ? active.value : undefined, start: active.selectionStart, end: active.selectionEnd
+  } : null;
+  const disclosures = new Map([...holder.querySelectorAll("details")].map((details) => [details.className, details.open]));
   const payload = session.draft || session.payload;
   const rows = PRIMARY_TAG_FIELDS.map(({ key, label }) => {
     const selected = payload.selection?.[key] || [];
@@ -212,15 +226,28 @@ export function renderTagSystem(id) {
   if (conflict) rows.push(conflict);
   holder.replaceChildren(...rows);
   renderSupplement?.();
-  if (focusLabel) {
-    const previous = [...holder.querySelectorAll("button")].find((button) => button.getAttribute("aria-label") === focusLabel && button.className === focusClass);
+  for (const details of holder.querySelectorAll("details")) {
+    if (disclosures.has(details.className)) details.open = disclosures.get(details.className);
+  }
+  if (savedFocus) {
+    const previous = [...holder.querySelectorAll("button, input")].find((node) => savedFocus.id ? node.id === savedFocus.id
+      : node.className === savedFocus.className && (savedFocus.label ? node.getAttribute("aria-label") === savedFocus.label : node.textContent === savedFocus.text));
+    if (previous && savedFocus.value !== undefined) {
+      previous.value = savedFocus.value;
+      previous.setSelectionRange(savedFocus.start, savedFocus.end);
+    }
     (previous || holder.querySelector(".tag-system-toolbar button"))?.focus({ preventScroll: true });
   }
+  emit("tag-system:render", id);
   return true;
 }
 function catalogEntries() {
   return PRIMARY_TAG_FIELDS.flatMap(({ key, label }) => terms(key).map((term) => ({ ...term, field: key, group: label, tag_ref: tagRef(key, term.id) })))
     .concat(vocab.custom.map((tag) => ({ ...tag, field: "custom_tags", group: "自定义", tag_ref: tag.tag_ref })));
+}
+function focusToolbar(session, label) {
+  if (session.id !== currentID || !byId("curate")?.open || document.querySelector("dialog[open]")) return;
+  [...byId("tag-rows").querySelectorAll(".tag-system-toolbar button")].find((button) => button.textContent === label)?.focus({ preventScroll: true });
 }
 function openPicker(session, { field, from } = {}) {
   const input = h("input.tag-search", { type: "search", placeholder: "搜索标签或创建自定义标记", "aria-label": "搜索标签", maxLength: 80 });
@@ -263,7 +290,8 @@ function openPicker(session, { field, from } = {}) {
     }
   };
   input.addEventListener("input", render);
-  dialog = openDialog({ title: from ? `替换「${termLabel(field, from)}」` : "添加标签", body: [input, error, results], initialFocus: () => input });
+  dialog = openDialog({ title: from ? `替换「${termLabel(field, from)}」` : "添加标签", body: [input, error, results], initialFocus: () => input,
+    onClose: () => focusToolbar(session, "添加标签") });
   render();
 }
 function customMenu(session, tag, anchor) {
@@ -284,7 +312,7 @@ function customMenu(session, tag, anchor) {
         } }] });
     } },
     { label: "管理自定义标记", run: () => manageCustomTags(session) }
-  ]);
+  ], { onClose: () => anchor.focus({ preventScroll: true }) });
 }
 function manageCustomTags(session) {
   const body = h("div");
@@ -334,7 +362,7 @@ async function showHistory(session) {
     loading = false; more.disabled = false;
   };
   more.addEventListener("click", read);
-  openDialog({ title: "标签变更", body });
+  openDialog({ title: "标签变更", body, onClose: () => focusToolbar(session, "查看变更") });
   read();
 }
 export async function confirmTagSystem(id) {

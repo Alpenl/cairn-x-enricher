@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#111113" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f6f7f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15191e" media="(prefers-color-scheme: dark)">
   <title>Cairn 收藏</title>
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/app.css">
@@ -152,8 +152,15 @@
             <div class="banner" id="process-banner" role="status" hidden></div>
             <p class="detail-lede" id="detail-lede"></p>
 
-            <section class="curate" id="curate" aria-label="整理这条收藏" hidden>
-              <fieldset class="curate-fields" id="curate-fields">
+            <details class="curate" id="curate" aria-label="标签与备注" hidden>
+              <summary class="curate-summary">
+                <span class="curate-summary-label">标签与备注</span>
+                <span class="curate-summary-tags" id="curate-summary-tags" hidden></span>
+                <span class="curate-summary-why" id="curate-summary-why" hidden></span>
+                <span class="curate-summary-state" id="curate-summary-state" hidden></span>
+                <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+              </summary>
+              <fieldset class="curate-fields curate-content" id="curate-fields">
                 <legend class="visually-hidden">整理</legend>
                 <div class="curate-row why-row">
                   <label class="curate-label" for="curation-why">收藏原因</label>
@@ -176,7 +183,7 @@
                   <span class="save-state" id="save-state" aria-live="polite"></span>
                 </div>
               </fieldset>
-            </section>
+            </details>
 
             <div class="figures" id="figures" hidden></div>
             <p class="body-loading" id="body-loading" hidden><span class="spinner" aria-hidden="true"></span>正在读取全文</p>
