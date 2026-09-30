@@ -1,6 +1,6 @@
 // The library list: one dense, keyboard-navigable column of bookmarks grouped
 // by day, with search highlighting, infinite scroll and multi-select.
-import { api, errorLabel, imagePath } from "./api.js";
+import { api, errorLabel, imagePath, invalidateQueryReads } from "./api.js";
 import { append, byId, clear, h, highlightInto } from "./dom.js";
 import {
   bucketLabel, curationShort, displaySummary, displayTitle, formatFull, highlightRanges, isWorking,
@@ -17,6 +17,8 @@ const POLL_INTERVAL = 10000;
 let controller = null;
 let requestVersion = 0;
 let firstPageSnapshot = "";
+let displayedQuery = "";
+let refreshing = false;
 let anchorId = 0; // shift-click range anchor
 let hooks = {};
 
@@ -28,11 +30,14 @@ export function bookmarkHref(id) {
 
 // --- Rendering ------------------------------------------------------------
 
-function imageThumb(item) {
+function imageThumb(item, existing) {
   const images = Array.isArray(item.images) ? item.images : [];
   if (!images.length) return null;
+  const src = imagePath(images[0].key);
+  if (existing?.dataset.updated === (item.enriched_at || "") && existing.querySelector("img")?.getAttribute("src") === src) return existing;
   const box = h("div.row-thumb");
-  const image = h("img", { alt: "", loading: "lazy", decoding: "async", src: imagePath(images[0].key) });
+  box.dataset.updated = item.enriched_at || "";
+  const image = h("img", { alt: "", loading: "lazy", decoding: "async", fetchPriority: "low", src });
   // Fade in once decoded so a slow image does not pop into view.
   if (image.complete) image.classList.add("ready");
   image.addEventListener("load", () => image.classList.add("ready"));
@@ -82,7 +87,7 @@ function rowMeta(item) {
   );
 }
 
-export function renderRow(item) {
+export function renderRow(item, { thumbnail } = {}) {
   const terms = searchTerms(state.search);
   const title = displayTitle(item);
   const summary = state.search ? searchExcerpt(item, terms) : displaySummary(item);
@@ -106,7 +111,7 @@ export function renderRow(item) {
   const personalNode = personal
     ? h("p.row-why", { class: item.why ? "" : "note" }, icon(item.why ? "quote" : "pencil", 12), textWithHighlights("span", personal, terms))
     : null;
-  append(link, [h("div.row-body", top, summaryNode, personalNode, rowMeta(item)), imageThumb(item)]);
+  append(link, [h("div.row-body", top, summaryNode, personalNode, rowMeta(item)), imageThumb(item, thumbnail)]);
   row.append(check, link);
   return row;
 }
@@ -119,8 +124,13 @@ function rowElement(id) {
   return els.rows.querySelector(`li.row[data-id="${id}"]`);
 }
 
-function renderRows(ids, { append = false } = {}) {
+function renderRows(ids, { append = false, reuseImages = true } = {}) {
   const fragment = document.createDocumentFragment();
+  const thumbnails = new Map();
+  if (!append && reuseImages) for (const row of els.rows.querySelectorAll("li.row[data-id]")) {
+    const thumbnail = row.querySelector(".row-thumb");
+    if (thumbnail) thumbnails.set(Number(row.dataset.id), thumbnail);
+  }
   let lastBucket = null;
   if (append) {
     const lastRow = [...els.rows.querySelectorAll("li.row")].at(-1);
@@ -134,7 +144,7 @@ function renderRows(ids, { append = false } = {}) {
       fragment.append(bucketRow(bucket));
       lastBucket = bucket;
     }
-    fragment.append(renderRow(item));
+    fragment.append(renderRow(item, { thumbnail: thumbnails.get(id) }));
   }
   // Build detached and attach once: appending rows one by one to a live list
   // forces style and layout work per row during scroll-triggered loads.
@@ -146,7 +156,7 @@ export function updateRow(id) {
   const current = rowElement(id);
   const item = getItem(id);
   if (!current || !item) return;
-  current.replaceWith(renderRow(item));
+  current.replaceWith(renderRow(item, { thumbnail: current.querySelector(".row-thumb") }));
 }
 
 function pruneBuckets() {
@@ -200,8 +210,9 @@ function viewLabel() {
 
 export function updateHeader() {
   els.title.textContent = viewLabel();
-  els.count.textContent = state.total === null ? "" : `${state.total} 条`;
-  els.count.hidden = state.total === null;
+  const stale = displayedQuery && displayedQuery !== apiParams(state.filters, state.search, { limit: PAGE_SIZE }).toString();
+  els.count.textContent = refreshing ? "正在筛选…" : stale && state.listError ? "上次结果" : state.total === null ? "" : `${state.total} 条`;
+  els.count.hidden = !refreshing && state.total === null;
   els.search.placeholder = `在「${viewLabel()}」中搜索`;
   renderActiveFilters();
 }
@@ -245,7 +256,7 @@ function updateFooter() {
   els.empty.hidden = !empty;
   if (empty) renderEmpty();
   els.tail.hidden = state.loading || Boolean(state.nextBeforeID) || state.order.length === 0;
-  els.more.hidden = !(state.loading && state.order.length > 0);
+  els.more.hidden = !(state.loading && !refreshing && state.order.length > 0);
 }
 
 function renderEmpty() {
@@ -296,54 +307,58 @@ export function showNewItems(count) {
 
 // --- Loading ----------------------------------------------------------------
 
-export async function reload({ keepSelection = true, silent = false } = {}) {
+export async function reload({ keepSelection = true, silent = false, reuse = false } = {}) {
   controller?.abort();
   controller = new AbortController();
   const version = ++requestVersion;
+  const params = apiParams(state.filters, state.search, { limit: PAGE_SIZE });
+  const filters = { ...state.filters };
+  refreshing = !silent;
   state.loading = true;
   els.pane.dataset.loading = "true";
+  els.pane.setAttribute("aria-busy", "true");
   els.fresh.hidden = true;
   state.listError = null;
   els.notice.hidden = true;
   if (!silent) {
-    state.order = [];
-    state.nextBeforeID = null;
-    state.total = null;
-    firstPageSnapshot = "";
-    els.rows.replaceChildren(...skeleton());
-    els.scroll.scrollTop = 0;
-    updateHeader();
+    if (!state.order.length) els.rows.replaceChildren(...skeleton());
+    syncChecks();
   }
+  updateHeader();
   updateFooter();
   try {
-    const params = apiParams(state.filters, state.search, { limit: PAGE_SIZE });
-    const page = await api.list(params, controller.signal);
+    const page = await api.list(params, controller.signal, { reuse });
     if (version !== requestVersion) return;
-    if (needsFilterContract(state.filters) && page.filter_contract_version !== 1) {
+    if (needsFilterContract(filters) && page.filter_contract_version !== 1) {
       throw Object.assign(new Error("unsupported_filter_contract"), { status: 409 });
     }
     const snapshot = JSON.stringify(page);
     if (silent && snapshot === firstPageSnapshot) return;
     firstPageSnapshot = snapshot;
+    displayedQuery = params.toString();
     const items = Array.isArray(page.items) ? page.items : [];
     for (const item of items) mergeItem(item);
     state.order = items.map((item) => item.id);
     state.nextBeforeID = page.next_before_id ?? null;
     state.total = page.counts?.total ?? items.length;
     state.counts = page.counts || null;
-    renderRows(state.order);
+    renderRows(state.order, { reuseImages: reuse || silent });
+    if (!silent) els.scroll.scrollTop = 0;
     updateHeader();
     emit("list:loaded", { silent, keepSelection });
   } catch (error) {
     if (version !== requestVersion || error.name === "AbortError") return;
     if (!silent) {
-      els.rows.replaceChildren();
+      if (!state.order.length) els.rows.replaceChildren();
       showError(error);
     }
   } finally {
     if (version === requestVersion) {
       state.loading = false;
+      refreshing = false;
       els.pane.dataset.loading = "false";
+      els.pane.setAttribute("aria-busy", "false");
+      updateHeader();
       updateFooter();
       renderBatchBar();
     }
@@ -357,12 +372,14 @@ export async function loadMore() {
   const version = ++requestVersion;
   state.loading = true;
   els.pane.dataset.loading = "true";
+  els.pane.setAttribute("aria-busy", "true");
   updateFooter();
   try {
     const params = apiParams(state.filters, state.search, { limit: PAGE_SIZE, beforeId: state.nextBeforeID });
     params.set("counts", "0");
     const page = await api.list(params, controller.signal);
     if (version !== requestVersion) return false;
+    if (needsFilterContract(state.filters) && page.filter_contract_version !== 1) throw new Error("unsupported_filter_contract");
     const items = (Array.isArray(page.items) ? page.items : []).filter((item) => !state.order.includes(item.id));
     for (const item of items) mergeItem(item);
     state.order.push(...items.map((item) => item.id));
@@ -378,6 +395,7 @@ export async function loadMore() {
     if (version === requestVersion) {
       state.loading = false;
       els.pane.dataset.loading = "false";
+      els.pane.setAttribute("aria-busy", "false");
       updateFooter();
     }
   }
@@ -389,15 +407,18 @@ async function pollFirstPage() {
   if (document.hidden || state.loading || state.listError || state.search) return;
   const head = state.order.slice(0, PAGE_SIZE).map(getItem);
   if (!head.some(isWorking)) return;
+  const version = requestVersion;
   try {
     const params = apiParams(state.filters, state.search, { limit: PAGE_SIZE });
     params.set("counts", "0");
     const page = await api.list(params);
+    if (version !== requestVersion || state.loading) return;
     for (const item of page.items || []) {
       if (!state.order.includes(item.id)) continue;
       const before = JSON.stringify(getItem(item.id));
       mergeItem(item);
       if (JSON.stringify(getItem(item.id)) !== before) {
+        invalidateQueryReads();
         updateRow(item.id);
         emit("item", item.id);
       }

@@ -1,6 +1,6 @@
 // Same-origin API client. The browser never holds a Worker token or model key:
 // every call goes to the Go service, which forwards it with its own credentials.
-import { getItem } from "./store.js";
+import { emit, getItem, on } from "./store.js";
 
 const ERROR_LABELS = Object.freeze({
   job_busy: "这条正在处理中",
@@ -164,6 +164,66 @@ function cached(key, load) {
   return once.get(key);
 }
 
+// Filter navigation can revisit an identical query while the server is still
+// expensive to read. Keep a small, short-lived copy of successful responses;
+// explicit refreshes and background polling always go to the server.
+const queryCache = new Map();
+const QUERY_TTL_MS = 10_000;
+const QUERY_MAX_ITEMS = 10;
+const QUERY_MAX_BYTES = 4 * 1024 * 1024;
+let queryBytes = 0;
+let queryGeneration = 0;
+
+export function invalidateQueryReads() {
+  queryGeneration++;
+  queryCache.clear();
+  queryBytes = 0;
+}
+on("tags:changed", invalidateQueryReads);
+on("library:changed", invalidateQueryReads);
+
+function forgetQuery(key) {
+  queryBytes -= queryCache.get(key)?.bytes || 0;
+  queryCache.delete(key);
+}
+
+function queryRead(path, params, signal, { reuse = false } = {}) {
+  const stable = new URLSearchParams(params);
+  stable.sort();
+  const key = `${path}?${stable}`;
+  if (signal?.aborted) return Promise.reject(new DOMException("Request aborted", "AbortError"));
+  const stored = queryCache.get(key);
+  if (stored && stored.until <= Date.now()) forgetQuery(key);
+  else if (stored && reuse) {
+    queryCache.delete(key);
+    queryCache.set(key, stored);
+    return Promise.resolve(structuredClone(stored.value));
+  }
+  const generation = queryGeneration;
+  return fetchJSON(key, { signal, priority: path === "/api/bookmarks" ? "high" : "low" }).then((value) => {
+    if (generation !== queryGeneration || signal?.aborted) return value;
+    const bytes = JSON.stringify(value).length * 2;
+    if (bytes <= QUERY_MAX_BYTES) {
+      forgetQuery(key);
+      queryCache.set(key, { value: structuredClone(value), bytes, until: Date.now() + QUERY_TTL_MS });
+      queryBytes += bytes;
+      while (queryCache.size > QUERY_MAX_ITEMS || queryBytes > QUERY_MAX_BYTES) forgetQuery(queryCache.keys().next().value);
+    }
+    return value;
+  });
+}
+
+async function mutate(load, id) {
+  invalidateQueryReads();
+  if (id) invalidateDetail(id);
+  try { return await load(); }
+  finally {
+    // Reads that overlapped a write may still contain the pre-write snapshot.
+    invalidateQueryReads();
+    emit("library:changed");
+  }
+}
+
 // A nearby row is prefetched only once. A later explicit refresh starts a new
 // generation so a slow old prefetch cannot put stale text back into the cache.
 const detailFlights = new Map();
@@ -266,15 +326,16 @@ function readAux(kind, id, identity, options = {}) {
   return readDetail(id).then((item) => readAuxDirect(kind, id, item?.cache_identity || identity, options));
 }
 
-async function fetchReadingDetail(id) {
-  if (readingSupported === false) return { detail: await fetchJSON(`/api/bookmarks/${id}`) };
+async function fetchReadingDetail(id, { prefetch = false } = {}) {
+  const options = { priority: prefetch ? "low" : "high" };
+  if (readingSupported === false) return { detail: await fetchJSON(`/api/bookmarks/${id}`, options) };
   try {
     const current = getItem(id);
     const bodyRevision = current?.content_loaded !== false &&
       Number.isSafeInteger(current?.cache_identity?.body_revision) && current.cache_identity.body_revision >= 0
       ? current.cache_identity.body_revision : null;
     const suffix = bodyRevision === null ? "" : `?body_revision=${bodyRevision}`;
-    const reading = await fetchJSON(`/api/bookmarks/${id}/reading${suffix}`);
+    const reading = await fetchJSON(`/api/bookmarks/${id}/reading${suffix}`, options);
     if (reading?.version !== 1 || reading.detail?.id !== id || !reading.detail.cache_identity ||
         reading.selection?.available !== true || !reading.entities) throw new APIError("invalid_reading", 502);
     if (reading.body_unchanged) {
@@ -289,7 +350,7 @@ async function fetchReadingDetail(id) {
   } catch (error) {
     if (![404, 405].includes(error?.status) &&
         !(error?.status === 503 && error.message === "reading_unsupported")) throw error;
-    const detail = await fetchJSON(`/api/bookmarks/${id}`);
+    const detail = await fetchJSON(`/api/bookmarks/${id}`, options);
     readingSupported = false;
     return { detail };
   }
@@ -345,7 +406,7 @@ function readDetail(id, { prefetch = false, fresh = false } = {}) {
   const flight = { used: !prefetch, generation, promise: null };
   detailStates.set(id, state);
   state.active++;
-  flight.promise = fetchReadingDetail(id).then(({ detail: item, selection, entities }) => {
+  flight.promise = fetchReadingDetail(id, { prefetch }).then(({ detail: item, selection, entities }) => {
     if (state.generation !== generation) return null;
     if (selection && entities) {
       invalidateAux(id);
@@ -365,39 +426,40 @@ function readDetail(id, { prefetch = false, fresh = false } = {}) {
 
 export const api = {
   cacheStats: () => ({ prefetch_items: prefetchedDetails.size, prefetch_bytes: prefetchBytes,
-    auxiliary_items: auxCache.size, auxiliary_bytes: auxBytes }),
-  list: (params, signal) => fetchJSON(`/api/bookmarks?${params}`, { signal }),
+    auxiliary_items: auxCache.size, auxiliary_bytes: auxBytes, query_items: queryCache.size, query_bytes: queryBytes }),
+  list: (params, signal, options) => queryRead("/api/bookmarks", params, signal, options),
   detail: (id) => readDetail(id),
   detailFresh: (id) => readDetail(id, { fresh: true }),
+  prefetchAvailable: () => readingSupported === true,
   prefetchDetail: (id) => readDetail(id, { prefetch: true }),
   identity: (id) => fetchJSON(`/api/bookmarks/${id}/identity`),
   overview: () => fetchJSON("/api/overview"),
   backstage: () => fetchJSON("/api/backstage"),
   taxonomy: () => cached("taxonomy", () => fetchJSON("/api/taxonomy")),
   taxonomyV2: () => cached("taxonomy-v2", () => fetchJSON("/api/v2-taxonomy")),
-  curation: (id, body) => { invalidateDetail(id); return fetchJSON(`/api/bookmarks/${id}/curation`, jsonBody("PATCH", body)); },
+  curation: (id, body) => mutate(() => fetchJSON(`/api/bookmarks/${id}/curation`, jsonBody("PATCH", body)), id),
   v2Selection: (id, identity, options) => readAux("v2-selection", id, identity, options),
-  v2Override: (id, body) => { invalidateDetail(id); return fetchJSON(`/api/bookmarks/${id}/v2-override`, jsonBody("POST", body)); },
+  v2Override: (id, body) => mutate(() => fetchJSON(`/api/bookmarks/${id}/v2-override`, jsonBody("POST", body)), id),
   tags: (id) => fetchJSON(`/api/bookmarks/${id}/tags`),
-  editTags: (id, body) => { invalidateDetail(id); return fetchJSON(`/api/bookmarks/${id}/tags`, jsonBody("POST", body)); },
+  editTags: (id, body) => mutate(() => fetchJSON(`/api/bookmarks/${id}/tags`, jsonBody("POST", body)), id),
   tagHistory: (id, beforeId) => fetchJSON(`/api/bookmarks/${id}/tag-history?limit=30${beforeId ? `&before_id=${beforeId}` : ""}`),
   customTags: () => fetchJSON("/api/custom-tags"),
-  createCustomTag: (body) => fetchJSON("/api/custom-tags", jsonBody("POST", body)),
-  renameCustomTag: (id, body) => fetchJSON(`/api/custom-tags/${encodeURIComponent(id)}`, jsonBody("PATCH", body)),
-  archiveCustomTag: (id, body) => fetchJSON(`/api/custom-tags/${encodeURIComponent(id)}`, jsonBody("DELETE", body)),
-  tagCounts: (params) => fetchJSON(`/api/tag-counts?${params}`),
+  createCustomTag: (body) => mutate(() => fetchJSON("/api/custom-tags", jsonBody("POST", body))),
+  renameCustomTag: (id, body) => mutate(() => fetchJSON(`/api/custom-tags/${encodeURIComponent(id)}`, jsonBody("PATCH", body))),
+  archiveCustomTag: (id, body) => mutate(() => fetchJSON(`/api/custom-tags/${encodeURIComponent(id)}`, jsonBody("DELETE", body))),
+  tagCounts: (params, signal) => queryRead("/api/tag-counts", params, signal, { reuse: true }),
   evidence: (id) => fetchJSON(`/api/bookmarks/${id}/evidence`),
   classificationStatus: (id) => fetchJSON(`/api/bookmarks/${id}/classification-status`),
   entities: (id, identity, options) => readAux("entities", id, identity, options),
-  correctEntity: (id, body) => { invalidateDetail(id); return fetchJSON(`/api/bookmarks/${id}/entities`, jsonBody("POST", body)); },
-  retryClassification: (id) => { invalidateDetail(id); return fetchJSON(`/api/bookmarks/${id}/retry-classification`, { method: "POST" }); },
-  refreshSource: (id) => { invalidateDetail(id); return refreshSourceRequest(id); },
-  replayPolicy: (id, commit) => { invalidateDetail(id); return fetchJSON(`/api/bookmarks/${id}/replay-policy`, jsonBody("POST", commit ? { commit: true } : {})); },
-  process: (ids) => { ids.forEach(invalidateDetail); return processRequest(ids); },
-  submitSource: (id, submission) => { invalidateDetail(id); return processingRequest(`/api/bookmarks/${id}/source`, {
+  correctEntity: (id, body) => mutate(() => fetchJSON(`/api/bookmarks/${id}/entities`, jsonBody("POST", body)), id),
+  retryClassification: (id) => mutate(() => fetchJSON(`/api/bookmarks/${id}/retry-classification`, { method: "POST" }), id),
+  refreshSource: (id) => mutate(() => refreshSourceRequest(id), id),
+  replayPolicy: (id, commit) => mutate(() => fetchJSON(`/api/bookmarks/${id}/replay-policy`, jsonBody("POST", commit ? { commit: true } : {})), id),
+  process: (ids) => { ids.forEach(invalidateDetail); return mutate(() => processRequest(ids)); },
+  submitSource: (id, submission) => mutate(() => processingRequest(`/api/bookmarks/${id}/source`, {
     original_text: submission.text, operation_key: submission.operation_key,
     expected_revision: submission.expected_revision
-  }); }
+  }), id)
 };
 
 export function imagePath(key) {

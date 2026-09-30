@@ -41,7 +41,7 @@ jobs:
         # bar as the service.
         run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./experiments/...
       - name: Check frontend assets
-        run: node internal/dashboard/frontend-check.mjs internal/dashboard
+        run: make test-frontend
       - name: Build
         run: go build -trimpath ./cmd/cairn-x-enricher
 

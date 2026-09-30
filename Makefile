@@ -34,6 +34,7 @@ test-image-browser:
 
 test-frontend:
 	node internal/dashboard/frontend-check.mjs internal/dashboard
+	node internal/dashboard/query-cache-test.mjs
 
 # Fast local check. CI runs the full golangci-lint suite; use `make lint-ci` to
 # reproduce it exactly before pushing.

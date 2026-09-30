@@ -25,6 +25,13 @@ page.on("pageerror", (error) => errors.push(error.message));
 const send = (route, body) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 await page.route("**/api/v2-taxonomy", (route) => send(route, catalog));
 await page.route("**/api/custom-tags", (route) => send(route, { tags: [custom] }));
+await page.route("**/api/bookmarks/*/tags", (route) => {
+  const id = Number(new URL(route.request().url()).pathname.split("/")[3]);
+  const item = fixture.items.find((entry) => entry.id === id);
+  return send(route, { id, revision: 1, content_revision: 1, decision_id: 1, custom_tags: item.custom_tags,
+    selection: { topics: item.classification.topics, resource_kinds: item.classification.resource_kinds },
+    automatic: item.classification, state: { fields: {} } });
+});
 await page.route("**/api/tag-counts?*", (route) => send(route, { total: 7,
   topics: catalog.topics.map(({ id }) => ({ id, count: 7 })), resource_kinds: catalog.resource_kinds.map(({ id }) => ({ id, count: 7 })),
   custom_tags: [{ id: custom.id, count: 7 }] }));
