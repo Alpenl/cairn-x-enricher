@@ -7,7 +7,7 @@ import { emit } from "./store.js";
 export const V2_DIMENSIONS = Object.freeze([
   { key: "topics", label: "主题", multi: true, max: 64 },
   { key: "resource_kinds", label: "资源类型", multi: true, max: 64, optional: true },
-  { key: "content_functions", label: "内容功能", multi: true, max: 8 },
+  { key: "content_functions", label: "内容特征", multi: true, max: 8 },
   { key: "carriers", label: "载体", multi: false, max: 1 },
   { key: "affordances", label: "潜在用途", multi: true, max: 8 }
 ]);

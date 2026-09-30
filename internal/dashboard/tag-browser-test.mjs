@@ -10,10 +10,11 @@ const item = fixture.items.find((entry) => entry.curation_status === "inbox");
 const tag = (id,label,aliases=[]) => ({id,label,aliases,active:true});
 const catalog = { ...taxonomyV2(), topics:[tag("image_creation","图像生成"),tag("ai_coding","AI编程"),tag("video_creation","视频制作")],
   resource_kinds:[tag("skill","Skill"),tag("prompt","提示词",["Prompt"])] };
-const initial = {id:item.id,revision:4,content_revision:1,decision_id:3,selection:{topics:["image_creation","ai_coding"],resource_kinds:["skill"],content_functions:[],carriers:[],affordances:[]},
-  automatic:{topics:["image_creation","ai_coding"],resource_kinds:["skill"]},custom_tags:[],state:{fields:{
+const initial = {id:item.id,revision:4,content_revision:1,decision_id:3,selection:{topics:["image_creation","ai_coding"],resource_kinds:["skill"],content_functions:["method","opinion"],carriers:[],affordances:[]},
+  automatic:{topics:["image_creation","ai_coding"],resource_kinds:["skill"],content_functions:["method","opinion"]},custom_tags:[],state:{fields:{
     topics:{status:"completed_nonempty",values:[{term:"image_creation",origin:"automatic"},{term:"ai_coding",origin:"automatic"}],actions:[],candidates:[{term_id:"video_creation",verdict:"abstained"}]},
-    resource_kinds:{status:"completed_nonempty",values:[{term:"skill",origin:"automatic"}],actions:[],candidates:[]}}}};
+    resource_kinds:{status:"completed_nonempty",values:[{term:"skill",origin:"automatic"}],actions:[],candidates:[]},
+    content_functions:{status:"completed_nonempty",values:[{term:"method",origin:"automatic"},{term:"opinion",origin:"automatic"}],actions:[],candidates:[]}}}};
 let current = structuredClone(initial);
 let custom = [];
 let conflict = false;
@@ -77,8 +78,8 @@ try {
   assert.equal(await page.locator("#curate").evaluate(node=>node.open),false);
   assert.equal(await page.locator("#curation-why").isVisible(),false);
   assert.equal(await page.locator(".tag-suggestions").isVisible(),false);
-  assert.deepEqual(await page.locator(".curate-summary-tag").allTextContents(),["图像生成","AI编程"]);
-  assert.equal(await page.locator(".curate-summary-more").textContent(),"+1");
+  assert.deepEqual(await page.locator(".curate-summary-tag").allTextContents(),["图像生成","AI编程","Skill","方法","观点"]);
+  assert.equal(await page.locator(".curate-summary-more").count(),0);
   assert.equal(calls.length,0);checked("reading opens with a compact effective-tag summary and no editor or write");
   await page.locator("#detail-scroll").focus();await page.keyboard.press("r");
   assert.equal(await page.locator("#curate").evaluate(node=>node.open),true);
@@ -113,6 +114,18 @@ try {
   await page.locator("#curate > summary").click();
   await page.locator('.tag-system-row[data-dimension="resource_kinds"]').waitFor();
   assert.equal(await page.locator('.tag-system-chip.custom').count(),0);checked("custom section absent when unused");
+  const functions = page.locator('.tag-system-row[data-dimension="content_functions"]');
+  assert.equal(await functions.isVisible(),true);
+  assert.deepEqual(await functions.locator('.tag-name').allTextContents(),["方法","观点"]);
+  assert.equal(await page.locator('.tag-secondary [data-dimension="content_functions"]').count(),0);
+  checked("content features are visible identity-bearing tags without a duplicate advanced editor");
+  await functions.getByRole("button",{name:"移除观点",exact:true}).click();
+  await page.waitForFunction(()=>document.querySelectorAll('.tag-system-row[data-dimension="content_functions"] .tag-name').length===1);
+  assert.deepEqual(calls.at(-1).actions,[{action:"reject",tag_ref:"system/content_functions/opinion"}]);
+  assert.equal(await functions.locator('.tag-origin').textContent(),"自动标签");
+  await page.locator('.toast-action').last().click();
+  await page.waitForFunction(()=>document.querySelectorAll('.tag-system-row[data-dimension="content_functions"] .tag-name').length===2);
+  checked("content feature removal and causal undo preserve the other automatic tag's origin");
   assert.equal(await page.locator('.tag-system-row[data-dimension="topics"] .tag-name').count(),2);
   assert.equal(await page.locator('.tag-suggestions').count(),1);checked("boundary suggestion is separate from effective labels");
   const before=calls.length;

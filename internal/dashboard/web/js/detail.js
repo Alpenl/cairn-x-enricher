@@ -31,6 +31,18 @@ export function currentItemId() {
   return currentId;
 }
 
+function sourceURL(item) {
+  try {
+    const value = String(item?.url || "");
+    return ["http:", "https:"].includes(new URL(value).protocol) ? value : null;
+  } catch { return null; }
+}
+
+export function openSource() {
+  const url = sourceURL(getItem(currentId));
+  if (url) window.open(url, "_blank", "noopener,noreferrer");
+}
+
 // --- Rendering -------------------------------------------------------------------
 
 function paragraphs(container, text) {
@@ -141,8 +153,11 @@ function render(item) {
     h("span.meta-sep", "·"),
     h("time", { dateTime: item.created_at || "" }, formatFull(item.created_at)),
     item.source ? [h("span.meta-sep", "·"), h("span", sourceLabels[item.source] || item.source)] : null,
-    item.note ? [h("span.meta-sep", "·"), h("span.meta-note", { title: "来自 App 的收藏备注" }, icon("pencil", 12), item.note)] : null);
-  els.source.href = item.url;
+    item.note ? [h("span.meta-sep", "·"), h("span.meta-note", { title: "来自 App 的收藏备注" }, icon("pencil", 12), h("span", item.note))] : null);
+  const source = sourceURL(item);
+  els.source.hidden = !source;
+  if (source) els.source.href = source;
+  else els.source.removeAttribute("href");
   renderStatusControl(item);
   renderProcessBanner(item);
 
@@ -217,6 +232,8 @@ export function showItem(id) {
   els.empty.hidden = true;
   els.error.hidden = true;
   if (changed) {
+    els.source.hidden = true;
+    els.source.removeAttribute("href");
     renderedImages = "";
     renderedLinks = "";
     els.original.hidden = true;
@@ -370,7 +387,7 @@ function openDetailMenu(anchor) {
   if (!item) return;
   const processable = item.processable !== false && item.status !== "unsupported";
   openMenu(anchor, [
-    { label: "打开原帖", icon: "external", kbd: "V", run: () => window.open(item.url, "_blank", "noopener,noreferrer") },
+    { label: "打开原帖", icon: "external", kbd: "V", disabled: !sourceURL(item), run: openSource },
     { label: "复制原帖链接", icon: "copy", run: () => copyLink(item) },
     { label: "导出这条（Markdown）", icon: "download", run: () => hooks.exportItems([item.id]) },
     "separator",

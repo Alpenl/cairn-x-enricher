@@ -51,8 +51,8 @@ try {
   await page.locator(".facet-chip-count").first().waitFor({ state: "attached" });
   await group("custom_tags").waitFor({ state: "attached" });
   assert.equal(await page.locator("details.facet-group[open]").count(), 0);
-  assert.deepEqual(await page.locator("#facets > details").evaluateAll((nodes) => nodes.map((node) => node.dataset.group)), ["topics", "resource_kinds", "custom_tags", "more"]);
-  for (const id of ["source", "since", "entity_state", "legacy", "content_functions"]) assert.equal(await group(id).evaluate((node) => node.closest('details[data-group="more"]') !== null), true);
+  assert.deepEqual(await page.locator("#facets > details").evaluateAll((nodes) => nodes.map((node) => node.dataset.group)), ["topics", "resource_kinds", "content_functions", "custom_tags", "more"]);
+  for (const id of ["source", "since", "entity_state", "legacy"]) assert.equal(await group(id).evaluate((node) => node.closest('details[data-group="more"]') !== null), true);
   checked("all groups start collapsed and low-frequency filters share one More group");
 
   await open("topics");

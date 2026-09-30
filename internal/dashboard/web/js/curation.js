@@ -99,9 +99,10 @@ function renderSummary() {
   const selection = modern?.selection || (session.v2.status === "ready" ? session.v2.selection : session.v1.selection) || item?.classification || {};
   const tags = (selection.topics || []).map((term) => termLabel("topics", term))
     .concat((selection.resource_kinds || []).map((term) => termLabel("resource_kinds", term)))
+    .concat((selection.content_functions || []).map((term) => termLabel("content_functions", term)))
     .concat((modern?.custom_tags || item?.custom_tags || []).map((tag) => tag.label));
-  els.summaryTags.replaceChildren(...tags.slice(0, 2).map((label) => h("span.tag.curate-summary-tag", label)),
-    ...(tags.length > 2 ? [h("span.tag.curate-summary-more", `+${tags.length - 2}`)] : []));
+  els.summaryTags.replaceChildren(...tags.slice(0, 5).map((label) => h("span.tag.curate-summary-tag", label)),
+    ...(tags.length > 5 ? [h("span.tag.curate-summary-more", `+${tags.length - 5}`)] : []));
   els.summaryTags.hidden = !tags.length;
   const why = (session.why.dirty || session.why.saving ? session.why.draft : item?.why || "") || "";
   els.summaryWhy.textContent = why.replace(/\s+/g, " ").trim();
@@ -843,7 +844,7 @@ export function initCuration() {
     const session = sessions.get(currentId);
     if (!session) return;
     const secondary = session.v2.status === "ready"
-      ? renderV2Rows(session, getItem(currentId)).filter((entry) => entry.dataset?.dimension && !["topics", "resource_kinds"].includes(entry.dataset.dimension)) : [];
+      ? renderV2Rows(session, getItem(currentId)).filter((entry) => entry.dataset?.dimension && !["topics", "resource_kinds", "content_functions"].includes(entry.dataset.dimension)) : [];
     const entity = renderEntityRow(session);
     if (entity) secondary.push(entity);
     if (secondary.length) els.tags.append(h("details.tag-secondary", h("summary", "更多内容属性与实体"), ...secondary));

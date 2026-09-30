@@ -17,9 +17,10 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
-// PolicyVersion changes whenever questions or selection policy change. It is
+// PolicyVersion changes whenever selection policy changes. Question semantics
+// have their own spec identity, so policy-only changes can replay stored runs. It is
 // the version announced in the Worker handshake.
-const PolicyVersion = "jev-policy-v3"
+const PolicyVersion = "jev-policy-v4"
 
 // Input separates source evidence, secondary context, and the user's note.
 //

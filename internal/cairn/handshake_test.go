@@ -85,7 +85,7 @@ func TestHandshakeDeclaresCapabilitiesAndReportsSupport(t *testing.T) {
 	if !result.Supported || result.Target.Generation != 3 || result.Target.SpecID != "classify-v1" {
 		t.Fatalf("Handshake() = %+v", result)
 	}
-	for _, want := range []string{"protocol=v2", "spec_ids=classify-v1", "policy_versions=jev-policy-v3", "models=jev-latest", "taxonomy_versions=2026-09-20.1"} {
+	for _, want := range []string{"protocol=v2", "spec_ids=classify-v1", "policy_versions=" + classify.PolicyVersion, "models=jev-latest", "taxonomy_versions=2026-09-20.1"} {
 		if !contains(gotQuery, want) {
 			t.Fatalf("handshake query %q missing %q", gotQuery, want)
 		}
@@ -171,7 +171,7 @@ func TestBudgetedConsumerRequiresServerProtocolBeforeClaim(t *testing.T) {
 				if supported {
 					w.Header().Set("X-Cairn-Classification-Budget", "1")
 				}
-				_, _ = w.Write([]byte(`{"target":{"generation":1,"spec_id":"fixture","spec_hash":"hash","taxonomy_version":"fixture","policy_version":"jev-policy-v3","requested_model":"jev-1.13.0","protocol":"v2"},"supported":true}`))
+				_, _ = fmt.Fprintf(w, `{"target":{"generation":1,"spec_id":"fixture","spec_hash":"hash","taxonomy_version":"fixture","policy_version":%q,"requested_model":"jev-1.13.0","protocol":"v2"},"supported":true}`, classify.PolicyVersion)
 			}))
 			defer server.Close()
 			client := NewClient(server.URL, "fixture", server.Client())

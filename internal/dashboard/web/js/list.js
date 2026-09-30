@@ -69,10 +69,12 @@ function processBadge(item) {
 function rowMeta(item) {
   const topics = item.classification?.topics || [];
   const resources = item.classification?.resource_kinds || [];
+  const functions = item.classification?.content_functions || [];
   const custom = Array.isArray(item.custom_tags) ? item.custom_tags : [];
   const labels = [
     ...topics.map((id) => ({ label: termLabel("topics", id), kind: "topic" })),
     ...resources.map((id) => ({ label: termLabel("resource_kinds", id), kind: "resource" })),
+    ...functions.map((id) => ({ label: termLabel("content_functions", id), kind: "function" })),
     ...custom.map((tag) => ({ label: tag.label || tag.id, kind: "custom" }))
   ];
   const visible = topics.length && resources.length ? [labels[0], labels[topics.length]] : labels.slice(0, 2);
