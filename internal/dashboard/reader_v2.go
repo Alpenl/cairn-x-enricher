@@ -414,14 +414,17 @@ func (s *Server) exportMarkdown(writer http.ResponseWriter, request *http.Reques
 		fmt.Fprintf(&builder, "## %s\n\n", exportLine(item.URL))
 		fmt.Fprintf(&builder, "- 收藏 ID：%d\n- 来源：%s\n- 整理状态：%s\n", item.ID, exportLine(item.Source), exportLine(item.CurationStatus))
 		if view := views[index]; view != nil {
-			topics, resources := view.Effective.Topics, view.Effective.ResourceKinds
+			topics, resources, functions := view.Effective.Topics, view.Effective.ResourceKinds, view.Effective.ContentFunctions
 			if tagView := tags[index]; tagView != nil {
 				topics, resources = tagView.Selection.Topics, tagView.Selection.ResourceKinds
+				if tagView.Selection.ContentFunctions != nil {
+					functions = tagView.Selection.ContentFunctions
+				}
 			}
 			fmt.Fprintf(&builder, "- 主题：%s\n", exportList(topics))
 			fmt.Fprintf(&builder, "- 资源类型：%s\n", exportList(resources))
 			fmt.Fprintf(&builder, "- 实体：%s\n", exportList(view.Effective.Entities))
-			fmt.Fprintf(&builder, "- 内容功能：%s\n", exportList(view.Effective.ContentFunctions))
+			fmt.Fprintf(&builder, "- 内容功能：%s\n", exportList(functions))
 			fmt.Fprintf(&builder, "- 载体：%s\n", exportList(view.Effective.Carriers))
 			fmt.Fprintf(&builder, "- 潜在用途：%s\n", exportList(view.Effective.Affordances))
 			fmt.Fprintf(&builder, "- v1 形态/用途：%s / %s\n", exportLine(view.Effective.Form), exportLine(view.Effective.Use))
@@ -435,7 +438,7 @@ func (s *Server) exportMarkdown(writer http.ResponseWriter, request *http.Reques
 		}
 		if tagView := tags[index]; tagView != nil {
 			fmt.Fprintf(&builder, "- 自定义标记：%s\n", exportList(tagView.CustomLabels()))
-			for _, key := range []string{"topics", "resource_kinds"} {
+			for _, key := range []string{"topics", "resource_kinds", "content_functions"} {
 				for _, value := range tagView.State.Fields[key].Values {
 					origin := value.Origin
 					switch origin {

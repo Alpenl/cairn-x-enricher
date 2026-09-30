@@ -799,6 +799,7 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, body an
 	// This client understands the additive tag-system contract. Older clients
 	// omit the header, allowing the Worker to keep strict legacy responses legal.
 	request.Header.Set("X-Cairn-Tag-System", "1")
+	request.Header.Set("X-Cairn-Content-Functions", "1")
 	if path == "/api/enrichment/jobs/claim" ||
 		(strings.HasPrefix(path, "/api/enrichment/jobs/") && strings.HasSuffix(path, "/claim")) {
 		request.Header.Set("X-Cairn-Source-Lease-Admission", "1")

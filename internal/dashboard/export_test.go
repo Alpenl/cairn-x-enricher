@@ -187,3 +187,27 @@ func TestExportDoesNotReturnPartialFileWhenBatchFails(t *testing.T) {
 		t.Fatalf("failed batch produced a partial export: %d %s", code, body)
 	}
 }
+
+func TestExportUsesCurrentContentFeaturesAndTheirOrigins(t *testing.T) {
+	worker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v2/links/effective-batch":
+			_, _ = w.Write([]byte(`{"version":1,"items":[{"id":1,"effective":{"topics":["ai_coding"],"content_functions":["tool"]},"projected":true,"stale":false}],"missing_ids":[],"d1":{"scope":"effective_view_only","sql_count":1,"rows_read":1,"rows_written":0}}`))
+		case "/api/v2/links/1/tags":
+			_, _ = w.Write([]byte(`{"selection":{"topics":["ai_coding"],"resource_kinds":["software"],"content_functions":["method"]},"state":{"fields":{"content_functions":{"values":[{"term":"method","origin":"human","confirmed":true}]}}}}`))
+		default:
+			t.Errorf("unexpected export request: %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer worker.Close()
+	backend := &batchExportBackend{pagingBackend: &pagingBackend{total: 1}, Client: cairn.NewClient(worker.URL, "internal", worker.Client())}
+	server := New(context.Background(), startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+	defer server.Drain(time.Second)
+	code, body := exportBody(t, server.Handler(), "limit=1")
+	if code != http.StatusOK || !strings.Contains(body, "- 内容功能：method") || strings.Contains(body, "- 内容功能：tool") ||
+		!strings.Contains(body, "- 标签来源：content_functions / method：你已确认") {
+		t.Fatalf("content features or their origins are missing from export: %d %s", code, body)
+	}
+}

@@ -257,6 +257,7 @@ func TestReplayChangesDecisionWithoutNewEvidence(t *testing.T) {
 	oldPolicy := DefaultPolicy()
 	newPolicy := DefaultPolicy()
 	newPolicy.Version = "jev-policy-v2.1"
+	newPolicy.MinPrimaryTags, newPolicy.MaxPrimaryTags, newPolicy.FunctionSupportAccept = 0, 0, 0
 	newPolicy.TopicAccept = 0.6
 	newPolicy.TopicReject = 0.4
 	before, after, changed, err := Replay(raw, oldPolicy, newPolicy)

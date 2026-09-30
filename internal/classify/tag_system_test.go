@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
@@ -129,6 +131,7 @@ func TestResourceTagsPersistReplayAndKeepIncrementalHumanDecisions(t *testing.T)
 	}
 	newPolicy := result.Policy
 	newPolicy.Version += "+resource-evaluation"
+	newPolicy.MinPrimaryTags, newPolicy.MaxPrimaryTags, newPolicy.FunctionSupportAccept = 0, 0, 0
 	newPolicy.TopicAccept = 0.45
 	_, after, changed, err := Replay(stored, result.Policy, newPolicy)
 	if err != nil || !slices.Contains(changed, "resource_kinds") || !slices.Contains(after.ResourceKinds, "software") || calls != 1 {
@@ -156,5 +159,167 @@ func TestResourceGroupEmptyAndPerTagResetRemainIndependent(t *testing.T) {
 	})
 	if !slices.Equal(view.ResourceKinds, []string{"skill"}) || !slices.Equal(view.Topics, proposals.Topics) {
 		t.Fatalf("per-tag readmission re-enabled the group or affected topics: %+v", view)
+	}
+}
+
+func personalTagCatalogWithClothing() taxonomy.Catalog {
+	catalog := personalTagCatalog()
+	catalog.Version = "2026-09-30.2"
+	catalog.DefinitionVersion++
+	catalog.Topics = append(catalog.Topics, taxonomy.Term{
+		ID: "clothing_style", Label: "服饰与穿搭", Active: true, Status: "active",
+		DefinitionVersion: 1, DisplayRevision: 1,
+		Description: "主要讨论现实服饰、穿搭选择、衣物材质或服饰品牌的风格与评价。",
+		Includes:    []string{"服饰风格与穿搭选择"},
+		Excludes:    []string{"只在图像生成示例中出现服饰"},
+	})
+	return catalog
+}
+
+func TestClothingTopicChangesSpecWithoutInvalidatingExistingQuestionHashes(t *testing.T) {
+	previous, err := CompileSpec(personalTagCatalog(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := personalTagCatalogWithClothing()
+	next, err := CompileSpec(catalog, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if previous.SpecID == next.SpecID || previous.SemanticHash == next.SemanticHash {
+		t.Fatal("new semantic candidate retained the old whole-spec identity")
+	}
+	if len(previous.Questions) != 30 || len(next.Questions) != 31 {
+		t.Fatalf("question counts changed unexpectedly: old=%d new=%d", len(previous.Questions), len(next.Questions))
+	}
+	previousHashes := map[string]string{}
+	for _, question := range previous.Questions {
+		hash, hashErr := QuestionHash(question)
+		if hashErr != nil {
+			t.Fatal(hashErr)
+		}
+		previousHashes[question.ID] = hash
+	}
+	newHashes := map[string]string{}
+	for _, question := range next.Questions {
+		hash, hashErr := QuestionHash(question)
+		if hashErr != nil {
+			t.Fatal(hashErr)
+		}
+		newHashes[question.ID] = hash
+		if question.ID == "topic_clothing_style" {
+			if question.Kind != QuestionNoul || question.Dimension != "topic" || len(question.DependsOn) != 0 {
+				t.Fatal("clothing candidate must remain an independent multi-label topic")
+			}
+			if !strings.Contains(string(question.Instructions), catalog.Topics[len(catalog.Topics)-1].Includes[0]) ||
+				!strings.Contains(string(question.Instructions), catalog.Topics[len(catalog.Topics)-1].Excludes[0]) {
+				t.Fatal("clothing topic's real subject boundary was omitted from the provider question")
+			}
+		} else if previousHashes[question.ID] != hash {
+			t.Errorf("existing question %s changed hash after adding an independent topic", question.ID)
+		}
+	}
+	for id, hash := range previousHashes {
+		if newHashes[id] != hash {
+			t.Errorf("old question %s is missing or no longer reusable", id)
+		}
+	}
+	if newHashes["topic_clothing_style"] == "" {
+		t.Fatal("clothing topic was not compiled")
+	}
+	batches, err := PlanBatches(next)
+	if err != nil || len(batches) != 1 || len(batches[0].Questions) != 31 {
+		t.Fatalf("31 independent questions must stay in one batch: batches=%d err=%v", len(batches), err)
+	}
+	chunks, err := PlanChunks(next, DefaultMaxQuestionsPerRequest)
+	if err != nil || len(chunks) != 1 || len(chunks[0].Questions) != 31 {
+		t.Fatalf("31 questions must stay in one bounded provider request: chunks=%d err=%v", len(chunks), err)
+	}
+
+	// A future redefinition must invalidate only the new topic's own judgment.
+	catalog.Topics[len(catalog.Topics)-1].Description = "只讨论实际穿搭组合与衣物搭配。"
+	catalog.Topics[len(catalog.Topics)-1].DefinitionVersion++
+	redefined, err := CompileSpec(catalog, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, question := range redefined.Questions {
+		hash, hashErr := QuestionHash(question)
+		if hashErr != nil {
+			t.Fatal(hashErr)
+		}
+		if question.ID == "topic_clothing_style" {
+			if hash == newHashes[question.ID] {
+				t.Fatal("clothing meaning change reused its original question hash")
+			}
+		} else if hash != newHashes[question.ID] {
+			t.Errorf("clothing redefinition invalidated unrelated question %s", question.ID)
+		}
+	}
+}
+
+func TestStoredPersonalTagRunInfersOnlyNewClothingTopic(t *testing.T) {
+	var calls int32
+	var requested [][]string
+	server := reuseServer(t, &calls, &requested)
+	defer server.Close()
+	previousClient, err := NewClient(server.URL, "fixture", "jev-latest", server.Client(), personalTagCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := Input{Evidence: &Evidence{Primary: "这是一份服饰品牌风格与穿搭选择的比较。", Coverage: "complete"}}
+	previous, err := previousClient.EvaluateBatched(context.Background(), input, DefaultMaxQuestionsPerRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if previous.Coverage != "complete" || len(previous.Judgments) != 30 || atomic.LoadInt32(&calls) != 1 {
+		t.Fatal("old stored tag run must have all 30 judgments from one request")
+	}
+	answers, err := json.Marshal(answersFromJudgments(previous))
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := json.Marshal(previous)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := RestoreStoredJudgments(previousClient.Spec(), previous.RequestedModel, previous.ResolvedModel, answers, previous.Coverage, metadata)
+	if err != nil {
+		t.Fatalf("restore the existing full raw run: %v", err)
+	}
+	stored.SourceRunID = 2002
+	nextClient, err := NewClient(server.URL, "fixture", "jev-latest", server.Client(), personalTagCatalogWithClothing())
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := PlanReuse(&stored, nextClient.Spec(), stored.EvidenceHash, stored.ResolvedModel, stored.BatchSemantics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(plan.ToInfer, []string{"topic_clothing_style"}) || len(plan.Reusable) != 30 {
+		t.Fatalf("adding clothing should reuse all old judgments and infer only the new candidate: %+v", plan)
+	}
+	merged, err := nextClient.EvaluateReusing(context.Background(), input, &stored, stored.BatchSemantics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if atomic.LoadInt32(&calls) != 2 || len(requested) != 2 || !slices.Equal(requested[1], []string{"topic_clothing_style"}) {
+		t.Fatalf("partial upgrade must send exactly one new question in one fake-provider call: calls=%d requests=%v", calls, requested)
+	}
+	if merged.Coverage != "complete" || len(merged.Judgments) != 31 || len(merged.Reused) != 30 || len(merged.QuestionHashes) != 31 ||
+		merged.SpecID != nextClient.SpecID() || merged.EvidenceHash != stored.EvidenceHash {
+		t.Fatal("merged upgrade lost complete coverage or the current spec/evidence identity")
+	}
+	if len(merged.Calls) != 1 || !slices.Equal(merged.Calls[0].QuestionIDs, []string{"topic_clothing_style"}) ||
+		slices.Contains(merged.Reused, "topic_clothing_style") || len(merged.ReusedFrom) != 30 {
+		t.Fatal("audit provenance counted reused judgments as fresh model questions")
+	}
+	for id, judgment := range stored.Judgments {
+		if !reflect.DeepEqual(merged.Judgments[id], judgment) || merged.QuestionHashes[id] != stored.QuestionHashes[id] || merged.ReusedFrom[id] != stored.SourceRunID {
+			t.Errorf("stored answer or provenance changed for %s", id)
+		}
+	}
+	if err := ValidateReplayMetadata(nextClient.Spec(), merged); err != nil {
+		t.Fatalf("upgraded full raw run is not safely replayable: %v", err)
 	}
 }

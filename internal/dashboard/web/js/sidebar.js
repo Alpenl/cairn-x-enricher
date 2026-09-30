@@ -148,11 +148,11 @@ export function renderFacets() {
   const more = [];
   let moreSelected = 0;
   if (vocab.v2Available && vocab.v2) {
-    for (const dimension of V2_DIMENSIONS.filter((entry) => entry.key === "topics" || entry.key === "resource_kinds")) {
+    for (const dimension of V2_DIMENSIONS.filter((entry) => ["topics", "resource_kinds", "content_functions"].includes(entry.key))) {
       if (Array.isArray(vocab.v2[dimension.key])) groups.push(vocabularyGroup(dimension.key, dimension.label, vocab.v2[dimension.key]));
     }
     if (vocab.custom.length || state.filters.custom_tags) groups.push(vocabularyGroup("custom_tags", "自定义标记", vocab.custom));
-    const secondary = V2_DIMENSIONS.filter((entry) => !["topics", "resource_kinds"].includes(entry.key));
+    const secondary = V2_DIMENSIONS.filter((entry) => !["topics", "resource_kinds", "content_functions"].includes(entry.key));
     more.push(...secondary.map((dimension) => vocabularyGroup(dimension.key, dimension.label, vocab.v2[dimension.key] || [])));
     moreSelected += secondary.reduce((count, entry) => count + splitList(state.filters[entry.key]).length, 0);
   }

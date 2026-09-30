@@ -63,9 +63,10 @@ export async function buildMarkdown(items, { hasMore = false, scope = "所选收
       `主题：${(effective.topics || []).map((id) => line(termLabel("topics", id))).join(" / ")}`,
       `形态：${line(termLabel("forms", classification.form || ""))}`, `用途：${line(termLabel("uses", classification.use || ""))}`,
       `资源类型：${(effective.resource_kinds || []).map((id) => line(termLabel("resource_kinds", id))).join(" / ")}`,
+      `内容特征：${(effective.content_functions || []).map((id) => line(termLabel("content_functions", id))).join(" / ")}`,
       `自定义标记：${(tagView?.custom_tags || []).map((tag) => line(tag.label)).join(" / ")}`, "");
     if (tagView) {
-      for (const field of ["topics", "resource_kinds"]) for (const value of tagView.state?.fields?.[field]?.values || []) {
+      for (const field of ["topics", "resource_kinds", "content_functions"]) for (const value of tagView.state?.fields?.[field]?.values || []) {
         lines.push(`标签来源：${line(termLabel(field, value.term))} — ${value.origin === "human" ? value.confirmed ? "你已确认" : "你添加" : value.origin === "legacy_unknown" ? "历史来源未知" : "自动标签"}`);
       }
       lines.push("");

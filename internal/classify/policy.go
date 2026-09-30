@@ -109,6 +109,14 @@ type Policy struct {
 	// personal uses. Absence preserves historical policy replay; current policy
 	// versions enable it and the Worker independently rejects such new writes.
 	BlockPersonalUse bool `json:"block_personal_use,omitempty"`
+	// Primary tags are the visible objective topics, resource kinds and content
+	// functions. The minimum is a supported target, never permission to invent
+	// labels; the maximum applies before human overrides.
+	MinPrimaryTags int `json:"min_primary_tags,omitempty"`
+	MaxPrimaryTags int `json:"max_primary_tags,omitempty"`
+	// FunctionSupportAccept is the weaker, explicit support bound used only to
+	// fill a sparse automatic result with existing content-function judgments.
+	FunctionSupportAccept float64 `json:"function_support_accept,omitempty"`
 }
 
 // DefaultPolicy is the conservative, explicitly uncalibrated objective policy.
@@ -118,16 +126,29 @@ func DefaultPolicy() Policy {
 		TopicAccept: 0.8, TopicReject: 0.2,
 		ChoiceAccept: 0.65, ChoiceMargin: 0.15,
 		MaxDisplayTopics: 3, MaxEffectiveTopics: 64,
+		MinPrimaryTags: 2, MaxPrimaryTags: 5, FunctionSupportAccept: 0.65,
 	}
 }
 
 // Validate rejects a policy whose bounds cannot describe a decision.
 func (p Policy) Validate() error {
-	if p.Version == "jev-policy-v3" && !p.BlockPersonalUse {
-		return errors.New("jev-policy-v3 requires the personal use guard")
+	if (p.Version == "jev-policy-v3" || p.Version == "jev-policy-v4") && !p.BlockPersonalUse {
+		return errors.New("current objective policies require the personal use guard")
 	}
 	if p.Version == "jev-policy-v2" && p.BlockPersonalUse {
 		return errors.New("personal use guard changes jev-policy-v2 semantics; use a new policy identity")
+	}
+	hasDensity := p.MinPrimaryTags != 0 || p.MaxPrimaryTags != 0 || p.FunctionSupportAccept != 0
+	if (p.Version == "jev-policy-v2" || p.Version == "jev-policy-v3") && hasDensity {
+		return errors.New("primary tag density changes historical policy semantics; use a new policy identity")
+	}
+	if p.Version == "jev-policy-v4" || hasDensity {
+		if p.MinPrimaryTags < 1 || p.MaxPrimaryTags < 2 || p.MinPrimaryTags > p.MaxPrimaryTags || p.MaxPrimaryTags > 64 {
+			return errors.New("primary tag density limits are inconsistent")
+		}
+		if !validProbability(p.FunctionSupportAccept) || p.FunctionSupportAccept <= p.TopicReject || p.FunctionSupportAccept > p.TopicAccept {
+			return errors.New("content function support must be above rejection and at or below acceptance")
+		}
 	}
 	if p.Version == "" || len(p.Version) > 100 {
 		return errors.New("policy version must contain 1 to 100 bytes")
@@ -345,6 +366,9 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 			})
 		}
 	}
+	if policy.MaxPrimaryTags > 0 {
+		applyPrimaryTagDensity(&proposals, raw, policy)
+	}
 	// Legacy dimensions that keep the v1 projection alive.
 	for _, decision := range proposals.Decisions {
 		switch {
@@ -392,6 +416,102 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 		return a.Probability < b.Probability
 	})
 	return proposals, nil
+}
+
+// applyPrimaryTagDensity composes retained judgments without inferring new
+// semantics. Resolve runs afterwards and is allowed to produce fewer or more
+// visible labels when a person explicitly clears, rejects or adds them.
+func applyPrimaryTagDensity(proposals *Proposals, raw RawJudgments, policy Policy) {
+	primary := func(dimension string) bool {
+		return dimension == "topics" || dimension == "resource_kinds" || dimension == "content_functions"
+	}
+	less := func(a, b FieldDecision) bool {
+		if a.Probability != b.Probability {
+			return a.Probability > b.Probability
+		}
+		if a.Dimension != b.Dimension {
+			return a.Dimension < b.Dimension
+		}
+		return a.TermID < b.TermID
+	}
+	count := len(proposals.Topics) + len(proposals.ResourceKinds) + len(proposals.ContentFunctions)
+	if count < policy.MinPrimaryTags {
+		// Only observed Noul function judgments may support the minimum. Choice,
+		// personal-use and missing answers cannot be repurposed into labels.
+		observed := map[string]bool{}
+		for _, judgment := range raw.Judgments {
+			if judgment.Kind == QuestionNoul && normalizeDimension(judgment.Dimension) == "content_functions" &&
+				judgment.Noul != nil && validProbability(*judgment.Noul) {
+				observed[judgment.TermID] = true
+			}
+		}
+		var support []int
+		for i, decision := range proposals.Decisions {
+			if decision.Dimension == "content_functions" && decision.TermID != "" && observed[decision.TermID] &&
+				decision.Verdict == VerdictAbstained && decision.Probability >= policy.FunctionSupportAccept {
+				support = append(support, i)
+			}
+		}
+		sort.Slice(support, func(i, j int) bool { return less(proposals.Decisions[support[i]], proposals.Decisions[support[j]]) })
+		for _, index := range support {
+			if count >= policy.MinPrimaryTags {
+				break
+			}
+			decision := &proposals.Decisions[index]
+			decision.Verdict = VerdictAccepted
+			decision.Reason = "density_support"
+			proposals.ContentFunctions = append(proposals.ContentFunctions, decision.TermID)
+			count++
+		}
+	}
+	if count <= policy.MaxPrimaryTags {
+		return
+	}
+	var accepted []int
+	for i, decision := range proposals.Decisions {
+		if primary(decision.Dimension) && decision.TermID != "" && decision.Verdict == VerdictAccepted {
+			accepted = append(accepted, i)
+		}
+	}
+	sort.Slice(accepted, func(i, j int) bool { return less(proposals.Decisions[accepted[i]], proposals.Decisions[accepted[j]]) })
+	key := func(decision FieldDecision) string { return decision.Dimension + "/" + decision.TermID }
+	kept := map[string]bool{}
+	// Preserve a substantive subject and reusable resource whenever either was
+	// accepted, even if higher-probability functions compete for the same slots.
+	for _, dimension := range []string{"topics", "resource_kinds"} {
+		for _, index := range accepted {
+			decision := proposals.Decisions[index]
+			if decision.Dimension == dimension {
+				kept[key(decision)] = true
+				break
+			}
+		}
+	}
+	for _, index := range accepted {
+		decision := &proposals.Decisions[index]
+		if !kept[key(*decision)] && len(kept) < policy.MaxPrimaryTags {
+			kept[key(*decision)] = true
+		}
+	}
+	for _, index := range accepted {
+		decision := &proposals.Decisions[index]
+		if !kept[key(*decision)] {
+			decision.Verdict = VerdictAbstained
+			decision.Reason = "label_limit"
+		}
+	}
+	retain := func(dimension string, values []string) []string {
+		result := values[:0]
+		for _, term := range values {
+			if kept[dimension+"/"+term] {
+				result = append(result, term)
+			}
+		}
+		return result
+	}
+	proposals.Topics = retain("topics", proposals.Topics)
+	proposals.ResourceKinds = retain("resource_kinds", proposals.ResourceKinds)
+	proposals.ContentFunctions = retain("content_functions", proposals.ContentFunctions)
 }
 
 // normalizeDimension maps the legacy singular dimension names onto the v2

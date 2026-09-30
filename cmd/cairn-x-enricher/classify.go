@@ -55,6 +55,7 @@ func newClassifyCommand() *cobra.Command {
 			}
 		}
 		worker := processor.NewStaged(queue, nil, client, catalog.Version, cfg.TypesafeModel, newLogger(cfg.LogLevel), 1)
+		worker.SetPartialReuse(cfg.PartialReuse)
 		extensions, err := extensionService(cfg, client)
 		if err != nil {
 			return err

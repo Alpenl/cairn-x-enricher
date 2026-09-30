@@ -443,7 +443,7 @@ async function confirmOne(id) {
 async function confirmMany(ids) {
   const candidates = ids.filter((id) => {
     const item = getItem(id);
-    return item && (vocab.tagSystemAvailable || !item.classification_reviewed) && (item.classification?.topics?.length || item.classification?.resource_kinds?.length || item.classification?.form || item.classification?.use);
+    return item && (vocab.tagSystemAvailable || !item.classification_reviewed) && (item.classification?.topics?.length || item.classification?.resource_kinds?.length || item.classification?.content_functions?.length || item.classification?.form || item.classification?.use);
   });
   if (!candidates.length) {
     toast("所选收藏没有待确认的 AI 标签");
@@ -696,7 +696,7 @@ async function boot() {
     editTags: () => curation.toggleEditingAll(),
     undo: () => { if (!runLastToastAction()) toast("没有可以撤销的操作"); },
     check: () => { if (state.selectedId) list.toggleChecked(state.selectedId); },
-    openSource: () => { const item = getItem(state.selectedId); if (item) window.open(item.url, "_blank", "noopener,noreferrer"); },
+    openSource: () => detail.openSource(),
     exportCurrent: () => { if (state.checked.size) exportIds([...state.checked]); else if (state.selectedId) exportIds([state.selectedId]); },
     focus: toggleFocus,
     view: (view) => hooksForFilters.setView(view),

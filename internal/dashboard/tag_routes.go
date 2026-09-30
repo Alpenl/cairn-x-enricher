@@ -100,8 +100,9 @@ func (s *Server) tagSystemProxy(writer http.ResponseWriter, request *http.Reques
 
 type exportTags struct {
 	Selection struct {
-		Topics        []string `json:"topics"`
-		ResourceKinds []string `json:"resource_kinds"`
+		Topics           []string `json:"topics"`
+		ResourceKinds    []string `json:"resource_kinds"`
+		ContentFunctions []string `json:"content_functions"`
 	} `json:"selection"`
 	CustomTags []struct {
 		Label string `json:"label"`

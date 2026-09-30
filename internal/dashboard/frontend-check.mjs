@@ -390,6 +390,12 @@ const { buildMarkdown } = await load("export.js");
   equal("summary export hydrates the selected detail", requests, [9]);
   check("export includes both full languages", markdown.includes("exported full source") && markdown.includes("导出的完整译文"));
   check("export lists current entities", markdown.includes("实体：Acme"));
+  const modern = await buildMarkdown([{ id: 1, url: "https://x.com/a/status/1", original_text: "", classification: { content_functions: ["tool"] } }], {
+    fetchEntities: async () => ({ available: false }),
+    fetchTags: async () => ({ selection: { content_functions: ["method"] }, state: { fields: { content_functions: { values: [{ term: "method", origin: "human", confirmed: true }] } } } })
+  });
+  check("export uses effective content features instead of an older classification", modern.includes("内容特征：method") && !modern.includes("内容特征：tool"));
+  check("export retains each content feature's confirmation provenance", modern.includes("标签来源：method — 你已确认"));
   check("export escapes Markdown in titles", (await buildMarkdown([{ id: 1, url: "https://x.com/1", ai_title: "a *b* [c](d)", original_text: "" }], {
     fetchEntities: async () => ({ available: false })
   })).includes("a \\*b\\* \\[c\\]\\(d\\)"));

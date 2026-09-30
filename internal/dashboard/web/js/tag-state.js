@@ -1,7 +1,8 @@
 // Pure tag-system helpers. UI labels never invent a human confirmation from a
 // bookmark-wide reviewed flag; the per-term state is the source of truth.
 export const PRIMARY_TAG_FIELDS = Object.freeze([
-  { key: "topics", label: "主题" }, { key: "resource_kinds", label: "资源类型" }
+  { key: "topics", label: "主题" }, { key: "resource_kinds", label: "资源类型" },
+  { key: "content_functions", label: "内容特征" }
 ]);
 
 export function tagRef(field, id) { return `system/${field}/${id}`; }

@@ -84,12 +84,13 @@ type Classification struct {
 	Selection
 	// ResourceKinds is an additive effective read field. Objective writes keep
 	// their authoritative resources in the replayable automatic view.
-	ResourceKinds   []string `json:"resource_kinds,omitempty"`
-	WhySuggestion   string   `json:"why_suggestion"`
-	Entities        []string `json:"entities"`
-	Uncertainty     bool     `json:"uncertainty"`
-	TaxonomyVersion string   `json:"taxonomy_version"`
-	DiscardedTags   []string `json:"discarded_tags"`
+	ResourceKinds    []string `json:"resource_kinds,omitempty"`
+	ContentFunctions []string `json:"content_functions,omitempty"`
+	WhySuggestion    string   `json:"why_suggestion"`
+	Entities         []string `json:"entities"`
+	Uncertainty      bool     `json:"uncertainty"`
+	TaxonomyVersion  string   `json:"taxonomy_version"`
+	DiscardedTags    []string `json:"discarded_tags"`
 }
 
 // Validate rejects ambiguous aliases and malformed or empty catalogs at startup.
