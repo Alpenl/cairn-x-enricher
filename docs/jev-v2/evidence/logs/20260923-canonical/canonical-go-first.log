@@ -1,0 +1,16 @@
+=== RUN   TestCanonicalOptionsRequireIdentityInTheSameSourceBlock
+--- PASS: TestCanonicalOptionsRequireIdentityInTheSameSourceBlock (0.00s)
+=== RUN   TestEntityServiceKeepsSameNameIdentitiesAndUnknownSeparate
+--- PASS: TestEntityServiceKeepsSameNameIdentitiesAndUnknownSeparate (0.00s)
+=== RUN   TestEntityJudgmentsPreserveExplicitNoneUnknownAndIncidental
+=== RUN   TestEntityJudgmentsPreserveExplicitNoneUnknownAndIncidental/none
+=== RUN   TestEntityJudgmentsPreserveExplicitNoneUnknownAndIncidental/unknown
+=== RUN   TestEntityJudgmentsPreserveExplicitNoneUnknownAndIncidental/incidental
+--- PASS: TestEntityJudgmentsPreserveExplicitNoneUnknownAndIncidental (0.00s)
+    --- PASS: TestEntityJudgmentsPreserveExplicitNoneUnknownAndIncidental/none (0.00s)
+    --- PASS: TestEntityJudgmentsPreserveExplicitNoneUnknownAndIncidental/unknown (0.00s)
+    --- PASS: TestEntityJudgmentsPreserveExplicitNoneUnknownAndIncidental/incidental (0.00s)
+=== RUN   TestEntityCatalogRejectsMalformedAndUnboundedOperatorData
+--- PASS: TestEntityCatalogRejectsMalformedAndUnboundedOperatorData (0.00s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/internal/extension	0.004s

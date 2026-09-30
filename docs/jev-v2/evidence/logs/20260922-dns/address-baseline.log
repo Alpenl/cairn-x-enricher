@@ -1,0 +1,79 @@
+WHAT: 运行旧地址规则失败对照
+WHY:  预期特殊地址仍会进入套接字拨号并被测试捕获
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/0.1.2.3
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/100.64.0.1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/100.127.255.254
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/192.0.0.9
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/192.0.2.1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/192.88.99.1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/198.18.1.1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/198.19.255.254
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/198.51.100.1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/203.0.113.1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/240.0.0.1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/255.255.255.255
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/::ffff:100.64.0.1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/::127.0.0.1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/64:ff9b::7f00:1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/64:ff9b:1::1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/100::1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/100:0:0:1::1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/2001:2::1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/2001:db8::1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/2002:7f00:1::1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/3fff::1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/5f00::1
+    fetch_dial_test.go:188: special answer must prevent every connection
+=== RUN   TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/fec0::1
+    fetch_dial_test.go:188: special answer must prevent every connection
+--- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/0.1.2.3 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/100.64.0.1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/100.127.255.254 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/192.0.0.9 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/192.0.2.1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/192.88.99.1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/198.18.1.1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/198.19.255.254 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/198.51.100.1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/203.0.113.1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/240.0.0.1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/255.255.255.255 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/::ffff:100.64.0.1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/::127.0.0.1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/64:ff9b::7f00:1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/64:ff9b:1::1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/100::1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/100:0:0:1::1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/2001:2::1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/2001:db8::1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/2002:7f00:1::1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/3fff::1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/5f00::1 (0.00s)
+    --- FAIL: TestDialGuardRejectsSpecialPurposeAnswersBeforeConnecting/fec0::1 (0.00s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/extension	0.003s
+FAIL

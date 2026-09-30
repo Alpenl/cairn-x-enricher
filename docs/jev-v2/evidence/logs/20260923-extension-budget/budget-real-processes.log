@@ -1,0 +1,5 @@
+== TestLocalWorkerExtensionBudgetAcrossProcesses: starting worker on 127.0.0.1:35807 ==
+# github.com/Alpenl/cairn-x-enricher/tests/localintegration [github.com/Alpenl/cairn-x-enricher/tests/localintegration.test]
+tests/localintegration/extension_budget_test.go:57:16: assignment mismatch: 2 variables but cairn.NewClient returns 1 value
+FAIL	github.com/Alpenl/cairn-x-enricher/tests/localintegration [build failed]
+FAIL

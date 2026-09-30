@@ -1,0 +1,4 @@
+# github.com/Alpenl/cairn-x-enricher/tests/localintegration [github.com/Alpenl/cairn-x-enricher/tests/localintegration.test]
+tests/localintegration/classification_budget_test.go:197:24: queue.GetClassificationJob undefined (type *cairn.Client has no field or method GetClassificationJob)
+FAIL	github.com/Alpenl/cairn-x-enricher/tests/localintegration [build failed]
+FAIL

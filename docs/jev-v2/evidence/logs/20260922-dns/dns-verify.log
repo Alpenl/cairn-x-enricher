@@ -1,0 +1,16 @@
+WHAT: 运行 HTTPS 及完整 Go 门禁
+WHY:  验证 DNS 修复在实际传输和全项目内可用
+ok  	github.com/Alpenl/cairn-x-enricher/internal/extension	1.065s
+ok  	github.com/Alpenl/cairn-x-enricher/internal/processor	(cached)
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+internal/extension/fetch_dial_test.go:31:18: Error return value of `peer.Close` is not checked (errcheck)
+	defer peer.Close()
+	                ^
+internal/extension/fetch_dial_test.go:49:18: Error return value of `conn.Close` is not checked (errcheck)
+	defer conn.Close()
+	                ^
+2 issues:
+* errcheck: 2
+exit status 1
+make: *** [Makefile:39: lint-ci] Error 1

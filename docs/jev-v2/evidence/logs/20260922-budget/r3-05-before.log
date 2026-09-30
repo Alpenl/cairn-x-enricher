@@ -1,0 +1,12 @@
+--- FAIL: TestStructuredEvidenceBudgetBoundsActualHTTPWithoutMutatingArchive (0.01s)
+    --- FAIL: TestStructuredEvidenceBudgetBoundsActualHTTPWithoutMutatingArchive/primary (0.00s)
+        jev_test.go:521: outbound budget exceeded: request=80193 state=77290 runes=15640 blocks=8
+    --- FAIL: TestStructuredEvidenceBudgetBoundsActualHTTPWithoutMutatingArchive/context (0.00s)
+        jev_test.go:521: outbound budget exceeded: request=5199 state=2296 runes=646 blocks=8
+    --- FAIL: TestStructuredEvidenceBudgetBoundsActualHTTPWithoutMutatingArchive/metadata (0.00s)
+        jev_test.go:521: outbound budget exceeded: request=133271 state=130368 runes=646 blocks=8
+--- FAIL: TestQuestionCriteriaCannotBypassTotalRequestBudget (0.00s)
+    jev_test.go:543: oversized criteria reached HTTP: calls=1 err=transient: HTTP 500
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/classify	0.012s
+FAIL

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
+	"github.com/Alpenl/cairn-x-enricher/internal/classify"
 	"github.com/Alpenl/cairn-x-enricher/internal/config"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
@@ -23,6 +24,21 @@ import (
 type countingQueue struct {
 	calls atomic.Int64
 }
+
+type emptyNotifiedQueue struct{ claims chan struct{} }
+
+func (q *emptyNotifiedQueue) Claim(context.Context) (*cairn.Job, error) {
+	q.claims <- struct{}{}
+	return nil, nil
+}
+func (q *emptyNotifiedQueue) GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error) {
+	return cairn.BookmarkDetail{}, nil
+}
+func (q *emptyNotifiedQueue) StoreImages(context.Context, int64, string, []string) ([]cairn.ImageRef, error) {
+	return nil, nil
+}
+func (q *emptyNotifiedQueue) Complete(context.Context, int64, cairn.Completion) error { return nil }
+func (q *emptyNotifiedQueue) Fail(context.Context, int64, string, string) error       { return nil }
 
 func (q *countingQueue) Claim(ctx context.Context) (*cairn.Job, error) {
 	q.calls.Add(1)
@@ -188,5 +204,169 @@ func TestSchedulerStopsAdmittingNewBatchesAfterShutdown(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if got := queue.calls.Load(); got != after {
 		t.Fatalf("batches continued after shutdown: %d -> %d", after, got)
+	}
+}
+
+func TestSchedulerWakesAfterManualSourceSave(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	queue := &emptyNotifiedQueue{claims: make(chan struct{}, 2)}
+	worker := processor.New(queue, &noopEnricher{}, discardLogger(), 1)
+	tracker := health.NewTracker()
+	tracker.MarkStarted()
+	wakeup := make(chan struct{}, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runScheduler(ctx, worker, tracker, config.Config{MaxJobsPerRun: 1, PollInterval: time.Hour,
+			ShutdownTimeout: time.Second}, discardLogger(), wakeup)
+	}()
+	select {
+	case <-queue.claims:
+	case <-time.After(time.Second):
+		t.Fatal("initial claim did not run")
+	}
+	wakeup <- struct{}{}
+	select {
+	case <-queue.claims:
+	case <-time.After(time.Second):
+		t.Fatal("manual save did not wake scheduler")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("scheduler did not stop")
+	}
+}
+
+type independentStageQueue struct {
+	processor.StageQueue
+	sourceStarted         chan struct{}
+	classificationClaimed chan struct{}
+	startOnce             sync.Once
+	claimOnce             sync.Once
+}
+
+func (q *independentStageQueue) Claim(ctx context.Context) (*cairn.Job, error) {
+	q.startOnce.Do(func() { close(q.sourceStarted) })
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (q *independentStageQueue) ClaimClassification(context.Context, string, string, string) (*cairn.ClassificationJob, error) {
+	q.claimOnce.Do(func() { close(q.classificationClaimed) })
+	return nil, nil
+}
+
+type idleClassifier struct{}
+
+func (idleClassifier) SpecID() string { return "test-spec" }
+func (idleClassifier) Classify(context.Context, classify.Input) (classify.Result, error) {
+	return classify.Result{}, nil
+}
+
+func TestClassificationSchedulerRunsWhileSourceClaimIsBlocked(t *testing.T) {
+	queue := &independentStageQueue{sourceStarted: make(chan struct{}), classificationClaimed: make(chan struct{})}
+	worker := processor.NewStaged(queue, nil, idleClassifier{}, "v1", "jev", discardLogger(), 1)
+	tracker := health.NewTracker()
+	tracker.MarkStarted()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runScheduler(ctx, worker, tracker, config.Config{
+			MaxJobsPerRun: 1, PollInterval: time.Hour, ShutdownTimeout: 2 * time.Second,
+		}, discardLogger())
+	}()
+	select {
+	case <-queue.sourceStarted:
+	case <-time.After(time.Second):
+		t.Fatal("source round did not start")
+	}
+	select {
+	case <-queue.classificationClaimed:
+	case <-time.After(time.Second):
+		t.Fatal("source claim blocked the independent classification round")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("independent schedulers did not stop")
+	}
+}
+
+type finiteSourceQueue struct {
+	processor.Queue
+	mu        sync.Mutex
+	remaining int
+}
+
+func (q *finiteSourceQueue) Claim(context.Context) (*cairn.Job, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.remaining == 0 {
+		return nil, nil
+	}
+	q.remaining--
+	return &cairn.Job{ID: int64(q.remaining + 1), URL: "https://x.com/a/status/1", LeaseToken: "lease"}, nil
+}
+func (*finiteSourceQueue) GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error) {
+	return cairn.BookmarkDetail{}, nil
+}
+func (*finiteSourceQueue) StoreImages(context.Context, int64, string, []string) ([]cairn.ImageRef, error) {
+	return nil, nil
+}
+func (*finiteSourceQueue) Complete(context.Context, int64, cairn.Completion) error { return nil }
+func (*finiteSourceQueue) Fail(context.Context, int64, string, string) error       { return nil }
+
+func TestSourceSweepFollowsBacklogPastTheOldClaimWindow(t *testing.T) {
+	queue := &finiteSourceQueue{remaining: 4}
+	worker := processor.New(queue, &slowEnricher{hold: 70 * time.Millisecond}, discardLogger(), 1)
+	worker.SetClaimTimeout(20 * time.Millisecond)
+	stats, err := runSourceSweepSafely(context.Background(), worker, config.Config{
+		MaxJobsPerRun: 1, ShutdownTimeout: 100 * time.Millisecond,
+	}, discardLogger())
+	if err != nil || stats.Claimed != 4 || stats.Completed != 4 || stats.Duration < 200*time.Millisecond {
+		t.Fatalf("source sweep stopped at a batch window: stats=%+v err=%v", stats, err)
+	}
+}
+
+type finiteClassificationQueue struct {
+	processor.StageQueue
+	mu        sync.Mutex
+	remaining int
+}
+
+func (q *finiteClassificationQueue) ClaimClassification(context.Context, string, string, string) (*cairn.ClassificationJob, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.remaining == 0 {
+		return nil, nil
+	}
+	q.remaining--
+	return &cairn.ClassificationJob{ID: int64(q.remaining + 1)}, nil
+}
+func (*finiteClassificationQueue) CompleteClassification(context.Context, *cairn.ClassificationJob, classify.Result) error {
+	return nil
+}
+
+type slowClassifier struct{ hold time.Duration }
+
+func (slowClassifier) SpecID() string { return "test-spec" }
+func (c slowClassifier) Classify(context.Context, classify.Input) (classify.Result, error) {
+	time.Sleep(c.hold)
+	return classify.Result{}, nil
+}
+
+func TestClassificationRoundUsesPerJobDeadline(t *testing.T) {
+	queue := &finiteClassificationQueue{remaining: 2}
+	worker := processor.NewStaged(queue, nil, slowClassifier{hold: 70 * time.Millisecond}, "v1", "jev", discardLogger(), 1)
+	stats, err := runClassificationSafely(context.Background(), worker, config.Config{
+		MaxJobsPerRun: 2, ShutdownTimeout: 100 * time.Millisecond,
+	}, discardLogger())
+	if err != nil || stats.Classified != 2 || stats.Duration < 100*time.Millisecond {
+		t.Fatalf("classification round inherited a short batch window: stats=%+v err=%v", stats, err)
 	}
 }

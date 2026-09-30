@@ -1,0 +1,121 @@
+[36mWHAT[0m: 复现实际多维筛选缺口
+[35mWHY[0m:  为下一批建立真实 D1 HTTP 失败对照
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:1449287) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-b05-filter-next/worker
+
+ ❯ test/selection-filter-routes.test.ts (4 tests | 4 failed) 2090ms
+   × actual list routes apply topic=design (fourth topic) to the effective selection 517ms
+   × actual list routes apply content_functions=method,data&carriers=single&affordances=practice (OR within dimensions and AND across dimensions) to the effective selection 513ms
+   × actual list routes distinguish absent entity runs from failed runs 544ms
+   × invalid v2 filters do not silently broaden a query 516ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/selection-filter-routes.test.ts > actual list routes apply topic=design (fourth topic) to the effective selection
+AssertionError: links: expected [] to deeply equal [ 1 ]
+
+- Expected
++ Received
+
+- [
+-   1,
+- ]
++ []
+
+ ❯ test/selection-filter-routes.test.ts:41:52
+     39|     expect(response.status).toBe(200);
+     40|     const result = await response.json() as { items: Array<{ id: numbe…
+     41|     expect(result.items.map(row => row.id), route).toEqual([first]);
+       |                                                    ^
+     42|   }
+     43| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  test/selection-filter-routes.test.ts > actual list routes apply content_functions=method,data&carriers=single&affordances=practice (OR within dimensions and AND across dimensions) to the effective selection
+AssertionError: links: expected [ 2, 1 ] to deeply equal [ 1 ]
+
+- Expected
++ Received
+
+  [
++   2,
+    1,
+  ]
+
+ ❯ test/selection-filter-routes.test.ts:41:52
+     39|     expect(response.status).toBe(200);
+     40|     const result = await response.json() as { items: Array<{ id: numbe…
+     41|     expect(result.items.map(row => row.id), route).toEqual([first]);
+       |                                                    ^
+     42|   }
+     43| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  test/selection-filter-routes.test.ts > actual list routes distinguish absent entity runs from failed runs
+AssertionError: expected [ { id: 2, …(5) }, { id: 1, …(5) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "created_at": "2026-09-22T15:57:10.563Z",
++     "id": 2,
++     "learned": false,
++     "learned_at": null,
++     "note": "",
++     "url": "https://example.com/filter/second",
++   },
++   {
++     "created_at": "2026-09-22T15:57:10.558Z",
++     "id": 1,
++     "learned": false,
++     "learned_at": null,
++     "note": "",
++     "url": "https://example.com/filter/first",
++   },
++ ]
+
+ ❯ test/selection-filter-routes.test.ts:49:65
+     47|   const response = await request("links?entity_state=failed", undefine…
+     48|   expect(response.status).toBe(200);
+     49|   expect((await response.json() as { items: unknown[] }).items).toEqua…
+       |                                                                 ^
+     50| });
+     51|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  test/selection-filter-routes.test.ts > invalid v2 filters do not silently broaden a query
+AssertionError: expected 200 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 200
+
+ ❯ test/selection-filter-routes.test.ts:55:27
+     53|   await fixture();
+     54|   const response = await request("links?content_functions=not_a_term",…
+     55|   expect(response.status).toBe(400);
+       |                           ^
+     56| });
+     57|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  23:57:08
+   Duration  2.69s (transform 101ms, setup 0ms, import 171ms, tests 2.09s, environment 0ms)
+

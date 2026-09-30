@@ -1,0 +1,37 @@
+=== RUN   TestQuestionStateFieldsMatchActualProductionWire
+    state_fields_test.go:51: question form refers to fields absent from actual state
+    state_fields_test.go:51: question topic_city refers to fields absent from actual state
+    state_fields_test.go:51: question topic_invest refers to fields absent from actual state
+    state_fields_test.go:51: question topic_manage refers to fields absent from actual state
+    state_fields_test.go:51: question topic_media refers to fields absent from actual state
+    state_fields_test.go:51: question topic_writing refers to fields absent from actual state
+    state_fields_test.go:51: question affordances_material refers to fields absent from actual state
+    state_fields_test.go:51: question content_functions_method refers to fields absent from actual state
+    state_fields_test.go:51: question topic_eng refers to fields absent from actual state
+    state_fields_test.go:51: question content_functions_opinion refers to fields absent from actual state
+    state_fields_test.go:51: question topic_edu refers to fields absent from actual state
+    state_fields_test.go:51: question topic_life refers to fields absent from actual state
+    state_fields_test.go:51: question topic_psych refers to fields absent from actual state
+    state_fields_test.go:51: question use refers to fields absent from actual state
+    state_fields_test.go:51: question affordances_practice refers to fields absent from actual state
+    state_fields_test.go:51: question content_functions_case refers to fields absent from actual state
+    state_fields_test.go:51: question topic_law refers to fields absent from actual state
+    state_fields_test.go:51: question topic_product refers to fields absent from actual state
+    state_fields_test.go:51: question content_functions_data refers to fields absent from actual state
+    state_fields_test.go:51: question content_functions_tool refers to fields absent from actual state
+    state_fields_test.go:51: question topic_design refers to fields absent from actual state
+    state_fields_test.go:51: question affordances_quote refers to fields absent from actual state
+    state_fields_test.go:51: question topic_health refers to fields absent from actual state
+    state_fields_test.go:51: question topic_history refers to fields absent from actual state
+    state_fields_test.go:51: question topic_eval refers to fields absent from actual state
+    state_fields_test.go:51: question topic_llm refers to fields absent from actual state
+    state_fields_test.go:51: question topic_science refers to fields absent from actual state
+    state_fields_test.go:51: question affordances_background refers to fields absent from actual state
+    state_fields_test.go:51: question carriers refers to fields absent from actual state
+--- FAIL: TestQuestionStateFieldsMatchActualProductionWire (0.00s)
+=== RUN   TestStateFieldAblationChangesOnlyTwoFieldNames
+    state_fields_test.go:70: field-name correction must produce a new immutable spec
+--- FAIL: TestStateFieldAblationChangesOnlyTwoFieldNames (0.00s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/classify	0.006s
+FAIL

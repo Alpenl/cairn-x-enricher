@@ -1,0 +1,32 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:1804854) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-b05-filter-next/worker
+
+ ❯ test/selection-filter-fold.test.ts (3 tests | 1 failed) 16320ms
+   × SQL membership matches the canonical fold across deterministic mixed histories 12459ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/selection-filter-fold.test.ts > SQL membership matches the canonical fold across deterministic mixed histories
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/selection-filter-fold.test.ts:68:1
+     66|   }
+     67| });
+     68| it('SQL membership matches the canonical fold across deterministic mix…
+       | ^
+     69|   let state=92813;
+     70|   const random=(max:number)=>{state=(Math.imul(state,1664525)+10139042…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  00:12:46
+   Duration  16.97s (transform 113ms, setup 0ms, import 191ms, tests 16.32s, environment 0ms)
+

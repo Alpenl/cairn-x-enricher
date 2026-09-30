@@ -1,0 +1,34 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+0 issues.
+go test -race -coverprofile=coverage.out ./...
+ok  	github.com/Alpenl/cairn-x-enricher/cmd/cairn-x-enricher	3.061s	coverage: 38.9% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/ablation	1.056s	coverage: 31.6% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/ablation/main		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/ablation-report		coverage: 0.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/classification/main	2.081s	coverage: 41.7% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/classification/referencegen	1.308s	coverage: 82.7% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/harvest		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/identity		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/rescore		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/threadreport		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/threadvalue		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/verifyurls		coverage: 0.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/buildinfo	1.022s	coverage: 100.0% of statements
+--- FAIL: TestHandshakeDeclaresCapabilitiesAndReportsSupport (0.00s)
+    handshake_test.go:38: handshake query "models=jev-latest&policy_versions=jev-policy-v3&protocol=v2&spec_ids=classify-v1&taxonomy_versions=2026-09-20.1" missing "policy_versions=jev-policy-v2"
+FAIL
+coverage: 41.9% of statements
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/cairn	0.830s
+ok  	github.com/Alpenl/cairn-x-enricher/internal/classify	1.389s	coverage: 76.5% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/config	1.026s	coverage: 88.3% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/dashboard	1.341s	coverage: 53.3% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/enrich	1.374s	coverage: 83.6% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/evaluation	1.529s	coverage: 88.5% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/extension	1.241s	coverage: 87.2% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/health	1.015s	coverage: 94.2% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/processor	1.327s	coverage: 83.7% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/taxonomy	1.029s	coverage: 93.3% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.022s	coverage: [no statements]
+FAIL
+make: *** [Makefile:19: test] Error 1

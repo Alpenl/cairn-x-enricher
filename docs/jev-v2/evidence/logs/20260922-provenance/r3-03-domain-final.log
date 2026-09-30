@@ -1,0 +1,16 @@
+WHAT: 核验最终来源回归和过滤
+WHY:  AI 移除标签后旧端筛选也应同步
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:384609) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 <workspace>/Cairn/cairn-share/worker
+
+
+ Test Files  1 passed (1)
+      Tests  35 passed (35)
+   Start at  16:32:30
+   Duration  12.21s (transform 106ms, setup 0ms, import 182ms, tests 11.59s, environment 0ms)
+

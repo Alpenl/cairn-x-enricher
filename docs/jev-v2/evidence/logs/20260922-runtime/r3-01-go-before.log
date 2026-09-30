@@ -1,0 +1,18 @@
+--- FAIL: TestCompleteClassificationRecoversALostResponse (0.00s)
+    recovery_test.go:56: must confirm identical operation without another inference: commits=1 keys=[classify-7-rev-2-input-3-gen-1]
+--- FAIL: TestCompletedBookmarkDoesNotConfirmAnotherOperation (0.00s)
+    recovery_test.go:79: generic completed must not confirm this operation: err=<nil> commits=1
+--- FAIL: TestCompletionRequiresMatchingAcknowledgment (0.00s)
+    --- FAIL: TestCompletionRequiresMatchingAcknowledgment/{} (0.00s)
+        recovery_test.go:92: invalid acknowledgment must fail the contract: <nil>
+    --- FAIL: TestCompletionRequiresMatchingAcknowledgment/{"id":8,"status":"completed"} (0.00s)
+        recovery_test.go:92: invalid acknowledgment must fail the contract: <nil>
+    --- FAIL: TestCompletionRequiresMatchingAcknowledgment/{"id":7,"status":"processing"} (0.00s)
+        recovery_test.go:92: invalid acknowledgment must fail the contract: <nil>
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/cairn	0.006s
+--- FAIL: TestAlreadyCompletedDoesNotConfirmThisOperation (0.00s)
+    stages_test.go:235: generic completed is not an operation confirmation: done=1 failed=0 err=<nil>
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/processor	0.003s
+FAIL

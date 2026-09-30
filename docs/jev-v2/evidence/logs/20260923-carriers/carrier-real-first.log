@@ -1,0 +1,9 @@
+[36mWHAT[0m: 验证实际词表与历史对象
+[35mWHY[0m:  运行真实 Worker 新旧 spec 存读链路
+== TestLocalWorkerCarrierDefinitionUpgrade: starting worker on 127.0.0.1:57239 ==
+=== RUN   TestLocalWorkerCarrierDefinitionUpgrade
+    carrier_catalog_test.go:64: changed unrelated questions: [affordances_background affordances_material affordances_practice affordances_quote carriers content_functions_case content_functions_data content_functions_method content_functions_opinion content_functions_tool form topic_city topic_design topic_edu topic_eng topic_eval topic_health topic_history topic_invest topic_law topic_life topic_llm topic_manage topic_media topic_product topic_psych topic_science topic_writing use]
+--- FAIL: TestLocalWorkerCarrierDefinitionUpgrade (0.07s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.071s
+FAIL

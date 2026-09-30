@@ -1,0 +1,12 @@
+# Apply only with a release that includes the `observe` command. This overlay
+# adds a persistent configuration volume without publishing the control port.
+services:
+  enricher:
+    environment:
+      CAIRN_OBSERVABILITY_CONFIG_PATH: /var/lib/cairn/observability.json
+      CAIRN_OBSERVABILITY_CONTROL_ADDR: 127.0.0.1:9090
+    volumes:
+      - observability_config:/var/lib/cairn
+
+volumes:
+  observability_config:

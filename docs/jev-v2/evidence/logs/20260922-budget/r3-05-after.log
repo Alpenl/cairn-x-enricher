@@ -1,0 +1,3 @@
+WHAT: 验证实际 HTTP 预算回归
+WHY:  确认结构化输入、metadata 及 criteria 都受限
+ok  	github.com/Alpenl/cairn-x-enricher/internal/classify	0.023s

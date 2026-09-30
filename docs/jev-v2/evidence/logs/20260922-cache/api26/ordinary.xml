@@ -1,0 +1,46 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.alpenl.cairn.share.AccountCacheInstrumentedTest" tests="24" failures="0" errors="0" skipped="7" time="36.694" timestamp="2026-09-22T13:53:36" hostname="localhost">
+  <properties>
+    <property name="device" value="emulator-5554 - 8.0.0" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="refreshRebasesResetPreviewWithoutChangingTheDurableIntentAndCapabilitiesStayIndependent" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.672" />
+  <testcase name="returningToSameAccountCannotPublishOldDetailSelectionTaxonomyOrDebug" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="1.053" />
+  <testcase name="lateDetailCannotUndoAnEditInTheSameAccount" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.876" />
+  <testcase name="oldMutationsCannotReplaceDeleteOrNavigateTheNewAccount" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.856" />
+  <testcase name="persistBeforeSendAndLoseFirstResponse" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.033">
+    <skipped />
+  </testcase>
+  <testcase name="explicitlyRecoverLegacyAfterRestart" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.005">
+    <skipped />
+  </testcase>
+  <testcase name="preserveAmbiguousLegacyAndSeparateSameSuffixAccounts" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.014">
+    <skipped />
+  </testcase>
+  <testcase name="restoreAutomaticDraftAfterProcessDeath" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.006">
+    <skipped />
+  </testcase>
+  <testcase name="persistResetWithIndependentAutomaticBaseline" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.003">
+    <skipped />
+  </testcase>
+  <testcase name="discardAndAccountSwitchPreserveUnrelatedActions" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.0">
+    <skipped />
+  </testcase>
+  <testcase name="recoverThenHandleTwoRealConflictsAndMidChainFailure" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.0">
+    <skipped />
+  </testcase>
+  <testcase name="firstPageIsVisibleBeforeLaterPagesComplete" classname="com.alpenl.cairn.share.EnrichmentInstrumentedTest" time="2.057" />
+  <testcase name="readsBilingualContentImagesAndSavesCuration" classname="com.alpenl.cairn.share.EnrichmentInstrumentedTest" time="3.717" />
+  <testcase name="recreationPreservesSelectionAndNoteWithoutSubmitting" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="3.529" />
+  <testcase name="launcherAutomaticallyRetriesLocalQueueAndAllowsManualRetry" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="1.83" />
+  <testcase name="failedPostIsKeptLocallyWithoutASecondSubmission" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="2.592" />
+  <testcase name="unsupportedShareShowsNoSaveableLink" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="1.986" />
+  <testcase name="multipleLinksRequireSelectionAndSubmitOnlyTheChosenCompleteUrl" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="3.174" />
+  <testcase name="singleLinkIsNotSubmittedUntilUserAddsNoteAndSaves" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="2.441" />
+  <testcase name="launcherEntryShowsLibraryAndCanEditToggleAndDeleteLinks" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="3.208" />
+  <testcase name="legacyActionsNeedTheVisibleOwnershipConfirmation" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="2.694" />
+  <testcase name="oldBackendResetShowsPendingInsteadOfTheHumanValues" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="1.202" />
+  <testcase name="aConflictKeepsTheDraftAndOffersReapply" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="1.382" />
+  <testcase name="showsEffectiveDimensionsAndSubmitsAFieldAction" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="1.115" />
+</testsuite>

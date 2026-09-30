@@ -1,0 +1,5 @@
+go vet ./...
+# github.com/Alpenl/cairn-x-enricher/internal/processor
+# [github.com/Alpenl/cairn-x-enricher/internal/processor]
+vet: internal/processor/stages_test.go:617:47: policy.Version undefined (type []byte has no field or method Version)
+make: *** [Makefile:36: lint] Error 1

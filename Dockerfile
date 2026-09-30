@@ -3,7 +3,7 @@
 FROM --platform=$BUILDPLATFORM golang:1.26.8-alpine3.23 AS build
 
 WORKDIR /src
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates && mkdir -p /out/observability && touch /out/observability/.keep
 
 ARG GOPROXY=https://proxy.golang.org,direct
 ARG TARGETOS
@@ -31,6 +31,7 @@ FROM scratch
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build --chown=65532:65532 /out/cairn-x-enricher /cairn-x-enricher
+COPY --from=build --chown=65532:65532 /out/observability/ /var/lib/cairn/
 
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 USER 65532:65532

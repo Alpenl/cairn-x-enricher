@@ -1,0 +1,21 @@
+{
+  "scope": "post-hoc training diagnosis; external_article and language are confounded",
+  "transitions": [
+    {
+      "language": "zh",
+      "baseline_carriers": "",
+      "baseline_abstained": true,
+      "variant_carriers": "",
+      "variant_abstained": true,
+      "count": 2
+    },
+    {
+      "language": "zh",
+      "baseline_carriers": "external_article",
+      "baseline_abstained": false,
+      "variant_carriers": "",
+      "variant_abstained": true,
+      "count": 5
+    }
+  ]
+}

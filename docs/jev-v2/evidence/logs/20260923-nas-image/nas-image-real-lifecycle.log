@@ -1,0 +1,6 @@
+== TestLocalWorkerPrivateImageLifecycle: starting worker on 127.0.0.1:53455 ==
+=== RUN   TestLocalWorkerPrivateImageLifecycle
+    image_privacy_test.go:90: actual Worker/D1/R2 + Go client/dashboard: PNG read, no-store, authenticated delete, conditional stale read rejected; zero model calls
+--- PASS: TestLocalWorkerPrivateImageLifecycle (0.12s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.121s

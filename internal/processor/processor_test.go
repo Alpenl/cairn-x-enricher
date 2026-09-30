@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
@@ -80,6 +81,120 @@ type fakeEnricher struct {
 	noMedia bool
 }
 
+type deadlineProbeEnricher struct {
+	called   int
+	deadline time.Time
+}
+
+type capacityProbeEnricher struct {
+	firstStarted chan struct{}
+	releaseFirst chan struct{}
+}
+
+func (e *capacityProbeEnricher) Enrich(ctx context.Context, input enrich.Input) (enrich.Result, error) {
+	if input.ID == 1 {
+		close(e.firstStarted)
+		select {
+		case <-e.releaseFirst:
+		case <-ctx.Done():
+			return enrich.Result{}, ctx.Err()
+		}
+	}
+	return fakeEnricher{noMedia: true}.Enrich(ctx, input)
+}
+
+type claimProbeQueue struct {
+	*fakeQueue
+	firstClaim chan struct{}
+	once       sync.Once
+}
+
+func TestClassificationOnlyRoundLeavesNewSourceUnclaimed(t *testing.T) {
+	queue := newFakeQueue(&cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1})
+	worker := New(queue, nil, discardLogger(), 1)
+	stats, err := worker.RunClassificationsOnly(context.Background(), 1)
+	if err != nil || stats.HasWork() || len(queue.jobs) != 1 {
+		t.Fatalf("classification-only round claimed a source: stats=%+v jobs=%d error=%v",
+			stats, len(queue.jobs), err)
+	}
+}
+
+func (q *claimProbeQueue) Claim(ctx context.Context) (*cairn.Job, error) {
+	q.once.Do(func() { close(q.firstClaim) })
+	return q.fakeQueue.Claim(ctx)
+}
+
+func TestSourceSweepAcquiresCapacityBeforeClaimingLease(t *testing.T) {
+	queue := &claimProbeQueue{fakeQueue: newFakeQueue(&cairn.Job{ID: 2,
+		URL: "https://x.com/a/status/2", Attempt: 1, LeaseToken: "lease-2"}), firstClaim: make(chan struct{})}
+	model := &capacityProbeEnricher{firstStarted: make(chan struct{}), releaseFirst: make(chan struct{})}
+	worker := New(queue, model, discardLogger(), 1)
+	manualDone := make(chan error, 1)
+	go func() {
+		manualDone <- worker.Process(context.Background(), &cairn.Job{ID: 1,
+			URL: "https://x.com/a/status/1", Attempt: 1, LeaseToken: "lease-1"})
+	}()
+	select {
+	case <-model.firstStarted:
+	case <-time.After(time.Second):
+		t.Fatal("manual job did not acquire capacity")
+	}
+	batchDone := make(chan error, 1)
+	go func() { _, err := worker.RunSources(context.Background(), 1); batchDone <- err }()
+	select {
+	case <-queue.firstClaim:
+		t.Fatal("source sweep claimed a lease while capacity was held")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(model.releaseFirst)
+	if err := <-manualDone; err != nil {
+		t.Fatalf("manual job failed: %v", err)
+	}
+	select {
+	case err := <-batchDone:
+		if err != nil {
+			t.Fatalf("source sweep failed: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("source sweep did not resume after capacity was released")
+	}
+	select {
+	case <-queue.firstClaim:
+	default:
+		t.Fatal("source sweep never claimed after capacity was released")
+	}
+}
+
+func (e *deadlineProbeEnricher) Enrich(ctx context.Context, _ enrich.Input) (enrich.Result, error) {
+	e.called++
+	e.deadline, _ = ctx.Deadline()
+	return enrich.Result{}, errors.New("fixture stopped before a provider call")
+}
+
+func TestSourceJobIsBoundedByItsLeaseAndRejectsExpiredWork(t *testing.T) {
+	queue := newFakeQueue()
+	model := &deadlineProbeEnricher{}
+	worker := New(queue, model, discardLogger(), 1)
+	leaseUntil := time.Now().Add(2 * time.Minute)
+	job := &cairn.Job{ID: 12, URL: "https://x.com/a/status/12", Attempt: 1,
+		LeaseToken: "lease-12", LeaseUntil: leaseUntil.Format(time.RFC3339Nano)}
+	if err := worker.Process(context.Background(), job); err == nil || model.called != 1 {
+		t.Fatalf("source call=%d error=%v", model.called, err)
+	}
+	want := leaseUntil
+	if model.deadline.IsZero() || model.deadline.Before(want.Add(-time.Second)) || model.deadline.After(want.Add(time.Second)) {
+		t.Fatalf("source deadline=%s, want near %s", model.deadline, want)
+	}
+	job.LeaseUntil = time.Now().Add(20 * time.Second).Format(time.RFC3339Nano)
+	if err := worker.Process(context.Background(), job); !enrich.IsStale(err) || model.called != 1 {
+		t.Fatalf("expired source was called: calls=%d error=%v", model.called, err)
+	}
+	job.LeaseUntil = "invalid"
+	if err := worker.Process(context.Background(), job); !enrich.PausesComponent(err) || model.called != 1 {
+		t.Fatalf("malformed lease was used: calls=%d error=%v", model.called, err)
+	}
+}
+
 func (e fakeEnricher) Enrich(_ context.Context, input enrich.Input) (enrich.Result, error) {
 	if e.inputs != nil {
 		e.inputs <- input
@@ -131,7 +246,7 @@ func TestRunCompletesClaimedJobs(t *testing.T) {
 	}
 }
 
-func TestRunReportsModelFailureAndStopsThatWorker(t *testing.T) {
+func TestRunContinuesAfterOneBookmarkFails(t *testing.T) {
 	queue := newFakeQueue(
 		&cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, LeaseToken: "lease-1"},
 		&cairn.Job{ID: 2, URL: "https://x.com/a/status/2", Attempt: 1, LeaseToken: "lease-2"},
@@ -142,7 +257,7 @@ func TestRunReportsModelFailureAndStopsThatWorker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if stats.Claimed != 1 || stats.Completed != 0 || stats.Failed != 1 {
+	if stats.Claimed != 2 || stats.Completed != 1 || stats.Failed != 1 {
 		t.Fatalf("Run() stats = %+v", stats)
 	}
 	// The stored message names the path so a retrieval failure is
@@ -150,8 +265,41 @@ func TestRunReportsModelFailureAndStopsThatWorker(t *testing.T) {
 	if queue.failures[1] != "[search] model failure" {
 		t.Fatalf("failure = %q, want the path-labelled cause", queue.failures[1])
 	}
-	if len(queue.jobs) != 1 {
-		t.Fatalf("remaining jobs = %d", len(queue.jobs))
+	if len(queue.jobs) != 0 || len(queue.completions) != 1 {
+		t.Fatalf("other bookmark was not processed: pending=%d complete=%d", len(queue.jobs), len(queue.completions))
+	}
+}
+
+type hangingClaimQueue struct{ Queue }
+
+func (hangingClaimQueue) Claim(ctx context.Context) (*cairn.Job, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestEachSourceClaimHasItsOwnTimeout(t *testing.T) {
+	p := New(hangingClaimQueue{}, fakeEnricher{}, discardLogger(), 1)
+	p.SetClaimTimeout(30 * time.Millisecond)
+	started := time.Now()
+	_, err := p.RunSources(context.Background(), 1)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("claim error = %v, want request timeout", err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("single claim took %s despite its timeout", elapsed)
+	}
+}
+
+func TestWorkerWriteFailureStopsSourceClaims(t *testing.T) {
+	queue := newFakeQueue(
+		&cairn.Job{ID: 1, URL: "https://x.com/a/status/1", LeaseToken: "one"},
+		&cairn.Job{ID: 2, URL: "https://x.com/a/status/2", LeaseToken: "two"},
+	)
+	queue.failErr = &cairn.APIError{StatusCode: 503, Code: "upstream_unavailable"}
+	p := New(queue, fakeEnricher{failID: 1}, discardLogger(), 1)
+	stats, err := p.RunSources(context.Background(), 10)
+	if err == nil || stats.Claimed != 1 || len(queue.jobs) != 1 {
+		t.Fatalf("Worker failure consumed unrelated leases: stats=%+v pending=%d err=%v", stats, len(queue.jobs), err)
 	}
 }
 

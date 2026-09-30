@@ -1,0 +1,1244 @@
+
+> test
+> vitest run
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:2890337) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-rerank-next/worker
+
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+ ❯ test/integration.test.ts (9 tests | 1 failed) 6010ms
+   × classifies independently of reading and preserves source on reading failure 647ms
+ ❯ test/app-enrichment.test.ts (10 tests | 8 failed) 6563ms
+     × negotiates cache identity separately from legacy summary/detail and mutation responses 542ms
+     × rejects unsupported image types and cancels oversized streams without trusting headers 667ms
+     × keeps legacy reads stable and loads full content only in opted-in details 576ms
+     × invalidates warmed list and detail caches when an internal job completes 719ms
+     × returns current enriched content after learning and clears stale bodies after a URL edit 658ms
+     × shares human curation and filters across App and dashboard without changing source content 563ms
+     × searches source content while transferring only a summary and paginates filtered results 632ms
+     × offers compact internal lists while preserving full legacy responses 576ms
+ ❯ test/curation.test.ts (12 tests | 7 failed) 7329ms
+     × stores AI suggestions in inbox without inventing a confirmed collection reason 543ms
+     × rejects unknown, duplicate, oversized, and stale model classifications 576ms
+     × preserves human labels and intent while an in-flight enrichment completes 585ms
+     × keeps incomplete and legacy records available for review 597ms
+     × searches reasons, entities and original text with AND terms and literal wildcards 561ms
+     × invalidates generated classification while retaining human work after an App edit 562ms
+     × leaves shelved bookmarks out of automatic model processing 605ms
+ ❯ test/rerank-cache.test.ts (10 tests | 1 failed) 8836ms
+   × actual human and reading field updates invalidate ownership without requiring consumer-side revision writes 1026ms
+ ❯ test/classification.test.ts (19 tests | 17 failed) 10524ms
+   × R3-02: delayed primary snapshot does not claim or burn attempts 546ms
+   × R3-02: delayed context snapshot does not claim or burn attempts 542ms
+   × R3-02: a snapshot with the current revision but another primary cannot be claimed 598ms
+   × persists source before reading succeeds and classifies independently 593ms
+   × keeps human curation and stored reading aids when Jev is rerun 555ms
+   × rejects old classifications after source or note changes 568ms
+   × backs off classification failures without touching retrieval and allows explicit retry 563ms
+   × enforces lease expiry, taxonomy version and internal authentication 587ms
+   × reclassifies enrolled sources after policy changes without grabbing active leases 596ms
+   × does not re-claim a completed target across A/B policy alternation (20 rounds) 575ms
+   × only hands v2 jobs to a matching consumer and migrates stale generations 567ms
+   × binds a v2 claim to the server target and completes it (F02 regression) 559ms
+   × guards completion against a target switch (no stale overwrite) 502ms
+   × commits a lost completion idempotently by operation key without a second run 497ms
+   × keeps the target read and claim guard atomic under concurrent claims 512ms
+   × objective classification rejects personal opposition without side effects 490ms
+   × objective guard preserves explicit human opposition and historical readable values 521ms
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+ ❯ test/privacy-delete.test.ts (11 tests | 1 failed) 14851ms
+   × a put completing after deletion cannot recreate a readable or retained image 651ms
+ ❯ test/index.test.ts (31 tests | 10 failed) 17593ms
+     × atomically claims only X links in FIFO order 612ms
+     × stores completed enrichment without changing the public link contract 579ms
+     × copies allow-listed X images to R2 and serves only stored object keys 578ms
+     × rejects unsafe image sources and image uploads with a stale lease 587ms
+     × lists X bookmarks, returns details and manually reclaims a selected item 631ms
+     × backs off failed jobs, recovers expired work and exhausts bounded retries 593ms
+     × returns expired leases to the queue and resets enrichment after content edits 566ms
+     × invalidates stored source on URL change but preserves human curation 557ms
+     × validates enrichment result shapes and methods 552ms
+     × updates URL, note and learned state in one PATCH 460ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 45 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/app-enrichment.test.ts > App enrichment integration > negotiates cache identity separately from legacy summary/detail and mutation responses
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:44:5
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:44:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/45]⎯
+
+ FAIL  test/app-enrichment.test.ts > App enrichment integration > rejects unsupported image types and cancels oversized streams without trusting headers
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/app-enrichment.test.ts:114:26
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/app-enrichment.test.ts:114:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/45]⎯
+
+ FAIL  test/app-enrichment.test.ts > App enrichment integration > keeps legacy reads stable and loads full content only in opted-in details
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:143:5
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:143:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/45]⎯
+
+ FAIL  test/app-enrichment.test.ts > App enrichment integration > invalidates warmed list and detail caches when an internal job completes
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:169:5
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:169:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/45]⎯
+
+ FAIL  test/app-enrichment.test.ts > App enrichment integration > returns current enriched content after learning and clears stale bodies after a URL edit
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:180:5
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:180:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/45]⎯
+
+ FAIL  test/app-enrichment.test.ts > App enrichment integration > shares human curation and filters across App and dashboard without changing source content
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:198:5
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:198:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/45]⎯
+
+ FAIL  test/app-enrichment.test.ts > App enrichment integration > searches source content while transferring only a summary and paginates filtered results
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:221:5
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:221:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/45]⎯
+
+ FAIL  test/app-enrichment.test.ts > App enrichment integration > offers compact internal lists while preserving full legacy responses
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:235:5
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/app-enrichment.test.ts:29:17
+ ❯ test/app-enrichment.test.ts:235:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/45]⎯
+
+ FAIL  test/classification.test.ts > R3-02: delayed primary snapshot does not claim or burn attempts
+ FAIL  test/classification.test.ts > R3-02: delayed context snapshot does not claim or burn attempts
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:33:39
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:33:39
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/45]⎯
+
+ FAIL  test/classification.test.ts > R3-02: a snapshot with the current revision but another primary cannot be claimed
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:63:18
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:63:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/45]⎯
+
+ FAIL  test/classification.test.ts > persists source before reading succeeds and classifies independently
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:85:39
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:85:39
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/45]⎯
+
+ FAIL  test/classification.test.ts > keeps human curation and stored reading aids when Jev is rerun
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:101:39
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:101:39
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/45]⎯
+
+ FAIL  test/classification.test.ts > rejects old classifications after source or note changes
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:114:39
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:114:39
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/45]⎯
+
+ FAIL  test/classification.test.ts > backs off classification failures without touching retrieval and allows explicit retry
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:129:18
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:129:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/45]⎯
+
+ FAIL  test/classification.test.ts > enforces lease expiry, taxonomy version and internal authentication
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:142:39
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:142:39
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/45]⎯
+
+ FAIL  test/classification.test.ts > reclassifies enrolled sources after policy changes without grabbing active leases
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:158:18
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:158:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/45]⎯
+
+ FAIL  test/classification.test.ts > does not re-claim a completed target across A/B policy alternation (20 rounds)
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:191:39
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:191:39
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/45]⎯
+
+ FAIL  test/classification.test.ts > only hands v2 jobs to a matching consumer and migrates stale generations
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:219:18
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:219:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/45]⎯
+
+ FAIL  test/classification.test.ts > binds a v2 claim to the server target and completes it (F02 regression)
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:232:26
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:232:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/45]⎯
+
+ FAIL  test/classification.test.ts > guards completion against a target switch (no stale overwrite)
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:289:18
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:289:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/45]⎯
+
+ FAIL  test/classification.test.ts > commits a lost completion idempotently by operation key without a second run
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:312:18
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:312:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/45]⎯
+
+ FAIL  test/classification.test.ts > keeps the target read and claim guard atomic under concurrent claims
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:331:18
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:331:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/45]⎯
+
+ FAIL  test/classification.test.ts > objective classification rejects personal opposition without side effects
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:344:13
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:344:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/45]⎯
+
+ FAIL  test/classification.test.ts > objective guard preserves explicit human opposition and historical readable values
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:355:13
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ setup test/classification.test.ts:18:18
+ ❯ test/classification.test.ts:355:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/45]⎯
+
+ FAIL  test/curation.test.ts > bookmark curation > stores AI suggestions in inbox without inventing a confirmed collection reason
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/curation.test.ts:32:17
+ ❯ test/curation.test.ts:61:13
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/curation.test.ts:32:17
+ ❯ test/curation.test.ts:61:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/45]⎯
+
+ FAIL  test/curation.test.ts > bookmark curation > rejects unknown, duplicate, oversized, and stale model classifications
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/curation.test.ts:32:17
+ ❯ test/curation.test.ts:71:15
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/curation.test.ts:32:17
+ ❯ test/curation.test.ts:71:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/45]⎯
+
+ FAIL  test/curation.test.ts > bookmark curation > preserves human labels and intent while an in-flight enrichment completes
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/curation.test.ts:80:26
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/curation.test.ts:80:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/45]⎯
+
+ FAIL  test/curation.test.ts > bookmark curation > keeps incomplete and legacy records available for review
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/curation.test.ts:32:17
+ ❯ test/curation.test.ts:107:13
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/curation.test.ts:32:17
+ ❯ test/curation.test.ts:107:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/45]⎯
+
+ FAIL  test/curation.test.ts > bookmark curation > searches reasons, entities and original text with AND terms and literal wildcards
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/curation.test.ts:32:17
+ ❯ test/curation.test.ts:114:5
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/curation.test.ts:32:17
+ ❯ test/curation.test.ts:114:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/45]⎯
+
+ FAIL  test/curation.test.ts > bookmark curation > invalidates generated classification while retaining human work after an App edit
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/curation.test.ts:32:17
+ ❯ test/curation.test.ts:153:5
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ complete test/curation.test.ts:32:17
+ ❯ test/curation.test.ts:153:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/45]⎯
+
+ FAIL  test/curation.test.ts > bookmark curation > leaves shelved bookmarks out of automatic model processing
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/curation.test.ts:167:13
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/curation.test.ts:167:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/45]⎯
+
+ FAIL  test/index.test.ts > cairn-share worker > atomically claims only X links in FIFO order
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:123:24
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:123:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/45]⎯
+
+ FAIL  test/index.test.ts > cairn-share worker > stores completed enrichment without changing the public link contract
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:148:28
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:148:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/45]⎯
+
+ FAIL  test/index.test.ts > cairn-share worker > copies allow-listed X images to R2 and serves only stored object keys
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:217:28
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:217:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/45]⎯
+
+ FAIL  test/index.test.ts > cairn-share worker > rejects unsafe image sources and image uploads with a stale lease
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:274:28
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:274:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/45]⎯
+
+ FAIL  test/index.test.ts > cairn-share worker > lists X bookmarks, returns details and manually reclaims a selected item
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:297:32
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:297:32
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/45]⎯
+
+ FAIL  test/index.test.ts > cairn-share worker > backs off failed jobs, recovers expired work and exhausts bounded retries
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:377:33
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:377:33
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/45]⎯
+
+ FAIL  test/index.test.ts > cairn-share worker > returns expired leases to the queue and resets enrichment after content edits
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:416:33
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:416:33
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[38/45]⎯
+
+ FAIL  test/index.test.ts > cairn-share worker > invalidates stored source on URL change but preserves human curation
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:473:28
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:473:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39/45]⎯
+
+ FAIL  test/index.test.ts > cairn-share worker > validates enrichment result shapes and methods
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:500:28
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJob src/index.ts:868:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:500:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[40/45]⎯
+
+ FAIL  test/index.test.ts > cairn-share worker > updates URL, note and learned state in one PATCH
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ updateLink src/index.ts:620:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:782:32
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ updateLink src/index.ts:620:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/index.test.ts:782:32
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[41/45]⎯
+
+ FAIL  test/integration.test.ts > classifies independently of reading and preserves source on reading failure
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/integration.test.ts:66:17
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/integration.test.ts:66:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[42/45]⎯
+
+ FAIL  test/privacy-delete.test.ts > a put completing after deletion cannot recreate a readable or retained image
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+    223|     const started = performance.now();
+    224|     try {
+    225|       return await operation();
+       |              ^
+    226|     } finally {
+    227|       this.entries.push({ name, duration: performance.now() - started …
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/privacy-delete.test.ts:55:24
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:440:19
+ ❯ TimingCollector.measure src/index.ts:225:14
+ ❯ claimEnrichmentJobById src/index.ts:921:15
+ ❯ Object.fetch src/index.ts:254:22
+ ❯ test/privacy-delete.test.ts:55:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[43/45]⎯
+
+ FAIL  test/rerank-cache.test.ts > actual human and reading field updates invalidate ownership without requiring consumer-side revision writes
+Error: D1_ERROR: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:188:19
+ ❯ cloudflare-internal:d1-api:478:19
+ ❯ test/rerank-cache.test.ts:121:3
+
+
+Caused by: Error: no such column: OLD.source: SQLITE_ERROR
+ ❯ D1DatabaseSessionAlwaysPrimary._sendOrThrow cloudflare-internal:d1-api:189:24
+ ❯ cloudflare-internal:d1-api:478:19
+ ❯ test/rerank-cache.test.ts:121:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[44/45]⎯
+
+
+ Test Files  7 failed | 13 passed (20)
+      Tests  45 failed | 193 passed (238)
+   Start at  06:29:04
+   Duration  33.23s (transform 3.56s, setup 0ms, import 16.61s, tests 236.78s, environment 1ms)

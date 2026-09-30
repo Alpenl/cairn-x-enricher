@@ -1,0 +1,6 @@
+== TestLocalWorkerHalfOpenClaimFaultsAndIndependentSource: starting worker on 127.0.0.1:45623 ==
+=== RUN   TestLocalWorkerHalfOpenClaimFaultsAndIndependentSource
+    half_open_test.go:220: real Worker/D1 and Go client: 401 pause, 503/network half-open failures, source/reading completion during pause, one bounded recovery each; 2 local model fixture calls
+--- PASS: TestLocalWorkerHalfOpenClaimFaultsAndIndependentSource (90.96s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	90.978s

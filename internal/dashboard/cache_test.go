@@ -147,10 +147,49 @@ func TestBackstageSummaryRefreshesAfterTTL(t *testing.T) {
 	}
 	fetch()
 	// Expire the cache by rewinding the recorded timestamp rather than sleeping.
-	server.summaryCachedAt = time.Now().Add(-backstageSummaryTTL - time.Second)
+	server.summary.mu.Lock()
+	server.summary.cachedAt = time.Now().Add(-backstageSummaryTTL - time.Second)
+	server.summary.mu.Unlock()
 	fetch()
 	if backend.listCalls != 2*len(backstageAttentionStatuses) {
 		t.Fatalf("listCalls = %d, want %d", backend.listCalls, 2*len(backstageAttentionStatuses))
+	}
+}
+
+type parallelBackstageBackend struct {
+	fakeBackend
+	started chan string
+	release chan struct{}
+}
+
+func (b *parallelBackstageBackend) ListBookmarks(ctx context.Context, query cairn.BookmarkQuery) (cairn.BookmarkPage, error) {
+	b.started <- query.Status
+	select {
+	case <-b.release:
+		return cairn.BookmarkPage{}, nil
+	case <-ctx.Done():
+		return cairn.BookmarkPage{}, ctx.Err()
+	}
+}
+
+func TestBackstageReadsIndependentAttentionStatusesInParallel(t *testing.T) {
+	backend := &parallelBackstageBackend{started: make(chan string, 2), release: make(chan struct{})}
+	server := New(context.Background(), startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+	defer server.Drain(time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { _, err := server.buildBackstageSummary(ctx); result <- err }()
+	for range backstageAttentionStatuses {
+		select {
+		case <-backend.started:
+		case <-ctx.Done():
+			t.Fatal("the second attention read waited for the first")
+		}
+	}
+	close(backend.release)
+	if err := <-result; err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -169,32 +208,6 @@ func TestImageProxyRejectsTruncatedUpstreamBody(t *testing.T) {
 	}
 	if response.Body.Len() != len("short") {
 		t.Fatalf("body length = %d", response.Body.Len())
-	}
-}
-
-func TestManualQueueCapacityUsesAtomicCounter(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	processing := make(chan int64, 1)
-	backend := &fakeBackend{
-		jobs:      map[int64]*cairn.Job{},
-		claimErrs: map[int64]error{},
-	}
-	server := New(ctx, startedTracker(), backend, &fakeProcessor{processed: processing}, testLogger(), 1)
-
-	if got := server.queued.Load(); got != 0 {
-		t.Fatalf("initial queued = %d", got)
-	}
-	// Simulate a saturated queue without starting real work.
-	server.queued.Store(int64(cap(server.jobs)))
-
-	body := `{"ids":[1]}`
-	request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/bookmarks/process", stringReader(body))
-	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
-	server.Handler().ServeHTTP(response, request)
-	if response.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503 when the queue is saturated", response.Code)
 	}
 }
 
@@ -305,38 +318,23 @@ func (*plainError) Error() string { return "plain failure" }
 // testImageKey is a well-formed R2 enrichment key matching one bookmark ID.
 const testImageKey = "0000000000000000000000000000000000000000000000000000000000000000.jpg"
 
-func stringReader(value string) *strings.Reader { return strings.NewReader(value) }
-
-func TestImageProxySetsImmutableCacheControlWhenBackendOmitsIt(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	backend := &fakeBackend{imageBody: "jpeg-data"}
-	backend.omitImageCacheControl = true
-	server := New(ctx, startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
-
-	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/images/enrichment/1/"+testImageKey, nil)
-	response := httptest.NewRecorder()
-	server.Handler().ServeHTTP(response, request)
-
-	if got := response.Header().Get("Cache-Control"); !strings.Contains(got, "immutable") {
-		t.Fatalf("Cache-Control = %q, want an immutable directive for content-addressed images", got)
-	}
-}
-
-func TestImageProxyKeepsTheBackendCacheControl(t *testing.T) {
-	// The backend's directive must win: this service cannot know better than
-	// the component that owns the object.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	backend := &fakeBackend{imageBody: "jpeg-data", imageCacheControl: "no-store"}
-	server := New(ctx, startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
-
-	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/images/enrichment/1/"+testImageKey, nil)
-	response := httptest.NewRecorder()
-	server.Handler().ServeHTTP(response, request)
-
-	if got := response.Header().Get("Cache-Control"); got != "no-store" {
-		t.Fatalf("Cache-Control = %q, want the backend value preserved", got)
+func TestImageProxyNeverPersistsPrivateImages(t *testing.T) {
+	for _, upstream := range []string{"", "public, max-age=604800, immutable", "private, max-age=86400", "no-store"} {
+		t.Run(upstream, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			backend := &fakeBackend{imageBody: "jpeg-data", imageCacheControl: upstream, omitImageCacheControl: upstream == ""}
+			server := New(ctx, startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+			request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/images/enrichment/1/"+testImageKey, nil)
+			response := httptest.NewRecorder()
+			server.Handler().ServeHTTP(response, request)
+			if response.Code != http.StatusOK || response.Body.String() != "jpeg-data" {
+				t.Fatalf("image = %d %q", response.Code, response.Body.String())
+			}
+			if got := response.Header().Get("Cache-Control"); got != "private, no-store" {
+				t.Fatalf("Cache-Control = %q, want private, no-store", got)
+			}
+		})
 	}
 }
 

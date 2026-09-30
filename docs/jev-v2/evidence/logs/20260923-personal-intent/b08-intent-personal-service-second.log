@@ -1,0 +1,6 @@
+== TestLocalWorkerObjectivePersonalBoundary: starting worker on 127.0.0.1:44151 ==
+=== RUN   TestLocalWorkerObjectivePersonalBoundary
+    personal_intent_test.go:138: actual provider -> Go -> Worker/D1: 3 invalid v2 completions rejected without runs; valid completion and replay preserve explicit human opposition; unsafe replay rejected; 1 fixture model call total
+--- PASS: TestLocalWorkerObjectivePersonalBoundary (0.45s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.450s

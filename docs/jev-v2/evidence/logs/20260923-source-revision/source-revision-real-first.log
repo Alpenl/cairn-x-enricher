@@ -1,0 +1,6 @@
+== TestLocalWorkerSourceRevisionOnce: starting worker on 127.0.0.1:59041 ==
+=== RUN   TestLocalWorkerSourceRevisionOnce
+    source_revision_test.go:83: 3 compound source changes: revision 2 -> 5; repeated saves keep snapshot identity; invalid lease rejected; zero model calls
+--- PASS: TestLocalWorkerSourceRevisionOnce (1.30s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.306s

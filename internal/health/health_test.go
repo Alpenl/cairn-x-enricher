@@ -98,6 +98,27 @@ func TestTrackerStaysUnreadyWhileDegraded(t *testing.T) {
 	}
 }
 
+func TestConcurrentComponentsRecoverIndependently(t *testing.T) {
+	tracker := NewTracker()
+	tracker.MarkStarted()
+	tracker.MarkComponentDegraded("source", "source contract failed")
+	tracker.MarkComponentDegraded("classification", "model authentication failed")
+	tracker.MarkComponentRecovered("classification")
+	if tracker.Ready() || tracker.Snapshot().ReadyReason != "source contract failed" {
+		t.Fatalf("classification recovery cleared source fault: %+v", tracker.Snapshot())
+	}
+	tracker.MarkComponentRecovered("source")
+	if !tracker.Ready() {
+		t.Fatalf("both components recovered: %+v", tracker.Snapshot())
+	}
+	tracker.Record(processor.Stats{Claimed: 1}, nil)
+	tracker.RecordClassification(processor.Stats{Classified: 2}, nil)
+	state := tracker.Snapshot()
+	if state.LastStats == nil || state.LastStats.Claimed != 1 || state.LastClassificationStats == nil || state.LastClassificationStats.Classified != 2 {
+		t.Fatalf("independent scheduler statistics lost: %+v", state)
+	}
+}
+
 func TestTrackerFailureDoesNotFlipLiveness(t *testing.T) {
 	tracker := NewTracker()
 	tracker.MarkStarted()

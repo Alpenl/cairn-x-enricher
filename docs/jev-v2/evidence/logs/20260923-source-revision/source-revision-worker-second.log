@@ -1,0 +1,17 @@
+
+> test
+> vitest run test/source-revision.test.ts
+
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:3168387) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-source-revision-next/worker
+
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  07:54:08
+   Duration  4.30s (transform 122ms, setup 0ms, import 206ms, tests 3.67s, environment 0ms)

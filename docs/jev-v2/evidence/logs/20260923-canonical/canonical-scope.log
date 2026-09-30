@@ -1,0 +1,4 @@
+WHAT: 验证原始范围索引
+WHY:  保留完整 235 项，局部交付不缩减目标
+PASS: 126 tasks + 109 controls = 235 IDs; exact requirements, bidirectional mappings, 112 pinned files; git objects checked=True
+Index integrity only; no functional, quality or final acceptance is asserted.

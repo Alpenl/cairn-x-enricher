@@ -1,0 +1,12 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+tests/localintegration/rerank_cache_test.go:90:44: G704: SSRF via taint analysis (gosec)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+"/api/rerank", strings.NewReader(string(body)))
+	                                          ^
+tests/localintegration/rerank_cache_test.go:95:37: G704: SSRF via taint analysis (gosec)
+	response, err := server.Client().Do(request)
+	                                   ^
+2 issues:
+* gosec: 2
+exit status 1
+make: *** [Makefile:44: lint-ci] Error 1

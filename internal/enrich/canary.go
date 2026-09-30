@@ -25,6 +25,7 @@ func (c *ResponsesClient) Canary(ctx context.Context) error {
 		ID:         0,
 		URL:        "https://x.com/canary/status/0",
 		Attempt:    1,
+		Canary:     true,
 		SourceText: canarySourceText,
 	})
 	if err != nil {

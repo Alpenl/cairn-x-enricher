@@ -1,0 +1,346 @@
+[36mWHAT[0m: 下载 API26 首轮失败日志
+[35mWHY[0m:  确定失败发生在环境准备还是测试行为
+﻿2026-09-22T14:39:56.9160496Z Current runner version: '2.337.0'
+2026-09-22T14:39:56.9187330Z ##[group]Runner Image Provisioner
+2026-09-22T14:39:56.9188187Z Hosted Compute Agent
+2026-09-22T14:39:56.9189010Z Version: 20260828.587
+2026-09-22T14:39:56.9189725Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-09-22T14:39:56.9190510Z Build Date: 2026-08-28T16:44:25Z
+2026-09-22T14:39:56.9191321Z Worker ID: {8cd384c8-b87f-4f02-92a0-61d7e96fdb24}
+2026-09-22T14:39:56.9192078Z Azure Region: eastus
+2026-09-22T14:39:56.9192642Z ##[endgroup]
+2026-09-22T14:39:56.9194246Z ##[group]Operating System
+2026-09-22T14:39:56.9194925Z Ubuntu
+2026-09-22T14:39:56.9195428Z 24.04.5
+2026-09-22T14:39:56.9196008Z LTS
+2026-09-22T14:39:56.9196531Z ##[endgroup]
+2026-09-22T14:39:56.9197147Z ##[group]Runner Image
+2026-09-22T14:39:56.9197840Z Image: ubuntu-24.04
+2026-09-22T14:39:56.9198400Z Version: 20260907.300.1
+2026-09-22T14:39:56.9199951Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+2026-09-22T14:39:56.9201987Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+2026-09-22T14:39:56.9203113Z ##[endgroup]
+2026-09-22T14:39:56.9204241Z ##[group]GITHUB_TOKEN Permissions
+2026-09-22T14:39:56.9206398Z Contents: read
+2026-09-22T14:39:56.9206991Z Metadata: read
+2026-09-22T14:39:56.9207679Z ##[endgroup]
+2026-09-22T14:39:56.9210187Z Secret source: Actions
+2026-09-22T14:39:56.9211237Z Cache mode: write
+2026-09-22T14:39:56.9212188Z Prepare workflow directory
+2026-09-22T14:39:56.9550010Z Prepare all required actions
+2026-09-22T14:39:56.9598257Z Getting action download info
+2026-09-22T14:39:57.2413948Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-09-22T14:39:57.3607385Z Download action repository 'actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961' (SHA:b6effb05e454b25005698d916606bdc6ffcbf961)
+2026-09-22T14:39:57.5860140Z Download action repository 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' (SHA:820762786026740c76f36085b0efc47a31fe5020)
+2026-09-22T14:39:57.7359648Z Download action repository 'reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d' (SHA:a421e43855164a8197daf9d8d40fe71c6996bb0d)
+2026-09-22T14:39:57.8949071Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+2026-09-22T14:39:58.1267244Z Complete job name: android-device (26)
+2026-09-22T14:39:58.2217339Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-09-22T14:39:58.2219593Z with:
+2026-09-22T14:39:58.2220550Z   repository: Alpenl/cairn-share
+2026-09-22T14:39:58.2229067Z   token: ***
+2026-09-22T14:39:58.2230001Z   ssh-strict: true
+2026-09-22T14:39:58.2231092Z   ssh-user: git
+2026-09-22T14:39:58.2232086Z   persist-credentials: true
+2026-09-22T14:39:58.2233100Z   clean: true
+2026-09-22T14:39:58.2234099Z   sparse-checkout-cone-mode: true
+2026-09-22T14:39:58.2235273Z   fetch-depth: 1
+2026-09-22T14:39:58.2236227Z   fetch-tags: false
+2026-09-22T14:39:58.2237214Z   show-progress: true
+2026-09-22T14:39:58.2238152Z   lfs: false
+2026-09-22T14:39:58.2239227Z   submodules: false
+2026-09-22T14:39:58.2240186Z   set-safe-directory: true
+2026-09-22T14:39:58.2241365Z   allow-unsafe-pr-checkout: false
+2026-09-22T14:39:58.2242819Z ##[endgroup]
+2026-09-22T14:39:58.3294577Z Syncing repository: Alpenl/cairn-share
+2026-09-22T14:39:58.3298279Z ##[group]Getting Git version info
+2026-09-22T14:39:58.3300787Z Working directory is '/home/runner/work/cairn-share/cairn-share'
+2026-09-22T14:39:58.3303628Z [command]/usr/bin/git version
+2026-09-22T14:39:58.3332050Z git version 2.55.0
+2026-09-22T14:39:58.3357239Z ##[endgroup]
+2026-09-22T14:39:58.3370553Z Temporarily overriding HOME='/home/runner/work/_temp/2c01ec91-ceed-4701-a720-a0442deb42ad' before making global git config changes
+2026-09-22T14:39:58.3464122Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-22T14:39:58.3467941Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/cairn-share/cairn-share
+2026-09-22T14:39:58.3471947Z Deleting the contents of '/home/runner/work/cairn-share/cairn-share'
+2026-09-22T14:39:58.3474205Z ##[group]Determining repository object format
+2026-09-22T14:39:58.3477067Z ##[endgroup]
+2026-09-22T14:39:58.3479913Z ##[group]Initializing the repository
+2026-09-22T14:39:58.3481730Z [command]/usr/bin/git init /home/runner/work/cairn-share/cairn-share
+2026-09-22T14:39:58.3579636Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-09-22T14:39:58.3581684Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-09-22T14:39:58.3583816Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-09-22T14:39:58.3585308Z hint: call:
+2026-09-22T14:39:58.3586057Z hint:
+2026-09-22T14:39:58.3587019Z hint: 	git config --global init.defaultBranch <name>
+2026-09-22T14:39:58.3588218Z hint:
+2026-09-22T14:39:58.3590166Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-09-22T14:39:58.3593279Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-09-22T14:39:58.3595741Z hint:
+2026-09-22T14:39:58.3597096Z hint: 	git branch -m <name>
+2026-09-22T14:39:58.3599092Z hint:
+2026-09-22T14:39:58.3601228Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-09-22T14:39:58.3604796Z Initialized empty Git repository in /home/runner/work/cairn-share/cairn-share/.git/
+2026-09-22T14:39:58.3621096Z [command]/usr/bin/git remote add origin https://github.com/Alpenl/cairn-share
+2026-09-22T14:39:58.3661135Z ##[endgroup]
+2026-09-22T14:39:58.3664260Z ##[group]Disabling automatic garbage collection
+2026-09-22T14:39:58.3666957Z [command]/usr/bin/git config --local gc.auto 0
+2026-09-22T14:39:58.3701811Z ##[endgroup]
+2026-09-22T14:39:58.3703982Z ##[group]Setting up auth
+2026-09-22T14:39:58.3705619Z Removing SSH command configuration
+2026-09-22T14:39:58.3711053Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-22T14:39:58.3747448Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-22T14:39:58.4126953Z Removing HTTP extra header
+2026-09-22T14:39:58.4132661Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-22T14:39:58.4172466Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-22T14:39:58.4395363Z Removing includeIf entries pointing to credentials config files
+2026-09-22T14:39:58.4399500Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-22T14:39:58.4435459Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-22T14:39:58.4672201Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-ce68fdb6-e562-40a9-8d2e-1e578f6eaebf.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-22T14:39:58.4714894Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/cairn-share/cairn-share/.git.path /home/runner/work/_temp/git-credentials-ce68fdb6-e562-40a9-8d2e-1e578f6eaebf.config
+2026-09-22T14:39:58.4749642Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/cairn-share/cairn-share/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-ce68fdb6-e562-40a9-8d2e-1e578f6eaebf.config
+2026-09-22T14:39:58.4787670Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-ce68fdb6-e562-40a9-8d2e-1e578f6eaebf.config
+2026-09-22T14:39:58.4824037Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-ce68fdb6-e562-40a9-8d2e-1e578f6eaebf.config
+2026-09-22T14:39:58.4853869Z ##[endgroup]
+2026-09-22T14:39:58.4855366Z ##[group]Fetching the repository
+2026-09-22T14:39:58.4861773Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +0a38e52e4446344eb837bfab722978ad19a9ea06:refs/remotes/origin/impl/jev-v2-fixes-20260921
+2026-09-22T14:39:58.7730662Z From https://github.com/Alpenl/cairn-share
+2026-09-22T14:39:58.7733340Z  * [new ref]         0a38e52e4446344eb837bfab722978ad19a9ea06 -> origin/impl/jev-v2-fixes-20260921
+2026-09-22T14:39:58.7741344Z [command]/usr/bin/git branch --list --remote origin/impl/jev-v2-fixes-20260921
+2026-09-22T14:39:58.7770474Z   origin/impl/jev-v2-fixes-20260921
+2026-09-22T14:39:58.7780814Z [command]/usr/bin/git rev-parse refs/remotes/origin/impl/jev-v2-fixes-20260921
+2026-09-22T14:39:58.7807812Z 0a38e52e4446344eb837bfab722978ad19a9ea06
+2026-09-22T14:39:58.7812710Z ##[endgroup]
+2026-09-22T14:39:58.7813591Z ##[group]Determining the checkout info
+2026-09-22T14:39:58.7814540Z ##[endgroup]
+2026-09-22T14:39:58.7817404Z [command]/usr/bin/git sparse-checkout disable
+2026-09-22T14:39:58.7870597Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-09-22T14:39:58.7905263Z ##[group]Checking out the ref
+2026-09-22T14:39:58.7911123Z [command]/usr/bin/git checkout --progress --force -B impl/jev-v2-fixes-20260921 refs/remotes/origin/impl/jev-v2-fixes-20260921
+2026-09-22T14:39:58.8102716Z Switched to a new branch 'impl/jev-v2-fixes-20260921'
+2026-09-22T14:39:58.8108508Z branch 'impl/jev-v2-fixes-20260921' set up to track 'origin/impl/jev-v2-fixes-20260921'.
+2026-09-22T14:39:58.8116717Z ##[endgroup]
+2026-09-22T14:39:58.8164924Z [command]/usr/bin/git log -1 --format=%H
+2026-09-22T14:39:58.8194037Z 0a38e52e4446344eb837bfab722978ad19a9ea06
+2026-09-22T14:39:58.8515223Z ##[group]Run actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+2026-09-22T14:39:58.8515855Z with:
+2026-09-22T14:39:58.8516221Z   distribution: temurin
+2026-09-22T14:39:58.8516607Z   java-version: 17
+2026-09-22T14:39:58.8516969Z   cache: gradle
+2026-09-22T14:39:58.8517326Z   java-package: jdk
+2026-09-22T14:39:58.8517697Z   check-latest: false
+2026-09-22T14:39:58.8518071Z   set-default: true
+2026-09-22T14:39:58.8518436Z   verify-signature: false
+2026-09-22T14:39:58.8519069Z   server-id: github
+2026-09-22T14:39:58.8519459Z   server-username: GITHUB_ACTOR
+2026-09-22T14:39:58.8519883Z   server-password: GITHUB_TOKEN
+2026-09-22T14:39:58.8520303Z   overwrite-settings: true
+2026-09-22T14:39:58.8520695Z   job-status: success
+2026-09-22T14:39:58.8523171Z   token: ***
+2026-09-22T14:39:58.8523558Z   show-download-progress: false
+2026-09-22T14:39:58.8523976Z ##[endgroup]
+2026-09-22T14:39:59.0086881Z ##[group]Installed distributions
+2026-09-22T14:39:59.0156765Z Resolved Java 17.0.20+1 from tool-cache
+2026-09-22T14:39:59.0157698Z Setting Java 17.0.20+1 as the default
+2026-09-22T14:39:59.0169115Z Creating toolchains.xml for JDK version 17 from temurin
+2026-09-22T14:39:59.0244677Z Writing to /home/runner/.m2/toolchains.xml
+2026-09-22T14:39:59.0245303Z 
+2026-09-22T14:39:59.0245611Z Java configuration:
+2026-09-22T14:39:59.0246315Z   Distribution: temurin
+2026-09-22T14:39:59.0247018Z   Version: 17.0.20+1
+2026-09-22T14:39:59.0247902Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-09-22T14:39:59.0248595Z 
+2026-09-22T14:39:59.0249774Z ##[endgroup]
+2026-09-22T14:39:59.0286696Z Creating settings.xml with server-id: github
+2026-09-22T14:39:59.0287643Z Writing to /home/runner/.m2/settings.xml
+2026-09-22T14:39:59.0289486Z Configured MAVEN_ARGS to include -ntp to suppress Maven transfer progress logs. Set 'show-download-progress: true' to keep the download progress output.
+2026-09-22T14:39:59.1740366Z gradle cache is not found
+2026-09-22T14:39:59.2699061Z Cache hit for: setup-java-Linux-x64-gradle-wrapper-ce86eca3038caeeb7da02c46cc9deb7c86f61ff60b65de489159e96265f81393
+2026-09-22T14:40:00.0526666Z Received 135423479 of 135423479 (100.0%), 178.6 MBs/sec
+2026-09-22T14:40:00.0528500Z Cache Size: ~129 MB (135423479 B)
+2026-09-22T14:40:00.0560543Z [command]/usr/bin/tar -xf /home/runner/work/_temp/a9abcc3d-7075-4f2f-a6ac-baa98d68f564/cache.tzst -P -C /home/runner/work/cairn-share/cairn-share --use-compress-program unzstd
+2026-09-22T14:40:00.2947826Z Cache restored successfully
+2026-09-22T14:40:00.3010436Z gradle-wrapper cache restored from key: setup-java-Linux-x64-gradle-wrapper-ce86eca3038caeeb7da02c46cc9deb7c86f61ff60b65de489159e96265f81393
+2026-09-22T14:40:00.3276482Z ##[group]Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+2026-09-22T14:40:00.3276908Z with:
+2026-09-22T14:40:00.3277116Z   node-version: 22
+2026-09-22T14:40:00.3277342Z   cache: npm
+2026-09-22T14:40:00.3277596Z   cache-dependency-path: worker/package-lock.json
+2026-09-22T14:40:00.3277920Z   check-latest: false
+2026-09-22T14:40:00.3280510Z   token: ***
+2026-09-22T14:40:00.3280760Z   package-manager-cache: true
+2026-09-22T14:40:00.3281030Z env:
+2026-09-22T14:40:00.3281340Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-09-22T14:40:00.3281880Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-09-22T14:40:00.3282277Z   MAVEN_ARGS: -ntp
+2026-09-22T14:40:00.3282489Z ##[endgroup]
+2026-09-22T14:40:00.4668233Z Found in cache @ /opt/hostedtoolcache/node/22.23.2/x64
+2026-09-22T14:40:00.4670406Z ##[group]Environment details
+2026-09-22T14:40:00.8523684Z node: v22.23.2
+2026-09-22T14:40:00.8524503Z npm: 10.9.8
+2026-09-22T14:40:00.8525301Z yarn: 1.22.22
+2026-09-22T14:40:00.8526868Z ##[endgroup]
+2026-09-22T14:40:00.8547420Z [command]/opt/hostedtoolcache/node/22.23.2/x64/bin/npm config get cache
+2026-09-22T14:40:00.9630031Z /home/runner/.npm
+2026-09-22T14:40:01.0478097Z Cache hit for: node-cache-Linux-x64-npm-e4c49f4fe79b89c46c6fc5d7557fa535c5678a8f04846985353e784588ddb863
+2026-09-22T14:40:01.6414058Z Received 109431488 of 109431488 (100.0%), 188.7 MBs/sec
+2026-09-22T14:40:01.6415405Z Cache Size: ~104 MB (109431488 B)
+2026-09-22T14:40:01.6478874Z [command]/usr/bin/tar -xf /home/runner/work/_temp/af3983f7-95b5-40e1-b143-22e4ae16eb30/cache.tzst -P -C /home/runner/work/cairn-share/cairn-share --use-compress-program unzstd
+2026-09-22T14:40:01.8179429Z Cache restored successfully
+2026-09-22T14:40:01.8235295Z Cache restored from key: node-cache-Linux-x64-npm-e4c49f4fe79b89c46c6fc5d7557fa535c5678a8f04846985353e784588ddb863
+2026-09-22T14:40:01.8395568Z ##[group]Run npm ci --prefix worker
+2026-09-22T14:40:01.8395939Z [36;1mnpm ci --prefix worker[0m
+2026-09-22T14:40:01.8442811Z shell: /usr/bin/bash -e {0}
+2026-09-22T14:40:01.8443101Z env:
+2026-09-22T14:40:01.8443460Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-09-22T14:40:01.8444021Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-09-22T14:40:01.8444438Z   MAVEN_ARGS: -ntp
+2026-09-22T14:40:01.8444670Z ##[endgroup]
+2026-09-22T14:40:08.4739268Z 
+2026-09-22T14:40:08.4749241Z added 90 packages, and audited 91 packages in 7s
+2026-09-22T14:40:08.4749784Z 
+2026-09-22T14:40:08.4750166Z 28 packages are looking for funding
+2026-09-22T14:40:08.4750758Z   run `npm fund` for details
+2026-09-22T14:40:08.5242055Z 
+2026-09-22T14:40:08.5243046Z 4 high severity vulnerabilities
+2026-09-22T14:40:08.5243451Z 
+2026-09-22T14:40:08.5243700Z To address all issues, run:
+2026-09-22T14:40:08.5244197Z   npm audit fix --force
+2026-09-22T14:40:08.5244603Z 
+2026-09-22T14:40:08.5244845Z Run `npm audit` for details.
+2026-09-22T14:40:08.6003878Z ##[group]Run set -euo pipefail
+2026-09-22T14:40:08.6004278Z [36;1mset -euo pipefail[0m
+2026-09-22T14:40:08.6004940Z [36;1mecho 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules[0m
+2026-09-22T14:40:08.6005615Z [36;1msudo udevadm control --reload-rules[0m
+2026-09-22T14:40:08.6005984Z [36;1msudo udevadm trigger --name-match=kvm[0m
+2026-09-22T14:40:08.6042701Z shell: /usr/bin/bash -e {0}
+2026-09-22T14:40:08.6043199Z env:
+2026-09-22T14:40:08.6043573Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-09-22T14:40:08.6044184Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-09-22T14:40:08.6044707Z   MAVEN_ARGS: -ntp
+2026-09-22T14:40:08.6044984Z ##[endgroup]
+2026-09-22T14:40:08.6177013Z KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"
+2026-09-22T14:40:08.6579370Z ##[group]Run reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+2026-09-22T14:40:08.6579895Z with:
+2026-09-22T14:40:08.6580100Z   api-level: 26
+2026-09-22T14:40:08.6580320Z   target: google_apis
+2026-09-22T14:40:08.6580555Z   arch: x86_64
+2026-09-22T14:40:08.6580761Z   profile: pixel_6
+2026-09-22T14:40:08.6581608Z   script: ./android/gradlew -p android --no-daemon --dependency-verification strict connectedDebugAndroidTest
+ANDROID_SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ {print $1}')" bash tests/android-worker/run.sh
+
+2026-09-22T14:40:08.6582492Z   cores: 2
+2026-09-22T14:40:08.6582686Z   avd-name: test
+2026-09-22T14:40:08.6582912Z   force-avd-creation: true
+2026-09-22T14:40:08.6583159Z   emulator-boot-timeout: 600
+2026-09-22T14:40:08.6583412Z   emulator-port: 5554
+2026-09-22T14:40:08.6583820Z   emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+2026-09-22T14:40:08.6584311Z   disable-animations: true
+2026-09-22T14:40:08.6584561Z   disable-spellchecker: false
+2026-09-22T14:40:08.6584825Z   disable-linux-hw-accel: auto
+2026-09-22T14:40:08.6585077Z   enable-hw-keyboard: false
+2026-09-22T14:40:08.6585318Z   channel: stable
+2026-09-22T14:40:08.6585528Z env:
+2026-09-22T14:40:08.6585839Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-09-22T14:40:08.6586346Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-09-22T14:40:08.6586784Z   MAVEN_ARGS: -ntp
+2026-09-22T14:40:08.6586995Z ##[endgroup]
+2026-09-22T14:40:08.7154617Z ##[group]Configure emulator
+2026-09-22T14:40:08.7157315Z API level: 26
+2026-09-22T14:40:08.7158024Z System image API level: 26
+2026-09-22T14:40:08.7158915Z target: google_apis
+2026-09-22T14:40:08.7159686Z CPU architecture: x86_64
+2026-09-22T14:40:08.7160598Z Hardware profile: pixel_6
+2026-09-22T14:40:08.7169561Z Cores: 2
+2026-09-22T14:40:08.7170008Z RAM size: 
+2026-09-22T14:40:08.7170306Z Heap size: 
+2026-09-22T14:40:08.7170644Z SD card path or size: 
+2026-09-22T14:40:08.7170960Z Disk size: 
+2026-09-22T14:40:08.7171418Z AVD name: test
+2026-09-22T14:40:08.7171742Z force avd creation: true
+2026-09-22T14:40:08.7172147Z Emulator boot timeout: 600
+2026-09-22T14:40:08.7172511Z emulator port: 5554
+2026-09-22T14:40:08.7173218Z emulator options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+2026-09-22T14:40:08.7173862Z disable animations: true
+2026-09-22T14:40:08.7174222Z disable spellchecker: false
+2026-09-22T14:40:08.7174647Z disable Linux hardware acceleration: false
+2026-09-22T14:40:08.7175132Z enable hardware keyboard: false
+2026-09-22T14:40:08.7175592Z Channel: 0 (stable)
+2026-09-22T14:40:08.7175993Z Script:
+2026-09-22T14:40:08.7176763Z ./android/gradlew -p android --no-daemon --dependency-verification strict connectedDebugAndroidTest
+2026-09-22T14:40:08.7178003Z ANDROID_SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ {print $1}')" bash tests/android-worker/run.sh
+2026-09-22T14:40:08.7178983Z Pre emulator launch script:
+2026-09-22T14:40:08.7179536Z ##[endgroup]
+2026-09-22T14:40:08.7179990Z ##[group]Install Android SDK
+2026-09-22T14:40:08.7237873Z [command]/usr/bin/sh -c \yes | sdkmanager --licenses > /dev/null
+2026-09-22T14:40:14.2995174Z Installing latest build tools, platform tools, and platform.
+2026-09-22T14:40:14.3014265Z [command]/usr/bin/sh -c \sdkmanager --install 'build-tools;37.0.0' platform-tools 'platforms;android-26'> /dev/null
+2026-09-22T14:40:19.9935249Z Installing latest emulator.
+2026-09-22T14:40:19.9956451Z [command]/usr/bin/sh -c \sdkmanager --install emulator --channel=0 > /dev/null
+2026-09-22T14:40:25.3189788Z Warning: An error occurred while preparing SDK package Android Emulator: Error on ZipFile unknown archive.
+2026-09-22T14:40:25.3318270Z ##[endgroup]
+2026-09-22T14:40:25.3319259Z ##[group]Terminate Emulator
+2026-09-22T14:40:25.3339079Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 emu kill
+2026-09-22T14:40:25.5260473Z error: could not connect to TCP port 5554: Connection refused
+2026-09-22T14:40:25.5270414Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-09-22T14:40:25.5272080Z ##[endgroup]
+2026-09-22T14:40:25.5299651Z ##[error]The process '/usr/bin/sh' failed with exit code 1
+2026-09-22T14:40:25.5426460Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-09-22T14:40:25.5426950Z with:
+2026-09-22T14:40:25.5427201Z   name: connected-test-report-api-26
+2026-09-22T14:40:25.5428341Z   path: android/app/build/reports/androidTests/connected/**
+android/app/build/outputs/androidTest-results/connected/**
+/home/runner/work/_temp/cairn-android-worker.*/*.log
+/home/runner/work/_temp/cairn-android-worker.*/transport-history.json
+
+2026-09-22T14:40:25.5429750Z   if-no-files-found: ignore
+2026-09-22T14:40:25.5430031Z   retention-days: 7
+2026-09-22T14:40:25.5430283Z   compression-level: 6
+2026-09-22T14:40:25.5430534Z   overwrite: false
+2026-09-22T14:40:25.5430795Z   include-hidden-files: false
+2026-09-22T14:40:25.5431073Z   archive: true
+2026-09-22T14:40:25.5431299Z env:
+2026-09-22T14:40:25.5431646Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-09-22T14:40:25.5432243Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-09-22T14:40:25.5432692Z   MAVEN_ARGS: -ntp
+2026-09-22T14:40:25.5432967Z   ANDROID_AVD_HOME: /home/runner/.android/avd
+2026-09-22T14:40:25.5433285Z ##[endgroup]
+2026-09-22T14:40:25.6933418Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-09-22T14:40:25.6936497Z The least common ancestor is /home/runner/work. This will be the root directory of the artifact
+2026-09-22T14:40:25.6937763Z No files were found with the provided path: android/app/build/reports/androidTests/connected/**
+2026-09-22T14:40:25.6939168Z android/app/build/outputs/androidTest-results/connected/**
+2026-09-22T14:40:25.6939875Z /home/runner/work/_temp/cairn-android-worker.*/*.log
+2026-09-22T14:40:25.6940891Z /home/runner/work/_temp/cairn-android-worker.*/transport-history.json. No artifacts will be uploaded.
+2026-09-22T14:40:25.7152524Z Post job cleanup.
+2026-09-22T14:40:25.8917526Z Post job cleanup.
+2026-09-22T14:40:25.9881521Z [command]/usr/bin/git version
+2026-09-22T14:40:25.9933762Z git version 2.55.0
+2026-09-22T14:40:25.9997488Z Temporarily overriding HOME='/home/runner/work/_temp/de2d35e3-d68e-44bf-bc0a-3a4fbf5955f9' before making global git config changes
+2026-09-22T14:40:26.0005298Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-22T14:40:26.0023519Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/cairn-share/cairn-share
+2026-09-22T14:40:26.0057021Z Removing SSH command configuration
+2026-09-22T14:40:26.0057703Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-22T14:40:26.0105106Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-22T14:40:26.0359505Z Removing HTTP extra header
+2026-09-22T14:40:26.0367480Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-22T14:40:26.0407270Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-22T14:40:26.0664262Z Removing includeIf entries pointing to credentials config files
+2026-09-22T14:40:26.0674290Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-22T14:40:26.0710895Z includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git.path
+2026-09-22T14:40:26.0717040Z includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git/worktrees/*.path
+2026-09-22T14:40:26.0718380Z includeif.gitdir:/github/workspace/.git.path
+2026-09-22T14:40:26.0720005Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-09-22T14:40:26.0729274Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git.path
+2026-09-22T14:40:26.0754873Z /home/runner/work/_temp/git-credentials-ce68fdb6-e562-40a9-8d2e-1e578f6eaebf.config
+2026-09-22T14:40:26.0766517Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-ce68fdb6\-e562\-40a9\-8d2e\-1e578f6eaebf\.config
+2026-09-22T14:40:26.0819534Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git/worktrees/*.path
+2026-09-22T14:40:26.0851933Z /home/runner/work/_temp/git-credentials-ce68fdb6-e562-40a9-8d2e-1e578f6eaebf.config
+2026-09-22T14:40:26.0863214Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-ce68fdb6\-e562\-40a9\-8d2e\-1e578f6eaebf\.config
+2026-09-22T14:40:26.0906639Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-09-22T14:40:26.0934746Z /github/runner_temp/git-credentials-ce68fdb6-e562-40a9-8d2e-1e578f6eaebf.config
+2026-09-22T14:40:26.0943114Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-ce68fdb6\-e562\-40a9\-8d2e\-1e578f6eaebf\.config
+2026-09-22T14:40:26.0983790Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-09-22T14:40:26.1014512Z /github/runner_temp/git-credentials-ce68fdb6-e562-40a9-8d2e-1e578f6eaebf.config
+2026-09-22T14:40:26.1023668Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-ce68fdb6\-e562\-40a9\-8d2e\-1e578f6eaebf\.config
+2026-09-22T14:40:26.1061946Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-22T14:40:26.1295912Z Removing credentials config '/home/runner/work/_temp/git-credentials-ce68fdb6-e562-40a9-8d2e-1e578f6eaebf.config'
+2026-09-22T14:40:26.1444893Z Cleaning up orphan processes

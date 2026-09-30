@@ -1,0 +1,49 @@
+diff --git a/android/app/src/androidTest/java/com/alpenl/cairn/share/AccountCacheInstrumentedTest.kt b/android/app/src/androidTest/java/com/alpenl/cairn/share/AccountCacheInstrumentedTest.kt
+index 06f7591..8e98d18 100644
+--- a/android/app/src/androidTest/java/com/alpenl/cairn/share/AccountCacheInstrumentedTest.kt
++++ b/android/app/src/androidTest/java/com/alpenl/cairn/share/AccountCacheInstrumentedTest.kt
+@@ -99,6 +99,44 @@ class AccountCacheInstrumentedTest {
+         return json(JSONObject().put("revision", revision).put("selection", value(topic)).put("automatic", value(automatic)))
+     }
+ 
++    @Test fun blankKeywordLibraryLoadsServerMembershipBeyondLocalProjection() = runBlocking<Unit> {
++        settings.setLastFilter("all")
++        val filteredRequest = CountDownLatch(1)
++        server.dispatcher = object : Dispatcher() {
++            override fun dispatch(request: RecordedRequest): MockResponse {
++                val url = request.requestUrl!!
++                return when (url.encodedPath) {
++                    "/api/links" -> {
++                        val topics = listOfNotNull(url.queryParameter("topic"), url.queryParameter("topics")).flatMap { it.split(',') }
++                        if ("design" !in topics) page("local unfiltered snapshot") else {
++                            assertTrue("no keyword is needed for a library filter", url.queryParameter("q").isNullOrEmpty())
++                            filteredRequest.countDown()
++                            // The matching row is absent from the unfiltered
++                            // local snapshot; its v1 summary cannot express the
++                            // fourth topic. Membership belongs to the server.
++                            val row = link(99, "confirmed fourth topic")
++                            row.getJSONObject("enrichment").put("classification", JSONObject()
++                                .put("topics", JSONArray(listOf("llm", "eng", "eval"))))
++                            json(JSONObject().put("items", JSONArray().put(row))
++                                .put("next_before_id", JSONObject.NULL).put("filter_contract_version", 1))
++                        }
++                    }
++                    "/api/taxonomy" -> taxonomy("v1")
++                    else -> MockResponse().setResponseCode(404)
++                }
++            }
++        }
++        val model = start()
++        awaitState(model) { it.links.size == 4 && !it.loading }
++        withContext(Dispatchers.Main) { model.setBookmarkFilters(BookmarkFilters(topic = "design")) }
++        assertTrue("blank-keyword library must request server membership", withContext(Dispatchers.IO) { filteredRequest.await(5, TimeUnit.SECONDS) })
++        awaitState(model) { it.visibleLibraryLinks().map { row -> row.id } == listOf(99) }
++        withContext(Dispatchers.Main) {
++            assertEquals("", model.uiState.searchQuery)
++            assertEquals("queue snapshot stays separate from filtered membership", listOf(1, 2, 3, 4), model.uiState.links.map { it.id }.sorted())
++        }
++    }
++
+     @Test fun delayedPersistedTokenCannotReactivateTheAccountAfterANewerSetting() = runBlocking<Unit> {
+         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+         val file = context.preferencesDataStoreFile("credential-race-${System.nanoTime()}")

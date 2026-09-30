@@ -1,0 +1,8 @@
+[36mWHAT[0m: 验证历史 spec 与载体升级
+[35mWHY[0m:  确认问题身份隔离且原个人立场守卫有效
+--- FAIL: TestObjectiveUseSpecAndNoteIsolation (0.00s)
+    personal_intent_test.go:132: unrelated question changed: affordances_background
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/classify	0.053s
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.003s
+FAIL

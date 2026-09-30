@@ -1,0 +1,23 @@
+=== RUN   TestBrowserPrivateImageCache
+    image_browser_test.go:94: ok 1 prewarm old release URL
+        ok 2 browser actually reuses old response
+        ok 3 old cached response avoided a second HTTP request
+        node:internal/modules/run_main:123
+            triggerUncaughtException(
+            ^
+
+        page.evaluate: TypeError: Cannot read properties of undefined (reading 'imagePath')
+            at eval (eval at evaluate (:311:30), <anonymous>:1:21)
+            at UtilityScript.evaluate (<anonymous>:313:16)
+            at UtilityScript.<anonymous> (<anonymous>:1:44)
+            at /tmp/cairn-nas-image-next/tests/browser/image-cache.mjs:17:23 {
+          log: []
+        }
+
+        Node.js v22.22.2
+
+    image_browser_test.go:96: browser: exit status 1
+--- FAIL: TestBrowserPrivateImageCache (1.02s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/dashboard	1.025s
+FAIL

@@ -1,0 +1,8 @@
+== TestLocalWorkerSourceLeaseAdmission: starting worker on 127.0.0.1:57363 ==
+=== RUN   TestLocalWorkerSourceLeaseAdmission
+    source_lease_test.go:153: source Worker HTTP calls = 12 (budget 12): [GET /api/enrichment/jobs/1/source GET /api/enrichment/jobs/1 POST /api/enrichment/jobs/1/lease-admit POST /api/enrichment/provider-attempts/reserve POST /api/enrichment/provider-attempts/settle POST /api/enrichment/jobs/1/source POST /api/v2/links/1/evidence GET /api/enrichment/jobs/1 POST /api/enrichment/jobs/1/lease-admit POST /api/enrichment/provider-attempts/reserve POST /api/enrichment/provider-attempts/settle POST /api/enrichment/jobs/1/complete]
+    source_lease_test.go:245: unknown provider result Worker HTTP calls = 5 (budget 5): [GET /api/enrichment/jobs/2/source GET /api/enrichment/jobs/2 POST /api/enrichment/jobs/2/lease-admit POST /api/enrichment/provider-attempts/reserve POST /api/enrichment/jobs/2/fail]
+    source_lease_test.go:286: personal edits kept one source/reading attempt and no new source lease; failed reading kept the source and blocked a duplicate paid attempt
+--- PASS: TestLocalWorkerSourceLeaseAdmission (0.44s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.459s

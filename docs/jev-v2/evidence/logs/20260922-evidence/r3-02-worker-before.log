@@ -1,0 +1,58 @@
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:335111) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 <workspace>/Cairn/cairn-share/worker
+
+ ❯ test/classification.test.ts (16 tests | 2 failed | 14 skipped) 420ms
+   × R3-02: missing or delayed current snapshot does not claim or burn attempts 199ms
+   × R3-02: a snapshot with the current revision but another primary cannot be claimed 221ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/classification.test.ts > R3-02: missing or delayed current snapshot does not claim or burn attempts
+AssertionError: expected 200 to be 204 // Object.is equality
+
+- Expected
++ Received
+
+- 204
++ 200
+
+ ❯ test/classification.test.ts:40:80
+     38|   expect((await request(`enrichment/jobs/${id}/source`, { lease_token,…
+     39|   for (let poll = 0; poll < 8; poll++) {
+     40|     expect((await request("enrichment/classifications/claim", v2Caps))…
+       |                                                                                ^
+     41|   }
+     42|   const waiting = await env.DB.prepare("SELECT status,attempts,lease_t…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/classification.test.ts > R3-02: a snapshot with the current revision but another primary cannot be claimed
+AssertionError: expected 200 to be 204 // Object.is equality
+
+- Expected
++ Received
+
+- 204
++ 200
+
+ ❯ test/classification.test.ts:67:78
+     65|     fetched_at: "2026-09-22T00:00:00Z", retrieval: "manual", truncatio…
+     66|   } })).status).toBe(200);
+     67|   expect((await request("enrichment/classifications/claim", v2Caps)).s…
+       |                                                                              ^
+     68|   expect(await env.DB.prepare("SELECT attempts FROM classification_job…
+     69| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 14 skipped (16)
+   Start at  16:04:24
+   Duration  1.08s (transform 127ms, setup 0ms, import 204ms, tests 420ms, environment 0ms)
+

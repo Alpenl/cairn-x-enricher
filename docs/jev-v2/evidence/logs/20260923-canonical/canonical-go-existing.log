@@ -1,0 +1,19 @@
+--- FAIL: TestServiceBudgetPersistsAcrossRequestsAndConcurrentKinds (0.00s)
+    budget_test.go:58: entity call failed
+--- FAIL: TestEntityCacheRecoversLostCompletionAndReusesEmptyWithoutBudget (0.00s)
+    entity_cache_test.go:86: lost acknowledgment not recovered: {State:failed Entities:[] Reason:invalid entity choice Calls:1 Tokens:65536 OperationKey: Observations:[]}
+--- FAIL: TestEntitiesValidatesCandidatesAndKeepsDistinctNames (0.00s)
+    service_test.go:57: state = failed
+--- FAIL: TestEntitiesCompletedEmptyIsASuccess (0.00s)
+    service_test.go:76: a legitimate empty must be a completed empty: {State:failed Entities:[] Reason:invalid entity choice Calls:1 Tokens:65536 OperationKey: Observations:[]}
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/extension	0.244s
+ok  	github.com/Alpenl/cairn-x-enricher/internal/config	0.004s
+--- FAIL: TestExtensionsRunAfterClassificationWithoutFailingIt (0.00s)
+    stages_test.go:443: entity state = failed
+--- FAIL: TestEntitiesRequireVerifiedSnapshot (0.00s)
+    stages_test.go:918: entities came from stale plain text: []
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/processor	0.298s
+ok  	github.com/Alpenl/cairn-x-enricher/cmd/cairn-x-enricher	2.034s
+FAIL

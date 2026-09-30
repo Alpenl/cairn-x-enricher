@@ -8,7 +8,7 @@
    同一事务将分类任务入队。后续失败不会撤销原文。
 3. `ResponsesClient.Transform` 根据存档原文生成中文标题、译文和摘要，不携带词表、
    不执行搜索。模型返回的原文不能覆盖快照。图片继续走受控 R2 存储。
-4. Jev 分类队列独立领取原文、上下文与收藏备注。语义判断成功后只更新 AI 建议，
+4. Jev 分类队列独立领取任务并绑定原文与上下文证据。语义判断成功后只更新 AI 建议，
    不写原文、阅读增强、人工 `curation`、`why` 或 `curation_status`。
 
 生产 `serve`/`once` 使用 `processor.NewStaged`。旧 `Generate`/`Workflow` 为消融实验和
@@ -16,69 +16,92 @@
 
 ## Jev 契约和规则
 
-服务端调用 `POST https://api.typesafe.ai/v1/systemone`，使用 Bearer key，
-默认 `jev-latest`，记录 API 实际返回的模型标识。问题一次构造、同一请求并行回答：
+服务端调用 `POST https://api.typesafe.ai/v1/systemone`，使用 Bearer key。
+生产入口固定 `jev-1.13.0`，并核对响应模型。`Evaluate` 保存 typed answers、分布、
+实际请求身份和 usage；`Decide` 与 `Resolve` 为纯函数，可以零模型调用重放。
 
-- `topics`：每个 active 主题一个 Noul，概率 >= 0.8 接纳，最多取三个；
-  0.2 < p < 0.8 标记待确认；超过三个强匹配也标记待确认。
-- `form`、`use`：分别使用 Choice，包含 `none`。最高概率 < 0.65 或与次高差 < 0.15
-  时留空并标记待确认。选择 `none` 同样留空。
-- 这些阈值是初始保守策略，未经真实收藏集校准。`uncertainty` 不是接口调用失败，
-  调用成功但待确认的结果按正常分类完成存储。
-- `why_suggestion` 使用明确标注的用途模板，不生成用户真实收藏动机。
-- 第一版不生成自由实体名称，`entities` 为空；新分类会替换旧 AI 实体建议。
-  实体提取如需恢复，应作为独立的候选提取能力实现。
-- 保存完整 typed answers、token usage、实际模型与策略版本，便于离线复核。
+不可变 spec 来自版本化词表和问题编译器，目标由 Worker 的 spec/model/policy/generation
+决定。主题、功能等独立判断与互斥 Choice 分开；标签安全上限与界面展示数量分开，
+不会因为默认展示三个而丢弃第四个有效主题。字段分别接纳、拒绝或弃权，合法空结果正常完成。
+阈值仍标记为未校准。完整合同见 [B04 判断层](jev-v2/04-judgment-policy.md)。
 
-词表唯一来源仍为 Worker `src/taxonomy.json`，增加可选 `description` 定义，
-当前版本 `2026-09-20.1`。问题与阈值集中在 `internal/classify/jev.go`。
-更改问题含义或阈值时必须递增 `PolicyVersion`。词表修改应递增 `taxonomy.version`。
+客观判断使用绑定的来源证据，不读取用户 note/why/status/stance；个人意图来自人工维护。
+自动 `contra` 被当前 policy 和 Worker 写入口拒绝，历史读取和明确人工选择保留。
+实体为独立、默认关闭的候选与原文 span 能力，不能由分类模型自由编造名称。
 
 ## 独立状态和一致性
 
-`classification_jobs` 保存 `pending/processing/completed/failed/exhausted/waiting_source`、
-attempt、next retry、独立 lease、输入 revision、词表/策略/请求模型版本及审计结果。
-已存档来源继续使用现有 `links` 阅读字段；原始来源快照存于 `enrichment_sources`。
+`classification_jobs` 保存独立状态、attempt、lease、输入 revision、目标 generation、
+不可变 spec、内容版本和 evidence snapshot 身份。提交必须仍匹配当前绑定；
+过期输入不能覆盖新来源或人工整理。来源快照与阅读增强先后保存，分类失败不撤销原文。
+个人字段变化与原文内容版本分离，不因整理备注而重新抓取来源。
 
-- 模型调用错误按 1m / 5m / 30m / 2h 退避，最多五次；没有在客户端叠加重试。
-- 源内容、URL、备注改变会增加 revision、清除租约并失效旧 AI 分类。
-  完成提交同时检查 lease token、有效期、revision、词表和策略版本。
-- 修改 URL/备注仍沿用当前 App 的原文失效策略。未来可进一步优化为仅备注变更时保留原文。
-- 分类策略、词表或请求模型改变后，已入队且有原文的记录会自动重新分类。
-  `jev-latest` 指向新模型不会改变请求模型字符串；要强制重跑可改变策略版本或按 ID 入队。
-- 活跃租约不会被重跑抢占。历史内容不自动入队，可按 ID 显式加入。
-- 分类结果写入同样触发 App 内容缓存失效。没有修改公共列表/详情的字段集合。
+瞬时错误沿用服务端退避和最多五次 attempt；stale 属于失效工作，配置/协议/预算错误暂停
+组件，不伪装成语义失败。没有在模型 HTTP 层增加多层重试。目标切换必须通过 B01 的
+受控 generation，不因本地改环境变量而自动激活。历史收藏不隐式全库入队。
 
-获取/阅读任务的并发上限仍为 `MAX_CONCURRENCY`；分类使用额外的一个串行 worker。
-两类队列同时运行，互不因批次领取窗口而饥饿；人工获取完成后最迟下个轮询周期分类。
-`once` 在预算内最多各处理 `--max-jobs` 条获取任务和分类任务。
+获取/阅读任务保留 `MAX_CONCURRENCY`；分类由独立串行 worker 执行，单条有 deadline。
+`once` 的 `--max-jobs` 是单轮任务上限，下面的 D1 日预算跨轮次和进程生效。
+
+普通文本和绑定的结构化快照使用相同的输入预算：默认正文加上下文最多 12,000 个 Unicode 字符、12 个上下文块，序列化后的 state 最多 48 KiB，包含问题 instructions/criteria 的完整 HTTP 请求最多 128 KiB。这些是应用自身的限制，不是供应商 token 数或上下文窗口的估算。优先保留原帖；超限时缩短请求正文或移除末尾上下文块，并记录 `truncated`/`coverage`。数据库完整快照保持不变。问题定义本身导致整包超限时，发送前返回合同错误，不删改问题含义；复用与扩展请求也受完整请求字节上限约束。
+
+## 持久调用预算
+
+普通分类在一套 Worker/D1 部署内按 UTC 自然日共享预算。每次实际 Jev HTTP 请求都先经
+内部 `POST /api/v2/classification-budget/reserve` 原子授权；全量、部分重用和拆批经过
+同一入口，每个拆批分别计数。与[扩展预算](jev-v2/09-semantic-extensions.md)的 20/2
+额度分开；两个池不是 TypeSafe 账户级总额度，也不跨不同 Worker 部署共享。
+
+| 环境变量 | 默认值及服务端上限 |
+| --- | ---: |
+| `CAIRN_CLASSIFICATION_MAX_CALLS` | 20 |
+| `CAIRN_CLASSIFICATION_MAX_CALLS_PER_ITEM` | 5 |
+| `CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS` | 1310720 |
+| `CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS_PER_ITEM` | 327680 |
+
+四项只允许正整数且只能收紧。每次预留固定 **65536 input tokens**，是按固定 Jev 1.13
+请求上限采用的保守额度，不是实际 usage 或 tokenizer 估算；实际 usage 另存。
+依据：[当前模型说明](https://docs.typesafe.ai/models)。不足一次预留时不调用模型。
+多个客户端的较低设置约束各自申请；服务端上限约束所有消费者。午夜重置，非滑动 24 小时。
+
+授权在同一事务验证有效 lease、输入/内容版本、spec、当前 generation 和证据身份。
+重复 operation key 不再次授权，异 payload 冲突；丢失授权响应、后端不可用或非法确认
+均不调用模型，不重试授权、不退款。调用失败或取消后的已消费额度也不退回。
+匿名全局账本不保存收藏 ID、lease、请求正文或原文；删除收藏清除逐条记录但不退回全局额度。
+本次复用已有账本和 0026 删除守卫，无新增迁移。
+
+全局耗尽在领取任务前暂停，不继续增加 attempt；逐条耗尽则跳过该条。
+已领取任务完全复用兼容 raw 时不申请新额度，纯策略 replay 也为零调用；全局耗尽时
+不会为了尝试复用而额外领取新任务。拆批中途耗尽停止后续请求，保留实际调用记录并标明 partial。
 
 ## 配置与使用
 
 `.env` 使用 `TYPESAFE_API_KEY`、`TYPESAFE_BASE_URL=https://api.typesafe.ai`、
-`TYPESAFE_MODEL=jev-latest`。API 根地址不含 `/v1`。CLI 自动读取根目录 `.env`，
-Docker 通过已有 `env_file` 注入。配置文件应被 Git 忽略并设为权限 0600。
+`TYPESAFE_MODEL=jev-1.13.0`。API 根地址不含 `/v1`。CLI 自动读取根目录 `.env`，
+Docker 通过已有 `env_file` 注入；配置文件被 Git 忽略。
+`serve`/`classify` 在启动网络操作前拒绝其他模型或 alias，现有目标须按 B01 受控切换。
 
 ```bash
-# 只处理分类，完全不触发 Grok。
+# 只处理分类，不需要 Grok 凭据或调用 Grok。
 go run ./cmd/cairn-x-enricher classify --max-jobs 20
-# 将一条历史原文入队后消费队列；可能也会消费其他待处理条目。
+# 显式入队一条历史原文；队列也可能含其他待处理条目。
 go run ./cmd/cairn-x-enricher classify --id 123 --max-jobs 20
 ```
 
-`classify` 复用服务的配置校验，因此仍要求完整的现有环境配置，但不会连接 Grok。
-Jev 单条状态和概率通过内部 `GET /api/enrichment/classifications/{id}` 查看；
-`/status` 的批次统计增加 `classified` 和 `classification_failed`。
-当前网页仍显示原有获取/阅读任务状态，尚无独立分类队列的可视化操作面板。
+单条状态通过内部 `GET /api/enrichment/classifications/{id}` 查看；
+`/status` 统计 `classified` 和 `classification_failed`。预算错误按组件暂停处理。
 
-## 升级
+## 升级与回退边界
 
-1. 在配套 `cairn-share/worker` 验证并应用迁移 0009，发布新 Worker 和词表。
-2. 在 Enricher 环境配置 TypeSafe key，构建/发布新版本，再启动服务。
-3. 小批量验证原文存档、阅读增强和分类。不要直接启动全库回填。
+1. 停止并排空旧分类消费者，避免升级前已经取得的 lease 继续走旧付费路径。
+2. 先准备含全部迁移（当前截至 0030）和预算端点的 Worker；检查备份与恢复。
+3. 新消费者请求和 Worker 响应均声明 `X-Cairn-Classification-Budget: 1`。
+   旧消费者面对新 Worker 不能领取任务；新消费者面对旧 Worker 在握手阶段停止，不能领取任务。
+4. 配置固定模型并通过既有受控接口建立匹配的目标 generation，再限定 ID 小批验证。
 
-本改动不自动部署 Worker、不应用远端迁移、不更新 NAS 镜像。
-回滚应用时可保留新增表；旧 Worker 不消费分类队列。旧单次生成路径的分类结果仍兼容。
+预算不能追溯约束升级前的旧 lease。回退到无预算消费者不能继续运行付费分类，
+应停止分类并保留兼容 Worker/账本。关闭扩展 flag 不会关闭普通分类预算。
+本批只提交代码和验收证据，未部署、未迁移生产、未自动激活目标或执行全库回填。
 
 ## 验证和效果边界
 
@@ -94,7 +117,8 @@ CAIRN_TEST_LIVE_TYPESAFE=1 go test -run '^TestLiveJev$' -v ./internal/classify
 2026-09-20 使用完整词表的一次合成样本返回 `jev-1.13.0`，耗时约 0.77 秒，
 输入/输出 token 为 4637/430，标签为 `eval` 和 `llm`，形态 `method`、用途 `try`。
 其他主题的中间概率触发了保守的待确认标记。这个结果证明 API 契约可用，
-不代表真实收藏集的分类准确率或性能基准。正式质量评估仍需人工标注的代表性样本。
+不代表真实收藏集的分类准确率或性能基准。按所有者授权，后续使用带来源和生成记录的 `automatic_reference` 样本评估，无需人工标注；
+自动参考不能称为 human gold。训练/开发/保留集隔离，未决结果不能升级为质量达标。
 
 项目技能位于 `.agents/skills/typesafe-ai/`。权威 API 参考：
 [HTTP API](https://docs.typesafe.ai/api)、[Noul](https://docs.typesafe.ai/primitives/noul)、

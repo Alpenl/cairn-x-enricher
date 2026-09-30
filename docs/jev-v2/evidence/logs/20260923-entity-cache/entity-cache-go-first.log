@@ -1,0 +1,8 @@
+--- FAIL: TestEntitiesRejectsAnAnswerOutsideTheCandidateSet (0.00s)
+    service_test.go:108: an out-of-set verdict must fail the run: {State:failed Entities:[] Reason:incomplete entity answer set Calls:1 Tokens:65536 OperationKey:}
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/extension	0.243s
+ok  	github.com/Alpenl/cairn-x-enricher/internal/cairn	0.770s
+ok  	github.com/Alpenl/cairn-x-enricher/internal/processor	0.297s
+ok  	github.com/Alpenl/cairn-x-enricher/cmd/cairn-x-enricher	2.035s
+FAIL

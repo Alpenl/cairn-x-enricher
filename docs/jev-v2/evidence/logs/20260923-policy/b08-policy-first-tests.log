@@ -1,0 +1,50 @@
+=== RUN   TestProductionPolicyFitUsesSixDimensionsAndZeroAdditionalCalls
+--- PASS: TestProductionPolicyFitUsesSixDimensionsAndZeroAdditionalCalls (0.00s)
+=== RUN   TestPolicyReplayRejectsChangedOrUnboundInputs
+=== RUN   TestPolicyReplayRejectsChangedOrUnboundInputs/question_hash
+=== RUN   TestPolicyReplayRejectsChangedOrUnboundInputs/material
+=== RUN   TestPolicyReplayRejectsChangedOrUnboundInputs/call_provenance
+=== RUN   TestPolicyReplayRejectsChangedOrUnboundInputs/mixed_batching
+=== RUN   TestPolicyReplayRejectsChangedOrUnboundInputs/invalid_probability
+=== RUN   TestPolicyReplayRejectsChangedOrUnboundInputs/legacy_raw
+=== RUN   TestPolicyReplayRejectsChangedOrUnboundInputs/model
+=== RUN   TestPolicyReplayRejectsChangedOrUnboundInputs/wire_state
+=== RUN   TestPolicyReplayRejectsChangedOrUnboundInputs/taxonomy
+=== RUN   TestPolicyReplayRejectsChangedOrUnboundInputs/missing_raw
+=== RUN   TestPolicyReplayRejectsChangedOrUnboundInputs/partial
+=== RUN   TestPolicyReplayRejectsChangedOrUnboundInputs/spec
+--- PASS: TestPolicyReplayRejectsChangedOrUnboundInputs (0.01s)
+    --- PASS: TestPolicyReplayRejectsChangedOrUnboundInputs/question_hash (0.00s)
+    --- PASS: TestPolicyReplayRejectsChangedOrUnboundInputs/material (0.00s)
+    --- PASS: TestPolicyReplayRejectsChangedOrUnboundInputs/call_provenance (0.00s)
+    --- PASS: TestPolicyReplayRejectsChangedOrUnboundInputs/mixed_batching (0.00s)
+    --- PASS: TestPolicyReplayRejectsChangedOrUnboundInputs/invalid_probability (0.00s)
+    --- PASS: TestPolicyReplayRejectsChangedOrUnboundInputs/legacy_raw (0.00s)
+    --- PASS: TestPolicyReplayRejectsChangedOrUnboundInputs/model (0.00s)
+    --- PASS: TestPolicyReplayRejectsChangedOrUnboundInputs/wire_state (0.00s)
+    --- PASS: TestPolicyReplayRejectsChangedOrUnboundInputs/taxonomy (0.00s)
+    --- PASS: TestPolicyReplayRejectsChangedOrUnboundInputs/missing_raw (0.00s)
+    --- PASS: TestPolicyReplayRejectsChangedOrUnboundInputs/partial (0.00s)
+    --- PASS: TestPolicyReplayRejectsChangedOrUnboundInputs/spec (0.00s)
+=== RUN   TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig
+=== RUN   TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/nan
+=== RUN   TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/infinite_risk
+=== RUN   TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/missing_dimension
+=== RUN   TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/no_error_loss
+=== RUN   TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/duplicate_candidate
+=== RUN   TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/calibrated
+=== RUN   TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/alias
+--- PASS: TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig (0.00s)
+    --- PASS: TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/nan (0.00s)
+    --- PASS: TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/infinite_risk (0.00s)
+    --- PASS: TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/missing_dimension (0.00s)
+    --- PASS: TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/no_error_loss (0.00s)
+    --- PASS: TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/duplicate_candidate (0.00s)
+    --- PASS: TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/calibrated (0.00s)
+    --- PASS: TestPolicyFitRejectsHoldoutLeakageAndMalformedConfig/alias (0.00s)
+=== RUN   TestVerifiedPolicyReplayDoesNotExposeMutableReferences
+--- PASS: TestVerifiedPolicyReplayDoesNotExposeMutableReferences (0.00s)
+=== RUN   TestPolicyFitDoesNotRelaxUnsatisfiedConstraints
+--- PASS: TestPolicyFitDoesNotRelaxUnsatisfiedConstraints (0.00s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/internal/evaluation	0.024s

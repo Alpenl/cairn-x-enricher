@@ -1,0 +1,45 @@
+[36mWHAT[0m: 复核 Worker 最终门禁
+[35mWHY[0m:  修复错误码类型后复核完整受测版本
+
+> test
+> vitest run
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:734184) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /home/alpen/Stu/Cairn/cairn-share/worker
+
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+
+ Test Files  12 passed (12)
+      Tests  179 passed (179)
+   Start at  19:47:48
+   Duration  23.55s (transform 1.64s, setup 0ms, import 6.09s, tests 114.70s, environment 0ms)
+
+
+> typecheck
+> tsc --noEmit
+
+
+> deploy:dry-run
+> wrangler deploy --dry-run
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ⛅️ wrangler 4.126.0 (update available 4.136.2)
+───────────────────────────────────────────────
+Total Upload: 223.78 KiB / gzip: 48.54 KiB
+Your Worker has access to the following bindings:
+Binding                                                Resource
+env.DB (cairn-share)                                   D1 Database
+env.ENRICHMENT_IMAGES (cairn-x-enrichment-images)      R2 Bucket
+
+--dry-run: exiting now.

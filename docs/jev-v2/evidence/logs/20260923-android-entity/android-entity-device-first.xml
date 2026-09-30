@@ -1,0 +1,39 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.alpenl.cairn.share.V2CurationInstrumentedTest" tests="7" failures="2" errors="0" skipped="0" time="5.322" timestamp="2026-09-23T00:58:39" hostname="localhost">
+  <properties>
+    <property name="device" value="cairn-r307-api26(AVD) - 8.0.0" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="legacyActionsNeedTheVisibleOwnershipConfirmation" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="2.095" />
+  <testcase name="showsSameNamedEntityIdentitiesAndUnknownWithoutNewInference" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="0.353">
+    <failure>java.lang.AssertionError: Action performScrollTo() failed.
+Reason: Expected exactly '1' node but could not find any node that satisfies: (Text + EditableText contains 'Acme（项目，acme-a）' (ignoreCase: false))
+
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+at androidx.compose.ui.test.ActionsKt.performScrollTo(Actions.kt:76)
+at com.alpenl.cairn.share.V2CurationInstrumentedTest.inspectEntityEvidence$lambda$17$inspect(V2CurationInstrumentedTest.kt:208)
+at com.alpenl.cairn.share.V2CurationInstrumentedTest.inspectEntityEvidence(V2CurationInstrumentedTest.kt:216)
+at com.alpenl.cairn.share.V2CurationInstrumentedTest.showsSameNamedEntityIdentitiesAndUnknownWithoutNewInference(V2CurationInstrumentedTest.kt:226)
+</failure>
+  </testcase>
+  <testcase name="staleEntityEvidenceRemainsReadableAfterActivityRecreation" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="0.48">
+    <failure>java.lang.AssertionError: Action performScrollTo() failed.
+Reason: Expected exactly '1' node but could not find any node that satisfies: (Text + EditableText contains 'Acme（项目，acme-a）' (ignoreCase: false))
+
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+at androidx.compose.ui.test.ActionsKt.performScrollTo(Actions.kt:76)
+at com.alpenl.cairn.share.V2CurationInstrumentedTest.inspectEntityEvidence$lambda$17$inspect(V2CurationInstrumentedTest.kt:208)
+at com.alpenl.cairn.share.V2CurationInstrumentedTest.inspectEntityEvidence(V2CurationInstrumentedTest.kt:216)
+at com.alpenl.cairn.share.V2CurationInstrumentedTest.staleEntityEvidenceRemainsReadableAfterActivityRecreation(V2CurationInstrumentedTest.kt:228)
+</failure>
+  </testcase>
+  <testcase name="displaysStoredOutcomesAndIndependentEntitiesWithoutAnInferenceRequest" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="0.455" />
+  <testcase name="oldBackendResetShowsPendingInsteadOfTheHumanValues" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="0.451" />
+  <testcase name="aConflictKeepsTheDraftAndOffersReapply" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="0.453" />
+  <testcase name="showsEffectiveDimensionsAndSubmitsAFieldAction" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="0.428" />
+</testsuite>

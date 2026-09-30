@@ -1,0 +1,87 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.alpenl.cairn.share.AccountCacheInstrumentedTest" tests="51" failures="0" errors="0" skipped="14" time="104.899" timestamp="2026-09-23T01:10:12" hostname="localhost">
+  <properties>
+    <property name="device" value="emulator-5554 - 15" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="libraryPaginationFreezesConditionsAndConfirmedCurationRestartsMembership" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="1.054" />
+  <testcase name="blankKeywordLibraryLoadsServerMembershipBeyondLocalProjection" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.315" />
+  <testcase name="pendingDeletionSurvivesViewModelRecreationAndFiltersStalePages" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.378" />
+  <testcase name="libraryResponseCannotReturnThroughAnAccountRoundTrip" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.96" />
+  <testcase name="lateSearchCannotUndoAnEditInTheSameAccount" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.885" />
+  <testcase name="effectiveFiltersRequireServerConfirmationAndStablePagingTime" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.302" />
+  <testcase name="delayedLibraryPageCannotCrossFiltersAndBadCursorStopsPaging" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="1.137" />
+  <testcase name="refreshRebasesResetPreviewWithoutChangingTheDurableIntentAndCapabilitiesStayIndependent" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.324" />
+  <testcase name="deletionClientDistinguishesBackgroundCleanupFromUnconfirmedFailure" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.155" />
+  <testcase name="lateSearchCannotRestoreADeletedResultOutsideTheMainList" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.879" />
+  <testcase name="deletionPurgesOwnedActionsAndRejectsLateSelectionAndDetail" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.831" />
+  <testcase name="deletionFinishingAfterAccountSwitchOnlyPurgesItsOriginalAccount" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.13" />
+  <testcase name="delayedPersistedTokenCannotReactivateTheAccountAfterANewerSetting" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.228" />
+  <testcase name="failedCredentialPersistenceKeepsTheChosenSessionAndRetrySurvivesRestart" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.228" />
+  <testcase name="returningToSameAccountCannotPublishOldDetailSelectionTaxonomyOrDebug" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.932" />
+  <testcase name="lateDetailCannotUndoAnEditInTheSameAccount" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.859" />
+  <testcase name="deletionPurgesDecodedImagesAndRejectsLateDownloadsOnlyForTheirOwner" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.002" />
+  <testcase name="deletionConfirmationAfterAccountRoundTripPurgesTheActiveAccount" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.227" />
+  <testcase name="editDuringPaginationRestartsMembershipAndDiscardsTheOldCursor" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.634" />
+  <testcase name="oldMutationsCannotReplaceDeleteOrNavigateTheNewAccount" classname="com.alpenl.cairn.share.AccountCacheInstrumentedTest" time="0.879" />
+  <testcase name="persistBeforeSendAndLoseFirstResponse" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.033">
+    <skipped />
+  </testcase>
+  <testcase name="persistDeletionAfterRealCommitResponseLoss" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.001">
+    <skipped />
+  </testcase>
+  <testcase name="explicitlyRecoverLegacyAfterRestart" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.004">
+    <skipped />
+  </testcase>
+  <testcase name="blankKeywordLibraryUsesFullEffectiveFiltersAndConfirmedWrites" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.009">
+    <skipped />
+  </testcase>
+  <testcase name="preserveAmbiguousLegacyAndSeparateSameSuffixAccounts" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.004">
+    <skipped />
+  </testcase>
+  <testcase name="restoreAutomaticDraftAfterProcessDeath" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.004">
+    <skipped />
+  </testcase>
+  <testcase name="persistTermResetAfterExplicitEmpty" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.004">
+    <skipped />
+  </testcase>
+  <testcase name="restoreTermResetAfterProcessDeath" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.003">
+    <skipped />
+  </testcase>
+  <testcase name="recoverDeletionAfterProcessDeathWithoutReplayingCuration" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.001">
+    <skipped />
+  </testcase>
+  <testcase name="confirmedCurationRefreshesRealFilteredSearch" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.001">
+    <skipped />
+  </testcase>
+  <testcase name="readEntityProvenanceAndHumanOverridesFromRealWorker" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.001">
+    <skipped />
+  </testcase>
+  <testcase name="persistResetWithIndependentAutomaticBaseline" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.004">
+    <skipped />
+  </testcase>
+  <testcase name="discardAndAccountSwitchPreserveUnrelatedActions" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.001">
+    <skipped />
+  </testcase>
+  <testcase name="recoverThenHandleTwoRealConflictsAndMidChainFailure" classname="com.alpenl.cairn.share.CurationWorkerRecoveryTest" time="0.001">
+    <skipped />
+  </testcase>
+  <testcase name="firstPageIsVisibleBeforeLaterPagesComplete" classname="com.alpenl.cairn.share.EnrichmentInstrumentedTest" time="3.589" />
+  <testcase name="readsBilingualContentImagesAndSavesCuration" classname="com.alpenl.cairn.share.EnrichmentInstrumentedTest" time="6.19" />
+  <testcase name="recreationPreservesSelectionAndNoteWithoutSubmitting" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="11.219" />
+  <testcase name="launcherAutomaticallyRetriesLocalQueueAndAllowsManualRetry" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="5.03" />
+  <testcase name="failedPostIsKeptLocallyWithoutASecondSubmission" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="7.07" />
+  <testcase name="unsupportedShareShowsNoSaveableLink" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="4.73" />
+  <testcase name="multipleLinksRequireSelectionAndSubmitOnlyTheChosenCompleteUrl" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="7.332" />
+  <testcase name="singleLinkIsNotSubmittedUntilUserAddsNoteAndSaves" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="8.498" />
+  <testcase name="libraryMultiSelectControlsSendFullFiltersAndExplainOldBackend" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="4.416" />
+  <testcase name="launcherEntryShowsLibraryAndCanEditToggleAndDeleteLinks" classname="com.alpenl.cairn.share.ShareActivityInstrumentedTest" time="5.674" />
+  <testcase name="legacyActionsNeedTheVisibleOwnershipConfirmation" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="5.171" />
+  <testcase name="showsSameNamedEntityIdentitiesAndUnknownWithoutNewInference" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="4.671" />
+  <testcase name="staleEntityEvidenceRemainsReadableAfterActivityRecreation" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="5.408" />
+  <testcase name="displaysStoredOutcomesAndIndependentEntitiesWithoutAnInferenceRequest" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="2.309" />
+  <testcase name="oldBackendResetShowsPendingInsteadOfTheHumanValues" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="2.847" />
+  <testcase name="aConflictKeepsTheDraftAndOffersReapply" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="3.235" />
+  <testcase name="showsEffectiveDimensionsAndSubmitsAFieldAction" classname="com.alpenl.cairn.share.V2CurationInstrumentedTest" time="2.673" />
+</testsuite>

@@ -1,9 +1,31 @@
 package config
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestEntityCatalogOnlyLoadsForEnabledConsumer(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("CAIRN_ENTITY_CATALOG_PATH", filepath.Join(t.TempDir(), "missing.json"))
+	t.Setenv("CAIRN_EXTENSION_ENTITIES", "false")
+	if _, err := LoadFor(RoleClassify); err != nil {
+		t.Fatalf("disabled entity catalog blocked classification: %v", err)
+	}
+	t.Setenv("CAIRN_EXTENSION_ENTITIES", "true")
+	if _, err := LoadFor(RoleClassify); err == nil {
+		t.Fatal("enabled consumer silently ignored missing catalog")
+	}
+	if _, err := LoadFor(RoleEnrich); err != nil {
+		t.Fatalf("reading-only role consumed entity catalog: %v", err)
+	}
+	t.Setenv("CAIRN_ENTITY_CATALOG_PATH", "")
+	cfg, err := LoadFor(RoleClassify)
+	if err != nil || cfg.EntityCatalog.Version != "empty-v1" || len(cfg.EntityCatalog.Entities) != 0 {
+		t.Fatalf("unconfigured directory must be explicitly empty: %v", err)
+	}
+}
 
 func TestLoadDefaults(t *testing.T) {
 	setRequiredEnv(t)
@@ -20,6 +42,10 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.PollInterval != 5*time.Minute {
 		t.Fatalf("PollInterval = %s", cfg.PollInterval)
+	}
+	if cfg.WorkerRequestTimeout != 20*time.Second || cfg.GrokFetchTimeout != 3*time.Minute ||
+		cfg.GrokReadingTimeout != 3*time.Minute || cfg.TypesafeRequestTimeout != 3*time.Minute {
+		t.Fatalf("unexpected upstream timeouts: %+v", cfg)
 	}
 	if cfg.MaxConcurrency != 2 || cfg.MaxJobsPerRun != 100 {
 		t.Fatalf("unexpected processing defaults: %+v", cfg)
@@ -42,6 +68,10 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		value string
 	}{
 		{name: "duration", key: "POLL_INTERVAL", value: "soon"},
+		{name: "source timeout exceeds lease", key: "REQUEST_TIMEOUT", value: "15m"},
+		{name: "independent fetch timeout exceeds lease", key: "GROK_FETCH_TIMEOUT", value: "15m"},
+		{name: "independent reading timeout exceeds lease", key: "GROK_READING_TIMEOUT", value: "15m"},
+		{name: "classification timeout exceeds job", key: "TYPESAFE_REQUEST_TIMEOUT", value: "4m"},
 		{name: "concurrency", key: "MAX_CONCURRENCY", value: "0"},
 		{name: "tokens", key: "GROK_MAX_OUTPUT_TOKENS", value: "12"},
 		{name: "base URL", key: "GROK_MODELS_BASE_URL", value: "file:///tmp/model"},
@@ -60,6 +90,21 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 	}
 }
 
+func TestObservabilityWritePortMustStayOnContainerLoopback(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("CAIRN_OBSERVABILITY_CONFIG_PATH", filepath.Join(t.TempDir(), "policy.json"))
+	for _, address := range []string{":9090", "0.0.0.0:9090", "localhost:9090", "127.0.0.1:0"} {
+		t.Setenv("CAIRN_OBSERVABILITY_CONTROL_ADDR", address)
+		if _, err := Load(); err == nil {
+			t.Errorf("unsafe control address %q accepted", address)
+		}
+	}
+	t.Setenv("CAIRN_OBSERVABILITY_CONTROL_ADDR", "127.0.0.1:9090")
+	if _, err := Load(); err != nil {
+		t.Fatalf("literal loopback rejected: %v", err)
+	}
+}
+
 func setRequiredEnv(t *testing.T) {
 	t.Helper()
 	for _, name := range []string{
@@ -68,11 +113,15 @@ func setRequiredEnv(t *testing.T) {
 		"GROK_MAX_OUTPUT_TOKENS",
 		"POLL_INTERVAL",
 		"REQUEST_TIMEOUT",
+		"WORKER_REQUEST_TIMEOUT", "GROK_FETCH_TIMEOUT", "GROK_READING_TIMEOUT", "TYPESAFE_REQUEST_TIMEOUT",
 		"SHUTDOWN_TIMEOUT",
 		"MAX_CONCURRENCY",
 		"MAX_JOBS_PER_RUN",
 		"HTTP_ADDR",
 		"LOG_LEVEL",
+		"CAIRN_OBSERVABILITY_CONFIG_PATH", "CAIRN_OBSERVABILITY_CONTROL_ADDR",
+		"CAIRN_EXTENSION_MAX_CALLS", "CAIRN_EXTENSION_MAX_CALLS_PER_ITEM",
+		"CAIRN_EXTENSION_MAX_INPUT_TOKENS", "CAIRN_EXTENSION_MAX_INPUT_TOKENS_PER_ITEM", "CAIRN_EXTENSION_TIMEOUT",
 	} {
 		t.Setenv(name, "")
 	}
@@ -82,4 +131,121 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("TYPESAFE_API_KEY", "test-typesafe-key")
 	t.Setenv("TYPESAFE_BASE_URL", "")
 	t.Setenv("TYPESAFE_MODEL", "")
+}
+
+func TestUpstreamTimeoutOverridesAreIndependent(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("REQUEST_TIMEOUT", "90s")
+	t.Setenv("WORKER_REQUEST_TIMEOUT", "11s")
+	t.Setenv("GROK_READING_TIMEOUT", "2m")
+	t.Setenv("TYPESAFE_REQUEST_TIMEOUT", "45s")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.WorkerRequestTimeout != 11*time.Second || cfg.GrokFetchTimeout != 90*time.Second ||
+		cfg.GrokReadingTimeout != 2*time.Minute || cfg.TypesafeRequestTimeout != 45*time.Second {
+		t.Fatalf("upstream timeout override leaked across clients: %+v", cfg)
+	}
+}
+
+func TestExtensionLimitsCanOnlyTightenTheDeploymentCeiling(t *testing.T) {
+	for name, value := range map[string]string{
+		"CAIRN_EXTENSION_MAX_CALLS": "21", "CAIRN_EXTENSION_MAX_CALLS_PER_ITEM": "3",
+		"CAIRN_EXTENSION_MAX_INPUT_TOKENS": "1310721", "CAIRN_EXTENSION_MAX_INPUT_TOKENS_PER_ITEM": "131073", "CAIRN_EXTENSION_TIMEOUT": "21s",
+	} {
+		t.Run(name, func(t *testing.T) {
+			setRequiredEnv(t)
+			t.Setenv(name, value)
+			if _, err := Load(); err == nil {
+				t.Fatal("widened ceiling accepted")
+			}
+		})
+	}
+	setRequiredEnv(t)
+	t.Setenv("CAIRN_EXTENSION_MAX_CALLS", "4")
+	t.Setenv("CAIRN_EXTENSION_MAX_CALLS_PER_ITEM", "1")
+	t.Setenv("CAIRN_EXTENSION_MAX_INPUT_TOKENS", "65536")
+	t.Setenv("CAIRN_EXTENSION_MAX_INPUT_TOKENS_PER_ITEM", "32768")
+	t.Setenv("CAIRN_EXTENSION_TIMEOUT", "2s")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ExtensionMaxCalls != 4 || cfg.ExtensionMaxCallsPerItem != 1 || cfg.ExtensionMaxInputTokens != 65536 || cfg.ExtensionMaxInputTokensPerItem != 32768 || cfg.ExtensionTimeout != 2*time.Second {
+		t.Fatal("configured limits not retained")
+	}
+}
+
+// TestClassifyRoleDoesNotRequireGrok pins B02-T09: the classify command only
+// talks to the Worker and Jev, so a deployment with a valid Jev key but no Grok
+// credentials must still be able to run classification. Conversely, an enrich
+// role must not silently start without the reading credentials it needs.
+func TestClassifyRoleDoesNotRequireGrok(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("XAI_API_KEY", "")
+	t.Setenv("GROK_MODELS_BASE_URL", "")
+
+	if _, err := LoadFor(RoleClassify); err != nil {
+		t.Fatalf("LoadFor(RoleClassify) error = %v, want success without Grok config", err)
+	}
+	if _, err := LoadFor(RoleEnrich); err == nil {
+		t.Fatal("LoadFor(RoleEnrich) error = nil, want missing Grok config error")
+	}
+}
+
+func TestEnrichRoleDoesNotRequireTypesafe(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("TYPESAFE_API_KEY", "")
+
+	if _, err := LoadFor(RoleEnrich); err != nil {
+		t.Fatalf("LoadFor(RoleEnrich) error = %v, want success without Typesafe config", err)
+	}
+	if _, err := LoadFor(RoleClassify); err == nil {
+		t.Fatal("LoadFor(RoleClassify) error = nil, want missing Typesafe config error")
+	}
+}
+
+func TestEveryRoleRequiresTheWorkerToken(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("CAIRN_ENRICHER_TOKEN", "")
+	for _, role := range []Role{RoleServe, RoleEnrich, RoleClassify} {
+		if _, err := LoadFor(role); err == nil {
+			t.Errorf("LoadFor(%s) error = nil, want missing Worker token error", role)
+		}
+	}
+}
+
+func TestClassificationBudgetConfiguration(t *testing.T) {
+	setRequiredEnv(t)
+	cfg, err := LoadFor(RoleClassify)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TypesafeModel != "jev-1.13.0" || cfg.ClassificationMaxCalls != 20 || cfg.ClassificationMaxCallsPerItem != 5 || cfg.ClassificationMaxInputTokens != 20*65536 || cfg.ClassificationMaxInputTokensPerItem != 5*65536 {
+		t.Fatalf("defaults %+v", cfg)
+	}
+	for _, pair := range [][2]string{{"CAIRN_CLASSIFICATION_MAX_CALLS", "201"}, {"CAIRN_CLASSIFICATION_MAX_CALLS_PER_ITEM", "6"}, {"CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS", "0"}, {"CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS_PER_ITEM", "327681"}, {"TYPESAFE_MODEL", "jev-latest"}} {
+		t.Run(pair[0], func(t *testing.T) {
+			t.Setenv(pair[0], pair[1])
+			if _, err := LoadFor(RoleClassify); err == nil {
+				t.Fatal("unsafe config accepted")
+			}
+		})
+	}
+
+	t.Run("explicit bulk allowance", func(t *testing.T) {
+		t.Setenv("CAIRN_CLASSIFICATION_MAX_CALLS", "60")
+		t.Setenv("CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS", "3932160")
+		bulk, loadErr := LoadFor(RoleClassify)
+		if loadErr != nil || bulk.ClassificationMaxCalls != 60 || bulk.ClassificationMaxInputTokens != 60*65536 {
+			t.Fatalf("bulk allowance %v %+v", loadErr, bulk)
+		}
+	})
+	t.Setenv("CAIRN_CLASSIFICATION_MAX_CALLS", "1")
+	t.Setenv("CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS", "1")
+	cfg, err = LoadFor(RoleClassify)
+	if err != nil || cfg.ClassificationMaxCalls != 1 || cfg.ClassificationMaxInputTokens != 1 {
+		t.Fatalf("tightening %v %+v", err, cfg)
+	}
 }

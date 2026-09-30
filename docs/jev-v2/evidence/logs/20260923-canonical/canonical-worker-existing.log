@@ -1,0 +1,12 @@
+WHAT: 验证 Worker 持久化接入
+WHY:  检查新旧实体合同与来源版本兼容
+
+> typecheck
+> tsc --noEmit
+
+src/domain-routes.ts(155,38): error TS2558: Expected 0 type arguments, but got 1.
+src/domain-routes.ts(169,37): error TS18046: 'observations' is of type 'unknown'.
+src/domain-routes.ts(169,57): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/domain-routes.ts(223,18): error TS2571: Object is of type 'unknown'.
+src/domain-routes.ts(223,28): error TS2558: Expected 0 type arguments, but got 1.
+src/domain-routes.ts(224,74): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string[]'.

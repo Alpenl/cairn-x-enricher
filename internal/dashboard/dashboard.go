@@ -2,7 +2,8 @@ package dashboard
 
 import (
 	"context"
-	_ "embed"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,7 +20,9 @@ import (
 
 	"github.com/Alpenl/cairn-x-enricher/internal/buildinfo"
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
+	"github.com/Alpenl/cairn-x-enricher/internal/extension"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
+	"github.com/Alpenl/cairn-x-enricher/internal/observability"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
@@ -40,41 +43,49 @@ const (
 
 var backstageAttentionStatuses = []string{"failed", "exhausted"}
 
-//go:embed index.html
-var indexHTML []byte
-
-//go:embed reader.html
-var readerHTML []byte
-
-//go:embed backstage.html
-var backstageHTML []byte
-
-//go:embed dashboard.css
-var dashboardCSS []byte
-
-//go:embed common.js
-var commonJS []byte
-
-//go:embed home.js
-var homeJS []byte
-
-//go:embed backstage.js
-var backstageJS []byte
-
-//go:embed reader.js
-var readerJS []byte
-
-//go:embed download.svg
-var downloadSVG []byte
-
 // Backend provides the internal Cloudflare data plane used by the dashboard.
 type Backend interface {
 	ListBookmarks(context.Context, cairn.BookmarkQuery) (cairn.BookmarkPage, error)
 	GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error)
 	GetImage(context.Context, string) (*http.Response, error)
 	ClaimByID(context.Context, int64) (*cairn.Job, error)
+	RequestEnrichment(context.Context, int64, string) error
+	SaveManualSource(context.Context, int64, string, int64, string) (cairn.ManualSourceResult, error)
 	GetTaxonomy(context.Context) (taxonomy.Catalog, error)
 	UpdateCuration(context.Context, int64, cairn.CurationUpdate) (cairn.BookmarkDetail, error)
+}
+
+type identityBackend interface {
+	GetBookmarkIdentity(context.Context, int64) (cairn.BookmarkIdentity, error)
+}
+
+type readingBackend interface {
+	GetReading(context.Context, int64, *int64) (cairn.ReadingSnapshot, error)
+}
+
+type overviewBackend interface {
+	GetOverview(context.Context) (cairn.BookmarkOverview, error)
+}
+
+// V2Backend is the optional multidimensional API. A backend that does not
+// implement it degrades to read-only v1 rather than showing empty data.
+type V2Backend interface {
+	GetV2Selection(context.Context, int64) (cairn.V2SelectionView, error)
+	UpdateV2Selection(context.Context, int64, cairn.V2SelectionUpdate) (cairn.V2SelectionView, error)
+	GetV2Taxonomy(context.Context) (cairn.V2Taxonomy, error)
+	ApplyV2Override(context.Context, int64, cairn.V2Override) (json.RawMessage, error)
+	GetV2Effective(context.Context, int64) (json.RawMessage, error)
+	// B05/B06/B09 surfaces: stored evidence, queue status, entity lifecycle,
+	// the replayable run history and the three explicit redo actions.
+	GetEvidence(context.Context, int64) (json.RawMessage, error)
+	GetClassificationStatus(context.Context, int64) (json.RawMessage, error)
+	GetEntities(context.Context, int64) (json.RawMessage, error)
+	CorrectEntity(context.Context, int64, map[string]any) error
+	GetRuns(context.Context, int64) ([]cairn.StoredRun, error)
+	GetQuestionSpec(context.Context, string) (cairn.StoredQuestionSpec, error)
+	SubmitDecision(context.Context, int64, map[string]any) error
+	RetryClassification(context.Context, int64) error
+	RefreshSource(context.Context, int64) (json.RawMessage, error)
 }
 
 // JobProcessor handles a job after the Worker has granted its lease.
@@ -104,6 +115,8 @@ type Server struct {
 	processor   JobProcessor
 	logger      *slog.Logger
 	jobs        chan manualJob
+	wakeup      chan<- struct{}
+	observation func() observability.Status
 	workers     sync.WaitGroup
 
 	// enqueueMu serialises admission so capacity cannot be oversold.
@@ -117,11 +130,20 @@ type Server struct {
 	queued  atomic.Int64
 	catalog *taxonomyCache
 
+	// extensionFlags reports which bounded extensions are enabled. They are
+	// independent of each other and default to off.
+	extensionFlags extension.Flags
+	// extensions is the same service the pipeline uses, so a rerank action
+	// shares its flags and budget.
+	extensions *extension.Service
+
 	// summary caches the backstage aggregate, which costs several backend
 	// list calls and is polled by an idle browser tab.
-	summaryMu       sync.Mutex
-	summaryCache    *backstageSummary
-	summaryCachedAt time.Time
+	summary snapshotCache[backstageSummary]
+
+	// overview caches the navigation counts, which fan out to several
+	// upstream count queries.
+	overview snapshotCache[overviewSummary]
 }
 
 // backstageSummaryTTL bounds backstage aggregation freshness. The page polls
@@ -132,6 +154,7 @@ const backstageSummaryTTL = 5 * time.Second
 type backstageSummary struct {
 	Title          string               `json:"title"`
 	State          string               `json:"state"`
+	Stale          bool                 `json:"stale,omitempty"`
 	LastError      string               `json:"last_error,omitempty"`
 	Attention      []cairn.Bookmark     `json:"attention"`
 	AttentionTotal int                  `json:"attention_total"`
@@ -173,6 +196,16 @@ func New(
 		go server.runWorker()
 	}
 	return server
+}
+
+// SetWakeup connects durable manual submissions to the shared scheduler.
+// It is configured once before the HTTP server starts accepting requests.
+func (s *Server) SetWakeup(wakeup chan<- struct{}) { s.wakeup = wakeup }
+
+// SetObservabilityStatus publishes read-only local state on the LAN dashboard.
+// Writes remain on the separate container-loopback control listener.
+func (s *Server) SetObservabilityStatus(snapshot func() observability.Status) {
+	s.observation = snapshot
 }
 
 // Drain stops admitting new manual work and waits up to timeout for jobs that
@@ -262,46 +295,65 @@ func waitForWorkers(group *sync.WaitGroup, timeout time.Duration) bool {
 // Handler returns the complete health and management HTTP surface.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", func(writer http.ResponseWriter, _ *http.Request) {
-		servePage(writer, indexHTML)
+	// Every page route serves the same application shell; the client router
+	// renders the library, a bookmark or the backstage view from the URL.
+	mux.HandleFunc("GET /{$}", func(writer http.ResponseWriter, request *http.Request) {
+		servePage(writer, request, appShell)
 	})
 	mux.HandleFunc("GET /bookmarks/{id}", serveReader)
-	mux.HandleFunc("GET /backstage", func(writer http.ResponseWriter, _ *http.Request) {
-		servePage(writer, backstageHTML)
+	mux.HandleFunc("GET /backstage", func(writer http.ResponseWriter, request *http.Request) {
+		servePage(writer, request, appShell)
 	})
-	mux.HandleFunc("GET /assets/dashboard.css", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "text/css; charset=utf-8", dashboardCSS)
-	})
-	mux.HandleFunc("GET /assets/common.js", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "text/javascript; charset=utf-8", commonJS)
-	})
-	mux.HandleFunc("GET /assets/home.js", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "text/javascript; charset=utf-8", homeJS)
-	})
-	mux.HandleFunc("GET /assets/backstage.js", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "text/javascript; charset=utf-8", backstageJS)
-	})
-	mux.HandleFunc("GET /assets/reader.js", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "text/javascript; charset=utf-8", readerJS)
-	})
-	mux.HandleFunc("GET /assets/download.svg", func(writer http.ResponseWriter, _ *http.Request) {
-		serveAsset(writer, "image/svg+xml", downloadSVG)
-	})
+	mux.HandleFunc("GET /assets/{path...}", serveWebAsset)
 
 	healthHandler := s.tracker.Handler()
 	mux.Handle("GET /healthz", healthHandler)
 	mux.Handle("GET /readyz", healthHandler)
 	mux.Handle("GET /status", healthHandler)
+	mux.HandleFunc("GET /api/observability", func(w http.ResponseWriter, _ *http.Request) {
+		if s.observation == nil {
+			writeError(w, http.StatusServiceUnavailable, "observability_unavailable")
+			return
+		}
+		writeJSON(w, http.StatusOK, s.observation())
+	})
 
 	mux.HandleFunc("GET /api/bookmarks", s.listBookmarks)
 	mux.HandleFunc("GET /api/taxonomy", s.getTaxonomy)
 	mux.HandleFunc("PATCH /api/bookmarks/{id}/curation", s.updateCuration)
+	mux.HandleFunc("GET /api/bookmarks/{id}/tags", s.tagSystemProxy)
+	mux.HandleFunc("POST /api/bookmarks/{id}/tags", s.tagSystemProxy)
+	mux.HandleFunc("GET /api/bookmarks/{id}/tag-history", s.tagSystemProxy)
+	mux.HandleFunc("GET /api/custom-tags", s.tagSystemProxy)
+	mux.HandleFunc("POST /api/custom-tags", s.tagSystemProxy)
+	mux.HandleFunc("PATCH /api/custom-tags/{id}", s.tagSystemProxy)
+	mux.HandleFunc("DELETE /api/custom-tags/{id}", s.tagSystemProxy)
+	mux.HandleFunc("GET /api/tag-counts", s.tagSystemProxy)
+	mux.HandleFunc("GET /api/tag-export", s.tagSystemProxy)
+	mux.HandleFunc("GET /api/bookmarks/{id}/v2-selection", s.getV2Selection)
+	mux.HandleFunc("PATCH /api/bookmarks/{id}/v2-selection", s.updateV2Selection)
+	mux.HandleFunc("GET /api/v2-taxonomy", s.getV2Taxonomy)
+	mux.HandleFunc("GET /api/extensions", s.getExtensions)
+	mux.HandleFunc("POST /api/bookmarks/{id}/v2-override", s.applyV2Override)
+	mux.HandleFunc("GET /api/bookmarks/{id}/v2-effective", s.getV2Effective)
+	mux.HandleFunc("GET /api/bookmarks/{id}/evidence", s.getEvidence)
+	mux.HandleFunc("GET /api/bookmarks/{id}/classification-status", s.getClassificationStatus)
+	mux.HandleFunc("GET /api/bookmarks/{id}/entities", s.getEntities)
+	mux.HandleFunc("POST /api/bookmarks/{id}/entities", s.correctEntity)
+	mux.HandleFunc("POST /api/bookmarks/{id}/retry-classification", s.retryClassification)
+	mux.HandleFunc("POST /api/bookmarks/{id}/refresh-source", s.refreshSource)
+	mux.HandleFunc("POST /api/bookmarks/{id}/replay-policy", s.replayPolicy)
+	mux.HandleFunc("GET /api/export", s.exportMarkdown)
+	mux.HandleFunc("POST /api/rerank", s.rerank)
 	mux.HandleFunc("GET /api/bookmarks/{id}", s.getBookmark)
+	mux.HandleFunc("GET /api/bookmarks/{id}/identity", s.getBookmarkIdentity)
+	mux.HandleFunc("GET /api/bookmarks/{id}/reading", s.getReading)
 	mux.HandleFunc("GET /api/images/{key...}", s.getImage)
 	mux.HandleFunc("GET /api/backstage", s.getBackstage)
+	mux.HandleFunc("GET /api/overview", s.getOverview)
 	mux.HandleFunc("POST /api/bookmarks/process", s.processBookmarks)
 	mux.HandleFunc("POST /api/bookmarks/{id}/source", s.processBookmarkSource)
-	return mux
+	return compressAPIResponses(mux)
 }
 
 func serveReader(writer http.ResponseWriter, request *http.Request) {
@@ -309,25 +361,25 @@ func serveReader(writer http.ResponseWriter, request *http.Request) {
 		http.NotFound(writer, request)
 		return
 	}
-	servePage(writer, readerHTML)
+	servePage(writer, request, appShell)
 }
 
-func servePage(writer http.ResponseWriter, content []byte) {
+func servePage(writer http.ResponseWriter, request *http.Request, content []byte) {
+	appendVary(writer.Header(), "Accept-Encoding")
+	if acceptsGzip(request) && len(appShellGzip) > 0 {
+		content = appShellGzip
+		writer.Header().Set("Content-Encoding", "gzip")
+	}
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+	writer.Header().Set("Content-Length", strconv.Itoa(len(content)))
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.Header().Set("Content-Security-Policy", "default-src 'none'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 	writer.Header().Set("Referrer-Policy", "no-referrer")
 	writer.Header().Set("X-Content-Type-Options", "nosniff")
 	writer.WriteHeader(http.StatusOK)
-	_, _ = writer.Write(content)
-}
-
-func serveAsset(writer http.ResponseWriter, contentType string, content []byte) {
-	writer.Header().Set("Content-Type", contentType)
-	writer.Header().Set("Cache-Control", "no-cache")
-	writer.Header().Set("X-Content-Type-Options", "nosniff")
-	writer.WriteHeader(http.StatusOK)
-	_, _ = writer.Write(content)
+	if request.Method != http.MethodHead {
+		_, _ = writer.Write(content)
+	}
 }
 
 func (s *Server) listBookmarks(writer http.ResponseWriter, request *http.Request) {
@@ -339,6 +391,14 @@ func (s *Server) listBookmarks(writer http.ResponseWriter, request *http.Request
 	page, err := s.backend.ListBookmarks(request.Context(), query)
 	if err != nil {
 		s.writeBackendError(writer, "list bookmarks", 0, err)
+		return
+	}
+	if query.SkipCounts {
+		writeJSON(writer, http.StatusOK, struct {
+			Items                 []cairn.Bookmark `json:"items"`
+			NextBeforeID          *int64           `json:"next_before_id"`
+			FilterContractVersion *int             `json:"filter_contract_version,omitempty"`
+		}{Items: page.Items, NextBeforeID: page.NextBeforeID, FilterContractVersion: page.FilterContractVersion})
 		return
 	}
 	writeJSON(writer, http.StatusOK, page)
@@ -356,6 +416,61 @@ func (s *Server) getBookmark(writer http.ResponseWriter, request *http.Request) 
 		return
 	}
 	writeJSON(writer, http.StatusOK, detail)
+}
+
+func (s *Server) getBookmarkIdentity(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	backend, ok := s.backend.(identityBackend)
+	if !ok {
+		writeError(writer, http.StatusServiceUnavailable, "identity_unsupported")
+		return
+	}
+	identity, err := backend.GetBookmarkIdentity(request.Context(), id)
+	if err != nil {
+		s.writeBackendError(writer, "get bookmark identity", id, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, identity)
+}
+
+func (s *Server) getReading(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	var knownBodyRevision *int64
+	if values, present := request.URL.Query()["body_revision"]; present {
+		if len(values) != 1 {
+			writeError(writer, http.StatusBadRequest, "invalid_query")
+			return
+		}
+		parsed, parseErr := strconv.ParseInt(values[0], 10, 64)
+		if parseErr != nil || parsed < 0 || strconv.FormatInt(parsed, 10) != values[0] {
+			writeError(writer, http.StatusBadRequest, "invalid_query")
+			return
+		}
+		knownBodyRevision = &parsed
+	}
+	backend, ok := s.backend.(readingBackend)
+	if !ok {
+		writeError(writer, http.StatusServiceUnavailable, "reading_unsupported")
+		return
+	}
+	reading, err := backend.GetReading(request.Context(), id, knownBodyRevision)
+	if errors.Is(err, cairn.ErrV2Unsupported) {
+		writeError(writer, http.StatusServiceUnavailable, "reading_unsupported")
+		return
+	}
+	if err != nil {
+		s.writeBackendError(writer, "get reading", id, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, reading)
 }
 
 func (s *Server) getTaxonomy(writer http.ResponseWriter, request *http.Request) {
@@ -396,6 +511,14 @@ func (s *Server) updateCuration(writer http.ResponseWriter, request *http.Reques
 		writeError(writer, http.StatusBadRequest, "invalid_curation")
 		return
 	}
+	guardedConfirm := update.ExpectedRevision != nil || update.OperationKey != nil
+	if guardedConfirm && (update.ExpectedRevision == nil || *update.ExpectedRevision < 0 ||
+		update.OperationKey == nil || len(*update.OperationKey) == 0 || len(*update.OperationKey) > 200 ||
+		update.Classification == nil || string(update.Classification) == "null" ||
+		update.Why != nil || update.Status != nil) {
+		writeError(writer, http.StatusBadRequest, "invalid_curation")
+		return
+	}
 	if update.Classification != nil && string(update.Classification) != "null" {
 		var selection taxonomy.Selection
 		selectionDecoder := json.NewDecoder(strings.NewReader(string(update.Classification)))
@@ -419,10 +542,190 @@ func (s *Server) updateCuration(writer http.ResponseWriter, request *http.Reques
 		s.writeBackendError(writer, "update curation", id, err)
 		return
 	}
+	s.invalidateOverview()
 	writeJSON(writer, http.StatusOK, detail)
 }
 
+// v2Backend returns the optional multidimensional API, or writes a safe
+// read-only signal when the configured backend does not implement it.
+func (s *Server) v2Backend(writer http.ResponseWriter) (V2Backend, bool) {
+	v2, ok := s.backend.(V2Backend)
+	if !ok {
+		writeJSON(writer, http.StatusOK, map[string]any{"available": false, "reason": "v2_unsupported"})
+		return nil, false
+	}
+	return v2, true
+}
+
+// SetExtensions attaches the bounded extension service.
+func (s *Server) SetExtensions(service *extension.Service) {
+	s.extensions = service
+	if service != nil {
+		s.extensionFlags = service.Flags
+	}
+}
+
+// getExtensions reports which bounded semantic extensions are enabled. Every
+// flag defaults to off, so a disabled extension is visible rather than a
+// button that silently succeeds.
+func (s *Server) getExtensions(writer http.ResponseWriter, _ *http.Request) {
+	flags := s.extensionFlags
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"entities": flags.Entities, "evidence": flags.Evidence,
+		"rerank": flags.Rerank, "proposal": flags.Proposal,
+		"quality_verified": false,
+	})
+}
+
+func (s *Server) getV2Selection(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	v2, ok := s.v2Backend(writer)
+	if !ok {
+		return
+	}
+	view, err := v2.GetV2Selection(request.Context(), id)
+	if errors.Is(err, cairn.ErrV2Unsupported) {
+		writeJSON(writer, http.StatusOK, map[string]any{"available": false, "reason": "v2_unsupported"})
+		return
+	}
+	if err != nil {
+		s.writeBackendError(writer, "get v2 selection", id, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"available": true, "selection": view.Selection, "automatic": view.Automatic, "v1_projection": view.V1Projection, "taxonomy_version": view.TaxonomyVersion, "v1_only": view.V1Only, "revision": view.Revision})
+}
+
+func (s *Server) updateV2Selection(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		writeError(writer, http.StatusBadRequest, "invalid_content_type")
+		return
+	}
+	request.Body = http.MaxBytesReader(writer, request.Body, maxActionBody)
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	var selection cairn.V2SelectionUpdate
+	if err := decoder.Decode(&selection); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		writeError(writer, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	v2, ok := s.v2Backend(writer)
+	if !ok {
+		return
+	}
+	view, err := v2.UpdateV2Selection(request.Context(), id, selection)
+	if errors.Is(err, cairn.ErrV2Unsupported) {
+		writeError(writer, http.StatusConflict, "v2_unsupported")
+		return
+	}
+	if err != nil {
+		s.writeBackendError(writer, "update v2 selection", id, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, view)
+}
+
+func (s *Server) getV2Taxonomy(writer http.ResponseWriter, request *http.Request) {
+	v2, ok := s.v2Backend(writer)
+	if !ok {
+		return
+	}
+	vocabulary, err := v2.GetV2Taxonomy(request.Context())
+	if errors.Is(err, cairn.ErrV2Unsupported) {
+		writeJSON(writer, http.StatusOK, map[string]any{"available": false, "reason": "v2_unsupported"})
+		return
+	}
+	if err != nil {
+		s.writeBackendError(writer, "get v2 taxonomy", 0, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, vocabulary)
+}
+
+func (s *Server) applyV2Override(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		writeError(writer, http.StatusBadRequest, "invalid_content_type")
+		return
+	}
+	request.Body = http.MaxBytesReader(writer, request.Body, maxActionBody)
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	var override cairn.V2Override
+	if err := decoder.Decode(&override); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		writeError(writer, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	// A why/status edit must never produce an override event: only a real
+	// field-level action is accepted here.
+	if override.Field == "why" || override.Field == "status" || override.OperationKey == "" {
+		writeError(writer, http.StatusBadRequest, "invalid_override")
+		return
+	}
+	v2, ok := s.v2Backend(writer)
+	if !ok {
+		return
+	}
+	result, err := v2.ApplyV2Override(request.Context(), id, override)
+	if errors.Is(err, cairn.ErrV2Unsupported) {
+		writeError(writer, http.StatusConflict, "v2_unsupported")
+		return
+	}
+	if err != nil {
+		s.writeBackendError(writer, "apply v2 override", id, err)
+		return
+	}
+	s.invalidateOverview()
+	writeJSON(writer, http.StatusOK, result)
+}
+
+func (s *Server) getV2Effective(writer http.ResponseWriter, request *http.Request) {
+	id, err := positiveID(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
+	}
+	v2, ok := s.v2Backend(writer)
+	if !ok {
+		return
+	}
+	result, err := v2.GetV2Effective(request.Context(), id)
+	if errors.Is(err, cairn.ErrV2Unsupported) {
+		writeJSON(writer, http.StatusOK, map[string]any{"available": false, "reason": "v2_unsupported"})
+		return
+	}
+	if err != nil {
+		s.writeBackendError(writer, "get v2 effective", id, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, result)
+}
+
 func (s *Server) getImage(writer http.ResponseWriter, request *http.Request) {
+	// Apply on successes and errors, independent of old backend cache policy.
+	writer.Header().Set("Cache-Control", "private, no-store")
 	response, err := s.backend.GetImage(request.Context(), request.PathValue("key"))
 	if err != nil {
 		s.writeBackendError(writer, "get image", 0, err)
@@ -436,18 +739,13 @@ func (s *Server) getImage(writer http.ResponseWriter, request *http.Request) {
 		writeError(writer, http.StatusBadGateway, "backend_error")
 		return
 	}
-	for _, header := range []string{"Content-Type", "Content-Length", "ETag", "Cache-Control", "Last-Modified"} {
+	for _, header := range []string{"Content-Type", "Content-Length", "ETag", "Last-Modified"} {
 		if value := response.Header.Get(header); value != "" {
 			writer.Header().Set(header, value)
 		}
 	}
-	// Image keys are content-addressed (enrichment/<id>/<sha256>.<ext>), so a
-	// given key can never change. Without a Cache-Control the browser falls back
-	// to heuristic caching, which revalidates on every scroll. Only apply this
-	// when the backend did not set its own directive.
-	if writer.Header().Get("Cache-Control") == "" {
-		writer.Header().Set("Cache-Control", "private, max-age=604800, immutable")
-	}
+	// Keys hash the source URL, not the image bytes. Private images can change
+	// or be deleted, even when an older backend advertises an immutable cache.
 	writer.Header().Set("X-Content-Type-Options", "nosniff")
 	writer.WriteHeader(http.StatusOK)
 	// When the backend advertises a length, copy exactly that many bytes so a
@@ -467,31 +765,48 @@ func (s *Server) getImage(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (s *Server) getBackstage(writer http.ResponseWriter, request *http.Request) {
-	summary, err := s.buildBackstageSummary(request.Context())
+	summary, stale, err := s.summary.read(request.Context(), s.requestCtx, backstageSummaryTTL, s.computeBackstageSummary)
 	if err != nil {
 		s.writeBackendError(writer, "build backstage summary", 0, err)
 		return
+	}
+	if stale {
+		summary.Stale = true
+		writer.Header().Set("Warning", `110 - "Response is stale"`)
 	}
 	writeJSON(writer, http.StatusOK, summary)
 }
 
 func (s *Server) buildBackstageSummary(ctx context.Context) (backstageSummary, error) {
-	s.summaryMu.Lock()
-	defer s.summaryMu.Unlock()
-	if s.summaryCache != nil && time.Since(s.summaryCachedAt) < backstageSummaryTTL {
-		return *s.summaryCache, nil
-	}
+	summary, _, err := s.summary.read(ctx, s.requestCtx, backstageSummaryTTL, s.computeBackstageSummary)
+	return summary, err
+}
 
+func (s *Server) computeBackstageSummary(ctx context.Context) (backstageSummary, error) {
 	status := s.tracker.Snapshot()
 	// A filtered list already carries queue-wide counts, so one request per
 	// attention status replaces the previous extra unfiltered counts call.
+	type result struct {
+		page cairn.BookmarkPage
+		err  error
+	}
+	results := make([]result, len(backstageAttentionStatuses))
+	var group sync.WaitGroup
+	for index, name := range backstageAttentionStatuses {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			results[index].page, results[index].err = s.backend.ListBookmarks(ctx, cairn.BookmarkQuery{Limit: 20, Status: name})
+		}()
+	}
+	group.Wait()
 	attention := []cairn.Bookmark{}
 	var counts cairn.BookmarkCounts
 	for index, name := range backstageAttentionStatuses {
-		page, err := s.backend.ListBookmarks(ctx, cairn.BookmarkQuery{Limit: 20, Status: name})
-		if err != nil {
-			return backstageSummary{}, fmt.Errorf("list %s bookmarks: %w", name, err)
+		if results[index].err != nil {
+			return backstageSummary{}, fmt.Errorf("list %s bookmarks: %w", name, results[index].err)
 		}
+		page := results[index].page
 		if index == 0 {
 			counts = page.Counts
 		} else {
@@ -513,8 +828,6 @@ func (s *Server) buildBackstageSummary(ctx context.Context) (backstageSummary, e
 		Counts:         counts,
 		Build:          status.Build,
 	}
-	s.summaryCache = &summary
-	s.summaryCachedAt = time.Now()
 	return summary, nil
 }
 
@@ -582,7 +895,8 @@ func (s *Server) processBookmarks(writer http.ResponseWriter, request *http.Requ
 	decoder := json.NewDecoder(request.Body)
 	decoder.DisallowUnknownFields()
 	var body struct {
-		IDs []int64 `json:"ids"`
+		IDs           []int64           `json:"ids"`
+		OperationKeys map[string]string `json:"operation_keys"`
 	}
 	if err := decoder.Decode(&body); err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid_json")
@@ -602,40 +916,70 @@ func (s *Server) processBookmarks(writer http.ResponseWriter, request *http.Requ
 	rejected := make([]rejection, 0)
 
 	s.enqueueMu.Lock()
-	defer s.enqueueMu.Unlock()
-	if s.draining {
+	draining := s.draining
+	s.enqueueMu.Unlock()
+	if draining {
 		writeError(writer, http.StatusServiceUnavailable, "shutting_down")
 		return
 	}
-	if s.queued.Load()+int64(len(ids)) > int64(cap(s.jobs)) {
-		writeError(writer, http.StatusServiceUnavailable, "queue_full")
-		return
-	}
+	retryAfter := ""
 	for _, id := range ids {
-		job, claimErr := s.backend.ClaimByID(request.Context(), id)
-		if claimErr != nil {
-			code := publicErrorCode(claimErr)
+		key := body.OperationKeys[strconv.FormatInt(id, 10)]
+		if key == "" {
+			key, err = newManualOperationKey()
+			if err != nil {
+				rejected = append(rejected, rejection{ID: id, Error: "backend_error"})
+				continue
+			}
+		}
+		if len(key) > 200 {
+			rejected = append(rejected, rejection{ID: id, Error: "invalid_operation_key"})
+			continue
+		}
+		requestErr := s.backend.RequestEnrichment(request.Context(), id, key)
+		if requestErr != nil {
+			code := publicErrorCode(requestErr)
 			rejected = append(rejected, rejection{ID: id, Error: code})
-			s.logger.WarnContext(request.Context(), "manual claim rejected", "link_id", id, "error", claimErr)
+			s.logger.WarnContext(request.Context(), "manual request rejected", "link_id", id, "error", requestErr)
+			var apiErr *cairn.APIError
+			if errors.As(requestErr, &apiErr) && apiErr.StatusCode == http.StatusTooManyRequests {
+				retryAfter = apiErr.RetryAfter
+			}
 			continue
 		}
-		if job == nil {
-			rejected = append(rejected, rejection{ID: id, Error: "not_found"})
-			continue
-		}
-		s.queued.Add(1)
-		s.jobs <- manualJob{job: job}
 		accepted = append(accepted, id)
 	}
 
 	status := http.StatusAccepted
 	if len(accepted) == 0 {
 		status = http.StatusConflict
+		if retryAfter != "" {
+			status = http.StatusTooManyRequests
+		}
+	} else {
+		s.invalidateOverview()
+		if s.wakeup != nil {
+			select {
+			case s.wakeup <- struct{}{}:
+			default:
+			}
+		}
+	}
+	if retryAfter != "" {
+		writer.Header().Set("Retry-After", retryAfter)
 	}
 	writeJSON(writer, status, map[string]any{
 		"accepted": accepted,
 		"rejected": rejected,
 	})
+}
+
+func newManualOperationKey() (string, error) {
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return "", err
+	}
+	return "manual-" + hex.EncodeToString(random[:]), nil
 }
 
 func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http.Request) {
@@ -654,7 +998,9 @@ func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http
 	decoder := json.NewDecoder(request.Body)
 	decoder.DisallowUnknownFields()
 	var body struct {
-		OriginalText string `json:"original_text"`
+		OriginalText     string `json:"original_text"`
+		OperationKey     string `json:"operation_key"`
+		ExpectedRevision *int64 `json:"expected_revision"`
 	}
 	if err := decoder.Decode(&body); err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid_json")
@@ -664,36 +1010,53 @@ func (s *Server) processBookmarkSource(writer http.ResponseWriter, request *http
 		writeError(writer, http.StatusBadRequest, "invalid_json")
 		return
 	}
-	sourceText := strings.TrimSpace(body.OriginalText)
-	if sourceText == "" || len(sourceText) > maxSourceLength {
+	sourceText := body.OriginalText
+	if strings.TrimSpace(sourceText) == "" || len(sourceText) > maxSourceLength || body.OperationKey == "" ||
+		len(body.OperationKey) > 200 || body.ExpectedRevision == nil || *body.ExpectedRevision < 0 {
 		writeProcessingResult(writer, http.StatusConflict, nil, []rejection{{ID: id, Error: "invalid_source"}})
 		return
 	}
 
 	s.enqueueMu.Lock()
-	defer s.enqueueMu.Unlock()
-	if s.draining {
+	draining := s.draining
+	s.enqueueMu.Unlock()
+	if draining {
 		writeError(writer, http.StatusServiceUnavailable, "shutting_down")
 		return
 	}
-	if s.queued.Load()+1 > int64(cap(s.jobs)) {
-		writeError(writer, http.StatusServiceUnavailable, "queue_full")
+	started := time.Now()
+	receipt, saveErr := s.backend.SaveManualSource(request.Context(), id, body.OperationKey, *body.ExpectedRevision, sourceText)
+	if saveErr != nil {
+		code := publicErrorCode(saveErr)
+		s.logger.WarnContext(request.Context(), "manual source save rejected", "link_id", id,
+			"duration_ms", time.Since(started).Milliseconds(), "error", saveErr)
+		status := http.StatusBadGateway
+		var apiErr *cairn.APIError
+		if errors.As(saveErr, &apiErr) && apiErr.StatusCode == http.StatusTooManyRequests {
+			status = http.StatusTooManyRequests
+			writer.Header().Set("Retry-After", apiErr.RetryAfter)
+		}
+		if code == "input_changed" || code == "operation_conflict" || code == "lease_conflict" ||
+			code == "not_found" || code == "invalid_source" {
+			status = http.StatusConflict
+		}
+		writeProcessingResult(writer, status, nil, []rejection{{ID: id, Error: code}})
 		return
 	}
-	job, claimErr := s.backend.ClaimByID(request.Context(), id)
-	if claimErr != nil {
-		code := publicErrorCode(claimErr)
-		s.logger.WarnContext(request.Context(), "manual source claim rejected", "link_id", id, "error", claimErr)
-		writeProcessingResult(writer, http.StatusConflict, nil, []rejection{{ID: id, Error: code}})
-		return
+	s.logger.InfoContext(request.Context(), "manual source persisted", "link_id", id,
+		"content_revision", receipt.ContentRevision,
+		"duration_ms", time.Since(started).Milliseconds())
+	if s.wakeup != nil {
+		select {
+		case s.wakeup <- struct{}{}:
+		default:
+		}
 	}
-	if job == nil {
-		writeProcessingResult(writer, http.StatusConflict, nil, []rejection{{ID: id, Error: "not_found"}})
-		return
-	}
-	s.queued.Add(1)
-	s.jobs <- manualJob{job: job, sourceText: sourceText}
-	writeProcessingResult(writer, http.StatusAccepted, []int64{id}, nil)
+	s.invalidateOverview()
+	writeJSON(writer, http.StatusAccepted, map[string]any{
+		"accepted": []int64{id}, "rejected": []rejection{},
+		"status": receipt.Status, "content_revision": receipt.ContentRevision,
+	})
 }
 
 // runJobSafely executes one manual job, converting a panic into an error so
@@ -764,6 +1127,37 @@ func writeProcessingResult(writer http.ResponseWriter, status int, accepted []in
 	})
 }
 
+func validCustomFilterID(term string) bool {
+	if len(term) != 36 {
+		return false
+	}
+	for index, c := range term {
+		if index == 8 || index == 13 || index == 18 || index == 23 {
+			if c != '-' {
+				return false
+			}
+			continue
+		}
+		if (c < 'a' || c > 'f') && (c < '0' || c > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// Validate transport syntax here; the Worker owns known/retired vocabulary IDs.
+func validFilterID(term string) bool {
+	if len(term) == 0 || len(term) > 40 || term[0] < 'a' || term[0] > 'z' {
+		return false
+	}
+	for _, c := range term {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '_' {
+			return false
+		}
+	}
+	return true
+}
+
 func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 	values := request.URL.Query()
 	limit := defaultPageSize
@@ -796,6 +1190,67 @@ func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 		CurationStatus: values.Get("curation_status"), Topic: values.Get("topic"),
 		Form: values.Get("form"), Use: values.Get("use"), Source: values.Get("source"), Since: values.Get("since"),
 		SummaryOnly: values.Get("view") == "summary",
+	}
+	if options := values["counts"]; len(options) > 1 || len(options) == 1 && options[0] != "0" && options[0] != "1" {
+		return cairn.BookmarkQuery{}, errors.New("invalid counts option")
+	} else if len(options) == 1 && options[0] == "0" {
+		query.SkipCounts = true
+	}
+	for _, filter := range []struct {
+		key    string
+		target *[]string
+	}{
+		{"topics", &query.Topics}, {"resource_kinds", &query.ResourceKinds}, {"custom_tags", &query.CustomTags}, {"content_functions", &query.ContentFunctions}, {"carriers", &query.Carriers},
+		{"affordances", &query.Affordances}, {"entity_state", &query.EntityStates},
+	} {
+		entries, present := values[filter.key]
+		if !present {
+			continue
+		}
+		if len(entries) != 1 || len(entries[0]) > 1024 {
+			return cairn.BookmarkQuery{}, errors.New("invalid filter")
+		}
+		terms := strings.Split(entries[0], ",")
+		limit := 64
+		if filter.key == "entity_state" {
+			limit = 5
+		}
+		if len(terms) > limit {
+			return cairn.BookmarkQuery{}, errors.New("too many filter terms")
+		}
+		seen := map[string]bool{}
+		for _, term := range terms {
+			if (filter.key != "custom_tags" && !validFilterID(term)) || (filter.key == "custom_tags" && !validCustomFilterID(term)) {
+				return cairn.BookmarkQuery{}, errors.New("invalid filter term")
+			}
+			if filter.key == "entity_state" && term != "not_run" && term != "failed" && term != "completed_empty" && term != "completed_nonempty" && term != "stale" {
+				return cairn.BookmarkQuery{}, errors.New("invalid entity state")
+			}
+			if !seen[term] {
+				*filter.target = append(*filter.target, term)
+				seen[term] = true
+			}
+		}
+	}
+
+	for _, mode := range []struct {
+		key    string
+		target *string
+	}{
+		{"topics_mode", &query.TopicMode}, {"resource_mode", &query.ResourceMode}, {"custom_mode", &query.CustomMode},
+	} {
+		if entries, present := values[mode.key]; present {
+			if len(entries) != 1 || (entries[0] != "any" && entries[0] != "all") {
+				return cairn.BookmarkQuery{}, errors.New("invalid tag mode")
+			}
+			*mode.target = entries[0]
+		}
+	}
+	if entries, present := values["filter_contract_version"]; present {
+		if len(entries) != 1 || entries[0] != "1" {
+			return cairn.BookmarkQuery{}, errors.New("unsupported filter contract")
+		}
+		query.RequireEffectiveFilters = true
 	}
 	if view := values.Get("view"); view != "" && view != "summary" {
 		return cairn.BookmarkQuery{}, errors.New("invalid view")
@@ -876,13 +1331,32 @@ func (s *Server) writeBackendError(writer http.ResponseWriter, operation string,
 			writeError(writer, http.StatusBadRequest, apiErr.Code)
 			return
 		}
+		// An optimistic-concurrency conflict is actionable: the UI must show the
+		// current revision and let the user re-apply, not a generic 502. The
+		// server's revision is forwarded when it provided one (F04).
+		if apiErr.IsConflict() {
+			payload := map[string]any{"error": apiErr.Code}
+			if apiErr.Revision != nil {
+				payload["revision"] = *apiErr.Revision
+			}
+			writeJSON(writer, http.StatusConflict, payload)
+			return
+		}
+		if apiErr.StatusCode == http.StatusConflict {
+			writeError(writer, http.StatusConflict, apiErr.Code)
+			return
+		}
 	}
 	writeError(writer, http.StatusBadGateway, "backend_error")
 }
 
 func publicErrorCode(err error) string {
 	var apiErr *cairn.APIError
-	if errors.As(err, &apiErr) && (apiErr.Code == "not_found" || apiErr.Code == "job_busy") {
+	if errors.As(err, &apiErr) && (apiErr.Code == "not_found" || apiErr.Code == "job_busy" ||
+		apiErr.Code == "lease_conflict" ||
+		apiErr.Code == "provider_result_unknown" ||
+		apiErr.Code == "input_changed" || apiErr.Code == "operation_conflict" ||
+		apiErr.Code == "manual_queue_full" || apiErr.Code == "invalid_source") {
 		return apiErr.Code
 	}
 	return "backend_error"

@@ -3,6 +3,8 @@ package health
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,17 +17,20 @@ type Clock func() time.Time
 
 // Snapshot is the public, secret-free service status payload.
 type Snapshot struct {
-	Ready          bool             `json:"ready"`
-	ReadyReason    string           `json:"ready_reason,omitempty"`
-	StartedAt      time.Time        `json:"started_at"`
-	LastRunAt      *time.Time       `json:"last_run_at,omitempty"`
-	LastSuccess    *time.Time       `json:"last_success_at,omitempty"`
-	LastWorkAt     *time.Time       `json:"last_work_at,omitempty"`
-	LastError      string           `json:"last_error,omitempty"`
-	LastStats      *processor.Stats `json:"last_stats,omitempty"`
-	LastWorkStats  *processor.Stats `json:"last_work_stats,omitempty"`
-	UnhealthySince *time.Time       `json:"unhealthy_since,omitempty"`
-	Build          buildinfo.Info   `json:"build"`
+	Ready                   bool             `json:"ready"`
+	ReadyReason             string           `json:"ready_reason,omitempty"`
+	StartedAt               time.Time        `json:"started_at"`
+	LastRunAt               *time.Time       `json:"last_run_at,omitempty"`
+	LastSuccess             *time.Time       `json:"last_success_at,omitempty"`
+	LastWorkAt              *time.Time       `json:"last_work_at,omitempty"`
+	LastError               string           `json:"last_error,omitempty"`
+	LastStats               *processor.Stats `json:"last_stats,omitempty"`
+	LastWorkStats           *processor.Stats `json:"last_work_stats,omitempty"`
+	LastClassificationRunAt *time.Time       `json:"last_classification_run_at,omitempty"`
+	LastClassificationStats *processor.Stats `json:"last_classification_stats,omitempty"`
+	LastClassificationError string           `json:"last_classification_error,omitempty"`
+	UnhealthySince          *time.Time       `json:"unhealthy_since,omitempty"`
+	Build                   buildinfo.Info   `json:"build"`
 }
 
 // Tracker stores thread-safe health and latest-batch state.
@@ -37,8 +42,7 @@ type Tracker struct {
 	// degraded marks failures that require an explicit recovery signal
 	// rather than merely a later successful batch. It covers vendor and
 	// configuration faults the process cannot fix by retrying.
-	degraded     bool
-	degradedErr  string
+	degraded     map[string]string
 	lastRecovery time.Time
 }
 
@@ -69,8 +73,7 @@ func NewTrackerWithClock(clock Clock) *Tracker {
 func (t *Tracker) MarkStarted() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.degraded = false
-	t.degradedErr = ""
+	t.degraded = nil
 	t.lastRecovery = t.clock()
 	t.refreshReadyLocked()
 }
@@ -79,14 +82,46 @@ func (t *Tracker) MarkStarted() {
 // such as an upstream contract violation or repeated authentication failure.
 // Readiness stays false until a successful recovery check clears it.
 func (t *Tracker) MarkDegraded(reason string) {
+	t.MarkComponentDegraded("general", reason)
+}
+
+// MarkComponentDegraded keeps faults independent across concurrent schedulers.
+func (t *Tracker) MarkComponentDegraded(component, reason string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if reason == "" {
 		reason = "degraded"
 	}
-	t.degraded = true
-	t.degradedErr = reason
+	if t.degraded == nil {
+		t.degraded = make(map[string]string)
+	}
+	t.degraded[component] = reason
 	t.refreshReadyLocked()
+}
+
+// MarkComponentRecovered clears only the component proven to have recovered.
+func (t *Tracker) MarkComponentRecovered(component string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.degraded, component)
+	t.refreshReadyLocked()
+}
+
+// RecordClassification reports a semantic round without overwriting source
+// batch statistics in /status.
+func (t *Tracker) RecordClassification(stats processor.Stats, err error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	now := t.clock()
+	t.snapshot.LastClassificationRunAt = &now
+	t.snapshot.LastClassificationStats = &stats
+	if err != nil {
+		t.snapshot.LastClassificationError = err.Error()
+	} else if stats.ClassificationFailed > 0 {
+		t.snapshot.LastClassificationError = "one or more classification jobs failed"
+	} else {
+		t.snapshot.LastClassificationError = ""
+	}
 }
 
 // Record updates the latest batch outcome.
@@ -121,8 +156,17 @@ func (t *Tracker) Record(stats processor.Stats, err error) {
 func (t *Tracker) refreshReadyLocked() {
 	reason := ""
 	switch {
-	case t.degraded:
-		reason = t.degradedErr
+	case len(t.degraded) > 0:
+		keys := make([]string, 0, len(t.degraded))
+		for key := range t.degraded {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		reasons := make([]string, 0, len(keys))
+		for _, key := range keys {
+			reasons = append(reasons, t.degraded[key])
+		}
+		reason = strings.Join(reasons, "; ")
 	case t.lastRecovery.IsZero():
 		reason = "starting"
 	}

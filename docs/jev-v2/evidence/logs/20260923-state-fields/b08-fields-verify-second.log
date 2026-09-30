@@ -1,0 +1,9 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+experiments/classification/referencegen/main_test.go:23:25: G703: Path traversal via taint analysis (gosec)
+		if err := os.WriteFile(filepath.Clean(filepath.Join(root, name)), data, 0o600); err != nil {
+		                      ^
+1 issues:
+* gosec: 1
+exit status 1
+make: *** [Makefile:39: lint-ci] Error 1

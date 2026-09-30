@@ -1,0 +1,82 @@
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:371505) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 <workspace>/Cairn/cairn-share/worker
+
+ ❯ test/domain.test.ts (33 tests | 3 failed | 30 skipped) 971ms
+   × R3-03: AI-only four topics never acquire human provenance across rebuilds 378ms
+   × R3-03: captured legacy complete selection (empty=false) replaces only expressible dimensions 303ms
+   × R3-03: captured legacy complete selection (empty=true) replaces only expressible dimensions 289ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/domain.test.ts > R3-03: AI-only four topics never acquire human provenance across rebuilds
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ test/domain.test.ts:255:37
+    253|     const body = await (await request(`v2/links/${id}/effective`, unde…
+    254|     expect(body.effective.topics).toEqual(automatic.topics);
+    255|     expect(body.effective.reviewed).toBe(false);
+       |                                     ^
+    256|     expect(await env.DB.prepare("SELECT curation FROM links WHERE id=?…
+    257|     for (const table of ["curation_overrides", "curation_events", "leg…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  test/domain.test.ts > R3-03: captured legacy complete selection (empty=false) replaces only expressible dimensions
+AssertionError: expected [ 'llm', 'eng' ] to deeply equal [ 'eng' ]
+
+- Expected
++ Received
+
+  [
++   "llm",
+    "eng",
+  ]
+
+ ❯ test/domain.test.ts:276:33
+    274|   expect((await submitDecision(id, run, { ...emptyAutomatic, topics: […
+    275|   const body = await (await request(`v2/links/${id}/effective`, undefi…
+    276|   expect(body.effective.topics).toEqual(manual.topics);
+       |                                 ^
+    277|   expect(body.effective.form).toBe("");
+    278|   expect(body.effective.use).toBe("");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  test/domain.test.ts > R3-03: captured legacy complete selection (empty=true) replaces only expressible dimensions
+AssertionError: expected [ 'llm' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "llm",
++ ]
+
+ ❯ test/domain.test.ts:276:33
+    274|   expect((await submitDecision(id, run, { ...emptyAutomatic, topics: […
+    275|   const body = await (await request(`v2/links/${id}/effective`, undefi…
+    276|   expect(body.effective.topics).toEqual(manual.topics);
+       |                                 ^
+    277|   expect(body.effective.form).toBe("");
+    278|   expect(body.effective.use).toBe("");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 30 skipped (33)
+   Start at  16:26:57
+   Duration  1.60s (transform 103ms, setup 0ms, import 176ms, tests 971ms, environment 0ms)
+

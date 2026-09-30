@@ -1,0 +1,7 @@
+== TestLocalWorkerClassifyCLI: starting worker on 127.0.0.1:55113 ==
+=== RUN   TestLocalWorkerClassifyCLI
+    classify_cli_test.go:95: POST http://127.0.0.1:55113/api/links status = 201: {"id":1,"url":"https://x.com/cli/status/1","note":"synthetic private note must not be model evidence","created_at":"2026-09-22T19:05:05.309Z","learned":false,"learned_at":null}
+--- FAIL: TestLocalWorkerClassifyCLI (0.08s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.085s
+FAIL

@@ -1,0 +1,16 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+internal/extension/entity_catalog.go:61:15: G304: Potential file inclusion via variable (gosec)
+	file, err := os.Open(path)
+	             ^
+tests/localintegration/entity_canonical_test.go:115:11: G204: Subprocess launched with variable (gosec)
+	build := exec.CommandContext(ctx, "go", "build", "-o", binary, "./cmd/cairn-x-enricher")
+	         ^
+internal/extension/budget_test.go:36:3: QF1003: could use tagged switch on q.Type (staticcheck)
+		if q.Type == classify.TypeScore {
+		^
+3 issues:
+* gosec: 2
+* staticcheck: 1
+exit status 1
+make: *** [Makefile:44: lint-ci] Error 1

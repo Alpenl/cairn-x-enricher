@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -25,17 +25,25 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/config"
 	"github.com/Alpenl/cairn-x-enricher/internal/dashboard"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
+	"github.com/Alpenl/cairn-x-enricher/internal/extension"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
+	"github.com/Alpenl/cairn-x-enricher/internal/observability"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 )
 
 func main() {
 	_ = godotenv.Load()
-	command := newRootCommand()
-	if err := command.Execute(); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "error:", err)
+	if executeCommand(newRootCommand(), os.Stderr) != 0 {
 		os.Exit(1)
 	}
+}
+
+func executeCommand(command *cobra.Command, stderr io.Writer) int {
+	if err := command.Execute(); err != nil {
+		_, _ = fmt.Fprintln(stderr, "error:", observability.SafeErrorCode(err))
+		return 1
+	}
+	return 0
 }
 
 func newRootCommand() *cobra.Command {
@@ -57,9 +65,29 @@ func newRootCommand() *cobra.Command {
 				return err
 			}
 			logger := newLogger(cfg.LogLevel)
+			var observer *observability.Store
+			var closeLogs func(context.Context) error
+			if cfg.ObservabilityConfigPath != "" {
+				observer, err = observability.Open(cfg.ObservabilityConfigPath, logLevel(cfg.LogLevel))
+				if err != nil {
+					return err
+				}
+				logger, closeLogs, err = observer.AsyncLogger(os.Stderr, 1024)
+				if err != nil {
+					return err
+				}
+			}
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
-			return runServe(ctx, cfg, logger)
+			serveErr := runServe(ctx, cfg, logger, observer)
+			if closeLogs != nil {
+				// Diagnostics never delay shutdown indefinitely or change the
+				// business result if stderr or an optional collector is blocked.
+				drainCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				_ = closeLogs(drainCtx)
+				cancel()
+			}
+			return serveErr
 		},
 	})
 
@@ -68,7 +96,7 @@ func newRootCommand() *cobra.Command {
 		Use:   "once",
 		Short: "Drain one bounded batch, print JSON stats, and exit",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			cfg, err := config.Load()
+			cfg, err := config.LoadFor(config.RoleClassify)
 			if err != nil {
 				return err
 			}
@@ -81,11 +109,37 @@ func newRootCommand() *cobra.Command {
 			logger := newLogger(cfg.LogLevel)
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
-			worker, _, err := newProcessor(ctx, cfg, health.NewTracker(), logger)
+			// This is a one-shot snapshot. If there is no claimable source now,
+			// this invocation runs only classification. A source arriving after
+			// the check waits for the next invocation; it cannot be claimed
+			// without the reading contract canary.
+			probe := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken,
+				upstreamHTTPClient(cfg.WorkerRequestTimeout))
+			sourceClaimable, probeErr := probe.SourceClaimable(ctx)
+			if probeErr != nil {
+				// Older or temporarily unavailable Workers cannot prove the
+				// source queue empty. Preserve the eager canary in that case.
+				logger.Warn("source claimability check failed; using full startup check",
+					"error", probeErr)
+				sourceClaimable = true
+			}
+			if sourceClaimable {
+				cfg, err = config.LoadFor(config.RoleServe)
+				if err != nil {
+					return err
+				}
+			}
+			worker, _, err := newProcessor(ctx, cfg, health.NewTracker(), logger, sourceClaimable)
 			if err != nil {
 				return err
 			}
-			stats, runErr := worker.Run(ctx, maxJobs)
+			var stats processor.Stats
+			var runErr error
+			if sourceClaimable {
+				stats, runErr = worker.Run(ctx, maxJobs)
+			} else {
+				stats, runErr = worker.RunClassificationsOnly(ctx, maxJobs)
+			}
 			if err := json.NewEncoder(os.Stdout).Encode(stats); err != nil {
 				return fmt.Errorf("write stats: %w", err)
 			}
@@ -101,6 +155,13 @@ func newRootCommand() *cobra.Command {
 	once.Flags().IntVar(&maxJobs, "max-jobs", 0, "maximum jobs to claim (default MAX_JOBS_PER_RUN)")
 	root.AddCommand(once)
 	root.AddCommand(newClassifyCommand())
+	root.AddCommand(newObserveCommand())
+	root.AddCommand(newReplayCommand())
+	root.AddCommand(newRefreshSourceCommand())
+	root.AddCommand(newProviderInspectCommand())
+	root.AddCommand(newProviderRecoverSourceCommand())
+	root.AddCommand(newProviderRecoverReadingCommand())
+	root.AddCommand(newExportDatasetCommand())
 
 	var healthURL string
 	var healthTimeout time.Duration
@@ -158,13 +219,28 @@ func newRootCommand() *cobra.Command {
 	return root
 }
 
-func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
+func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, observer *observability.Store) error {
+	var controlListener net.Listener
+	if observer != nil {
+		var listenErr error
+		controlListener, listenErr = (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.ObservabilityControlAddr)
+		if listenErr != nil {
+			return fmt.Errorf("listen on observability control loopback: %w", listenErr)
+		}
+		defer func() { _ = controlListener.Close() }()
+	}
 	tracker := health.NewTracker()
-	worker, queue, err := newProcessor(ctx, cfg, tracker, logger)
+	worker, queue, err := newProcessor(ctx, cfg, tracker, logger, true)
 	if err != nil {
 		return err
 	}
 	management := dashboard.New(ctx, tracker, queue, worker, logger, cfg.MaxConcurrency)
+	management.SetExtensions(worker.Extensions())
+	if observer != nil {
+		management.SetObservabilityStatus(observer.Snapshot)
+	}
+	wakeup := make(chan struct{}, 1)
+	management.SetWakeup(wakeup)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           management.Handler(),
@@ -172,6 +248,35 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
+	}
+	var controlServer *http.Server
+	var controlErrors chan error
+	if observer != nil {
+		auditCtx, stopAudit := context.WithCancel(ctx)
+		defer stopAudit()
+		go func() {
+			defer processor.RecoverTask(logger, "Worker observability publisher")
+			runWorkerPolicyPublisher(auditCtx, observer, queue)
+		}()
+		controlServer = &http.Server{Handler: observer.Handler(), ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
+		controlErrors = make(chan error, 1)
+		go func() {
+			defer processor.RecoverTask(logger, "observability control server")
+			controlErrors <- controlServer.Serve(controlListener)
+		}()
+		go func() {
+			ticker := time.NewTicker(time.Hour)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-auditCtx.Done():
+					return
+				case <-ticker.C:
+					_ = observer.PruneAudit() // failures remain visible in control_audit_errors while logs are off
+				}
+			}
+		}()
 	}
 
 	serverErrors := make(chan error, 1)
@@ -188,7 +293,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	schedulerDone := make(chan struct{})
 	go func() {
 		defer close(schedulerDone)
-		runScheduler(ctx, worker, tracker, cfg, logger)
+		runScheduler(ctx, worker, tracker, cfg, logger, wakeup)
 	}()
 
 	select {
@@ -197,6 +302,10 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	case err := <-serverErrors:
 		if !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("health server: %w", err)
+		}
+	case err := <-controlErrors:
+		if !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("observability control server: %w", err)
 		}
 	}
 
@@ -214,6 +323,10 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	defer cancel()
 	//nolint:contextcheck // shutdown must outlive the already-cancelled signal context
 	serverErr := server.Shutdown(shutdownCtx)
+	if controlServer != nil {
+		//nolint:contextcheck // Both listeners share the one shutdown deadline.
+		serverErr = errors.Join(serverErr, controlServer.Shutdown(shutdownCtx))
+	}
 	// Drain in-flight jobs even when the HTTP server did not stop cleanly. A
 	// client streaming an image can outlive the HTTP deadline, and returning
 	// early here would abandon leased jobs - the opposite of the intent.
@@ -241,72 +354,113 @@ func runScheduler(
 	tracker *health.Tracker,
 	cfg config.Config,
 	logger *slog.Logger,
+	wakeup ...<-chan struct{},
 ) {
-	// A batch can lease up to MAX_JOBS_PER_RUN jobs, so it must not inherit
-	// the shutdown context directly. Cancelling mid-batch would strand every
-	// already-leased job until its lease expires, wasting attempts.
-	//
-	// The batch budget is half the shutdown budget, leaving the other half for
-	// runServe to wait out the same batch. Giving both phases the full budget
-	// would exceed stop_grace_period, and Docker would SIGKILL the process
-	// before either could finish.
-	var mu sync.Mutex
-	var batch sync.WaitGroup
-	var stopping atomic.Bool
-
-	run := func() {
-		if stopping.Load() {
-			return
-		}
-		mu.Lock()
-		if stopping.Load() {
-			mu.Unlock()
-			return
-		}
-		batch.Add(1)
-		mu.Unlock()
-		defer batch.Done()
-
-		// Recover per batch, not per scheduler: a panic must fail one batch and
-		// drop readiness, but the loop has to keep running afterwards.
-		stats, err := runBatchSafely(ctx, worker, cfg, logger)
-		tracker.Record(stats, err)
-		if err != nil && isContractFailure(err) {
-			// A provider contract break will fail every future batch the
-			// same way, so leave readiness false and stop pretending the
-			// service is usable until an operator intervenes.
-			tracker.MarkDegraded(err.Error())
-		}
-		attributes := []any{
-			"claimed", stats.Claimed,
-			"completed", stats.Completed,
-			"failed", stats.Failed,
-			"classified", stats.Classified,
-			"classification_failed", stats.ClassificationFailed,
-			"duration_ms", stats.Duration.Milliseconds(),
-		}
-		if err != nil {
-			logger.ErrorContext(ctx, "scheduled batch failed", append(attributes, "error", err)...)
-			return
-		}
-		logger.InfoContext(ctx, "scheduled batch finished", attributes...)
+	var notified <-chan struct{}
+	if len(wakeup) > 0 {
+		notified = wakeup[0]
 	}
+	var loops sync.WaitGroup
+	loops.Add(3)
+	go func() {
+		defer loops.Done()
+		defer processor.RecoverTask(logger, "source scheduler")
+		runSourceScheduler(ctx, worker, tracker, cfg, logger, notified)
+	}()
+	go func() {
+		defer loops.Done()
+		defer processor.RecoverTask(logger, "classification scheduler")
+		runClassificationScheduler(ctx, worker, tracker, cfg, logger)
+	}()
+	go func() {
+		defer loops.Done()
+		defer processor.RecoverTask(logger, "evidence scheduler")
+		runEvidenceScheduler(ctx, worker, cfg, logger)
+	}()
+	<-ctx.Done()
+	// Each loop stops claiming on cancellation. Already leased jobs retain
+	// their own bounded stage contexts; wait within the shared shutdown budget.
+	waitForBatch(&loops, batchTimeout(cfg), logger)
+}
 
-	run()
+func runSourceScheduler(ctx context.Context, worker *processor.Processor, tracker *health.Tracker, cfg config.Config, logger *slog.Logger, notified <-chan struct{}) {
 	ticker := time.NewTicker(cfg.PollInterval)
 	defer ticker.Stop()
 	for {
+		if ctx.Err() != nil {
+			return
+		}
+		stats, err := runSourceSweepSafely(ctx, worker, cfg, logger)
+		tracker.Record(stats, err)
+		if err != nil && isContractFailure(err) {
+			tracker.MarkComponentDegraded("source_runtime", err.Error())
+		} else if err == nil && stats.Completed > 0 {
+			tracker.MarkComponentRecovered("source_runtime")
+		}
+		for _, stage := range []string{"source", "reading"} {
+			if paused, reason, _ := worker.SourceStagePaused(stage); paused {
+				tracker.MarkComponentDegraded(stage, reason)
+			} else {
+				tracker.MarkComponentRecovered(stage)
+			}
+		}
+		attributes := []any{"stage", "source", "claimed", stats.Claimed, "completed", stats.Completed, "failed", stats.Failed, "duration_ms", stats.Duration.Milliseconds()}
+		if err != nil {
+			logger.ErrorContext(ctx, "scheduled batch failed", append(attributes, "error", err)...)
+		} else {
+			logger.InfoContext(ctx, "scheduled batch finished", attributes...)
+		}
 		select {
 		case <-ctx.Done():
-			// Stop admitting new batches, then let the in-flight one finish
-			// within the shutdown budget.
-			mu.Lock()
-			stopping.Store(true)
-			mu.Unlock()
-			waitForBatch(&batch, batchTimeout(cfg), logger)
 			return
 		case <-ticker.C:
-			run()
+		case <-notified:
+		}
+	}
+}
+
+func runClassificationScheduler(ctx context.Context, worker *processor.Processor, tracker *health.Tracker, cfg config.Config, logger *slog.Logger) {
+	// Create the ticker before the first round: a long initial drain cannot
+	// postpone the next scheduling opportunity by another full interval.
+	ticker := time.NewTicker(cfg.PollInterval)
+	defer ticker.Stop()
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		stats, err := runClassificationSafely(ctx, worker, cfg, logger)
+		tracker.RecordClassification(stats, err)
+		if err != nil && isContractFailure(err) {
+			tracker.MarkComponentDegraded("classification", err.Error())
+		} else if err == nil && stats.Classified > 0 {
+			tracker.MarkComponentRecovered("classification")
+		}
+		attributes := []any{"classified", stats.Classified, "failed", stats.ClassificationFailed, "duration_ms", stats.Duration.Milliseconds()}
+		if err != nil {
+			logger.WarnContext(ctx, "classification round stopped", append(attributes, "error", err)...)
+		} else {
+			logger.InfoContext(ctx, "classification round finished", attributes...)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func runEvidenceScheduler(ctx context.Context, worker *processor.Processor, cfg config.Config, logger *slog.Logger) {
+	ticker := time.NewTicker(cfg.PollInterval)
+	defer ticker.Stop()
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		runEvidenceSafely(ctx, worker, cfg, logger)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
 		}
 	}
 }
@@ -340,43 +494,117 @@ func newProcessor(
 	cfg config.Config,
 	tracker *health.Tracker,
 	logger *slog.Logger,
+	withSource bool,
 ) (*processor.Processor, *cairn.Client, error) {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.MaxIdleConns = 20
-	transport.MaxIdleConnsPerHost = 10
-	httpClient := &http.Client{
-		Timeout:   cfg.RequestTimeout,
-		Transport: transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
+	queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, upstreamHTTPClient(cfg.WorkerRequestTimeout))
+	if withSource {
+		if err := queue.VerifySourceLeaseCapability(ctx); err != nil {
+			return nil, nil, fmt.Errorf("verify Worker source lease admission: %w", err)
+		}
 	}
-	queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, httpClient)
-	catalog, err := queue.GetTaxonomy(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("load Worker taxonomy (requires curation backend migration): %w", err)
-	}
-	userAgent := "cairn-x-enricher/" + buildinfo.Version
-	model := enrich.NewResponsesClient(
-		cfg.GrokBaseURL,
-		cfg.GrokAPIKey,
-		cfg.GrokModel,
-		cfg.GrokMaxTokens,
-		userAgent,
-		httpClient,
-		catalog,
-	)
-	if _, err := model.Transform(ctx, enrich.Input{URL: "https://x.com/canary/status/0", Attempt: 1, SourceText: "Canary check: validate structured reading aids."}); err != nil {
-		// A contract break must fail loudly at startup instead of silently
-		// burning every job's retry budget.
-		return nil, nil, fmt.Errorf("model endpoint contract check failed (check GROK_MODELS_BASE_URL, GROK_MODEL, XAI_API_KEY and strict schema support): %w", err)
-	}
-	classifier, err := classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel, httpClient, catalog)
+	catalog, legacyCatalog, err := queue.GetClassificationCatalog(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
+	if legacyCatalog {
+		logger.Warn("backend has no v2 taxonomy; running the legacy single-dimension vocabulary")
+	}
+	var reader processor.SourceReader
+	if withSource {
+		model := enrich.NewResponsesClient(
+			cfg.GrokBaseURL, cfg.GrokAPIKey, cfg.GrokModel, cfg.GrokMaxTokens,
+			"cairn-x-enricher/"+buildinfo.Version, upstreamHTTPClient(cfg.GrokFetchTimeout), catalog,
+		)
+		model.SetReadingHTTPClient(upstreamHTTPClient(cfg.GrokReadingTimeout))
+		model.SetPaidAttemptLedger(queue)
+		model.SetLogger(logger)
+		if _, err := model.Transform(ctx, enrich.Input{URL: "https://x.com/canary/status/0", Attempt: 1,
+			SourceText: "Canary check: validate structured reading aids.", Canary: true}); err != nil {
+			// A contract break must fail loudly before a source lease is claimed.
+			return nil, nil, fmt.Errorf("model endpoint contract check failed (check GROK_MODELS_BASE_URL, GROK_MODEL, XAI_API_KEY and strict schema support): %w", err)
+		}
+		reader = model
+	}
+	classifier, err := classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel,
+		upstreamHTTPClient(cfg.TypesafeRequestTimeout), catalog)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := configureClassificationBudget(cfg, queue, classifier); err != nil {
+		return nil, nil, err
+	}
+	// Register the immutable question spec so a stored run can be replayed
+	// against the exact definition it was evaluated with. Re-registering the
+	// same bytes is idempotent; a changed definition under the same id is
+	// rejected by the Worker, which is why the spec id changes with semantics.
+	if err := queue.PutQuestionSpec(ctx, classifier.Spec()); err != nil {
+		if !cairn.IsUnsupported(err) {
+			return nil, nil, fmt.Errorf("register classification question spec: %w", err)
+		}
+		logger.Warn("backend has no v2 question-spec endpoint; stored runs will not be replayable")
+	}
 	tracker.MarkStarted()
-	return processor.NewStaged(queue, model, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency), queue, nil
+	worker := processor.NewStaged(queue, reader, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
+	worker.SetClaimTimeout(batchTimeout(cfg))
+	worker.SetPaidStageTimeout(max(cfg.GrokFetchTimeout, cfg.GrokReadingTimeout))
+	fetcher, policy := evidenceFetcher(cfg)
+	extensions, err := extensionService(cfg, classifier)
+	if err != nil {
+		return nil, nil, err
+	}
+	extensions.SetBudgetStore(queue)
+	extensions.SetRerankStore(queue)
+	extensions.SetEntityStore(queue)
+	worker.SetExtensions(extensions, fetcher, policy)
+	worker.SetPartialReuse(cfg.PartialReuse)
+	return worker, queue, nil
+}
+
+// extensionService builds the bounded extension service from configuration.
+// Every flag defaults off; the evidence fetcher is only constructed when the
+// allowlist is non-empty, so an unconfigured process cannot fetch anything.
+func extensionService(cfg config.Config, judge extension.Judge) (*extension.Service, error) {
+	flags := extension.Flags{
+		Entities: cfg.ExtensionEntities, Evidence: cfg.ExtensionEvidence,
+		Rerank: cfg.ExtensionRerank, Proposal: cfg.ExtensionProposal,
+	}
+	budget := extension.DefaultBudget()
+	if cfg.ExtensionMaxCalls > 0 {
+		budget.MaxCallsTotal = cfg.ExtensionMaxCalls
+	}
+	if cfg.ExtensionMaxCallsPerItem > 0 {
+		budget.MaxCallsPerItem = cfg.ExtensionMaxCallsPerItem
+	}
+	if cfg.ExtensionMaxInputTokens > 0 {
+		budget.MaxTokens = cfg.ExtensionMaxInputTokens
+	}
+	if cfg.ExtensionMaxInputTokensPerItem > 0 {
+		budget.MaxTokensPerItem = cfg.ExtensionMaxInputTokensPerItem
+	}
+	if cfg.ExtensionTimeout > 0 {
+		budget.Timeout = cfg.ExtensionTimeout
+	}
+	service := extension.NewService(flags, budget, judge)
+	if cfg.EntityCatalog.Version != "" {
+		if err := service.SetEntityCatalog(cfg.EntityCatalog); err != nil {
+			return nil, err
+		}
+	}
+	return service, nil
+}
+
+// evidenceFetcher returns a controlled HTTP client for the evidence extension,
+// or nil when no host is allowlisted.
+func evidenceFetcher(cfg config.Config) (*http.Client, extension.FetchPolicy) {
+	policy := extension.DefaultFetchPolicy(cfg.ExtensionAllowlist)
+	if len(policy.AllowedHosts) == 0 {
+		return nil, policy
+	}
+	client, err := extension.ControlledFetcher(policy, nil)
+	if err != nil {
+		return nil, policy
+	}
+	return client, policy
 }
 
 // waitForSignal reports whether done was closed within timeout.
@@ -391,9 +619,8 @@ func waitForSignal(done <-chan struct{}, timeout time.Duration) bool {
 	}
 }
 
-// batchTimeout is the slice of the shutdown budget a single scheduled batch may
-// consume. The other half is reserved for runServe to wait out that same batch,
-// because both phases have to fit inside the container's stop_grace_period.
+// batchTimeout bounds one claim request and the scheduler shutdown wait. It
+// does not limit how long a source or classification round can keep claiming.
 func batchTimeout(cfg config.Config) time.Duration {
 	timeout := cfg.ShutdownTimeout / 2
 	if timeout <= 0 {
@@ -402,18 +629,40 @@ func batchTimeout(cfg config.Config) time.Duration {
 	return timeout
 }
 
-// runBatchSafely runs one scheduled batch, converting a panic into an error so
-// the scheduler records a failure and continues instead of the process dying.
-func runBatchSafely(
-	ctx context.Context,
-	worker *processor.Processor,
-	cfg config.Config,
-	logger *slog.Logger,
-) (stats processor.Stats, err error) {
-	defer processor.RecoverTask(logger, "scheduled batch")
-	runCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), batchTimeout(cfg))
-	defer cancel()
-	return worker.Run(runCtx, cfg.MaxJobsPerRun)
+// runSourceSweepSafely follows each full batch immediately while backlog
+// remains. Each claim has its own timeout; shutdown stops new claims without
+// cutting off already leased paid work.
+func runSourceSweepSafely(ctx context.Context, worker *processor.Processor, cfg config.Config, logger *slog.Logger) (stats processor.Stats, err error) {
+	defer processor.RecoverJob(logger, "scheduled source sweep", 0, &err)
+	stats.StartedAt = time.Now().UTC()
+	for ctx.Err() == nil {
+		part, runErr := worker.RunSources(ctx, cfg.MaxJobsPerRun)
+		stats.Claimed += part.Claimed
+		stats.Completed += part.Completed
+		stats.Failed += part.Failed
+		if runErr != nil {
+			err = runErr
+			break
+		}
+		if cfg.MaxJobsPerRun <= 0 || part.Claimed < int64(cfg.MaxJobsPerRun) || part.Completed+part.Failed == 0 {
+			break
+		}
+	}
+	stats.Duration = time.Since(stats.StartedAt)
+	return stats, err
+}
+
+func runClassificationSafely(ctx context.Context, worker *processor.Processor, cfg config.Config, logger *slog.Logger) (stats processor.Stats, err error) {
+	defer processor.RecoverJob(logger, "scheduled classification round", 0, &err)
+	stats.StartedAt = time.Now().UTC()
+	stats.Classified, stats.ClassificationFailed, err = worker.RunClassifications(ctx, cfg.MaxJobsPerRun)
+	stats.Duration = time.Since(stats.StartedAt)
+	return stats, err
+}
+
+func runEvidenceSafely(ctx context.Context, worker *processor.Processor, cfg config.Config, logger *slog.Logger) {
+	defer processor.RecoverTask(logger, "scheduled evidence recovery")
+	worker.RunEvidenceRecovery(ctx, cfg.MaxJobsPerRun)
 }
 
 // readinessReason extracts the human-readable reason from a /readyz body so a
@@ -430,9 +679,19 @@ func readinessReason(body io.Reader) string {
 
 // isContractFailure reports whether an error is a configuration or upstream
 // contract fault that retrying cannot repair.
+// isContractFailure reports whether a batch failure means the service cannot
+// make progress until an operator changes configuration or the provider fixes
+// its contract. Transient network/rate-limit faults and stale/conflict
+// responses are excluded: those are handled by bounded retry and must not drop
+// readiness for every future batch.
 func isContractFailure(err error) bool {
 	if err == nil {
 		return false
+	}
+	// The typed classification is authoritative when present.
+	class := enrich.ClassOf(enrich.ClassifyModelError(err))
+	if class == enrich.ErrorClassConfiguration || class == enrich.ErrorClassContract {
+		return true
 	}
 	var modelErr *enrich.ModelHTTPError
 	if errors.As(err, &modelErr) {
@@ -441,15 +700,53 @@ func isContractFailure(err error) bool {
 			return true
 		}
 	}
+	var apiErr *cairn.APIError
+	if errors.As(err, &apiErr) {
+		// The Worker's typed code is authoritative: capability_mismatch and
+		// configuration_error are component faults, while target_changed,
+		// input_changed and lease_expired are stale jobs that must not drop
+		// readiness.
+		switch apiErr.Class() {
+		case enrich.ErrorClassConfiguration, enrich.ErrorClassContract:
+			return true
+		default:
+			return false
+		}
+	}
 	return false
 }
 
 func newLogger(level string) *slog.Logger {
+	return slog.New(observability.SafeJSONHandler(os.Stderr, logLevel(level)))
+}
+
+func logLevel(level string) slog.Level {
 	levels := map[string]slog.Level{
 		"debug": slog.LevelDebug,
 		"info":  slog.LevelInfo,
 		"warn":  slog.LevelWarn,
 		"error": slog.LevelError,
 	}
-	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: levels[level]}))
+	return levels[level]
+}
+
+// configureClassificationBudget wires persistent admission before workers run.
+func configureClassificationBudget(cfg config.Config, queue *cairn.Client, client *classify.Client) error {
+	limits := classify.DefaultCallBudgetLimits()
+	if cfg.ClassificationMaxCalls > 0 {
+		limits.MaxCallsTotal = cfg.ClassificationMaxCalls
+	}
+	if cfg.ClassificationMaxCallsPerItem > 0 {
+		limits.MaxCallsPerItem = cfg.ClassificationMaxCallsPerItem
+	}
+	if cfg.ClassificationMaxInputTokens > 0 {
+		limits.MaxTokens = cfg.ClassificationMaxInputTokens
+	}
+	if cfg.ClassificationMaxInputTokensPerItem > 0 {
+		limits.MaxTokensPerItem = cfg.ClassificationMaxInputTokensPerItem
+	}
+	if err := queue.SetClassificationBudgetLimits(limits); err != nil {
+		return err
+	}
+	return client.SetCallBudget(queue, limits)
 }

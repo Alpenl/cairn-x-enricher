@@ -1,0 +1,4 @@
+WHAT: 验证隔离工作树的 DNS 修复
+WHY:  运行真实回归断言与竞态检查
+ok  	github.com/Alpenl/cairn-x-enricher/internal/extension	1.037s
+ok  	github.com/Alpenl/cairn-x-enricher/internal/processor	1.328s

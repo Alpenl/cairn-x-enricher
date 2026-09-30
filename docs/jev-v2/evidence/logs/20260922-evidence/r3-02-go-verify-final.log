@@ -1,0 +1,107 @@
+WHAT: 运行完整 Go 门禁
+WHY:  确认新增集成用例符合 lint 并无回归
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+0 issues.
+go test -race -coverprofile=coverage.out ./...
+ok  	github.com/Alpenl/cairn-x-enricher/cmd/cairn-x-enricher	3.051s	coverage: 38.9% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/ablation	(cached)	coverage: 31.6% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/ablation/main		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/ablation-report		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/classification/main		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/harvest		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/identity		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/rescore		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/threadreport		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/threadvalue		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/verifyurls		coverage: 0.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/buildinfo	(cached)	coverage: 100.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/cairn	(cached)	coverage: 44.3% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/classify	1.179s	coverage: 72.8% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/config	(cached)	coverage: 88.3% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/dashboard	(cached)	coverage: 49.1% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/enrich	(cached)	coverage: 83.6% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/evaluation	(cached)	coverage: 88.7% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/extension	(cached)	coverage: 80.3% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/health	(cached)	coverage: 94.2% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/processor	1.314s	coverage: 84.4% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/taxonomy	(cached)	coverage: 94.2% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.011s	coverage: [no statements]
+node internal/dashboard/frontend-check.mjs internal/dashboard
+ok   common.js parses
+ok   home.js parses
+ok   backstage.js parses
+ok   reader.js parses
+ok   reader bounds its polling attempts
+ok   formatDate empty
+ok   formatDate invalid
+ok   formatDate formats
+ok   formatDate same local day is stable
+ok   formatDate different days differ
+ok   formatDateTime formats
+ok   formatDateTime distinguishes instants
+ok   formatDateTime is stable for one instant
+ok   formatDate still collapses one local day
+ok   bucket invalid
+ok   bucket today
+ok   bucket 3 days
+ok   bucket 10 days
+ok   bucket 60 days
+ok   shortURL strips www
+ok   shortURL repeated
+ok   shortURL invalid
+ok   termLabel unknown
+ok   metadata sparse
+ok   metadata empty
+ok   exportMarkdown returns a promise
+ok   exportMarkdown resolves
+ok   home renders cards into the stream
+ok   home renders the bucket band
+ok   home renders titles
+ok   home keeps features out of the stream
+ok   search highlights matches
+ok   highlight marks carry the matched text
+ok   empty result renders no cards
+ok   empty state is revealed
+ok   reader defers collapsed original paragraphs
+ok   reader preserves unchanged body nodes during polling
+ok   reader preserves unchanged images during polling
+ok   reader expands original text on demand
+ok   reader refreshes changed visible translation
+ok   reader refreshes changed expanded original
+ok   summary export hydrates the selected detail
+ok   summary export includes both full languages
+ok   failed hydration cannot produce a partial export
+ok   editing a reason marks the form dirty
+ok   polling does not refetch detail while the form is dirty
+ok   a dirty reason draft is not overwritten by a poll
+ok   a dirty status draft is not overwritten by a poll
+ok   reader sends one patch for a why-only save
+ok   why-only save omits classification
+ok   reader sends one patch for a status-only save
+ok   status-only save omits classification
+ok   reader sends one patch for a why+status-only save
+ok   why+status-only save omits classification
+ok   explicit tag edit sends one patch
+ok   explicit tag edit sends classification
+ok   explicit tag edit keeps the reason field
+ok   confirm button is offered before review
+ok   explicit confirmation sends one patch
+ok   explicit confirmation sends classification
+ok   explicit confirmation keeps the AI topics
+ok   errorLabel(job_busy)
+ok   errorLabel(not_found)
+ok   errorLabel(backend_error)
+ok   errorLabel(queue_full)
+ok   errorLabel(invalid_ids)
+ok   errorLabel(invalid_source)
+ok   errorLabel(invalid_curation)
+ok   errorLabel(invalid_id)
+ok   errorLabel(invalid_query)
+ok   errorLabel(invalid_json)
+ok   errorLabel(invalid_content_type)
+ok   errorLabel unknown is shown verbatim
+
+73/73 checks passed
+mkdir -p bin
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Version=dev -X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Commit=3005d78 -X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Date=2026-09-22T08:09:01Z" -o bin/cairn-x-enricher ./cmd/cairn-x-enricher

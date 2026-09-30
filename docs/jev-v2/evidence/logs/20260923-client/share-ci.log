@@ -1,0 +1,702 @@
+android	Set up job	﻿2026-09-22T16:56:24.3285791Z Current runner version: '2.337.0'
+android	Set up job	2026-09-22T16:56:24.3301039Z ##[group]Runner Image Provisioner
+android	Set up job	2026-09-22T16:56:24.3301739Z Hosted Compute Agent
+android	Set up job	2026-09-22T16:56:24.3302105Z Version: 20260828.587
+android	Set up job	2026-09-22T16:56:24.3302501Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+android	Set up job	2026-09-22T16:56:24.3302920Z Build Date: 2026-08-28T16:44:25Z
+android	Set up job	2026-09-22T16:56:24.3303305Z Worker ID: {2be1b55e-2f3e-404a-b7c0-8f6d5adf9755}
+android	Set up job	2026-09-22T16:56:24.3303762Z Azure Region: westus3
+android	Set up job	2026-09-22T16:56:24.3304118Z ##[endgroup]
+android	Set up job	2026-09-22T16:56:24.3304864Z ##[group]Operating System
+android	Set up job	2026-09-22T16:56:24.3305216Z Ubuntu
+android	Set up job	2026-09-22T16:56:24.3305518Z 24.04.5
+android	Set up job	2026-09-22T16:56:24.3305848Z LTS
+android	Set up job	2026-09-22T16:56:24.3306210Z ##[endgroup]
+android	Set up job	2026-09-22T16:56:24.3306513Z ##[group]Runner Image
+android	Set up job	2026-09-22T16:56:24.3306899Z Image: ubuntu-24.04
+android	Set up job	2026-09-22T16:56:24.3307223Z Version: 20260907.300.1
+android	Set up job	2026-09-22T16:56:24.3307869Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+android	Set up job	2026-09-22T16:56:24.3308815Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+android	Set up job	2026-09-22T16:56:24.3309387Z ##[endgroup]
+android	Set up job	2026-09-22T16:56:24.3309994Z ##[group]GITHUB_TOKEN Permissions
+android	Set up job	2026-09-22T16:56:24.3311636Z Contents: read
+android	Set up job	2026-09-22T16:56:24.3312019Z Metadata: read
+android	Set up job	2026-09-22T16:56:24.3312402Z ##[endgroup]
+android	Set up job	2026-09-22T16:56:24.3313612Z Secret source: Actions
+android	Set up job	2026-09-22T16:56:24.3314156Z Cache mode: write
+android	Set up job	2026-09-22T16:56:24.3314618Z Prepare workflow directory
+android	Set up job	2026-09-22T16:56:24.3536669Z Prepare all required actions
+android	Set up job	2026-09-22T16:56:24.3565384Z Getting action download info
+android	Set up job	2026-09-22T16:56:24.6526404Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+android	Set up job	2026-09-22T16:56:24.7491085Z Download action repository 'actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961' (SHA:b6effb05e454b25005698d916606bdc6ffcbf961)
+android	Set up job	2026-09-22T16:56:25.6289963Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+android	Set up job	2026-09-22T16:56:25.7812721Z Complete job name: android
+android	Checkout	﻿2026-09-22T16:56:25.8276643Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+android	Checkout	2026-09-22T16:56:25.8277139Z with:
+android	Checkout	2026-09-22T16:56:25.8277374Z   repository: Alpenl/cairn-share
+android	Checkout	2026-09-22T16:56:25.8279415Z   token: ***
+android	Checkout	2026-09-22T16:56:25.8279636Z   ssh-strict: true
+android	Checkout	2026-09-22T16:56:25.8279863Z   ssh-user: git
+android	Checkout	2026-09-22T16:56:25.8280094Z   persist-credentials: true
+android	Checkout	2026-09-22T16:56:25.8280348Z   clean: true
+android	Checkout	2026-09-22T16:56:25.8280581Z   sparse-checkout-cone-mode: true
+android	Checkout	2026-09-22T16:56:25.8280848Z   fetch-depth: 1
+android	Checkout	2026-09-22T16:56:25.8281069Z   fetch-tags: false
+android	Checkout	2026-09-22T16:56:25.8281303Z   show-progress: true
+android	Checkout	2026-09-22T16:56:25.8281910Z   lfs: false
+android	Checkout	2026-09-22T16:56:25.8282212Z   submodules: false
+android	Checkout	2026-09-22T16:56:25.8282544Z   set-safe-directory: true
+android	Checkout	2026-09-22T16:56:25.8282929Z   allow-unsafe-pr-checkout: false
+android	Checkout	2026-09-22T16:56:25.8283375Z ##[endgroup]
+android	Checkout	2026-09-22T16:56:25.8919148Z Syncing repository: Alpenl/cairn-share
+android	Checkout	2026-09-22T16:56:25.8920726Z ##[group]Getting Git version info
+android	Checkout	2026-09-22T16:56:25.8921697Z Working directory is '/home/runner/work/cairn-share/cairn-share'
+android	Checkout	2026-09-22T16:56:25.8922914Z [command]/usr/bin/git version
+android	Checkout	2026-09-22T16:56:25.8980745Z git version 2.55.0
+android	Checkout	2026-09-22T16:56:25.8993051Z ##[endgroup]
+android	Checkout	2026-09-22T16:56:25.8999545Z Temporarily overriding HOME='/home/runner/work/_temp/dd4e7db7-409f-4926-bffa-d28e3c987619' before making global git config changes
+android	Checkout	2026-09-22T16:56:25.9001014Z Adding repository directory to the temporary git global config as a safe directory
+android	Checkout	2026-09-22T16:56:25.9003997Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/cairn-share/cairn-share
+android	Checkout	2026-09-22T16:56:26.0019941Z Deleting the contents of '/home/runner/work/cairn-share/cairn-share'
+android	Checkout	2026-09-22T16:56:26.0022839Z ##[group]Determining repository object format
+android	Checkout	2026-09-22T16:56:26.0024207Z ##[endgroup]
+android	Checkout	2026-09-22T16:56:26.0025400Z ##[group]Initializing the repository
+android	Checkout	2026-09-22T16:56:26.0027971Z [command]/usr/bin/git init /home/runner/work/cairn-share/cairn-share
+android	Checkout	2026-09-22T16:56:26.0713639Z hint: Using 'master' as the name for the initial branch. This default branch name
+android	Checkout	2026-09-22T16:56:26.0714524Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+android	Checkout	2026-09-22T16:56:26.0715142Z hint: to use in all of your new repositories, which will suppress this warning,
+android	Checkout	2026-09-22T16:56:26.0715641Z hint: call:
+android	Checkout	2026-09-22T16:56:26.0715959Z hint:
+android	Checkout	2026-09-22T16:56:26.0716434Z hint: 	git config --global init.defaultBranch <name>
+android	Checkout	2026-09-22T16:56:26.0717137Z hint:
+android	Checkout	2026-09-22T16:56:26.0717534Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+android	Checkout	2026-09-22T16:56:26.0718178Z hint: 'development'. The just-created branch can be renamed via this command:
+android	Checkout	2026-09-22T16:56:26.0718932Z hint:
+android	Checkout	2026-09-22T16:56:26.0719411Z hint: 	git branch -m <name>
+android	Checkout	2026-09-22T16:56:26.0719988Z hint:
+android	Checkout	2026-09-22T16:56:26.0720683Z hint: Disable this message with "git config set advice.defaultBranchName false"
+android	Checkout	2026-09-22T16:56:26.0721848Z Initialized empty Git repository in /home/runner/work/cairn-share/cairn-share/.git/
+android	Checkout	2026-09-22T16:56:26.0725513Z [command]/usr/bin/git remote add origin https://github.com/Alpenl/cairn-share
+android	Checkout	2026-09-22T16:56:26.0768574Z ##[endgroup]
+android	Checkout	2026-09-22T16:56:26.0769438Z ##[group]Disabling automatic garbage collection
+android	Checkout	2026-09-22T16:56:26.0770811Z [command]/usr/bin/git config --local gc.auto 0
+android	Checkout	2026-09-22T16:56:26.0796822Z ##[endgroup]
+android	Checkout	2026-09-22T16:56:26.0797724Z ##[group]Setting up auth
+android	Checkout	2026-09-22T16:56:26.0800829Z Removing SSH command configuration
+android	Checkout	2026-09-22T16:56:26.0807542Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+android	Checkout	2026-09-22T16:56:26.0828395Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+android	Checkout	2026-09-22T16:56:26.1111308Z Removing HTTP extra header
+android	Checkout	2026-09-22T16:56:26.1114373Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+android	Checkout	2026-09-22T16:56:26.1140543Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+android	Checkout	2026-09-22T16:56:26.1353374Z Removing includeIf entries pointing to credentials config files
+android	Checkout	2026-09-22T16:56:26.1354091Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+android	Checkout	2026-09-22T16:56:26.1392837Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+android	Checkout	2026-09-22T16:56:26.1554077Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-9362e896-6492-4d4e-a762-41b46b9771ec.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+android	Checkout	2026-09-22T16:56:26.1583663Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/cairn-share/cairn-share/.git.path /home/runner/work/_temp/git-credentials-9362e896-6492-4d4e-a762-41b46b9771ec.config
+android	Checkout	2026-09-22T16:56:26.1608975Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/cairn-share/cairn-share/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-9362e896-6492-4d4e-a762-41b46b9771ec.config
+android	Checkout	2026-09-22T16:56:26.1637746Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-9362e896-6492-4d4e-a762-41b46b9771ec.config
+android	Checkout	2026-09-22T16:56:26.1664521Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-9362e896-6492-4d4e-a762-41b46b9771ec.config
+android	Checkout	2026-09-22T16:56:26.1698691Z ##[endgroup]
+android	Checkout	2026-09-22T16:56:26.1700157Z ##[group]Fetching the repository
+android	Checkout	2026-09-22T16:56:26.1704376Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +89dc382ad5daadf248ec167b672f0dfa4b0754fc:refs/remotes/pull/32/merge
+android	Checkout	2026-09-22T16:56:26.9353326Z From https://github.com/Alpenl/cairn-share
+android	Checkout	2026-09-22T16:56:26.9354964Z  * [new ref]         89dc382ad5daadf248ec167b672f0dfa4b0754fc -> pull/32/merge
+android	Checkout	2026-09-22T16:56:26.9412469Z ##[endgroup]
+android	Checkout	2026-09-22T16:56:26.9414288Z ##[group]Determining the checkout info
+android	Checkout	2026-09-22T16:56:26.9415845Z ##[endgroup]
+android	Checkout	2026-09-22T16:56:26.9416729Z [command]/usr/bin/git sparse-checkout disable
+android	Checkout	2026-09-22T16:56:26.9419406Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+android	Checkout	2026-09-22T16:56:26.9444998Z ##[group]Checking out the ref
+android	Checkout	2026-09-22T16:56:26.9446954Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/32/merge
+android	Checkout	2026-09-22T16:56:26.9581307Z Note: switching to 'refs/remotes/pull/32/merge'.
+android	Checkout	2026-09-22T16:56:26.9582374Z 
+android	Checkout	2026-09-22T16:56:26.9582937Z You are in 'detached HEAD' state. You can look around, make experimental
+android	Checkout	2026-09-22T16:56:26.9584188Z changes and commit them, and you can discard any commits you make in this
+android	Checkout	2026-09-22T16:56:26.9585476Z state without impacting any branches by switching back to a branch.
+android	Checkout	2026-09-22T16:56:26.9586217Z 
+android	Checkout	2026-09-22T16:56:26.9586723Z If you want to create a new branch to retain commits you create, you may
+android	Checkout	2026-09-22T16:56:26.9587860Z do so (now or later) by using -c with the switch command. Example:
+android	Checkout	2026-09-22T16:56:26.9588701Z 
+android	Checkout	2026-09-22T16:56:26.9589093Z   git switch -c <new-branch-name>
+android	Checkout	2026-09-22T16:56:26.9589579Z 
+android	Checkout	2026-09-22T16:56:26.9589866Z Or undo this operation with:
+android	Checkout	2026-09-22T16:56:26.9590284Z 
+android	Checkout	2026-09-22T16:56:26.9590590Z   git switch -
+android	Checkout	2026-09-22T16:56:26.9590931Z 
+android	Checkout	2026-09-22T16:56:26.9591616Z Turn off this advice by setting config variable advice.detachedHead to false
+android	Checkout	2026-09-22T16:56:26.9592384Z 
+android	Checkout	2026-09-22T16:56:26.9593268Z HEAD is now at 89dc382 Merge 37b1dcefa667f164a160ab9bdfc2757f910f7a66 into 5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b
+android	Checkout	2026-09-22T16:56:26.9595703Z ##[endgroup]
+android	Checkout	2026-09-22T16:56:26.9621839Z [command]/usr/bin/git log -1 --format=%H
+android	Checkout	2026-09-22T16:56:26.9643824Z 89dc382ad5daadf248ec167b672f0dfa4b0754fc
+android	Setup JDK	﻿2026-09-22T16:56:26.9920040Z ##[group]Run actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+android	Setup JDK	2026-09-22T16:56:26.9920874Z with:
+android	Setup JDK	2026-09-22T16:56:26.9921308Z   distribution: temurin
+android	Setup JDK	2026-09-22T16:56:26.9921961Z   java-version: 17
+android	Setup JDK	2026-09-22T16:56:26.9922426Z   cache: gradle
+android	Setup JDK	2026-09-22T16:56:26.9922875Z   java-package: jdk
+android	Setup JDK	2026-09-22T16:56:26.9923345Z   check-latest: false
+android	Setup JDK	2026-09-22T16:56:26.9923836Z   set-default: true
+android	Setup JDK	2026-09-22T16:56:26.9924315Z   verify-signature: false
+android	Setup JDK	2026-09-22T16:56:26.9924828Z   server-id: github
+android	Setup JDK	2026-09-22T16:56:26.9925305Z   server-username: GITHUB_ACTOR
+android	Setup JDK	2026-09-22T16:56:26.9925884Z   server-password: GITHUB_TOKEN
+android	Setup JDK	2026-09-22T16:56:26.9926459Z   overwrite-settings: true
+android	Setup JDK	2026-09-22T16:56:26.9926987Z   job-status: success
+android	Setup JDK	2026-09-22T16:56:26.9931862Z   token: ***
+android	Setup JDK	2026-09-22T16:56:26.9932333Z   show-download-progress: false
+android	Setup JDK	2026-09-22T16:56:26.9932888Z ##[endgroup]
+android	Setup JDK	2026-09-22T16:56:27.0857525Z ##[group]Installed distributions
+android	Setup JDK	2026-09-22T16:56:27.0897678Z Resolved Java 17.0.20+1 from tool-cache
+android	Setup JDK	2026-09-22T16:56:27.0898518Z Setting Java 17.0.20+1 as the default
+android	Setup JDK	2026-09-22T16:56:27.0904167Z Creating toolchains.xml for JDK version 17 from temurin
+android	Setup JDK	2026-09-22T16:56:27.0945785Z Writing to /home/runner/.m2/toolchains.xml
+android	Setup JDK	2026-09-22T16:56:27.0946426Z 
+android	Setup JDK	2026-09-22T16:56:27.0946703Z Java configuration:
+android	Setup JDK	2026-09-22T16:56:27.0947358Z   Distribution: temurin
+android	Setup JDK	2026-09-22T16:56:27.0947853Z   Version: 17.0.20+1
+android	Setup JDK	2026-09-22T16:56:27.0948809Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+android	Setup JDK	2026-09-22T16:56:27.0949661Z 
+android	Setup JDK	2026-09-22T16:56:27.0950356Z ##[endgroup]
+android	Setup JDK	2026-09-22T16:56:27.0975714Z Creating settings.xml with server-id: github
+android	Setup JDK	2026-09-22T16:56:27.0976855Z Writing to /home/runner/.m2/settings.xml
+android	Setup JDK	2026-09-22T16:56:27.0979057Z Configured MAVEN_ARGS to include -ntp to suppress Maven transfer progress logs. Set 'show-download-progress: true' to keep the download progress output.
+android	Setup JDK	2026-09-22T16:56:27.3332178Z Cache hit for: setup-java-Linux-x64-gradle-76e90631ab2eea8fac1939ac319fbe442a1ea7ab4e61e70f2eabab61d16fdf41
+android	Setup JDK	2026-09-22T16:56:28.5705363Z Received 58720256 of 513837833 (11.4%), 56.0 MBs/sec
+android	Setup JDK	2026-09-22T16:56:29.5709711Z Received 255852544 of 513837833 (49.8%), 122.0 MBs/sec
+android	Setup JDK	2026-09-22T16:56:30.5713010Z Received 402653184 of 513837833 (78.4%), 128.0 MBs/sec
+android	Setup JDK	2026-09-22T16:56:31.2111711Z Received 513837833 of 513837833 (100.0%), 134.6 MBs/sec
+android	Setup JDK	2026-09-22T16:56:31.2191109Z Cache Size: ~490 MB (513837833 B)
+android	Setup JDK	2026-09-22T16:56:31.2191836Z [command]/usr/bin/tar -xf /home/runner/work/_temp/a45d8fc1-fb0f-4d18-b496-cad6d867c6a0/cache.tzst -P -C /home/runner/work/cairn-share/cairn-share --use-compress-program unzstd
+android	Setup JDK	2026-09-22T16:56:32.7170889Z Cache restored successfully
+android	Setup JDK	2026-09-22T16:56:32.7371305Z Cache restored from key: setup-java-Linux-x64-gradle-76e90631ab2eea8fac1939ac319fbe442a1ea7ab4e61e70f2eabab61d16fdf41
+android	Setup JDK	2026-09-22T16:56:32.9577447Z Cache hit for: setup-java-Linux-x64-gradle-wrapper-ce86eca3038caeeb7da02c46cc9deb7c86f61ff60b65de489159e96265f81393
+android	Setup JDK	2026-09-22T16:56:33.8534205Z Received 135423479 of 135423479 (100.0%), 152.8 MBs/sec
+android	Setup JDK	2026-09-22T16:56:33.8534783Z Cache Size: ~129 MB (135423479 B)
+android	Setup JDK	2026-09-22T16:56:33.8555837Z [command]/usr/bin/tar -xf /home/runner/work/_temp/a2d1ebf1-4133-4017-b11a-e9298cda8ff5/cache.tzst -P -C /home/runner/work/cairn-share/cairn-share --use-compress-program unzstd
+android	Setup JDK	2026-09-22T16:56:33.9948921Z Cache restored successfully
+android	Setup JDK	2026-09-22T16:56:34.0003014Z gradle-wrapper cache restored from key: setup-java-Linux-x64-gradle-wrapper-ce86eca3038caeeb7da02c46cc9deb7c86f61ff60b65de489159e96265f81393
+android	Install Android SDK packages	﻿2026-09-22T16:56:34.0168864Z ##[group]Run set -euo pipefail
+android	Install Android SDK packages	2026-09-22T16:56:34.0169120Z ^[[36;1mset -euo pipefail^[[0m
+android	Install Android SDK packages	2026-09-22T16:56:34.0169333Z ^[[36;1msdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"^[[0m
+android	Install Android SDK packages	2026-09-22T16:56:34.0169584Z ^[[36;1myes | "${sdkmanager}" --licenses >/dev/null || true^[[0m
+android	Install Android SDK packages	2026-09-22T16:56:34.0169840Z ^[[36;1m"${sdkmanager}" "platforms;android-35" "build-tools;35.0.0" "platform-tools"^[[0m
+android	Install Android SDK packages	2026-09-22T16:56:34.0203655Z shell: /usr/bin/bash -e {0}
+android	Install Android SDK packages	2026-09-22T16:56:34.0203820Z env:
+android	Install Android SDK packages	2026-09-22T16:56:34.0203993Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+android	Install Android SDK packages	2026-09-22T16:56:34.0204262Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+android	Install Android SDK packages	2026-09-22T16:56:34.0204480Z   MAVEN_ARGS: -ntp
+android	Install Android SDK packages	2026-09-22T16:56:34.0204601Z ##[endgroup]
+android	Install Android SDK packages	2026-09-22T16:56:36.7754497Z yes: standard output: Broken pipe
+android	Install Android SDK packages	2026-09-22T16:56:37.1925574Z Loading package information...                                                  
+android	Install Android SDK packages	2026-09-22T16:56:37.2541336Z Loading local repository...                                                     
+android	Install Android SDK packages	2026-09-22T16:56:37.2543440Z [                                       ] 3% Loading local repository...        
+android	Install Android SDK packages	2026-09-22T16:56:37.2599471Z [                                       ] 3% Fetch remote repository...         
+android	Install Android SDK packages	2026-09-22T16:56:37.4022812Z [=                                      ] 3% Fetch remote repository...         
+android	Install Android SDK packages	2026-09-22T16:56:37.4306352Z [=                                      ] 4% Fetch remote repository...         
+android	Install Android SDK packages	2026-09-22T16:56:37.4412516Z [=                                      ] 5% Fetch remote repository...         
+android	Install Android SDK packages	2026-09-22T16:56:37.4629140Z [==                                     ] 5% Fetch remote repository...         
+android	Install Android SDK packages	2026-09-22T16:56:37.4994183Z [==                                     ] 6% Fetch remote repository...         
+android	Install Android SDK packages	2026-09-22T16:56:37.5312947Z [==                                     ] 7% Fetch remote repository...         
+android	Install Android SDK packages	2026-09-22T16:56:37.5313844Z [==                                     ] 7% Computing updates...               
+android	Install Android SDK packages	2026-09-22T16:56:37.5372312Z [===                                    ] 8% Computing updates...               
+android	Install Android SDK packages	2026-09-22T16:56:37.5407969Z [===                                    ] 10% Computing updates...              
+android	Install Android SDK packages	2026-09-22T16:56:37.5408532Z [=======================================] 100% Computing updates...             
+android	Install Android SDK packages	2026-09-22T16:56:37.5412124Z 
+android	Verify dependency metadata	﻿2026-09-22T16:56:37.5630362Z ##[group]Run ./gradlew --no-daemon --dependency-verification strict help
+android	Verify dependency metadata	2026-09-22T16:56:37.5630665Z ^[[36;1m./gradlew --no-daemon --dependency-verification strict help^[[0m
+android	Verify dependency metadata	2026-09-22T16:56:37.5660692Z shell: /usr/bin/bash -e {0}
+android	Verify dependency metadata	2026-09-22T16:56:37.5660837Z env:
+android	Verify dependency metadata	2026-09-22T16:56:37.5661015Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+android	Verify dependency metadata	2026-09-22T16:56:37.5661283Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+android	Verify dependency metadata	2026-09-22T16:56:37.5661610Z   MAVEN_ARGS: -ntp
+android	Verify dependency metadata	2026-09-22T16:56:37.5661761Z ##[endgroup]
+android	Verify dependency metadata	2026-09-22T16:56:37.9602161Z 
+android	Verify dependency metadata	2026-09-22T16:56:37.9603098Z Welcome to Gradle 8.9!
+android	Verify dependency metadata	2026-09-22T16:56:37.9603633Z 
+android	Verify dependency metadata	2026-09-22T16:56:37.9604966Z Here are the highlights of this release:
+android	Verify dependency metadata	2026-09-22T16:56:37.9605830Z  - Enhanced Error and Warning Messages
+android	Verify dependency metadata	2026-09-22T16:56:37.9607592Z  - IDE Integration Improvements
+android	Verify dependency metadata	2026-09-22T16:56:37.9608376Z  - Daemon JVM Information
+android	Verify dependency metadata	2026-09-22T16:56:37.9608692Z 
+android	Verify dependency metadata	2026-09-22T16:56:37.9610572Z For more details see https://docs.gradle.org/8.9/release-notes.html
+android	Verify dependency metadata	2026-09-22T16:56:37.9611194Z 
+android	Verify dependency metadata	2026-09-22T16:56:37.9617256Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+android	Verify dependency metadata	2026-09-22T16:56:38.7602833Z Daemon will be stopped at the end of the build 
+android	Verify dependency metadata	2026-09-22T16:56:44.3611648Z 
+android	Verify dependency metadata	2026-09-22T16:56:44.3632543Z > Task :help
+android	Verify dependency metadata	2026-09-22T16:56:44.3633318Z 
+android	Verify dependency metadata	2026-09-22T16:56:44.3656603Z Welcome to Gradle 8.9.
+android	Verify dependency metadata	2026-09-22T16:56:44.3657097Z 
+android	Verify dependency metadata	2026-09-22T16:56:44.3657204Z To run a build, run gradlew <task> ...
+android	Verify dependency metadata	2026-09-22T16:56:44.3657380Z 
+android	Verify dependency metadata	2026-09-22T16:56:44.3657506Z To see a list of available tasks, run gradlew tasks
+android	Verify dependency metadata	2026-09-22T16:56:44.3657748Z 
+android	Verify dependency metadata	2026-09-22T16:56:44.3657903Z To see more detail about a task, run gradlew help --task <task>
+android	Verify dependency metadata	2026-09-22T16:56:44.3658144Z 
+android	Verify dependency metadata	2026-09-22T16:56:44.3658281Z To see a list of command-line options, run gradlew --help
+android	Verify dependency metadata	2026-09-22T16:56:44.3658539Z 
+android	Verify dependency metadata	2026-09-22T16:56:44.3658804Z For more detail on using Gradle, see https://docs.gradle.org/8.9/userguide/command_line_interface.html
+android	Verify dependency metadata	2026-09-22T16:56:44.3659141Z 
+android	Verify dependency metadata	2026-09-22T16:56:44.3659272Z For troubleshooting, visit https://help.gradle.org
+android	Verify dependency metadata	2026-09-22T16:56:44.3659472Z 
+android	Verify dependency metadata	2026-09-22T16:56:44.3659558Z BUILD SUCCESSFUL in 6s
+android	Verify dependency metadata	2026-09-22T16:56:44.3659784Z 1 actionable task: 1 executed
+android	Run Android gates	﻿2026-09-22T16:56:44.5064735Z ##[group]Run ./gradlew --no-daemon --dependency-verification strict testDebugUnitTest lintDebug assembleDebug compileDebugAndroidTestKotlin
+android	Run Android gates	2026-09-22T16:56:44.5065330Z ^[[36;1m./gradlew --no-daemon --dependency-verification strict testDebugUnitTest lintDebug assembleDebug compileDebugAndroidTestKotlin^[[0m
+android	Run Android gates	2026-09-22T16:56:44.5094941Z shell: /usr/bin/bash -e {0}
+android	Run Android gates	2026-09-22T16:56:44.5095088Z env:
+android	Run Android gates	2026-09-22T16:56:44.5095270Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+android	Run Android gates	2026-09-22T16:56:44.5095547Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+android	Run Android gates	2026-09-22T16:56:44.5095775Z   MAVEN_ARGS: -ntp
+android	Run Android gates	2026-09-22T16:56:44.5095901Z ##[endgroup]
+android	Run Android gates	2026-09-22T16:56:44.8843039Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+android	Run Android gates	2026-09-22T16:56:45.5818071Z Daemon will be stopped at the end of the build 
+android	Run Android gates	2026-09-22T16:56:50.3863262Z > Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+android	Run Android gates	2026-09-22T16:56:50.3863726Z > Task :app:preBuild UP-TO-DATE
+android	Run Android gates	2026-09-22T16:56:50.3863897Z > Task :app:preDebugBuild UP-TO-DATE
+android	Run Android gates	2026-09-22T16:56:50.4852650Z > Task :app:generateDebugBuildConfig
+android	Run Android gates	2026-09-22T16:56:50.7820532Z > Task :app:generateDebugResValues
+android	Run Android gates	2026-09-22T16:56:50.7862575Z > Task :app:checkDebugAarMetadata
+android	Run Android gates	2026-09-22T16:56:50.7863083Z > Task :app:mapDebugSourceSetPaths
+android	Run Android gates	2026-09-22T16:56:50.7863419Z > Task :app:generateDebugResources
+android	Run Android gates	2026-09-22T16:56:51.3862653Z > Task :app:packageDebugResources
+android	Run Android gates	2026-09-22T16:56:51.7854985Z > Task :app:mergeDebugResources
+android	Run Android gates	2026-09-22T16:56:51.7900193Z > Task :app:createDebugCompatibleScreenManifests
+android	Run Android gates	2026-09-22T16:56:51.7946463Z > Task :app:extractDeepLinksDebug
+android	Run Android gates	2026-09-22T16:56:51.8817442Z > Task :app:parseDebugLocalResources
+android	Run Android gates	2026-09-22T16:56:51.9817236Z > Task :app:processDebugMainManifest
+android	Run Android gates	2026-09-22T16:56:52.0820306Z > Task :app:processDebugManifest
+android	Run Android gates	2026-09-22T16:56:52.0822061Z > Task :app:preDebugUnitTestBuild UP-TO-DATE
+android	Run Android gates	2026-09-22T16:56:52.0822448Z > Task :app:javaPreCompileDebugUnitTest
+android	Run Android gates	2026-09-22T16:56:52.0822860Z > Task :app:processDebugManifestForPackage
+android	Run Android gates	2026-09-22T16:56:52.0823210Z > Task :app:javaPreCompileDebug
+android	Run Android gates	2026-09-22T16:56:52.1842664Z > Task :app:preDebugAndroidTestBuild SKIPPED
+android	Run Android gates	2026-09-22T16:56:52.1862018Z > Task :app:generateDebugAndroidTestResValues
+android	Run Android gates	2026-09-22T16:56:52.1885165Z > Task :app:extractProguardFiles
+android	Run Android gates	2026-09-22T16:56:52.1885528Z > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+android	Run Android gates	2026-09-22T16:56:52.2832379Z > Task :app:mergeDebugShaders
+android	Run Android gates	2026-09-22T16:56:52.2861925Z > Task :app:compileDebugShaders NO-SOURCE
+android	Run Android gates	2026-09-22T16:56:52.2892045Z > Task :app:generateDebugAssets UP-TO-DATE
+android	Run Android gates	2026-09-22T16:56:52.2921891Z > Task :app:mergeDebugAssets
+android	Run Android gates	2026-09-22T16:56:52.2951983Z > Task :app:compressDebugAssets
+android	Run Android gates	2026-09-22T16:56:52.2958699Z > Task :app:desugarDebugFileDependencies
+android	Run Android gates	2026-09-22T16:56:52.4820735Z > Task :app:mergeDebugJniLibFolders
+android	Run Android gates	2026-09-22T16:56:52.4842213Z > Task :app:processDebugResources
+android	Run Android gates	2026-09-22T16:56:52.4863240Z > Task :app:checkDebugDuplicateClasses
+android	Run Android gates	2026-09-22T16:56:52.4913827Z > Task :app:mergeDebugNativeLibs
+android	Run Android gates	2026-09-22T16:56:52.9852664Z > Task :app:mergeLibDexDebug
+android	Run Android gates	2026-09-22T16:56:52.9876800Z 
+android	Run Android gates	2026-09-22T16:56:52.9879519Z > Task :app:stripDebugDebugSymbols
+android	Run Android gates	2026-09-22T16:56:52.9881185Z Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, libdatastore_shared_counter.so.
+android	Run Android gates	2026-09-22T16:56:53.6852067Z 
+android	Run Android gates	2026-09-22T16:56:53.6892534Z > Task :app:validateSigningDebug
+android	Run Android gates	2026-09-22T16:56:53.6922023Z > Task :app:writeDebugAppMetadata
+android	Run Android gates	2026-09-22T16:56:53.6973843Z > Task :app:writeDebugSigningConfigVersions
+android	Run Android gates	2026-09-22T16:56:53.7862605Z > Task :app:processDebugAndroidTestManifest
+android	Run Android gates	2026-09-22T16:56:53.8862674Z > Task :app:generateDebugAndroidTestBuildConfig
+android	Run Android gates	2026-09-22T16:56:53.8922219Z > Task :app:checkDebugAndroidTestAarMetadata
+android	Run Android gates	2026-09-22T16:56:53.8952482Z > Task :app:mapDebugAndroidTestSourceSetPaths
+android	Run Android gates	2026-09-22T16:56:53.9029489Z > Task :app:generateDebugAndroidTestResources
+android	Run Android gates	2026-09-22T16:56:54.7822403Z > Task :app:mergeDebugAndroidTestResources
+android	Run Android gates	2026-09-22T16:56:54.9832496Z > Task :app:processDebugAndroidTestResources
+android	Run Android gates	2026-09-22T16:56:59.4842430Z > Task :app:mergeExtDexDebug
+android	Run Android gates	2026-09-22T16:57:10.8843866Z > Task :app:compileDebugKotlin
+android	Run Android gates	2026-09-22T16:57:11.7825135Z > Task :app:compileDebugJavaWithJavac
+android	Run Android gates	2026-09-22T16:57:11.8841084Z > Task :app:processDebugJavaRes
+android	Run Android gates	2026-09-22T16:57:11.9823064Z > Task :app:bundleDebugClassesToCompileJar
+android	Run Android gates	2026-09-22T16:57:11.9842178Z > Task :app:bundleDebugClassesToRuntimeJar
+android	Run Android gates	2026-09-22T16:57:12.2817323Z > Task :app:generateDebugLintReportModel
+android	Run Android gates	2026-09-22T16:57:12.6845814Z > Task :app:generateDebugAndroidTestLintModel
+android	Run Android gates	2026-09-22T16:57:12.6846716Z > Task :app:generateDebugUnitTestLintModel
+android	Run Android gates	2026-09-22T16:57:14.9829044Z > Task :app:compileDebugUnitTestKotlin
+android	Run Android gates	2026-09-22T16:57:15.0856641Z > Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+android	Run Android gates	2026-09-22T16:57:15.0902103Z > Task :app:processDebugUnitTestJavaRes
+android	Run Android gates	2026-09-22T16:57:17.0832480Z > Task :app:testDebugUnitTest
+android	Run Android gates	2026-09-22T16:57:25.4817417Z > Task :app:dexBuilderDebug
+android	Run Android gates	2026-09-22T16:57:25.5817309Z > Task :app:mergeDebugGlobalSynthetics
+android	Run Android gates	2026-09-22T16:57:26.5817109Z > Task :app:mergeDebugJavaResource
+android	Run Android gates	2026-09-22T16:57:27.2819529Z > Task :app:mergeProjectDexDebug
+android	Run Android gates	2026-09-22T16:57:27.8832549Z > Task :app:packageDebug
+android	Run Android gates	2026-09-22T16:57:27.8862195Z > Task :app:createDebugApkListingFileRedirect
+android	Run Android gates	2026-09-22T16:57:27.8862605Z > Task :app:assembleDebug
+android	Run Android gates	2026-09-22T16:57:34.4822693Z > Task :app:compileDebugAndroidTestKotlin
+android	Run Android gates	2026-09-22T16:57:37.9822904Z > Task :app:lintAnalyzeDebugUnitTest
+android	Run Android gates	2026-09-22T16:57:40.8816997Z > Task :app:lintAnalyzeDebugAndroidTest
+android	Run Android gates	2026-09-22T16:57:42.6824715Z > Task :app:lintAnalyzeDebug
+android	Run Android gates	2026-09-22T16:57:50.9792670Z > Task :app:lintReportDebug
+android	Run Android gates	2026-09-22T16:57:50.9796426Z > Task :app:lintDebug
+android	Run Android gates	2026-09-22T16:57:50.9796799Z 
+android	Run Android gates	2026-09-22T16:57:50.9797078Z BUILD SUCCESSFUL in 1m 6s
+android	Run Android gates	2026-09-22T16:57:50.9797376Z 61 actionable tasks: 61 executed
+android	Check debug APK exists	﻿2026-09-22T16:57:51.3015377Z ##[group]Run test -f app/build/outputs/apk/debug/app-debug.apk
+android	Check debug APK exists	2026-09-22T16:57:51.3015658Z ^[[36;1mtest -f app/build/outputs/apk/debug/app-debug.apk^[[0m
+android	Check debug APK exists	2026-09-22T16:57:51.3043689Z shell: /usr/bin/bash -e {0}
+android	Check debug APK exists	2026-09-22T16:57:51.3043823Z env:
+android	Check debug APK exists	2026-09-22T16:57:51.3044000Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+android	Check debug APK exists	2026-09-22T16:57:51.3044261Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+android	Check debug APK exists	2026-09-22T16:57:51.3044466Z   MAVEN_ARGS: -ntp
+android	Check debug APK exists	2026-09-22T16:57:51.3044593Z ##[endgroup]
+android	Upload debug APK	﻿2026-09-22T16:57:51.3120147Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+android	Upload debug APK	2026-09-22T16:57:51.3120362Z with:
+android	Upload debug APK	2026-09-22T16:57:51.3120487Z   name: cairn-share-debug-apk
+android	Upload debug APK	2026-09-22T16:57:51.3120762Z   path: android/app/build/outputs/apk/debug/app-debug.apk
+android	Upload debug APK	2026-09-22T16:57:51.3120944Z   if-no-files-found: error
+android	Upload debug APK	2026-09-22T16:57:51.3121074Z   retention-days: 7
+android	Upload debug APK	2026-09-22T16:57:51.3121190Z   compression-level: 6
+android	Upload debug APK	2026-09-22T16:57:51.3121309Z   overwrite: false
+android	Upload debug APK	2026-09-22T16:57:51.3121429Z   include-hidden-files: false
+android	Upload debug APK	2026-09-22T16:57:51.3121745Z   archive: true
+android	Upload debug APK	2026-09-22T16:57:51.3121859Z env:
+android	Upload debug APK	2026-09-22T16:57:51.3122021Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+android	Upload debug APK	2026-09-22T16:57:51.3122277Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+android	Upload debug APK	2026-09-22T16:57:51.3122480Z   MAVEN_ARGS: -ntp
+android	Upload debug APK	2026-09-22T16:57:51.3122591Z ##[endgroup]
+android	Upload debug APK	2026-09-22T16:57:51.4123107Z With the provided path, there will be 1 file uploaded
+android	Upload debug APK	2026-09-22T16:57:51.4134812Z Artifact name is valid!
+android	Upload debug APK	2026-09-22T16:57:51.4135283Z Root directory input is valid!
+android	Upload debug APK	2026-09-22T16:57:51.7608686Z Uploading artifact: cairn-share-debug-apk.zip
+android	Upload debug APK	2026-09-22T16:57:51.7633133Z Beginning upload of artifact content to blob storage
+android	Upload debug APK	2026-09-22T16:57:52.6014557Z Uploaded bytes 8388608
+android	Upload debug APK	2026-09-22T16:57:52.6739908Z Uploaded bytes 9742527
+android	Upload debug APK	2026-09-22T16:57:52.7272702Z Finished uploading artifact content to blob storage!
+android	Upload debug APK	2026-09-22T16:57:52.7273299Z SHA256 digest of uploaded artifact is 02bd9c88b8bf823ef679bda7a5800c4c5ceedfd1d03e00af44898c8ef555a374
+android	Upload debug APK	2026-09-22T16:57:52.7273729Z Finalizing artifact upload
+android	Upload debug APK	2026-09-22T16:57:53.0765742Z Artifact cairn-share-debug-apk successfully finalized. Artifact ID 10708862955
+android	Upload debug APK	2026-09-22T16:57:53.0766512Z Artifact cairn-share-debug-apk has been successfully uploaded! Final size is 9742527 bytes. Artifact ID is 10708862955
+android	Upload debug APK	2026-09-22T16:57:53.0768353Z Artifact download URL: https://github.com/Alpenl/cairn-share/actions/runs/35757397975/artifacts/10708862955
+android	Post Setup JDK	﻿2026-09-22T16:57:53.0908578Z Post job cleanup.
+android	Post Setup JDK	2026-09-22T16:57:53.1688267Z Cache hit occurred on the gradle-wrapper primary key setup-java-Linux-x64-gradle-wrapper-ce86eca3038caeeb7da02c46cc9deb7c86f61ff60b65de489159e96265f81393, not saving cache.
+android	Post Setup JDK	2026-09-22T16:57:53.1689303Z Cache hit occurred on the primary key setup-java-Linux-x64-gradle-76e90631ab2eea8fac1939ac319fbe442a1ea7ab4e61e70f2eabab61d16fdf41, not saving cache.
+android	Post Checkout	﻿2026-09-22T16:57:53.1817272Z Post job cleanup.
+android	Post Checkout	2026-09-22T16:57:53.2332342Z [command]/usr/bin/git version
+android	Post Checkout	2026-09-22T16:57:53.2362256Z git version 2.55.0
+android	Post Checkout	2026-09-22T16:57:53.2383163Z Temporarily overriding HOME='/home/runner/work/_temp/1f5f281c-e0c0-498c-8062-7fa75ab04007' before making global git config changes
+android	Post Checkout	2026-09-22T16:57:53.2383873Z Adding repository directory to the temporary git global config as a safe directory
+android	Post Checkout	2026-09-22T16:57:53.2386609Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/cairn-share/cairn-share
+android	Post Checkout	2026-09-22T16:57:53.2412108Z Removing SSH command configuration
+android	Post Checkout	2026-09-22T16:57:53.2416430Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+android	Post Checkout	2026-09-22T16:57:53.2442891Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+android	Post Checkout	2026-09-22T16:57:53.2631962Z Removing HTTP extra header
+android	Post Checkout	2026-09-22T16:57:53.2632540Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+android	Post Checkout	2026-09-22T16:57:53.2656704Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+android	Post Checkout	2026-09-22T16:57:53.2843919Z Removing includeIf entries pointing to credentials config files
+android	Post Checkout	2026-09-22T16:57:53.2848578Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+android	Post Checkout	2026-09-22T16:57:53.2874820Z includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git.path
+android	Post Checkout	2026-09-22T16:57:53.2875289Z includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git/worktrees/*.path
+android	Post Checkout	2026-09-22T16:57:53.2875821Z includeif.gitdir:/github/workspace/.git.path
+android	Post Checkout	2026-09-22T16:57:53.2876381Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+android	Post Checkout	2026-09-22T16:57:53.2882454Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git.path
+android	Post Checkout	2026-09-22T16:57:53.2903565Z /home/runner/work/_temp/git-credentials-9362e896-6492-4d4e-a762-41b46b9771ec.config
+android	Post Checkout	2026-09-22T16:57:53.2911987Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-9362e896\-6492\-4d4e\-a762\-41b46b9771ec\.config
+android	Post Checkout	2026-09-22T16:57:53.2943036Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git/worktrees/*.path
+android	Post Checkout	2026-09-22T16:57:53.2963490Z /home/runner/work/_temp/git-credentials-9362e896-6492-4d4e-a762-41b46b9771ec.config
+android	Post Checkout	2026-09-22T16:57:53.2969757Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-9362e896\-6492\-4d4e\-a762\-41b46b9771ec\.config
+android	Post Checkout	2026-09-22T16:57:53.2996252Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+android	Post Checkout	2026-09-22T16:57:53.3016021Z /github/runner_temp/git-credentials-9362e896-6492-4d4e-a762-41b46b9771ec.config
+android	Post Checkout	2026-09-22T16:57:53.3020232Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-9362e896\-6492\-4d4e\-a762\-41b46b9771ec\.config
+android	Post Checkout	2026-09-22T16:57:53.3045881Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+android	Post Checkout	2026-09-22T16:57:53.3065021Z /github/runner_temp/git-credentials-9362e896-6492-4d4e-a762-41b46b9771ec.config
+android	Post Checkout	2026-09-22T16:57:53.3070747Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-9362e896\-6492\-4d4e\-a762\-41b46b9771ec\.config
+android	Post Checkout	2026-09-22T16:57:53.3097496Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+android	Post Checkout	2026-09-22T16:57:53.3257748Z Removing credentials config '/home/runner/work/_temp/git-credentials-9362e896-6492-4d4e-a762-41b46b9771ec.config'
+android	Complete job	﻿2026-09-22T16:57:53.3360811Z Cleaning up orphan processes
+worker	Set up job	﻿2026-09-22T16:56:24.7253270Z Current runner version: '2.337.0'
+worker	Set up job	2026-09-22T16:56:24.7284247Z ##[group]Runner Image Provisioner
+worker	Set up job	2026-09-22T16:56:24.7285280Z Hosted Compute Agent
+worker	Set up job	2026-09-22T16:56:24.7285908Z Version: 20260828.587
+worker	Set up job	2026-09-22T16:56:24.7286829Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+worker	Set up job	2026-09-22T16:56:24.7287619Z Build Date: 2026-08-28T16:44:25Z
+worker	Set up job	2026-09-22T16:56:24.7288300Z Worker ID: {6995e410-76db-4869-ad0a-edf07620464c}
+worker	Set up job	2026-09-22T16:56:24.7289092Z Azure Region: canadaeast
+worker	Set up job	2026-09-22T16:56:24.7289724Z ##[endgroup]
+worker	Set up job	2026-09-22T16:56:24.7291777Z ##[group]Operating System
+worker	Set up job	2026-09-22T16:56:24.7292590Z Ubuntu
+worker	Set up job	2026-09-22T16:56:24.7293153Z 24.04.5
+worker	Set up job	2026-09-22T16:56:24.7293714Z LTS
+worker	Set up job	2026-09-22T16:56:24.7294260Z ##[endgroup]
+worker	Set up job	2026-09-22T16:56:24.7294797Z ##[group]Runner Image
+worker	Set up job	2026-09-22T16:56:24.7295461Z Image: ubuntu-24.04
+worker	Set up job	2026-09-22T16:56:24.7296047Z Version: 20260907.300.1
+worker	Set up job	2026-09-22T16:56:24.7297357Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+worker	Set up job	2026-09-22T16:56:24.7299160Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+worker	Set up job	2026-09-22T16:56:24.7300294Z ##[endgroup]
+worker	Set up job	2026-09-22T16:56:24.7301429Z ##[group]GITHUB_TOKEN Permissions
+worker	Set up job	2026-09-22T16:56:24.7303666Z Contents: read
+worker	Set up job	2026-09-22T16:56:24.7304314Z Metadata: read
+worker	Set up job	2026-09-22T16:56:24.7304932Z ##[endgroup]
+worker	Set up job	2026-09-22T16:56:24.7307608Z Secret source: Actions
+worker	Set up job	2026-09-22T16:56:24.7308977Z Cache mode: write
+worker	Set up job	2026-09-22T16:56:24.7310230Z Prepare workflow directory
+worker	Set up job	2026-09-22T16:56:24.7741400Z Prepare all required actions
+worker	Set up job	2026-09-22T16:56:24.7798179Z Getting action download info
+worker	Set up job	2026-09-22T16:56:25.0723972Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+worker	Set up job	2026-09-22T16:56:25.2128762Z Download action repository 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' (SHA:820762786026740c76f36085b0efc47a31fe5020)
+worker	Set up job	2026-09-22T16:56:25.4000377Z Complete job name: worker
+worker	Checkout	﻿2026-09-22T16:56:25.4863579Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+worker	Checkout	2026-09-22T16:56:25.4864738Z with:
+worker	Checkout	2026-09-22T16:56:25.4865201Z   repository: Alpenl/cairn-share
+worker	Checkout	2026-09-22T16:56:25.4869171Z   token: ***
+worker	Checkout	2026-09-22T16:56:25.4869609Z   ssh-strict: true
+worker	Checkout	2026-09-22T16:56:25.4870047Z   ssh-user: git
+worker	Checkout	2026-09-22T16:56:25.4870500Z   persist-credentials: true
+worker	Checkout	2026-09-22T16:56:25.4870991Z   clean: true
+worker	Checkout	2026-09-22T16:56:25.4871437Z   sparse-checkout-cone-mode: true
+worker	Checkout	2026-09-22T16:56:25.4871965Z   fetch-depth: 1
+worker	Checkout	2026-09-22T16:56:25.4872389Z   fetch-tags: false
+worker	Checkout	2026-09-22T16:56:25.4872830Z   show-progress: true
+worker	Checkout	2026-09-22T16:56:25.4873269Z   lfs: false
+worker	Checkout	2026-09-22T16:56:25.4873688Z   submodules: false
+worker	Checkout	2026-09-22T16:56:25.4874128Z   set-safe-directory: true
+worker	Checkout	2026-09-22T16:56:25.4874630Z   allow-unsafe-pr-checkout: false
+worker	Checkout	2026-09-22T16:56:25.4875443Z ##[endgroup]
+worker	Checkout	2026-09-22T16:56:25.5919681Z Syncing repository: Alpenl/cairn-share
+worker	Checkout	2026-09-22T16:56:25.5922838Z ##[group]Getting Git version info
+worker	Checkout	2026-09-22T16:56:25.5923859Z Working directory is '/home/runner/work/cairn-share/cairn-share'
+worker	Checkout	2026-09-22T16:56:25.5925019Z [command]/usr/bin/git version
+worker	Checkout	2026-09-22T16:56:25.6021275Z git version 2.55.0
+worker	Checkout	2026-09-22T16:56:25.6049714Z ##[endgroup]
+worker	Checkout	2026-09-22T16:56:25.6062794Z Temporarily overriding HOME='/home/runner/work/_temp/89ee5f85-e085-41fb-976c-3f59aacef51b' before making global git config changes
+worker	Checkout	2026-09-22T16:56:25.6065224Z Adding repository directory to the temporary git global config as a safe directory
+worker	Checkout	2026-09-22T16:56:25.6070054Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/cairn-share/cairn-share
+worker	Checkout	2026-09-22T16:56:25.6129344Z Deleting the contents of '/home/runner/work/cairn-share/cairn-share'
+worker	Checkout	2026-09-22T16:56:25.6132646Z ##[group]Determining repository object format
+worker	Checkout	2026-09-22T16:56:25.6134644Z ##[endgroup]
+worker	Checkout	2026-09-22T16:56:25.6135700Z ##[group]Initializing the repository
+worker	Checkout	2026-09-22T16:56:25.6140576Z [command]/usr/bin/git init /home/runner/work/cairn-share/cairn-share
+worker	Checkout	2026-09-22T16:56:25.6291172Z hint: Using 'master' as the name for the initial branch. This default branch name
+worker	Checkout	2026-09-22T16:56:25.6293109Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+worker	Checkout	2026-09-22T16:56:25.6294973Z hint: to use in all of your new repositories, which will suppress this warning,
+worker	Checkout	2026-09-22T16:56:25.6296216Z hint: call:
+worker	Checkout	2026-09-22T16:56:25.6297128Z hint:
+worker	Checkout	2026-09-22T16:56:25.6298038Z hint: 	git config --global init.defaultBranch <name>
+worker	Checkout	2026-09-22T16:56:25.6298994Z hint:
+worker	Checkout	2026-09-22T16:56:25.6299950Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+worker	Checkout	2026-09-22T16:56:25.6301493Z hint: 'development'. The just-created branch can be renamed via this command:
+worker	Checkout	2026-09-22T16:56:25.6302679Z hint:
+worker	Checkout	2026-09-22T16:56:25.6303339Z hint: 	git branch -m <name>
+worker	Checkout	2026-09-22T16:56:25.6304108Z hint:
+worker	Checkout	2026-09-22T16:56:25.6304896Z hint: Disable this message with "git config set advice.defaultBranchName false"
+worker	Checkout	2026-09-22T16:56:25.6306204Z Initialized empty Git repository in /home/runner/work/cairn-share/cairn-share/.git/
+worker	Checkout	2026-09-22T16:56:25.6318605Z [command]/usr/bin/git remote add origin https://github.com/Alpenl/cairn-share
+worker	Checkout	2026-09-22T16:56:25.6390155Z ##[endgroup]
+worker	Checkout	2026-09-22T16:56:25.6391565Z ##[group]Disabling automatic garbage collection
+worker	Checkout	2026-09-22T16:56:25.6393642Z [command]/usr/bin/git config --local gc.auto 0
+worker	Checkout	2026-09-22T16:56:25.6433951Z ##[endgroup]
+worker	Checkout	2026-09-22T16:56:25.6435177Z ##[group]Setting up auth
+worker	Checkout	2026-09-22T16:56:25.6436030Z Removing SSH command configuration
+worker	Checkout	2026-09-22T16:56:25.6441630Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+worker	Checkout	2026-09-22T16:56:25.6481018Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+worker	Checkout	2026-09-22T16:56:25.6894874Z Removing HTTP extra header
+worker	Checkout	2026-09-22T16:56:25.6908868Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+worker	Checkout	2026-09-22T16:56:25.6948597Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+worker	Checkout	2026-09-22T16:56:25.7183009Z Removing includeIf entries pointing to credentials config files
+worker	Checkout	2026-09-22T16:56:25.7188730Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+worker	Checkout	2026-09-22T16:56:25.7225945Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+worker	Checkout	2026-09-22T16:56:25.7468934Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-f67e9da4-42d0-4ab6-a39d-716cfed4859a.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+worker	Checkout	2026-09-22T16:56:25.7516067Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/cairn-share/cairn-share/.git.path /home/runner/work/_temp/git-credentials-f67e9da4-42d0-4ab6-a39d-716cfed4859a.config
+worker	Checkout	2026-09-22T16:56:25.7553425Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/cairn-share/cairn-share/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-f67e9da4-42d0-4ab6-a39d-716cfed4859a.config
+worker	Checkout	2026-09-22T16:56:25.7596920Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-f67e9da4-42d0-4ab6-a39d-716cfed4859a.config
+worker	Checkout	2026-09-22T16:56:25.7635931Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-f67e9da4-42d0-4ab6-a39d-716cfed4859a.config
+worker	Checkout	2026-09-22T16:56:25.7671249Z ##[endgroup]
+worker	Checkout	2026-09-22T16:56:25.7672771Z ##[group]Fetching the repository
+worker	Checkout	2026-09-22T16:56:25.7680121Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +89dc382ad5daadf248ec167b672f0dfa4b0754fc:refs/remotes/pull/32/merge
+worker	Checkout	2026-09-22T16:56:26.2767938Z From https://github.com/Alpenl/cairn-share
+worker	Checkout	2026-09-22T16:56:26.2770431Z  * [new ref]         89dc382ad5daadf248ec167b672f0dfa4b0754fc -> pull/32/merge
+worker	Checkout	2026-09-22T16:56:26.2779099Z ##[endgroup]
+worker	Checkout	2026-09-22T16:56:26.2780358Z ##[group]Determining the checkout info
+worker	Checkout	2026-09-22T16:56:26.2781712Z ##[endgroup]
+worker	Checkout	2026-09-22T16:56:26.2782279Z [command]/usr/bin/git sparse-checkout disable
+worker	Checkout	2026-09-22T16:56:26.2840809Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+worker	Checkout	2026-09-22T16:56:26.2878478Z ##[group]Checking out the ref
+worker	Checkout	2026-09-22T16:56:26.2883380Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/32/merge
+worker	Checkout	2026-09-22T16:56:26.3081788Z Note: switching to 'refs/remotes/pull/32/merge'.
+worker	Checkout	2026-09-22T16:56:26.3083777Z 
+worker	Checkout	2026-09-22T16:56:26.3085298Z You are in 'detached HEAD' state. You can look around, make experimental
+worker	Checkout	2026-09-22T16:56:26.3088365Z changes and commit them, and you can discard any commits you make in this
+worker	Checkout	2026-09-22T16:56:26.3091261Z state without impacting any branches by switching back to a branch.
+worker	Checkout	2026-09-22T16:56:26.3092631Z 
+worker	Checkout	2026-09-22T16:56:26.3093572Z If you want to create a new branch to retain commits you create, you may
+worker	Checkout	2026-09-22T16:56:26.3095147Z do so (now or later) by using -c with the switch command. Example:
+worker	Checkout	2026-09-22T16:56:26.3096776Z 
+worker	Checkout	2026-09-22T16:56:26.3097657Z   git switch -c <new-branch-name>
+worker	Checkout	2026-09-22T16:56:26.3098670Z 
+worker	Checkout	2026-09-22T16:56:26.3099046Z Or undo this operation with:
+worker	Checkout	2026-09-22T16:56:26.3099580Z 
+worker	Checkout	2026-09-22T16:56:26.3099881Z   git switch -
+worker	Checkout	2026-09-22T16:56:26.3100281Z 
+worker	Checkout	2026-09-22T16:56:26.3100961Z Turn off this advice by setting config variable advice.detachedHead to false
+worker	Checkout	2026-09-22T16:56:26.3101959Z 
+worker	Checkout	2026-09-22T16:56:26.3103162Z HEAD is now at 89dc382 Merge 37b1dcefa667f164a160ab9bdfc2757f910f7a66 into 5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b
+worker	Checkout	2026-09-22T16:56:26.3107259Z ##[endgroup]
+worker	Checkout	2026-09-22T16:56:26.3143482Z [command]/usr/bin/git log -1 --format=%H
+worker	Checkout	2026-09-22T16:56:26.3173736Z 89dc382ad5daadf248ec167b672f0dfa4b0754fc
+worker	Setup Node	﻿2026-09-22T16:56:26.3624408Z ##[group]Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+worker	Setup Node	2026-09-22T16:56:26.3626187Z with:
+worker	Setup Node	2026-09-22T16:56:26.3627224Z   node-version: 22
+worker	Setup Node	2026-09-22T16:56:26.3628105Z   cache: npm
+worker	Setup Node	2026-09-22T16:56:26.3629104Z   cache-dependency-path: worker/package-lock.json
+worker	Setup Node	2026-09-22T16:56:26.3630429Z   check-latest: false
+worker	Setup Node	2026-09-22T16:56:26.3640136Z   token: ***
+worker	Setup Node	2026-09-22T16:56:26.3641051Z   package-manager-cache: true
+worker	Setup Node	2026-09-22T16:56:26.3642089Z ##[endgroup]
+worker	Setup Node	2026-09-22T16:56:26.5150179Z Found in cache @ /opt/hostedtoolcache/node/22.23.2/x64
+worker	Setup Node	2026-09-22T16:56:26.5153647Z ##[group]Environment details
+worker	Setup Node	2026-09-22T16:56:28.6944058Z node: v22.23.2
+worker	Setup Node	2026-09-22T16:56:28.6944680Z npm: 10.9.8
+worker	Setup Node	2026-09-22T16:56:28.6944960Z yarn: 1.22.22
+worker	Setup Node	2026-09-22T16:56:28.6946324Z ##[endgroup]
+worker	Setup Node	2026-09-22T16:56:28.6969498Z [command]/opt/hostedtoolcache/node/22.23.2/x64/bin/npm config get cache
+worker	Setup Node	2026-09-22T16:56:28.9395178Z /home/runner/.npm
+worker	Setup Node	2026-09-22T16:56:29.0829151Z Cache hit for: node-cache-Linux-x64-npm-e4c49f4fe79b89c46c6fc5d7557fa535c5678a8f04846985353e784588ddb863
+worker	Setup Node	2026-09-22T16:56:30.1548677Z Received 109431488 of 109431488 (100.0%), 111.6 MBs/sec
+worker	Setup Node	2026-09-22T16:56:30.1549939Z Cache Size: ~104 MB (109431488 B)
+worker	Setup Node	2026-09-22T16:56:30.1612806Z [command]/usr/bin/tar -xf /home/runner/work/_temp/46565b1e-2b25-4c3d-82c6-d1e282361d56/cache.tzst -P -C /home/runner/work/cairn-share/cairn-share --use-compress-program unzstd
+worker	Setup Node	2026-09-22T16:56:30.3154123Z Cache restored successfully
+worker	Setup Node	2026-09-22T16:56:30.3211549Z Cache restored from key: node-cache-Linux-x64-npm-e4c49f4fe79b89c46c6fc5d7557fa535c5678a8f04846985353e784588ddb863
+worker	Install dependencies	﻿2026-09-22T16:56:30.3391669Z ##[group]Run npm ci
+worker	Install dependencies	2026-09-22T16:56:30.3392028Z ^[[36;1mnpm ci^[[0m
+worker	Install dependencies	2026-09-22T16:56:30.3442298Z shell: /usr/bin/bash -e {0}
+worker	Install dependencies	2026-09-22T16:56:30.3442652Z ##[endgroup]
+worker	Install dependencies	2026-09-22T16:56:37.6803849Z 
+worker	Install dependencies	2026-09-22T16:56:37.6811070Z added 90 packages, and audited 91 packages in 7s
+worker	Install dependencies	2026-09-22T16:56:37.6811989Z 
+worker	Install dependencies	2026-09-22T16:56:37.6812549Z 28 packages are looking for funding
+worker	Install dependencies	2026-09-22T16:56:37.6813421Z   run `npm fund` for details
+worker	Install dependencies	2026-09-22T16:56:37.7308021Z 
+worker	Install dependencies	2026-09-22T16:56:37.7308948Z 4 high severity vulnerabilities
+worker	Install dependencies	2026-09-22T16:56:37.7309578Z 
+worker	Install dependencies	2026-09-22T16:56:37.7310118Z To address all issues, run:
+worker	Install dependencies	2026-09-22T16:56:37.7310690Z   npm audit fix --force
+worker	Install dependencies	2026-09-22T16:56:37.7311002Z 
+worker	Install dependencies	2026-09-22T16:56:37.7311261Z Run `npm audit` for details.
+worker	Typecheck	﻿2026-09-22T16:56:37.8081810Z ##[group]Run npm run typecheck
+worker	Typecheck	2026-09-22T16:56:37.8082354Z ^[[36;1mnpm run typecheck^[[0m
+worker	Typecheck	2026-09-22T16:56:37.8133038Z shell: /usr/bin/bash -e {0}
+worker	Typecheck	2026-09-22T16:56:37.8133481Z ##[endgroup]
+worker	Typecheck	2026-09-22T16:56:37.9204495Z 
+worker	Typecheck	2026-09-22T16:56:37.9205227Z > typecheck
+worker	Typecheck	2026-09-22T16:56:37.9205605Z > tsc --noEmit
+worker	Typecheck	2026-09-22T16:56:37.9205793Z 
+worker	Test	﻿2026-09-22T16:56:41.4150515Z ##[group]Run npm test
+worker	Test	2026-09-22T16:56:41.4150828Z ^[[36;1mnpm test^[[0m
+worker	Test	2026-09-22T16:56:41.4199386Z shell: /usr/bin/bash -e {0}
+worker	Test	2026-09-22T16:56:41.4199695Z ##[endgroup]
+worker	Test	2026-09-22T16:56:41.5275046Z 
+worker	Test	2026-09-22T16:56:41.5275510Z > test
+worker	Test	2026-09-22T16:56:41.5275866Z > vitest run
+worker	Test	2026-09-22T16:56:41.5276029Z 
+worker	Test	2026-09-22T16:56:43.3606434Z 
+worker	Test	2026-09-22T16:56:43.3611266Z ^[[1m^[[30m^[[46m RUN ^[[49m^[[39m^[[22m ^[[36mv4.1.11 ^[[39m^[[90m/home/runner/work/cairn-share/cairn-share/worker^[[39m
+worker	Test	2026-09-22T16:56:43.3612293Z 
+worker	Test	2026-09-22T16:56:47.6505113Z  ^[[32m✓^[[39m test/classification.test.ts ^[[2m(^[[22m^[[2m17 tests^[[22m^[[2m)^[[22m^[[33m 2598^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:48.8438264Z  ^[[32m✓^[[39m test/index.test.ts ^[[2m(^[[22m^[[2m31 tests^[[22m^[[2m)^[[22m^[[33m 3790^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:49.9902345Z exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+worker	Test	2026-09-22T16:56:49.9915411Z stack: /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+worker	Test	2026-09-22T16:56:49.9923248Z exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+worker	Test	2026-09-22T16:56:49.9931165Z stack: /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+worker	Test	2026-09-22T16:56:50.5913216Z exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+worker	Test	2026-09-22T16:56:50.5925906Z stack: /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+worker	Test	2026-09-22T16:56:50.5937822Z exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+worker	Test	2026-09-22T16:56:50.5948187Z stack: /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+worker	Test	2026-09-22T16:56:50.9349497Z  ^[[32m✓^[[39m test/domain.test.ts ^[[2m(^[[22m^[[2m41 tests^[[22m^[[2m)^[[22m^[[33m 5862^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:51.5039404Z  ^[[32m✓^[[39m test/app-enrichment.test.ts ^[[2m(^[[22m^[[2m10 tests^[[22m^[[2m)^[[22m^[[33m 1799^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:51.6911003Z  ^[[32m✓^[[39m test/decision-atomicity.test.ts ^[[2m(^[[22m^[[2m18 tests^[[22m^[[2m)^[[22m^[[33m 3157^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:53.7643856Z  ^[[32m✓^[[39m test/evidence-execution.test.ts ^[[2m(^[[22m^[[2m11 tests^[[22m^[[2m)^[[22m^[[33m 1794^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:54.8825510Z exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+worker	Test	2026-09-22T16:56:54.8838366Z stack: /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+worker	Test	2026-09-22T16:56:54.8863157Z exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+worker	Test	2026-09-22T16:56:54.8871611Z stack: /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+worker	Test	2026-09-22T16:56:54.8877382Z exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+worker	Test	2026-09-22T16:56:54.8890099Z stack: /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+worker	Test	2026-09-22T16:56:54.8900957Z exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+worker	Test	2026-09-22T16:56:54.8912112Z stack: /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/runner/work/cairn-share/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+worker	Test	2026-09-22T16:56:55.6248040Z  ^[[32m✓^[[39m test/reset-migration.test.ts ^[[2m(^[[22m^[[2m2 tests^[[22m^[[2m)^[[22m^[[33m 2888^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:55.6251134Z    ^[[33m^[[2m✓^[[22m^[[39m 0024 upgrades all shared override histories without rewriting their source records ^[[33m 1101^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:55.6254793Z    ^[[33m^[[2m✓^[[22m^[[39m 0024 repairs legacy empty barriers, noncurrent entities and absent terms while preserving later decisions ^[[33m 1785^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:56.1227886Z  ^[[32m✓^[[39m test/curation.test.ts ^[[2m(^[[22m^[[2m11 tests^[[22m^[[2m)^[[22m^[[33m 1483^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:57.6343815Z  ^[[32m✓^[[39m test/selection-filter-routes.test.ts ^[[2m(^[[22m^[[2m15 tests^[[22m^[[2m)^[[22m^[[33m 5150^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:57.6347718Z    ^[[33m^[[2m✓^[[22m^[[39m different dimension and entity filters have separate cache entries and repeat reads hit ^[[33m 448^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:57.6350112Z    ^[[33m^[[2m✓^[[22m^[[39m counts reflect effective filters but not pagination or the status facet ^[[33m 350^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:57.6369069Z    ^[[33m^[[2m✓^[[22m^[[39m filtered cursors count only matching rows and invalid input never reuses cached broad results ^[[33m 418^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:57.6371193Z    ^[[33m^[[2m✓^[[22m^[[39m entity filters follow the independent snapshot state while human corrections leave that state unchanged ^[[33m 500^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:57.6373133Z    ^[[33m^[[2m✓^[[22m^[[39m authorized filtering does not read deliberately stale projection values ^[[33m 318^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:57.6374952Z    ^[[33m^[[2m✓^[[22m^[[39m real decision and override writes invalidate filter caches while retaining legal v1 projection ^[[33m 791^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:57.6377279Z    ^[[33m^[[2m✓^[[22m^[[39m confirms explicitly negotiated filters without changing old shapes or sharing their cache entry ^[[33m 376^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:58.5243671Z  ^[[32m✓^[[39m test/taxonomy-v2.test.ts ^[[2m(^[[22m^[[2m15 tests^[[22m^[[2m)^[[22m^[[33m 1743^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:59.0853220Z  ^[[32m✓^[[39m test/completion-atomicity.test.ts ^[[2m(^[[22m^[[2m12 tests^[[22m^[[2m)^[[22m^[[33m 2068^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:56:59.6239406Z  ^[[32m✓^[[39m test/integration.test.ts ^[[2m(^[[22m^[[2m9 tests^[[22m^[[2m)^[[22m^[[33m 1114^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:57:00.5368031Z  ^[[32m✓^[[39m test/run-provenance.test.ts ^[[2m(^[[22m^[[2m3 tests^[[22m^[[2m)^[[22m^[[33m 422^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:57:00.6957185Z  ^[[32m✓^[[39m test/entity-identity.test.ts ^[[2m(^[[22m^[[2m5 tests^[[22m^[[2m)^[[22m^[[33m 1185^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:57:00.6958855Z    ^[[33m^[[2m✓^[[22m^[[39m R3-09 search and cached projection follow entity accept/reject/reset/set-empty and source staleness ^[[33m 457^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:57:01.8050165Z  ^[[32m✓^[[39m test/selection-filter-migration.test.ts ^[[2m(^[[22m^[[2m1 test^[[22m^[[2m)^[[22m^[[32m 181^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:57:04.2908268Z ^[[90mstdout^[[2m | test/selection-filter-scale.test.ts^[[2m > ^[[22m^[[2mqueries the full collection through indexed histories instead of a bounded candidate prefix
+worker	Test	2026-09-22T16:57:04.3200371Z ^[[22m^[[39mB05 local scale {"links":1200,"actions":9600,"meta":{"served_by":"miniflare.db","duration":2470,"changes":0,"last_row_id":9600,"changed_db":false,"size_after":2142208,"rows_read":4455557,"rows_written":0},"plan":["SCAN links","CORRELATED SCALAR SUBQUERY 39","CO-ROUTINE effective","COMPOUND QUERY","LEFT-MOST SUBQUERY","CO-ROUTINE multi_candidates","MERGE (UNION)","LEFT","MATERIALIZE baseline","SCAN CONSTANT ROW","CORRELATED SCALAR SUBQUERY 15","SEARCH classification_decisions USING INDEX classification_decisions_link_idx (link_id=?)","MATERIALIZE dimensions","SCAN 6 CONSTANT ROWS","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-41)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","MATERIALIZE fields","SCAN 3 CONSTANT ROWS","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-41)","SCAN events","USE TEMP B-TREE FOR GROUP BY","MATERIALIZE events","CO-ROUTINE (subquery-42)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-42)","SCAN baseline","SCAN dimensions","SCAN j VIRTUAL TABLE INDEX 1:","SCAN b LEFT-JOIN","SCAN barrier LEFT-JOIN","CORRELATED SCALAR SUBQUERY 24","MATERIALIZE events","CO-ROUTINE (subquery-43)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-43)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-44)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-44)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","SCAN b LEFT-JOIN","USE TEMP B-TREE FOR ORDER BY","RIGHT","MATERIALIZE events","CO-ROUTINE (subquery-45)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-45)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-46)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-46)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","CORRELATED SCALAR SUBQUERY 13","MATERIALIZE events","CO-ROUTINE (subquery-47)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-47)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-48)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-48)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","SCAN b LEFT-JOIN","SCAN b LEFT-JOIN","BLOOM FILTER ON d (single=? AND field=?)","SEARCH d USING AUTOMATIC PARTIAL COVERING INDEX (single=? AND field=?)","USE TEMP B-TREE FOR ORDER BY","SCAN c","CORRELATED SCALAR SUBQUERY 33","MATERIALIZE events","CO-ROUTINE (subquery-49)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-49)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-50)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-50)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","CORRELATED SCALAR SUBQUERY 13","MATERIALIZE events","CO-ROUTINE (subquery-51)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-51)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-52)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-52)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","SCAN b LEFT-JOIN","SCAN b LEFT-JOIN","USE TEMP B-TREE FOR ORDER BY","UNION ALL","CO-ROUTINE single_candidates","COMPOUND QUERY","LEFT-MOST SUBQUERY","MATERIALIZE events","CO-ROUTINE (subquery-53)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-53)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-54)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-54)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","CORRELATED SCALAR SUBQUERY 13","MATERIALIZE events","CO-ROUTINE (subquery-55)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-55)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-56)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-56)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","SCAN b LEFT-JOIN","CORRELATED SCALAR SUBQUERY 28","MATERIALIZE events","CO-ROUTINE (subquery-57)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-57)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-58)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-58)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SEARCH e","CORRELATED SCALAR SUBQUERY 13","MATERIALIZE events","CO-ROUTINE (subquery-59)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-59)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-60)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-60)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","SCAN b LEFT-JOIN","SEARCH b LEFT-JOIN","SCAN b LEFT-JOIN","BLOOM FILTER ON d (single=? AND field=?)","SEARCH d USING AUTOMATIC PARTIAL COVERING INDEX (single=? AND field=?)","UNION ALL","MATERIALIZE baseline","SCAN CONSTANT ROW","CORRELATED SCALAR SUBQUERY 15","SEARCH classification_decisions USING INDEX classification_decisions_link_idx (link_id=?)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-61)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-61)","SCAN events","USE TEMP B-TREE FOR GROUP BY","MATERIALIZE events","CO-ROUTINE (subquery-62)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-62)","SCAN baseline","BLOOM FILTER ON dimensions (single=?)","SEARCH dimensions USING AUTOMATIC PARTIAL COVERING INDEX (single=?)","CORRELATED SCALAR SUBQUERY 31","MATERIALIZE events","CO-ROUTINE (subquery-63)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-63)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-64)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-64)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","CORRELATED SCALAR SUBQUERY 13","MATERIALIZE events","CO-ROUTINE (subquery-65)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-65)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-66)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-66)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","SCAN b LEFT-JOIN","CORRELATED SCALAR SUBQUERY 28","MATERIALIZE events","CO-ROUTINE (subquery-67)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-67)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-68)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-68)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SEARCH e","CORRELATED SCALAR SUBQUERY 13","MATERIALIZE events","CO-ROUTINE (subquery-69)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-69)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-70)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-70)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","SCAN b LEFT-JOIN","SEARCH b LEFT-JOIN","SCAN b LEFT-JOIN","BLOOM FILTER ON d (single=? AND field=?)","SEARCH d USING AUTOMATIC PARTIAL COVERING INDEX (single=? AND field=?)","SCAN j VIRTUAL TABLE INDEX 1:","SCAN b LEFT-JOIN","SCAN barrier LEFT-JOIN","CORRELATED SCALAR SUBQUERY 24","MATERIALIZE events","CO-ROUTINE (subquery-71)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-71)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-72)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-72)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","SCAN b LEFT-JOIN","SCAN c","CORRELATED SCALAR SUBQUERY 35","MATERIALIZE events","CO-ROUTINE (subquery-73)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-73)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-74)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-74)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","CORRELATED SCALAR SUBQUERY 13","MATERIALIZE events","CO-ROUTINE (subquery-75)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-75)","MATERIALIZE barriers","MATERIALIZE events","CO-ROUTINE (subquery-76)","MATERIALIZE raw_events","COMPOUND QUERY","LEFT-MOST SUBQUERY","SEARCH curation_overrides USING INDEX curation_overrides_link_revision_idx (link_id=?)","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","UNION ALL","SEARCH legacy_curation_history USING INTEGER PRIMARY KEY (rowid=?)","CORRELATED SCALAR SUBQUERY 1","SEARCH legacy_curation_history USING COVERING INDEX legacy_curation_history_link_idx (link_id=?)","SCAN fields","SCAN j VIRTUAL TABLE INDEX 1:","SCAN raw_events","USE TEMP B-TREE FOR ORDER BY","SCAN (subquery-76)","SCAN events","USE TEMP B-TREE FOR GROUP BY","SCAN e","SCAN b LEFT-JOIN","SCAN b LEFT-JOIN","USE TEMP B-TREE FOR count(DISTINCT)","SCAN effective","SCAN requested VIRTUAL TABLE INDEX 1:","CORRELATED LIST SUBQUERY 38","SCAN json_each VIRTUAL TABLE INDEX 3:"]}
+worker	Test	2026-09-22T16:57:04.3395820Z 
+worker	Test	2026-09-22T16:57:05.4113081Z  ^[[32m✓^[[39m test/selection-filter-fold.test.ts ^[[2m(^[[22m^[[2m3 tests^[[22m^[[2m)^[[22m^[[33m 4905^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:57:05.4115162Z    ^[[33m^[[2m✓^[[22m^[[39m SQL membership agrees with every shared Go/Worker golden vector ^[[33m 468^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:57:05.4117889Z    ^[[33m^[[2m✓^[[22m^[[39m SQL membership follows legacy null/empty/full sets, latest history, aliases and revision/id order ^[[33m 1035^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:57:05.4119292Z    ^[[33m^[[2m✓^[[22m^[[39m SQL membership matches the canonical fold across deterministic mixed histories ^[[33m 3398^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:57:08.5627639Z  ^[[32m✓^[[39m test/selection-filter-scale.test.ts ^[[2m(^[[22m^[[2m1 test^[[22m^[[2m)^[[22m^[[33m 6918^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:57:08.5628968Z    ^[[33m^[[2m✓^[[22m^[[39m queries the full collection through indexed histories instead of a bounded candidate prefix ^[[33m 6915^[[2mms^[[22m^[[39m
+worker	Test	2026-09-22T16:57:08.5671013Z 
+worker	Test	2026-09-22T16:57:08.5676204Z ^[[2m Test Files ^[[22m ^[[1m^[[32m17 passed^[[39m^[[22m^[[90m (17)^[[39m
+worker	Test	2026-09-22T16:57:08.5707788Z ^[[2m      Tests ^[[22m ^[[1m^[[32m205 passed^[[39m^[[22m^[[90m (205)^[[39m
+worker	Test	2026-09-22T16:57:08.5708585Z ^[[2m   Start at ^[[22m 16:56:43
+worker	Test	2026-09-22T16:57:08.5709769Z ^[[2m   Duration ^[[22m 25.20s^[[2m (transform 791ms, setup 0ms, import 4.90s, tests 47.06s, environment 4ms)^[[22m
+worker	Test	2026-09-22T16:57:08.5710490Z 
+worker	Build deploy bundle	﻿2026-09-22T16:57:08.6315973Z ##[group]Run npm run deploy:dry-run
+worker	Build deploy bundle	2026-09-22T16:57:08.6317567Z ^[[36;1mnpm run deploy:dry-run^[[0m
+worker	Build deploy bundle	2026-09-22T16:57:08.6366071Z shell: /usr/bin/bash -e {0}
+worker	Build deploy bundle	2026-09-22T16:57:08.6366718Z ##[endgroup]
+worker	Build deploy bundle	2026-09-22T16:57:08.7412708Z 
+worker	Build deploy bundle	2026-09-22T16:57:08.7413310Z > deploy:dry-run
+worker	Build deploy bundle	2026-09-22T16:57:08.7413888Z > wrangler deploy --dry-run
+worker	Build deploy bundle	2026-09-22T16:57:08.7414226Z 
+worker	Build deploy bundle	2026-09-22T16:57:10.1065469Z 
+worker	Build deploy bundle	2026-09-22T16:57:10.1066360Z  ⛅️ wrangler 4.126.0
+worker	Build deploy bundle	2026-09-22T16:57:10.1067193Z ────────────────────
+worker	Build deploy bundle	2026-09-22T16:57:10.4663899Z Total Upload: 240.74 KiB / gzip: 52.83 KiB
+worker	Build deploy bundle	2026-09-22T16:57:10.4695814Z Your Worker has access to the following bindings:
+worker	Build deploy bundle	2026-09-22T16:57:10.4696987Z Binding                                                Resource         
+worker	Build deploy bundle	2026-09-22T16:57:10.4726815Z env.DB (cairn-share)                                   D1 Database      
+worker	Build deploy bundle	2026-09-22T16:57:10.4731692Z env.ENRICHMENT_IMAGES (cairn-x-enrichment-images)      R2 Bucket        
+worker	Build deploy bundle	2026-09-22T16:57:10.4732238Z 
+worker	Build deploy bundle	2026-09-22T16:57:10.4732450Z --dry-run: exiting now.
+worker	Build deploy bundle	2026-09-22T16:57:10.4732806Z 
+worker	Build deploy bundle	2026-09-22T16:57:10.4733704Z Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
+worker	Post Setup Node	﻿2026-09-22T16:57:10.5503303Z Post job cleanup.
+worker	Post Setup Node	2026-09-22T16:57:10.6690560Z Cache hit occurred on the primary key node-cache-Linux-x64-npm-e4c49f4fe79b89c46c6fc5d7557fa535c5678a8f04846985353e784588ddb863, not saving cache.
+worker	Post Checkout	﻿2026-09-22T16:57:10.6841031Z Post job cleanup.
+worker	Post Checkout	2026-09-22T16:57:10.7827539Z [command]/usr/bin/git version
+worker	Post Checkout	2026-09-22T16:57:10.7883500Z git version 2.55.0
+worker	Post Checkout	2026-09-22T16:57:10.7929414Z Temporarily overriding HOME='/home/runner/work/_temp/f372c94d-e847-4b00-bb69-e3be06ea3a34' before making global git config changes
+worker	Post Checkout	2026-09-22T16:57:10.7953403Z Adding repository directory to the temporary git global config as a safe directory
+worker	Post Checkout	2026-09-22T16:57:10.7977622Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/cairn-share/cairn-share
+worker	Post Checkout	2026-09-22T16:57:10.7979210Z Removing SSH command configuration
+worker	Post Checkout	2026-09-22T16:57:10.7980154Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+worker	Post Checkout	2026-09-22T16:57:10.8021901Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+worker	Post Checkout	2026-09-22T16:57:10.8294568Z Removing HTTP extra header
+worker	Post Checkout	2026-09-22T16:57:10.8301965Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+worker	Post Checkout	2026-09-22T16:57:10.8348875Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+worker	Post Checkout	2026-09-22T16:57:10.8668662Z Removing includeIf entries pointing to credentials config files
+worker	Post Checkout	2026-09-22T16:57:10.8687671Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+worker	Post Checkout	2026-09-22T16:57:10.8724601Z includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git.path
+worker	Post Checkout	2026-09-22T16:57:10.8727919Z includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git/worktrees/*.path
+worker	Post Checkout	2026-09-22T16:57:10.8729091Z includeif.gitdir:/github/workspace/.git.path
+worker	Post Checkout	2026-09-22T16:57:10.8730048Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+worker	Post Checkout	2026-09-22T16:57:10.8738882Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git.path
+worker	Post Checkout	2026-09-22T16:57:10.8782358Z /home/runner/work/_temp/git-credentials-f67e9da4-42d0-4ab6-a39d-716cfed4859a.config
+worker	Post Checkout	2026-09-22T16:57:10.8848537Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-f67e9da4\-42d0\-4ab6\-a39d\-716cfed4859a\.config
+worker	Post Checkout	2026-09-22T16:57:10.8919086Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git/worktrees/*.path
+worker	Post Checkout	2026-09-22T16:57:10.8962443Z /home/runner/work/_temp/git-credentials-f67e9da4-42d0-4ab6-a39d-716cfed4859a.config
+worker	Post Checkout	2026-09-22T16:57:10.8979800Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/cairn-share/cairn-share/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-f67e9da4\-42d0\-4ab6\-a39d\-716cfed4859a\.config
+worker	Post Checkout	2026-09-22T16:57:10.9049888Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+worker	Post Checkout	2026-09-22T16:57:10.9065087Z /github/runner_temp/git-credentials-f67e9da4-42d0-4ab6-a39d-716cfed4859a.config
+worker	Post Checkout	2026-09-22T16:57:10.9090488Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-f67e9da4\-42d0\-4ab6\-a39d\-716cfed4859a\.config
+worker	Post Checkout	2026-09-22T16:57:10.9137791Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+worker	Post Checkout	2026-09-22T16:57:10.9151439Z /github/runner_temp/git-credentials-f67e9da4-42d0-4ab6-a39d-716cfed4859a.config
+worker	Post Checkout	2026-09-22T16:57:10.9160294Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-f67e9da4\-42d0\-4ab6\-a39d\-716cfed4859a\.config
+worker	Post Checkout	2026-09-22T16:57:10.9198516Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+worker	Post Checkout	2026-09-22T16:57:10.9440412Z Removing credentials config '/home/runner/work/_temp/git-credentials-f67e9da4-42d0-4ab6-a39d-716cfed4859a.config'
+worker	Complete job	﻿2026-09-22T16:57:10.9597753Z Cleaning up orphan processes

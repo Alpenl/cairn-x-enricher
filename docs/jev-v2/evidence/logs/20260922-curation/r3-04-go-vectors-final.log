@@ -1,0 +1,3 @@
+WHAT: 验证新增 reset 向量
+WHY:  覆盖时序修复完整性
+ok  	github.com/Alpenl/cairn-x-enricher/internal/classify	0.021s

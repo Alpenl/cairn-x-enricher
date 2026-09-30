@@ -1,0 +1,20 @@
+{
+  "identical_dataset_and_predictions": true,
+  "new_model_calls": 0,
+  "restored_metadata_v1": 42,
+  "original_input_tokens": 270731,
+  "reference_hash": "ea14264cbaabcedd13a328bfef6473cf31a18827ca0285b27c8047150370b414",
+  "decision": {
+    "promote": false,
+    "reasons": [
+      "insufficient independent reference groups",
+      "insufficient gold samples for a conclusion"
+    ],
+    "blockers": [
+      "promotion requires the frozen holdout split"
+    ],
+    "inconclusive": true
+  },
+  "directory_mode": "0700",
+  "file_modes": "0600"
+}

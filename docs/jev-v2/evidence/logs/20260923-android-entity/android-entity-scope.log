@@ -1,0 +1,4 @@
+[36mWHAT[0m: 核对完整范围索引
+[35mWHY[0m:  保留 235 项原要求和固定证据映射
+PASS: 126 tasks + 109 controls = 235 IDs; exact requirements, bidirectional mappings, 112 pinned files; git objects checked=True
+Index integrity only; no functional, quality or final acceptance is asserted.

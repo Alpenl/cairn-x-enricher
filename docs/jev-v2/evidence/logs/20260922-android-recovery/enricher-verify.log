@@ -1,0 +1,183 @@
+[36mWHAT[0m: 运行跨仓回归
+[35mWHY[0m:  确保新确认 shape 兼容 Go 消费路径
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+0 issues.
+go test -race -coverprofile=coverage.out ./...
+ok  	github.com/Alpenl/cairn-x-enricher/cmd/cairn-x-enricher	(cached)	coverage: 38.9% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/ablation	(cached)	coverage: 31.6% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/ablation/main		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/ablation-report		coverage: 0.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/classification/main	(cached)	coverage: 35.1% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/classification/referencegen	(cached)	coverage: 82.8% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/harvest		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/identity		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/rescore		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/threadreport		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/threadvalue		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/verifyurls		coverage: 0.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/buildinfo	(cached)	coverage: 100.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/cairn	(cached)	coverage: 40.9% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/classify	(cached)	coverage: 76.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/config	(cached)	coverage: 88.3% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/dashboard	1.328s	coverage: 49.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/enrich	(cached)	coverage: 83.6% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/evaluation	(cached)	coverage: 88.8% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/extension	(cached)	coverage: 79.5% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/health	(cached)	coverage: 94.2% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/processor	(cached)	coverage: 83.7% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/taxonomy	(cached)	coverage: 94.2% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	(cached)	coverage: [no statements]
+node internal/dashboard/frontend-check.mjs internal/dashboard
+ok   common.js parses
+ok   home.js parses
+ok   backstage.js parses
+ok   reader.js parses
+ok   reader bounds its polling attempts
+ok   formatDate empty
+ok   formatDate invalid
+ok   formatDate formats
+ok   formatDate same local day is stable
+ok   formatDate different days differ
+ok   formatDateTime formats
+ok   formatDateTime distinguishes instants
+ok   formatDateTime is stable for one instant
+ok   formatDate still collapses one local day
+ok   bucket invalid
+ok   bucket today
+ok   bucket 3 days
+ok   bucket 10 days
+ok   bucket 60 days
+ok   shortURL strips www
+ok   shortURL repeated
+ok   shortURL invalid
+ok   termLabel unknown
+ok   metadata sparse
+ok   metadata empty
+ok   exportMarkdown returns a promise
+ok   exportMarkdown resolves
+ok   home renders cards into the stream
+ok   home renders the bucket band
+ok   home renders titles
+ok   home keeps features out of the stream
+ok   search highlights matches
+ok   highlight marks carry the matched text
+ok   empty result renders no cards
+ok   empty state is revealed
+ok   reader defers collapsed original paragraphs
+ok   reader preserves unchanged body nodes during polling
+ok   reader preserves unchanged images during polling
+ok   reader expands original text on demand
+ok   reader refreshes changed visible translation
+ok   reader refreshes changed expanded original
+ok   summary export hydrates the selected detail
+ok   summary export includes both full languages
+ok   failed hydration cannot produce a partial export
+ok   editing a reason marks the form dirty
+ok   polling does not refetch detail while the form is dirty
+ok   a dirty reason draft is not overwritten by a poll
+ok   a dirty status draft is not overwritten by a poll
+ok   reader sends one patch for a why-only save
+ok   why-only save omits classification
+ok   reader sends one patch for a status-only save
+ok   status-only save omits classification
+ok   reader sends one patch for a why+status-only save
+ok   why+status-only save omits classification
+ok   explicit tag edit sends one patch
+ok   explicit tag edit sends classification
+ok   explicit tag edit keeps the reason field
+ok   confirm button is offered before review
+ok   explicit confirmation sends one patch
+ok   explicit confirmation sends classification
+ok   explicit confirmation keeps the AI topics
+ok   errorLabel(job_busy)
+ok   errorLabel(not_found)
+ok   errorLabel(backend_error)
+ok   errorLabel(queue_full)
+ok   errorLabel(invalid_ids)
+ok   errorLabel(invalid_source)
+ok   errorLabel(invalid_curation)
+ok   errorLabel(invalid_id)
+ok   errorLabel(invalid_query)
+ok   errorLabel(invalid_json)
+ok   errorLabel(invalid_content_type)
+ok   errorLabel unknown is shown verbatim
+
+73/73 checks passed
+mkdir -p bin
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Version=dev -X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Commit=60e0497 -X github.com/Alpenl/cairn-x-enricher/internal/buildinfo.Date=2026-09-22T11:46:47Z" -o bin/cairn-x-enricher ./cmd/cairn-x-enricher
+go test ./experiments/... ./internal/evaluation/...
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/ablation	(cached)
+?   	github.com/Alpenl/cairn-x-enricher/experiments/ablation/main	[no test files]
+?   	github.com/Alpenl/cairn-x-enricher/experiments/ablation-report	[no test files]
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/classification/main	(cached)
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/classification/referencegen	(cached)
+?   	github.com/Alpenl/cairn-x-enricher/experiments/harvest	[no test files]
+?   	github.com/Alpenl/cairn-x-enricher/experiments/identity	[no test files]
+?   	github.com/Alpenl/cairn-x-enricher/experiments/rescore	[no test files]
+?   	github.com/Alpenl/cairn-x-enricher/experiments/threadreport	[no test files]
+?   	github.com/Alpenl/cairn-x-enricher/experiments/threadvalue	[no test files]
+?   	github.com/Alpenl/cairn-x-enricher/experiments/verifyurls	[no test files]
+ok  	github.com/Alpenl/cairn-x-enricher/internal/evaluation	(cached)
+== TestLocalWorkerFullLifecycle: starting worker on 127.0.0.1:35091 ==
+=== RUN   TestLocalWorkerFullLifecycle
+--- PASS: TestLocalWorkerFullLifecycle (1.49s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.494s
+== TestLocalWorkerVersionCompetition: starting worker on 127.0.0.1:47381 ==
+=== RUN   TestLocalWorkerVersionCompetition
+--- PASS: TestLocalWorkerVersionCompetition (0.84s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.844s
+== TestLocalWorkerDisplayRenameKeepsSemantics: starting worker on 127.0.0.1:47857 ==
+=== RUN   TestLocalWorkerDisplayRenameKeepsSemantics
+--- PASS: TestLocalWorkerDisplayRenameKeepsSemantics (0.08s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.081s
+== TestLocalWorkerEvidenceCheckpointAndBoundRead: starting worker on 127.0.0.1:48885 ==
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead
+    evidence_test.go:153: source saved, snapshot 503, three empty claims without attempt consumption, retry repairs snapshot with one retrieval
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/404
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/503
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/malformed
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/id
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/revision
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/hash
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/body
+=== NAME  TestLocalWorkerEvidenceCheckpointAndBoundRead
+    evidence_test.go:252: real bound snapshot retained 45435 archive bytes; outbound request=2057 state=613 runes=200 blocks=0, truncation recorded
+    evidence_test.go:253: seven bound-read failures: zero model calls/commits; recovery: 1 model call, 1 run
+--- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead (1.35s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/404 (0.11s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/503 (0.12s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/malformed (0.12s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/id (0.12s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/revision (0.10s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/hash (0.10s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/body (0.10s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.350s
+== TestLocalWorkerEntitySnapshotIdentity: starting worker on 127.0.0.1:39735 ==
+=== RUN   TestLocalWorkerEntitySnapshotIdentity
+    entities_test.go:210: actual processor: input_revision=1 content_revision=3 snapshot=2; classification=1 entity=1; 3 archived blocks; reject/reset API+search agree; stale result refused
+--- PASS: TestLocalWorkerEntitySnapshotIdentity (0.84s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.840s
+== TestLocalWorkerStoredQuestionReuse: starting worker on 127.0.0.1:44211 ==
+=== RUN   TestLocalWorkerStoredQuestionReuse
+    reuse_test.go:259: production store/read/reuse: initial=4 changed=1 display=0 policy=0; legacy/partial/alias bounded full; drift=1 and no fallback; total requests=8
+--- PASS: TestLocalWorkerStoredQuestionReuse (2.58s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	2.583s
+== TestLocalWorkerDecisionReferences: starting worker on 127.0.0.1:57581 ==
+=== RUN   TestLocalWorkerDecisionReferences
+    decision_test.go:179: production multi-run references restored; alias drift rejected; committed response-loss recovery preserved human edit and made zero additional model calls; 3 local calls total
+--- PASS: TestLocalWorkerDecisionReferences (2.27s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	2.277s
+== TestLocalWorkerEvidenceExecutionRecovery: starting worker on 127.0.0.1:49285 ==
+=== RUN   TestLocalWorkerEvidenceExecutionRecovery
+    escalation_test.go:247: real production evidence escalation: competing owner denied; 1 external HTTP fetch, checkpoint lost-response replay, 3 bounded finalize failures, new processor recovery, 2 model fixture calls; 3 original blocks retained and third poll unchanged
+--- PASS: TestLocalWorkerEvidenceExecutionRecovery (1.31s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.314s

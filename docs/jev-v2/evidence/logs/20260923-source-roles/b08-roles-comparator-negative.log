@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/tmp/cairn-b08-roles-next/experiments/classification/reference-v1/compare-source-roles.py", line 36, in <module>
+    assert live['plan']['spec_id'] == intervention['variant_spec_id']
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+PASS: wrong variant identity rejected before output or scoring

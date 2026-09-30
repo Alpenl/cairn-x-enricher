@@ -1,0 +1,11 @@
+== applying real migrations to the local D1 ==
+== starting wrangler dev on 127.0.0.1:53207 ==
+== building the real Go service ==
+== driving the real browser against the real stack ==
+ok   the real Go service registered the compiled spec
+ok   the spec carries the multidimensional taxonomy version
+ok   v2 target activated
+ok   new bookmark created
+real end-to-end harness failed: Error: timeout waiting for a real v2 classification run: null
+    at waitFor (file:///tmp/cairn-nas-image-next/tests/local-integration/browser-e2e.mjs:46:9)
+    at async main (file:///tmp/cairn-nas-image-next/tests/local-integration/browser-e2e.mjs:114:17)

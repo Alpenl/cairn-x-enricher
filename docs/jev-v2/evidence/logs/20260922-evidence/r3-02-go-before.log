@@ -1,0 +1,20 @@
+--- FAIL: TestBoundEvidenceFailureNeverFallsBackToPlainText (0.00s)
+    --- FAIL: TestBoundEvidenceFailureNeverFallsBackToPlainText/404 (0.00s)
+        stages_test.go:679: bad evidence reached inference: done=1 failed=0 calls=1 commits=1 err=<nil>
+    --- FAIL: TestBoundEvidenceFailureNeverFallsBackToPlainText/503 (0.00s)
+        stages_test.go:679: bad evidence reached inference: done=1 failed=0 calls=1 commits=1 err=<nil>
+    --- FAIL: TestBoundEvidenceFailureNeverFallsBackToPlainText/malformed (0.00s)
+        stages_test.go:679: bad evidence reached inference: done=1 failed=0 calls=1 commits=1 err=<nil>
+    --- FAIL: TestBoundEvidenceFailureNeverFallsBackToPlainText/wrong-id (0.00s)
+        stages_test.go:679: bad evidence reached inference: done=1 failed=0 calls=1 commits=1 err=<nil>
+    --- FAIL: TestBoundEvidenceFailureNeverFallsBackToPlainText/wrong-revision (0.00s)
+        stages_test.go:679: bad evidence reached inference: done=1 failed=0 calls=1 commits=1 err=<nil>
+    --- FAIL: TestBoundEvidenceFailureNeverFallsBackToPlainText/wrong-hash (0.00s)
+        stages_test.go:679: bad evidence reached inference: done=1 failed=0 calls=1 commits=1 err=<nil>
+    --- FAIL: TestBoundEvidenceFailureNeverFallsBackToPlainText/altered-body (0.00s)
+        stages_test.go:679: bad evidence reached inference: done=1 failed=0 calls=1 commits=1 err=<nil>
+--- FAIL: TestSourceCheckpointRetryRepairsMissingSnapshotWithoutFetch (0.00s)
+    stages_test.go:702: retry did not repair checkpoint: fetches=1 snapshots=1 completions=1
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/processor	0.004s
+FAIL

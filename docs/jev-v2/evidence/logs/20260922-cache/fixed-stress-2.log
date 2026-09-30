@@ -1,0 +1,51 @@
+INSTRUMENTATION_STATUS: numtests=3
+INSTRUMENTATION_STATUS: stream=
+com.alpenl.cairn.share.AccountCacheInstrumentedTest:
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=refreshRebasesResetPreviewWithoutChangingTheDurableIntentAndCapabilitiesStayIndependent
+INSTRUMENTATION_STATUS: class=com.alpenl.cairn.share.AccountCacheInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=3
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=refreshRebasesResetPreviewWithoutChangingTheDurableIntentAndCapabilitiesStayIndependent
+INSTRUMENTATION_STATUS: class=com.alpenl.cairn.share.AccountCacheInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=3
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=returningToSameAccountCannotPublishOldDetailSelectionTaxonomyOrDebug
+INSTRUMENTATION_STATUS: class=com.alpenl.cairn.share.AccountCacheInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=3
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=returningToSameAccountCannotPublishOldDetailSelectionTaxonomyOrDebug
+INSTRUMENTATION_STATUS: class=com.alpenl.cairn.share.AccountCacheInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=3
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=oldMutationsCannotReplaceDeleteOrNavigateTheNewAccount
+INSTRUMENTATION_STATUS: class=com.alpenl.cairn.share.AccountCacheInstrumentedTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=3
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=oldMutationsCannotReplaceDeleteOrNavigateTheNewAccount
+INSTRUMENTATION_STATUS: class=com.alpenl.cairn.share.AccountCacheInstrumentedTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 2.401
+
+OK (3 tests)
+
+
+INSTRUMENTATION_CODE: -1

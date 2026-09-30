@@ -1,0 +1,7 @@
+== TestLocalWorkerFullLifecycle: starting worker on 127.0.0.1:48977 ==
+=== RUN   TestLocalWorkerFullLifecycle
+    local_integration_test.go:374: deleted source still readable
+--- FAIL: TestLocalWorkerFullLifecycle (1.22s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.226s
+FAIL

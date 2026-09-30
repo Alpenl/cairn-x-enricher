@@ -44,8 +44,8 @@ func TestLiveJev(t *testing.T) {
 	}
 	t.Logf("model=%s elapsed=%s topics=%v form=%s use=%s uncertain=%v usage=%s", r.Model, time.Since(started).Round(time.Millisecond), r.Classification.Topics, r.Classification.Form, r.Classification.Use, r.Classification.Uncertainty, r.Usage)
 	for id, answer := range r.Answers {
-		if answer.Noul != nil {
-			t.Logf("%s p=%.4f", id, *answer.Noul)
+		if answer.Noul != nil && answer.Noul.Noul != nil {
+			t.Logf("%s p=%.4f", id, *answer.Noul.Noul)
 		}
 	}
 }

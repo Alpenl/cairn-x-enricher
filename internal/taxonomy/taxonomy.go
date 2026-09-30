@@ -15,23 +15,44 @@ import (
 
 var idPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 
-// Term is one stable identifier, display label, and explicitly accepted aliases.
+// Term is one stable identifier, display label, and explicitly accepted
+// aliases. Includes/Excludes are boundary examples that carry semantics: they
+// are part of the compiled question and its hash, unlike the display label.
 type Term struct {
-	Description string   `json:"description,omitempty"`
-	ID          string   `json:"id"`
-	Label       string   `json:"label"`
-	Aliases     []string `json:"aliases"`
-	Active      bool     `json:"active"`
+	DefinitionVersion int      `json:"definition_version,omitempty"`
+	DisplayRevision   int      `json:"display_revision,omitempty"`
+	Status            string   `json:"status,omitempty"`
+	Description       string   `json:"description,omitempty"`
+	ID                string   `json:"id"`
+	Label             string   `json:"label"`
+	Aliases           []string `json:"aliases"`
+	Active            bool     `json:"active"`
+	Includes          []string `json:"includes,omitempty"`
+	Excludes          []string `json:"excludes,omitempty"`
 }
+
+// PersonalUse reports the reserved legacy use that expresses the user's own
+// opposition. It remains available for explicit human curation and historical
+// reading, but objective model requests must never infer it. Its stable ID is
+// part of the legacy compatibility contract, independent of its display label.
+func PersonalUse(id string) bool { return id == "contra" }
 
 // Catalog is supplied by the Worker so generation, storage, and the UI agree.
 // It is a plain immutable value; callers that need the rendered prompt or
 // schema repeatedly should use a Renderer, which caches both.
 type Catalog struct {
-	Version string `json:"version"`
-	Topics  []Term `json:"topics"`
-	Forms   []Term `json:"forms"`
-	Uses    []Term `json:"uses"`
+	Version           string `json:"version"`
+	DefinitionVersion int    `json:"definition_version,omitempty"`
+	Topics            []Term `json:"topics"`
+	Forms             []Term `json:"forms"`
+	Uses              []Term `json:"uses"`
+	// The multidimensional vocabulary is optional so the legacy taxonomy
+	// endpoint keeps working; when present it is compiled into its own
+	// questions and carried through the v2 effective view.
+	ContentFunctions []Term `json:"content_functions,omitempty"`
+	ResourceKinds    []Term `json:"resource_kinds,omitempty"`
+	Carriers         []Term `json:"carriers,omitempty"`
+	Affordances      []Term `json:"affordances,omitempty"`
 }
 
 // Renderer caches the prompt fragment and JSON Schema derived from one
@@ -61,6 +82,9 @@ type Selection struct {
 // Classification keeps model suggestions separate from the user's saved reason.
 type Classification struct {
 	Selection
+	// ResourceKinds is an additive effective read field. Objective writes keep
+	// their authoritative resources in the replayable automatic view.
+	ResourceKinds   []string `json:"resource_kinds,omitempty"`
 	WhySuggestion   string   `json:"why_suggestion"`
 	Entities        []string `json:"entities"`
 	Uncertainty     bool     `json:"uncertainty"`
@@ -73,13 +97,29 @@ func (c Catalog) Validate() error {
 	if strings.TrimSpace(c.Version) == "" || len(c.Version) > 64 {
 		return errors.New("taxonomy version must contain 1 to 64 bytes")
 	}
-	for name, terms := range map[string][]Term{"topics": c.Topics, "forms": c.Forms, "uses": c.Uses} {
+	if c.DefinitionVersion < 0 {
+		return errors.New("taxonomy definition version must not be negative")
+	}
+	dimensions := map[string][]Term{"topics": c.Topics, "forms": c.Forms, "uses": c.Uses}
+	optional := map[string][]Term{"content_functions": c.ContentFunctions, "resource_kinds": c.ResourceKinds, "carriers": c.Carriers, "affordances": c.Affordances}
+	for name, terms := range optional {
+		if len(terms) > 0 {
+			dimensions[name] = terms
+		}
+	}
+	for name, terms := range dimensions {
 		if len(terms) == 0 || len(terms) > 40 {
 			return fmt.Errorf("taxonomy %s must contain 1 to 40 terms", name)
 		}
 		ids, aliases := map[string]bool{}, map[string]string{}
 		active := 0
 		for _, term := range terms {
+			if term.DefinitionVersion < 0 || term.DisplayRevision < 0 || (term.Status != "" && term.Status != "active" && term.Status != "deprecated") {
+				return fmt.Errorf("taxonomy %s contains invalid term version metadata", name)
+			}
+			if term.Status != "" && (term.DefinitionVersion < 1 || term.DisplayRevision < 1 || (term.Status == "deprecated" && term.Active)) {
+				return fmt.Errorf("taxonomy %s contains inconsistent term identity metadata", name)
+			}
 			if !idPattern.MatchString(term.ID) || ids[term.ID] || strings.TrimSpace(term.Label) == "" || utf8.RuneCountInString(term.Label) > 80 || len(term.Aliases) > 20 || utf8.RuneCountInString(term.Description) > 1000 {
 				return fmt.Errorf("taxonomy %s contains an invalid or duplicate term", name)
 			}

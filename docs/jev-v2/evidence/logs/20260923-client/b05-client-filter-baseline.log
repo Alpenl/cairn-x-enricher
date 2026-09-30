@@ -1,0 +1,23 @@
+=== RUN   TestBookmarkQueryRejectsMalformedV2Filters
+=== RUN   TestBookmarkQueryRejectsMalformedV2Filters/content_functions=method,,data
+    filter_contract_test.go:20: malformed v2 filter was silently ignored; query must be rejected
+=== RUN   TestBookmarkQueryRejectsMalformedV2Filters/content_functions=method&content_functions=data
+    filter_contract_test.go:20: malformed v2 filter was silently ignored; query must be rejected
+=== RUN   TestBookmarkQueryRejectsMalformedV2Filters/topics=llm,
+    filter_contract_test.go:20: malformed v2 filter was silently ignored; query must be rejected
+=== RUN   TestBookmarkQueryRejectsMalformedV2Filters/carriers=
+    filter_contract_test.go:20: malformed v2 filter was silently ignored; query must be rejected
+=== RUN   TestBookmarkQueryRejectsMalformedV2Filters/affordances=practice,%27OR%201=1
+    filter_contract_test.go:20: malformed v2 filter was silently ignored; query must be rejected
+=== RUN   TestBookmarkQueryRejectsMalformedV2Filters/entity_state=failed,unknown
+    filter_contract_test.go:20: malformed v2 filter was silently ignored; query must be rejected
+--- FAIL: TestBookmarkQueryRejectsMalformedV2Filters (0.00s)
+    --- FAIL: TestBookmarkQueryRejectsMalformedV2Filters/content_functions=method,,data (0.00s)
+    --- FAIL: TestBookmarkQueryRejectsMalformedV2Filters/content_functions=method&content_functions=data (0.00s)
+    --- FAIL: TestBookmarkQueryRejectsMalformedV2Filters/topics=llm, (0.00s)
+    --- FAIL: TestBookmarkQueryRejectsMalformedV2Filters/carriers= (0.00s)
+    --- FAIL: TestBookmarkQueryRejectsMalformedV2Filters/affordances=practice,%27OR%201=1 (0.00s)
+    --- FAIL: TestBookmarkQueryRejectsMalformedV2Filters/entity_state=failed,unknown (0.00s)
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/dashboard	0.002s
+FAIL

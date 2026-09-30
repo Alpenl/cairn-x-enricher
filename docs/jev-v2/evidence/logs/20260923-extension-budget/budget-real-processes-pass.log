@@ -1,0 +1,6 @@
+== TestLocalWorkerExtensionBudgetAcrossProcesses: starting worker on 127.0.0.1:48121 ==
+=== RUN   TestLocalWorkerExtensionBudgetAcrossProcesses
+    extension_budget_test.go:135: PASS: five separate Go processes; two actual local provider calls; per-item/global D1 limits and unknown grant outcome survive restart; zero paid calls
+--- PASS: TestLocalWorkerExtensionBudgetAcrossProcesses (1.48s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.486s

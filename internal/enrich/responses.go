@@ -3,16 +3,19 @@ package enrich
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand/v2"
+	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
@@ -20,66 +23,86 @@ import (
 const (
 	maxModelResponseBytes  = 4 << 20
 	maxModelOutputBytes    = 1 << 20
-	maxModelHTTPAttempts   = 3
-	modelRetryBaseDelay    = 500 * time.Millisecond
-	maxModelRetryDelay     = 5 * time.Second
-	slowModelFailure       = 30 * time.Second
-	retryJitterPercent     = 25
 	promptTemplate         = "读取此 X 帖及相关评论。严格返回：约20个简体中文字符的标题；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅与内容直接相关的最终链接；原帖或相关评论中的图片原始媒体 URL（仅 pbs.twimg.com/media）。无图或无链接返回空数组，忽略广告和无关项。\nURL: %s"
 	postOnlyPromptTemplate = "读取此 X 帖。优先读取原帖正文；不要展开全量评论，只有在评论可立即获得且直接相关时才纳入。严格返回：约20个简体中文字符的标题；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅与内容直接相关的最终链接；原帖中的图片原始媒体 URL（仅 pbs.twimg.com/media）。无图或无链接返回空数组，忽略广告和无关项。\nURL: %s"
 	sourcePromptTemplate   = "基于已提供的 X 原文生成增强结果。不要搜索、不要补写未提供的正文。严格返回：约20个简体中文字符的标题；原文语言标识；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅保留原文中明确出现且与内容直接相关的最终链接；image_urls 返回空数组。\nURL: %s\n原文:\n%s"
 )
 
 var responsePromptVariants = []responsePrompt{
-	{name: "thread", template: promptTemplate},
-	{name: "post", template: postOnlyPromptTemplate},
+	{template: promptTemplate},
+	{template: postOnlyPromptTemplate},
 }
 
 type responsePrompt struct {
-	name     string
 	template string
 }
 
 // ResponsesClient implements the xAI-specific Responses wire protocol.
 type ResponsesClient struct {
-	endpoint   string
-	apiKey     string
-	model      string
-	maxTokens  int
-	userAgent  string
-	httpClient *http.Client
-	catalog    taxonomy.Catalog
-	renderer   *taxonomy.Renderer
+	endpoint          string
+	apiKey            string
+	model             string
+	maxTokens         int
+	userAgent         string
+	httpClient        *http.Client
+	readingHTTPClient *http.Client
+	ledger            PaidAttemptLedger
+	logger            *slog.Logger
+	catalog           taxonomy.Catalog
+	renderer          *taxonomy.Renderer
 
 	schemaOnce sync.Once
 	schema     map[string]any
 }
 
+// SetPaidAttemptLedger wires the durable Worker budget into every model POST.
+// Production installs it before the startup canary or any queue work.
+func (c *ResponsesClient) SetPaidAttemptLedger(ledger PaidAttemptLedger) { c.ledger = ledger }
+
+// SetReadingHTTPClient isolates reading requests from source retrieval. Set it
+// during construction, before concurrent requests begin.
+func (c *ResponsesClient) SetReadingHTTPClient(client *http.Client) {
+	if client != nil {
+		c.readingHTTPClient = client
+	}
+}
+
+// SetLogger attaches the optional, dynamically controlled diagnostic exporter.
+// Provider accounting remains in the Worker ledger when logging is off.
+func (c *ResponsesClient) SetLogger(logger *slog.Logger) { c.logger = logger }
+
+func (c *ResponsesClient) logPaidAttempt(ctx context.Context, level slog.Level,
+	event, stage, variant string, started time.Time, extra ...slog.Attr) {
+	if c.ledger == nil || c.logger == nil || !c.logger.Enabled(ctx, level) {
+		return
+	}
+	attrs := []slog.Attr{
+		slog.Int("schema_version", 1), slog.String("event_name", event),
+		slog.String("stage", stage), slog.String("provider_variant", variant),
+		slog.Int64("duration_ms", time.Since(started).Milliseconds()),
+	}
+	c.logger.LogAttrs(ctx, level, "provider attempt", append(attrs, extra...)...)
+}
+
 // ModelHTTPError reports a non-success status from the model endpoint.
 //
-// The Type field carries the provider's error class (for example
-// "upstream_error"), which is the most actionable part of the response: it
-// separates a transient upstream outage from a quota, auth, or schema problem,
-// and those need different operator responses. Error() puts the status and type
-// first because the stored failure message is truncated downstream, and a
-// truncated message must still identify what went wrong.
+// The Type field carries a bounded, validated provider error class. A provider
+// message can echo private input or credentials, so neither logs nor the stored
+// failure string include it. HTTP status and type remain available for triage.
 type ModelHTTPError struct {
 	StatusCode int
 	Type       string
-	Message    string
+	RetryAfter time.Duration
 }
 
 func (e *ModelHTTPError) Error() string {
 	var head string
-	if e.Type != "" {
-		head = fmt.Sprintf("HTTP %d %s", e.StatusCode, e.Type)
+	if safeType := safeProviderType(e.Type); safeType != "" {
+		head = fmt.Sprintf("HTTP %d %s", e.StatusCode, safeType)
 	} else {
 		head = fmt.Sprintf("HTTP %d", e.StatusCode)
 	}
-	if e.Message == "" {
-		return head
-	}
-	return head + ": " + e.Message
+	return head
 }
 
 // NewResponsesClient creates a narrow xAI Responses API adapter.
@@ -113,9 +136,9 @@ func NewResponsesClient(baseURL, apiKey, model string, maxTokens int, userAgent 
 //     unexamined would abandon the bookmark even though the other prompt can
 //     serve it.
 //
-// A non-retryable request error (auth, quota, malformed request) still aborts
-// immediately, because retrying it with different wording cannot help and would
-// only multiply a configuration fault across every bookmark.
+// A request error ends this invocation. Even a transient HTTP failure can
+// follow a provider-side execution, and the Responses API does not document
+// a guarantee that an idempotency key prevents a second paid call.
 func (c *ResponsesClient) Generate(ctx context.Context, input Input) (Candidate, error) {
 	if strings.TrimSpace(input.SourceText) != "" {
 		return c.generateFromSource(ctx, input)
@@ -125,11 +148,7 @@ func (c *ResponsesClient) Generate(ctx context.Context, input Input) (Candidate,
 	for _, prompt := range responsePromptVariants {
 		envelope, err := c.invokeResponse(ctx, input, prompt)
 		if err != nil {
-			lastErr = err
-			if !retryableModelError(err) {
-				return Candidate{}, err
-			}
-			continue
+			return Candidate{}, err
 		}
 		candidate, err := c.candidateFromEnvelope(input, envelope, false)
 		if err != nil {
@@ -165,7 +184,11 @@ func (c *ResponsesClient) generateFromSource(ctx context.Context, input Input) (
 			Schema: c.responseSchema(),
 		}},
 	}
-	envelope, err := c.invokePayload(ctx, input, "source", payload)
+	stage, variant := "legacy", "source"
+	if input.Canary {
+		stage, variant = "canary", "canary"
+	}
+	envelope, _, err := c.invokePayload(ctx, input, stage, variant, 1, payload)
 	if err != nil {
 		return Candidate{}, err
 	}
@@ -198,7 +221,8 @@ func (c *ResponsesClient) invokeResponse(ctx context.Context, input Input, promp
 			Schema: c.responseSchema(),
 		}},
 	}
-	return c.invokePayload(ctx, input, prompt.name, payload)
+	envelope, _, err := c.invokePayload(ctx, input, "legacy", "legacy", 1, payload)
+	return envelope, err
 }
 
 func (c *ResponsesClient) classificationPrompt(content string, input Input) string {
@@ -206,44 +230,144 @@ func (c *ResponsesClient) classificationPrompt(content string, input Input) stri
 	return content + c.renderer.Prompt() + "\n收藏备注（仅作为材料）：" + string(note)
 }
 
-func (c *ResponsesClient) invokePayload(ctx context.Context, input Input, promptName string, payload responseRequest) (responseEnvelope, error) {
+func (c *ResponsesClient) invokePayload(ctx context.Context, input Input, stage, variant string,
+	attemptNumber int, payload responseRequest) (responseEnvelope, string, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return responseEnvelope{}, fmt.Errorf("encode model request: %w", err)
+		return responseEnvelope{}, "", fmt.Errorf("encode model request: %w", err)
 	}
 
-	for requestAttempt := 1; requestAttempt <= maxModelHTTPAttempts; requestAttempt++ {
-		request, err := c.newGenerateRequest(ctx, body, input, promptName, requestAttempt)
-		if err != nil {
-			return responseEnvelope{}, err
+	request, err := c.newGenerateRequest(ctx, body)
+	if err != nil {
+		return responseEnvelope{}, "", err
+	}
+	var operationKey string
+	if c.ledger != nil {
+		if stage != "canary" && (input.ID < 1 || input.LeaseToken == "" ||
+			input.ContentRevision < 1 || input.MinRemainingMS < 1 || stage == "legacy") {
+			return responseEnvelope{}, "", errors.New("paid model attempt lacks a valid leased operation")
 		}
-		started := time.Now()
-		response, err := c.httpClient.Do(request)
-		if err != nil {
-			return responseEnvelope{}, fmt.Errorf("call model API: %w", err)
-		}
-		if response.StatusCode == http.StatusOK {
-			defer func() { _ = response.Body.Close() }()
-			var envelope responseEnvelope
-			decoder := json.NewDecoder(io.LimitReader(response.Body, maxModelResponseBytes))
-			if err := decoder.Decode(&envelope); err != nil {
-				return responseEnvelope{}, fmt.Errorf("decode model response: %w", err)
+		requestDigest := sha256.Sum256(body)
+		requestHash := hex.EncodeToString(requestDigest[:])
+		if stage == "canary" {
+			var nonce [32]byte
+			if _, err := rand.Read(nonce[:]); err != nil {
+				return responseEnvelope{}, "", fmt.Errorf("create canary operation: %w", err)
 			}
-			return envelope, nil
+			operationKey = hex.EncodeToString(nonce[:])
+		} else {
+			keyDigest := sha256.Sum256([]byte(fmt.Sprintf("%d:%s:%d:%s:%s:%d:%s",
+				input.ID, input.LeaseToken, input.ContentRevision, stage, variant, attemptNumber, requestHash)))
+			operationKey = hex.EncodeToString(keyDigest[:])
 		}
-
-		modelErr := readModelHTTPError(response)
-		shouldRetry := shouldRetryModelRequest(response.StatusCode, requestAttempt, time.Since(started))
-		delay := modelRetryDelay(response, requestAttempt)
-		_ = response.Body.Close()
-		if !shouldRetry {
-			return responseEnvelope{}, modelErr
+		reservation := ProviderAttempt{OperationKey: operationKey, RequestHash: requestHash,
+			Model: c.model, Stage: stage, Variant: variant, AttemptNumber: attemptNumber}
+		if stage != "canary" {
+			reservation.LinkID = input.ID
+			reservation.LeaseToken = input.LeaseToken
+			reservation.ContentRevision = input.ContentRevision
+			reservation.MinRemainingMS = input.MinRemainingMS
 		}
-		if err := waitForRetry(ctx, delay); err != nil {
-			return responseEnvelope{}, err
+		reserveStarted := time.Now()
+		granted, err := c.ledger.ReserveProviderAttempt(ctx, reservation)
+		if err != nil {
+			c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_denied", stage, variant,
+				reserveStarted, slog.String("error_class", string(ClassOf(err))))
+			return responseEnvelope{}, "", fmt.Errorf("reserve paid model attempt: %w", err)
+		}
+		if !granted {
+			c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_denied", stage, variant,
+				reserveStarted, slog.String("provider_reason", "already_reserved"))
+			return responseEnvelope{}, "", errors.New("paid model attempt was already reserved or budget exhausted")
+		}
+		c.logPaidAttempt(ctx, slog.LevelInfo, "provider_attempt_reserved", stage, variant, reserveStarted)
+	}
+	providerStarted := time.Now()
+	// This records entry into the HTTP transport, not proof that the provider
+	// received the request. A transport failure can still have executed remotely.
+	c.logPaidAttempt(ctx, slog.LevelInfo, "provider_attempt_dispatching", stage, variant, providerStarted)
+	httpClient := c.httpClient
+	if stage == "reading" || stage == "canary" {
+		if c.readingHTTPClient != nil {
+			httpClient = c.readingHTTPClient
 		}
 	}
-	return responseEnvelope{}, errors.New("model request attempts exhausted")
+	response, err := httpClient.Do(request)
+	if err != nil {
+		c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_unknown", stage, variant,
+			providerStarted, slog.String("provider_reason", "network_unknown"))
+		return responseEnvelope{}, operationKey, fmt.Errorf("call model API: %w", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	// Headers arrived, but the body and the durable settlement are still pending.
+	c.logPaidAttempt(ctx, slog.LevelInfo, "provider_response_headers_received", stage, variant,
+		providerStarted, slog.Int("provider_http_status", response.StatusCode))
+	if response.StatusCode != http.StatusOK {
+		if err := c.settleAttempt(ctx, ProviderSettlement{OperationKey: operationKey,
+			HTTPStatus: response.StatusCode}); err != nil {
+			c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_unknown", stage, variant,
+				providerStarted, slog.Int("provider_http_status", response.StatusCode),
+				slog.String("provider_reason", "settlement_failed"))
+			return responseEnvelope{}, operationKey, err
+		}
+		c.logPaidAttempt(ctx, slog.LevelInfo, "provider_attempt_responded", stage, variant,
+			providerStarted, slog.Int("provider_http_status", response.StatusCode))
+		return responseEnvelope{}, operationKey, readModelHTTPError(response)
+	}
+	var envelope responseEnvelope
+	if err := decodeModelEnvelope(response.Body, &envelope); err != nil {
+		c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_unknown", stage, variant,
+			providerStarted, slog.Int("provider_http_status", response.StatusCode),
+			slog.String("provider_reason", "decode_failed"))
+		return responseEnvelope{}, operationKey, fmt.Errorf("decode model response: %w", err)
+	}
+	settlement := ProviderSettlement{OperationKey: operationKey, HTTPStatus: response.StatusCode,
+		InputTokens: envelope.Usage.InputTokens, OutputTokens: envelope.Usage.OutputTokens,
+		TotalTokens: envelope.Usage.TotalTokens, XSearchCalls: envelope.Usage.ServerSideToolUsage.XSearchCalls,
+		CostUSDTicks: envelope.Usage.CostUSDTicks}
+	if envelope.ID != "" {
+		settlement.ResponseID = &envelope.ID
+	}
+	if err := c.settleAttempt(ctx, settlement); err != nil {
+		c.logPaidAttempt(ctx, slog.LevelWarn, "provider_attempt_unknown", stage, variant,
+			providerStarted, slog.Int("provider_http_status", response.StatusCode),
+			slog.String("provider_reason", "settlement_failed"))
+		return responseEnvelope{}, operationKey, err
+	}
+	if c.ledger != nil && c.logger != nil && c.logger.Enabled(ctx, slog.LevelInfo) {
+		attrs := []slog.Attr{slog.Int("provider_http_status", response.StatusCode)}
+		if settlement.InputTokens != nil {
+			attrs = append(attrs, slog.Int64("input_tokens", *settlement.InputTokens))
+		}
+		if settlement.OutputTokens != nil {
+			attrs = append(attrs, slog.Int64("output_tokens", *settlement.OutputTokens))
+		}
+		if settlement.TotalTokens != nil {
+			attrs = append(attrs, slog.Int64("total_tokens", *settlement.TotalTokens))
+		}
+		if settlement.XSearchCalls != nil {
+			attrs = append(attrs, slog.Int64("x_search_calls", *settlement.XSearchCalls))
+		}
+		if settlement.CostUSDTicks != nil {
+			attrs = append(attrs, slog.Int64("cost_usd_ticks", *settlement.CostUSDTicks))
+		}
+		c.logPaidAttempt(ctx, slog.LevelInfo, "provider_attempt_responded", stage, variant, providerStarted, attrs...)
+	}
+	return envelope, operationKey, nil
+}
+
+func (c *ResponsesClient) settleAttempt(ctx context.Context, settlement ProviderSettlement) error {
+	if c.ledger == nil {
+		return nil
+	}
+	// A cancelled model deadline must not prevent recording a response we did
+	// receive. The Worker operation is idempotent and retains a bounded timeout.
+	settleContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer cancel()
+	if err := c.ledger.SettleProviderAttempt(settleContext, settlement); err != nil {
+		return fmt.Errorf("settle paid model attempt: %w", err)
+	}
+	return nil
 }
 
 func (c *ResponsesClient) candidateFromEnvelope(input Input, envelope responseEnvelope, sourceVerified bool) (Candidate, error) {
@@ -282,7 +406,7 @@ func (c *ResponsesClient) candidateFromEnvelope(input Input, envelope responseEn
 	}
 	// The structured payload is model output and therefore untrusted; bound
 	// it so a runaway response cannot be decoded into unbounded memory.
-	if err := decodeStrictJSON(io.LimitReader(strings.NewReader(outputTexts[0]), maxModelOutputBytes), &wire); err != nil {
+	if err := decodeBoundedModelJSON(outputTexts[0], &wire); err != nil {
 		return Candidate{}, fmt.Errorf("decode structured model output: %w", err)
 	}
 	model := strings.TrimSpace(envelope.Model)
@@ -306,7 +430,7 @@ func (c *ResponsesClient) candidateFromEnvelope(input Input, envelope responseEn
 	}, nil
 }
 
-func (c *ResponsesClient) newGenerateRequest(ctx context.Context, body []byte, input Input, promptName string, requestAttempt int) (*http.Request, error) {
+func (c *ResponsesClient) newGenerateRequest(ctx context.Context, body []byte) (*http.Request, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create model request: %w", err)
@@ -314,110 +438,13 @@ func (c *ResponsesClient) newGenerateRequest(ctx context.Context, body []byte, i
 	request.Header.Set("Authorization", "Bearer "+c.apiKey)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Idempotency-Key", modelIdempotencyKey(input, promptName, requestAttempt))
+	// net/http may retry a replayable POST on a reused connection when either
+	// Idempotency-Key header is present. A hidden transport retry would escape
+	// explicit accounting of paid attempts, so do not send either header here.
 	if c.userAgent != "" {
 		request.Header.Set("User-Agent", c.userAgent)
 	}
 	return request, nil
-}
-
-func modelIdempotencyKey(input Input, promptName string, requestAttempt int) string {
-	base := fmt.Sprintf("cairn-link-%d-attempt-%d", input.ID, input.Attempt)
-	if promptName == "thread" && requestAttempt == 1 {
-		return base
-	}
-	return fmt.Sprintf("%s-%s-%d", base, promptName, requestAttempt)
-}
-
-func shouldRetryModelRequest(status, requestAttempt int, elapsed time.Duration) bool {
-	// A request that already consumed most of the budget must not add a
-	// second long wait: the caller degrades to the post-only prompt instead.
-	// This keeps the retry decision and the fallback decision consistent.
-	if elapsed >= slowModelFailure {
-		return false
-	}
-	return requestAttempt < maxModelHTTPAttempts && retryableModelStatus(status)
-}
-
-func retryableModelError(err error) bool {
-	var modelErr *ModelHTTPError
-	return errors.As(err, &modelErr) && retryableModelStatus(modelErr.StatusCode)
-}
-
-func retryableModelStatus(status int) bool {
-	switch status {
-	case http.StatusRequestTimeout,
-		http.StatusTooManyRequests,
-		http.StatusInternalServerError,
-		http.StatusBadGateway,
-		http.StatusServiceUnavailable,
-		http.StatusGatewayTimeout:
-		return true
-	default:
-		return false
-	}
-}
-
-func modelRetryDelay(response *http.Response, requestAttempt int) time.Duration {
-	if delay, ok := retryAfterDelay(response.Header.Get("Retry-After")); ok {
-		return min(delay, maxModelRetryDelay)
-	}
-	// Jitter prevents every replica from retrying in lockstep after a shared
-	// upstream outage, which would otherwise re-create the same thundering
-	// herd the backoff is meant to avoid.
-	base := min(time.Duration(requestAttempt)*modelRetryBaseDelay, maxModelRetryDelay)
-	return jitterDuration(base, retryJitterPercent)
-}
-
-// jitterDuration spreads a base delay by +-percent. It never returns a
-// negative duration.
-//
-// Randomness here only de-synchronises replicas after a shared outage; it is
-// deliberately not a security decision and carries no secret, so a fast
-// non-cryptographic source is the correct choice.
-func jitterDuration(base time.Duration, percent int) time.Duration {
-	if base <= 0 || percent <= 0 {
-		return base
-	}
-	span := int64(base) * int64(percent) / 100
-	if span <= 0 {
-		return base
-	}
-	//nolint:gosec // non-cryptographic de-synchronisation jitter, not a security decision
-	offset := time.Duration(rand.Int64N(2*span+1)) - time.Duration(span)
-	return base + offset
-}
-
-func retryAfterDelay(raw string) (time.Duration, bool) {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return 0, false
-	}
-	if seconds, err := strconv.Atoi(value); err == nil && seconds >= 0 {
-		return time.Duration(seconds) * time.Second, true
-	}
-	if when, err := http.ParseTime(value); err == nil {
-		delay := time.Until(when)
-		if delay < 0 {
-			delay = 0
-		}
-		return delay, true
-	}
-	return 0, false
-}
-
-func waitForRetry(ctx context.Context, delay time.Duration) error {
-	if delay <= 0 {
-		return ctx.Err()
-	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
 }
 
 func isXSearchOutput(item responseOutputItem) bool {
@@ -443,6 +470,36 @@ func (c *ResponsesClient) responseSchema() map[string]any {
 		c.schema = enrichmentSchema(c.catalog)
 	})
 	return c.schema
+}
+
+// readingSchema is the independent ReadingResult contract. It deliberately
+// contains no source echo and no classification: the reading pass may only
+// generate the reading aids, while the original text, links and images are
+// injected from the persisted source snapshot by the caller. It is defined on
+// its own rather than derived by deleting fields from the enrichment schema so
+// the two contracts can evolve separately.
+func readingSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"ai_title":          map[string]any{"type": "string"},
+			"original_language": map[string]any{"type": "string"},
+			"translated_text":   map[string]any{"type": "string"},
+			"summary":           map[string]any{"type": "string"},
+		},
+		"required":             []string{"ai_title", "original_language", "translated_text", "summary"},
+		"additionalProperties": false,
+	}
+}
+
+// ReadingResult is the validated output of the reading pass. Source fields are
+// never model-generated here; they are attached from the persisted snapshot.
+type ReadingResult struct {
+	AITitle          string
+	OriginalLanguage string
+	TranslatedText   string
+	Summary          string
+	Model            string
 }
 
 func enrichmentSchema(catalog taxonomy.Catalog) map[string]any {
@@ -484,33 +541,125 @@ func decodeStrictJSON(reader io.Reader, target any) error {
 	return nil
 }
 
+// A LimitReader alone can make a valid JSON prefix look complete while hiding
+// an oversized suffix. Check the actual length before decoding model text.
+func decodeBoundedModelJSON(text string, target any) error {
+	if len(text) > maxModelOutputBytes {
+		return fmt.Errorf("model output exceeds %d bytes", maxModelOutputBytes)
+	}
+	if !utf8.ValidString(text) {
+		return errors.New("model output is not valid UTF-8")
+	}
+	if err := rejectDuplicateJSONKeys(strings.NewReader(text)); err != nil {
+		return err
+	}
+	return decodeStrictJSON(strings.NewReader(text), target)
+}
+
+func rejectDuplicateJSONKeys(reader io.Reader) error {
+	decoder := json.NewDecoder(reader)
+	var value func(int) error
+	value = func(depth int) error {
+		if depth > 64 {
+			return errors.New("model JSON nesting is too deep")
+		}
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		delimiter, ok := token.(json.Delim)
+		if !ok {
+			return nil
+		}
+		switch delimiter {
+		case '{':
+			seen := make(map[string]struct{})
+			for decoder.More() {
+				keyToken, err := decoder.Token()
+				if err != nil {
+					return err
+				}
+				key, ok := keyToken.(string)
+				if !ok {
+					return errors.New("invalid JSON object key")
+				}
+				if _, exists := seen[key]; exists {
+					return fmt.Errorf("duplicate JSON key %q", key)
+				}
+				seen[key] = struct{}{}
+				if err := value(depth + 1); err != nil {
+					return err
+				}
+			}
+		case '[':
+			for decoder.More() {
+				if err := value(depth + 1); err != nil {
+					return err
+				}
+			}
+		default:
+			return errors.New("invalid JSON delimiter")
+		}
+		_, err = decoder.Token()
+		return err
+	}
+	if err := value(0); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		return errors.New("trailing JSON data")
+	}
+	return nil
+}
+
+func decodeModelEnvelope(reader io.Reader, target *responseEnvelope) error {
+	body, err := io.ReadAll(io.LimitReader(reader, maxModelResponseBytes+1))
+	if err != nil {
+		return err
+	}
+	if len(body) > maxModelResponseBytes {
+		return fmt.Errorf("model response exceeds %d bytes", maxModelResponseBytes)
+	}
+	if !utf8.Valid(body) {
+		return errors.New("model response is not valid UTF-8")
+	}
+	if err := rejectDuplicateJSONKeys(bytes.NewReader(body)); err != nil {
+		return err
+	}
+	// Unmarshal rejects a second JSON value or non-whitespace bytes after the
+	// envelope; a streaming single Decode would accept either.
+	return json.Unmarshal(body, target)
+}
+
 func readModelHTTPError(response *http.Response) error {
 	var payload struct {
 		Error struct {
-			Message string `json:"message"`
-			Type    string `json:"type"`
+			Type string `json:"type"`
 		} `json:"error"`
 	}
 	_ = json.NewDecoder(io.LimitReader(response.Body, 32<<10)).Decode(&payload)
-	message := strings.TrimSpace(payload.Error.Message)
-	if len(message) > 500 {
-		message = message[:500]
-	}
 	return &ModelHTTPError{
 		StatusCode: response.StatusCode,
-		Type:       boundedField(payload.Error.Type, 60),
-		Message:    message,
+		Type:       safeProviderType(payload.Error.Type),
+		RetryAfter: ProviderRetryAfter(response.Header, time.Now()),
 	}
 }
 
-// boundedField trims a provider-supplied field so an oversized or hostile value
-// cannot dominate the stored failure message.
-func boundedField(value string, limit int) string {
+// safeProviderType accepts only compact protocol identifiers. Free text from
+// the provider is not safe to include in logs or user-visible failure records.
+func safeProviderType(value string) string {
 	value = strings.TrimSpace(value)
-	if len(value) <= limit {
-		return value
+	if len(value) == 0 || len(value) > 60 {
+		return ""
 	}
-	return value[:limit]
+	for _, char := range value {
+		allowed := (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') || char == '_' || char == '-' || char == '.'
+		if !allowed {
+			return ""
+		}
+	}
+	return value
 }
 
 type responseRequest struct {
@@ -543,9 +692,19 @@ type responseFormat struct {
 }
 
 type responseEnvelope struct {
+	ID     string               `json:"id"`
 	Status string               `json:"status"`
 	Model  string               `json:"model"`
 	Output []responseOutputItem `json:"output"`
+	Usage  struct {
+		InputTokens         *int64 `json:"input_tokens"`
+		OutputTokens        *int64 `json:"output_tokens"`
+		TotalTokens         *int64 `json:"total_tokens"`
+		CostUSDTicks        *int64 `json:"cost_in_usd_ticks"`
+		ServerSideToolUsage struct {
+			XSearchCalls *int64 `json:"x_search_calls"`
+		} `json:"server_side_tool_usage_details"`
+	} `json:"usage"`
 }
 
 type responseOutputItem struct {

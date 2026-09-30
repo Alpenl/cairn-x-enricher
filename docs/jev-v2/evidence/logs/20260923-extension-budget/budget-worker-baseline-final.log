@@ -1,0 +1,177 @@
+
+> test
+> vitest run test/extension-budget.test.ts
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:2753456) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-budget-next/worker
+
+ ❯ test/extension-budget.test.ts (7 tests | 7 failed) 1450ms
+   × charges a durable per-item budget across independent requests; duplicate never re-grants 228ms
+   × serializes concurrent global reservations and counts all extension kinds together 209ms
+   × counts full reservation against each candidate and both token limits 190ms
+   × a lost grant response and changed payload cannot authorize a second call 220ms
+   × deletion removes link reservations without refunding the global budget 201ms
+   × only the current UTC day consumes the daily cap; callers cannot choose a day 199ms
+   × rejects App access, widened/invalid limits, bad units and unbounded candidate sets 203ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/extension-budget.test.ts > charges a durable per-item budget across independent requests; duplicate never re-grants
+AssertionError: expected { error: 'not_found' } to match object { granted: true }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "granted": true,
++   "error": "not_found",
+  }
+
+ ❯ test/extension-budget.test.ts:20:43
+     18| it("charges a durable per-item budget across independent requests; dup…
+     19|   await seed();
+     20|   expect(await (await reserve(1)).json()).toMatchObject({ granted: tru…
+       |                                           ^
+     21|   expect(await (await reserve(1)).json()).toMatchObject({ granted: fal…
+     22|   expect(await (await reserve(2)).json()).toMatchObject({ granted: tru…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  test/extension-budget.test.ts > serializes concurrent global reservations and counts all extension kinds together
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ test/extension-budget.test.ts:31:41
+     29|   const responses = await Promise.all([1, 2, 3, 4].map(n => reserve(n,…
+     30|   const bodies = await Promise.all(responses.map(r => r.json() as Prom…
+     31|   expect(bodies.filter(b => b.granted)).toHaveLength(1);
+       |                                         ^
+     32|   expect(await env.DB.prepare("SELECT COUNT(*) n FROM budget_ledger WH…
+     33| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  test/extension-budget.test.ts > counts full reservation against each candidate and both token limits
+AssertionError: expected { error: 'not_found' } to match object { granted: true }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "granted": true,
++   "error": "not_found",
+  }
+
+ ❯ test/extension-budget.test.ts:37:69
+     35| it("counts full reservation against each candidate and both token limi…
+     36|   await seed(3);
+     37|   expect(await (await reserve(1, [1, 2], { tokens: 2100 })).json()).to…
+       |                                                                     ^
+     38|   expect(await (await reserve(2, [3], { tokens: 2000 })).json()).toMat…
+     39|   expect(await (await reserve(3, [1], { tokens: 1000, limits: { ...lim…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  test/extension-budget.test.ts > a lost grant response and changed payload cannot authorize a second call
+AssertionError: expected { error: 'not_found' } to match object { granted: false, …(1) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "granted": false,
+-   "reason": "already_reserved",
++   "error": "not_found",
+  }
+
+ ❯ test/extension-budget.test.ts:46:43
+     44|   await seed(2);
+     45|   await reserve(1); // Deliberately discard the committed response.
+     46|   expect(await (await reserve(1)).json()).toMatchObject({ granted: fal…
+       |                                           ^
+     47|   expect((await reserve(1, [2])).status).toBe(409);
+     48|   expect(await env.DB.prepare("SELECT COUNT(*) n FROM budget_ledger WH…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  test/extension-budget.test.ts > deletion removes link reservations without refunding the global budget
+AssertionError: expected { error: 'not_found' } to match object { granted: false }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "granted": false,
++   "error": "not_found",
+  }
+
+ ❯ test/extension-budget.test.ts:57:67
+     55|   await env.DB.prepare("DELETE FROM links WHERE id=1").run();
+     56|   expect(await env.DB.prepare("SELECT COUNT(*) n FROM budget_ledger WH…
+     57|   expect(await (await reserve(2, [2], { limits: tight })).json()).toMa…
+       |                                                                   ^
+     58|   expect((await reserve(3, [1])).status).toBe(404);
+     59| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  test/extension-budget.test.ts > only the current UTC day consumes the daily cap; callers cannot choose a day
+AssertionError: expected { error: 'not_found' } to match object { granted: true }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "granted": true,
++   "error": "not_found",
+  }
+
+ ❯ test/extension-budget.test.ts:65:95
+     63|   await reserve(1);
+     64|   await env.DB.prepare("UPDATE budget_ledger SET created_at='2000-01-0…
+     65|   expect(await (await reserve(2, [1], { limits: { ...limits, max_calls…
+       |                                                                                               ^
+     66|   expect((await reserve(3, [1], { day: "2000-01-01" })).status).toBe(4…
+     67| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  test/extension-budget.test.ts > rejects App access, widened/invalid limits, bad units and unbounded candidate sets
+AssertionError: expected 404 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 404
+
+ ❯ test/extension-budget.test.ts:75:51
+     73|     { limits: { ...limits, max_calls_total: 21 } }, { limits: { ...lim…
+     74|     { limits: { ...limits, max_tokens: 4001 } }, { limits: { ...limits…
+     75|     expect((await reserve(2, [1], extra)).status).toBe(400);
+       |                                                   ^
+     76|   }
+     77|   for (const items of [[], [1, 1], Array.from({ length: 21 }, (_, i) =…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed (7)
+   Start at  05:36:07
+   Duration  2.04s (transform 101ms, setup 0ms, import 172ms, tests 1.45s, environment 0ms)

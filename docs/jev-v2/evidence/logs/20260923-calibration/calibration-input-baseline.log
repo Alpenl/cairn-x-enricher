@@ -1,0 +1,12 @@
+[36mWHAT[0m: 记录 typed 校验失败对照
+[35mWHY[0m:  证明越界 confidence 和非有限 Score 可穿过原验证
+--- FAIL: TestRejectsInvalidConfidenceBeforePersistingJudgments (0.00s)
+    calibration_input_test.go:13: accepted invalid confidence -0.01
+    calibration_input_test.go:13: accepted invalid confidence 1.01
+    calibration_input_test.go:13: accepted invalid confidence NaN
+    calibration_input_test.go:13: accepted invalid confidence +Inf
+--- FAIL: TestRejectsNonfiniteScoreBeforePersistingJudgments (0.00s)
+    calibration_input_test.go:23: accepted nonfinite Score NaN
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/classify	0.002s
+FAIL

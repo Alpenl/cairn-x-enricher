@@ -1,0 +1,16 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+internal/classify/personal_intent_test.go:6:1: File is not properly formatted (goimports)
+	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
+^
+internal/classify/policy.go:7:1: File is not properly formatted (goimports)
+	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
+^
+internal/classify/questions.go:218:22: QF1001: could apply De Morgan's law (staticcheck)
+			if term.Active && !(dimension.id == "use" && taxonomy.PersonalUse(term.ID)) {
+			                  ^
+3 issues:
+* goimports: 2
+* staticcheck: 1
+exit status 1
+make: *** [Makefile:39: lint-ci] Error 1

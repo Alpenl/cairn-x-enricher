@@ -1,0 +1,590 @@
+[
+  {
+    "id": "llm-method",
+    "zh": "冻结提示词和输入案例；让语言模型逐条作答；记录幻觉出现在哪些上下文。",
+    "en": "Freeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.",
+    "topics": [
+      "llm",
+      "eval"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "llm-opinion",
+    "zh": "生成式模型会把语言上的合理续写当作答案，这与有证据支持的事实有区别。",
+    "en": "A generative model can produce plausible continuations without evidence that those statements are facts.",
+    "topics": [
+      "llm"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "eng-method",
+    "zh": "创建一个最小复现程序；定位触发空指针的调用；加边界检查并运行回归测试。",
+    "en": "Create a minimal reproduction, locate the call that dereferences a null pointer, add a boundary check, and run the regression test.",
+    "topics": [
+      "eng"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "eng-opinion",
+    "zh": "共享可变状态让并发服务难以调试，隔离写入所有权能减少竞态。",
+    "en": "Shared mutable state makes concurrent services hard to debug; isolating ownership of writes reduces races.",
+    "topics": [
+      "eng"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "product-method",
+    "zh": "先访谈目标用户的未解决任务；给需求按痛点排序；只做能验证需求的最小功能。",
+    "en": "Interview target users about unmet tasks, rank their needs by pain, and build the smallest feature that can test demand.",
+    "topics": [
+      "product"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "product-opinion",
+    "zh": "新增功能的数量不等于产品价值；用户能否完成核心任务才是功能取舍的依据。",
+    "en": "Feature count is not product value; whether users can finish their core task should guide feature decisions.",
+    "topics": [
+      "product"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "design-method",
+    "zh": "画出页面信息层级；让主要按钮与次要按钮形成视觉差异；检查键盘焦点顺序。",
+    "en": "Sketch the information hierarchy, visually distinguish primary and secondary buttons, and check keyboard focus order.",
+    "topics": [
+      "design"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "design-opinion",
+    "zh": "一致的间距和视觉层级降低理解界面的负担，装饰不能替代清晰的信息结构。",
+    "en": "Consistent spacing and visual hierarchy reduce the effort of understanding an interface; decoration cannot replace clear structure.",
+    "topics": [
+      "design"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "writing-method",
+    "zh": "先写每段的中心句；删掉重复论点；用具体场景替换抽象形容词；最后调整叙述顺序。",
+    "en": "Write the point of each paragraph, remove repeated arguments, replace abstract adjectives with concrete scenes, and then revise the narrative order.",
+    "topics": [
+      "writing"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "writing-opinion",
+    "zh": "叙述视角决定读者何时知道什么；好的编辑要检查信息揭示的顺序。",
+    "en": "Narrative perspective determines what readers know and when; good editing checks the order in which information is revealed.",
+    "topics": [
+      "writing"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "invest-method",
+    "zh": "在虚构投资练习中列出各资产权重；计算单一行业暴露；模拟价格下跌时的组合损失。",
+    "en": "In a fictional portfolio exercise, list asset weights, calculate exposure to a single sector, and simulate portfolio losses during a price decline.",
+    "topics": [
+      "invest"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "invest-opinion",
+    "zh": "估值需要同时讨论预期收益与风险，单看短期涨幅无法说明资产是否便宜。",
+    "en": "Valuation requires discussion of expected returns and risk; a recent price rise alone cannot show whether an asset is inexpensive.",
+    "topics": [
+      "invest"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "health-method",
+    "zh": "做一份不含诊断的睡眠观察记录：每天填入上床和起床时间，写下睡前饮食和运动，再整理一周的变化。",
+    "en": "Keep a non-diagnostic sleep observation log: record bedtime and waking time, note food and exercise before bed, and organize the changes over one week.",
+    "topics": [
+      "health"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "health-opinion",
+    "zh": "谈论身体健康时需要区分个人体验与医疗证据，单个饮食故事不能说明疾病预防效果。",
+    "en": "Discussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.",
+    "topics": [
+      "health"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "psych-method",
+    "zh": "记录情绪出现时的情境；区分观察到的事实与自动想法；比较不同情境下的认知解释。",
+    "en": "Record the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.",
+    "topics": [
+      "psych"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "psych-opinion",
+    "zh": "确认偏误会让人偏爱支持已有看法的线索；认识这种认知机制不等于消除了它。",
+    "en": "Confirmation bias favors evidence that supports an existing belief; recognizing this cognitive mechanism does not eliminate it.",
+    "topics": [
+      "psych"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "manage-method",
+    "zh": "列出团队任务与负责人；明确交接输入和完成条件；每周核对协作阻塞点。",
+    "en": "List team tasks and their owners, clarify handoff inputs and completion conditions, and check collaboration bottlenecks each week.",
+    "topics": [
+      "manage"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "manage-opinion",
+    "zh": "组织中的责任不清会把协调成本转嫁给个人；管理应让决策权与执行责任相匹配。",
+    "en": "Unclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.",
+    "topics": [
+      "manage"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "media-method",
+    "zh": "追踪同一条报道的首发与转载路径；区分编辑选题和平台分发；记录标题在各渠道的变化。",
+    "en": "Trace the original publication and redistribution of a news report, distinguish editorial selection from platform distribution, and record headline changes across channels.",
+    "topics": [
+      "media"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "media-opinion",
+    "zh": "传播平台的推荐机制会改变新闻被看见的概率；曝光量本身不能证明报道准确。",
+    "en": "Recommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.",
+    "topics": [
+      "media"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "law-method",
+    "zh": "用虚构合同练习识别当事人、权利、义务和违约条款；逐条注明文本依据，最后列出解释上的分歧。",
+    "en": "Use a fictional contract to identify parties, rights, obligations, and breach clauses; cite the text for each point and list interpretive disagreements.",
+    "topics": [
+      "law"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "law-opinion",
+    "zh": "法律解释必须区分条文、证据与论证，不能把对结果的偏好当作权利义务的依据。",
+    "en": "Legal interpretation must distinguish the text, evidence, and argument; a preferred outcome is not itself a basis for rights or obligations.",
+    "topics": [
+      "law"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "edu-method",
+    "zh": "把课程目标拆成可观察的学习任务；先用一道题检查已有理解；再安排练习和反馈。",
+    "en": "Break course goals into observable learning tasks, use an initial question to check prior understanding, and then plan practice and feedback.",
+    "topics": [
+      "edu"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "edu-opinion",
+    "zh": "教学进度不等于学习进度；课程设计应给学生暴露误解和修正理解的机会。",
+    "en": "Teaching progress is not learning progress; course design should give students chances to reveal and correct misunderstandings.",
+    "topics": [
+      "edu"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "history-method",
+    "zh": "整理一组历史信件的写作日期和作者；比较不同史料对同一事件的描述；把缺失证据单独标出。",
+    "en": "Organize the dates and authors of historical letters, compare accounts of the same event across sources, and mark missing evidence separately.",
+    "topics": [
+      "history"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "history-opinion",
+    "zh": "解释过去的事件要尊重史料所处的时代；不能把今天的分类原样套在历史人物身上。",
+    "en": "Explanations of past events should respect the period in which sources were created; present-day categories should not be imposed unchanged on historical actors.",
+    "topics": [
+      "history"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "science-method",
+    "zh": "在模拟物理实验里只改变摆长；保持释放角度一致；重复记录周期，并解释误差来源。",
+    "en": "In a simulated physics experiment, vary only pendulum length, keep the release angle constant, repeatedly record the period, and explain sources of error.",
+    "topics": [
+      "science",
+      "eval"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "science-opinion",
+    "zh": "自然科学中的可重复观察与解释模型承担不同角色，模型需要接受新实验的检验。",
+    "en": "Repeatable observations and explanatory models play different roles in natural science; models must face new experimental tests.",
+    "topics": [
+      "science"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "city-method",
+    "zh": "绘制街区步行路线；标注过街点和无障碍断点；把公共空间连通性问题汇总到规划草图。",
+    "en": "Map walking routes in a neighborhood, mark crossings and accessibility gaps, and summarize public-space connectivity problems on a planning sketch.",
+    "topics": [
+      "city"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "city-opinion",
+    "zh": "城市公共空间不只是道路的剩余区域；规划需要考虑步行连接、停留与公共交往。",
+    "en": "Urban public space is more than land left over after roads; planning should consider walking connections, places to stay, and public interaction.",
+    "topics": [
+      "city"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "life-method",
+    "zh": "出门旅行前按行程天数列衣物；把常用小物分袋；回来后记录哪些东西没有用到，调整下次行李清单。",
+    "en": "Before a trip, list clothes by the number of travel days, pack everyday small items into separate bags, and afterward note unused items to adjust the next packing list.",
+    "topics": [
+      "life"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "life-opinion",
+    "zh": "日常消费体验包括使用和维护的麻烦，购买时的新鲜感只是生活体验的一部分。",
+    "en": "Everyday consumer experience includes the effort of use and maintenance; the novelty of buying is only one part of that experience.",
+    "topics": [
+      "life"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "eval-method",
+    "zh": "固定候选集和测试任务；预先写出通过标准；记录每个失败类型，最后比较各方案的召回率与误报率。",
+    "en": "Freeze the candidate set and test tasks, write pass criteria in advance, record failure categories, and compare recall and false-positive rates across alternatives.",
+    "topics": [
+      "eval"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": [
+      "practice"
+    ],
+    "kind": "method"
+  },
+  {
+    "id": "eval-opinion",
+    "zh": "评测结果依赖样本范围和指标定义；只公布一个分数会掩盖不同失败模式。",
+    "en": "Evaluation results depend on the sample scope and metric definitions; a single published score hides different failure modes.",
+    "topics": [
+      "eval"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "opinion"
+  },
+  {
+    "id": "outside-symbols",
+    "zh": "符号串：◇ △ □ ○。没有附加解释。",
+    "en": "Symbol sequence: ◇ △ □ ○. No explanation is provided.",
+    "topics": [],
+    "form": "",
+    "functions": [],
+    "affordances": [],
+    "kind": "outside"
+  },
+  {
+    "id": "incidental-ai",
+    "zh": "今天把旅行背包的肩带调短了一格，走路舒服多了。照片文件名碰巧叫 AI。",
+    "en": "Today I shortened my travel backpack straps by one notch and walking felt more comfortable. The photo filename happens to be AI.",
+    "topics": [
+      "life"
+    ],
+    "form": "case",
+    "functions": null,
+    "affordances": null,
+    "kind": "boundary"
+  },
+  {
+    "id": "not-evaluation",
+    "zh": "这个小桌灯好用，我把它放在床边。这里只是个人使用感受，没有进行对比测试。",
+    "en": "This small lamp is handy and I put it beside the bed. This is a personal impression, with no comparative test.",
+    "topics": [
+      "life"
+    ],
+    "form": "opinion",
+    "functions": [
+      "opinion"
+    ],
+    "affordances": null,
+    "kind": "boundary"
+  },
+  {
+    "id": "quotation-disagreement",
+    "zh": "我讨论的是叙事写作：引用中的投资建议只是小说人物的台词，不是这篇文章的主题。删掉解释性旁白，可以让人物通过行动表现动机。",
+    "en": "My subject is narrative writing: the investment advice in the quotation is dialogue spoken by a fictional character, not the subject of this post. Removing explanatory narration lets characters reveal motivation through action.",
+    "topics": [
+      "writing"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": null,
+    "kind": "quotation"
+  },
+  {
+    "id": "missing-image",
+    "zh": "图片里的结果见附图。当前存档只有这一行，图片文字尚未取得。",
+    "en": "The results are in the attached image. The archive currently contains only this line; no text from the image is available.",
+    "topics": null,
+    "form": null,
+    "functions": null,
+    "affordances": null,
+    "kind": "image_dependent"
+  },
+  {
+    "id": "multi-domain",
+    "zh": "语言模型问答产品需要同时设计用户任务与模型能力边界。我们先访谈用户需求，再定义哪些回答必须显示引用，并为缺失证据设计交互提示。",
+    "en": "A language-model question-answering product must design both user tasks and the limits of model capability. First interview users about their needs, then define which answers require citations, and design interface notices for missing evidence.",
+    "topics": [
+      "llm",
+      "product",
+      "design"
+    ],
+    "form": "method",
+    "functions": [
+      "method"
+    ],
+    "affordances": null,
+    "kind": "multi_topic"
+  }
+]

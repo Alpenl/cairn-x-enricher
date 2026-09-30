@@ -1,0 +1,84 @@
+
+> test
+> vitest run test/privacy-delete.test.ts
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:2528518) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /tmp/cairn-share-privacy-next/worker
+
+exception = workerd/api/unsafe.c++:229: failed: jsg.Error: Application called deleteAllDurableObjects().
+stack: /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@376c0d0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@23ba480 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@579605a /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@57957c0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c54e0 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@34c5a00 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@3359440 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@33597f6 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@5934588 /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c87cb /home/alpen/Stu/Cairn/cairn-share/worker/node_modules/@cloudflare/workerd-linux-64/bin/workerd@30c8c94
+ ❯ test/privacy-delete.test.ts (3 tests | 3 failed) 628ms
+   × HTTP deletion removes R2 history and link-scoped budgets without touching other links 224ms
+   × does not serve an orphaned image even for a conditional GET 187ms
+   × a put completing after deletion cannot recreate a readable or retained image 215ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/privacy-delete.test.ts > HTTP deletion removes R2 history and link-scoped budgets without touching other links
+AssertionError: expected [ HeadResult{ …(12) }, …(1) ] to have a length of +0 but got 2
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ ❯ test/privacy-delete.test.ts:38:84
+     36|     .bind(link, `op-${link}`, new Date().toISOString()).run();
+     37|   expect((await request(`links/${id}`, "DELETE")).status).toBe(204);
+     38|   expect((await env.ENRICHMENT_IMAGES.list({prefix:`enrichment/${id}/`…
+       |                                                                                    ^
+     39|   expect(await env.DB.prepare("SELECT COUNT(*) n FROM budget_ledger WH…
+     40|   expect(await env.DB.prepare("SELECT COUNT(*) n FROM budget_ledger WH…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  test/privacy-delete.test.ts > does not serve an orphaned image even for a conditional GET
+AssertionError: expected 304 to be 404 // Object.is equality
+
+- Expected
++ Received
+
+- 404
++ 304
+
+ ❯ test/privacy-delete.test.ts:50:20
+     48|   const r = await worker.fetch(new Request(`https://privacy.example/ap…
+     49|     headers: {Authorization:"Bearer app", "If-None-Match": object!.htt…
+     50|   expect(r.status).toBe(404);
+       |                    ^
+     51| });
+     52|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  test/privacy-delete.test.ts > a put completing after deletion cannot recreate a readable or retained image
+AssertionError: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ test/privacy-delete.test.ts:63:20
+     61|   } });
+     62|   const r = await request(`enrichment/jobs/${id}/images`, "POST", {lea…
+     63|   expect(r.status).toBe(409);
+       |                    ^
+     64|   expect((await env.ENRICHMENT_IMAGES.list({prefix:`enrichment/${id}/`…
+     65| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  04:05:13
+   Duration  1.19s (transform 100ms, setup 0ms, import 174ms, tests 628ms, environment 0ms)
+

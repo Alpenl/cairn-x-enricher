@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -32,11 +33,23 @@ func TestSourceAndReadingHaveSeparateContracts(t *testing.T) {
 			if request["tools"] != nil {
 				t.Error("reading must not search")
 			}
-			delete(value, "context_text")
-			value["original_text"] = "model attempted to rewrite source"
-			value["ai_title"] = "用于测试的原文阅读增强标题"
-			value["translated_text"] = "完整中文译文"
-			value["summary"] = "中文摘要"
+			// The independent ReadingResult contract contains only reading
+			// fields: the model must not echo source, links, images or tags.
+			value = map[string]any{
+				"ai_title":          "用于测试的原文阅读增强标题",
+				"original_language": "en",
+				"translated_text":   "完整中文译文",
+				"summary":           "中文摘要",
+			}
+			if _, ok := props["original_text"]; ok {
+				t.Error("reading schema must not require the model to echo original_text")
+			}
+			if _, ok := props["related_links"]; ok {
+				t.Error("reading schema must not require the model to echo related_links")
+			}
+			if _, ok := props["image_urls"]; ok {
+				t.Error("reading schema must not require the model to echo image_urls")
+			}
 		}
 		payload, _ := json.Marshal(value)
 		output = append(output, map[string]any{"type": "message", "content": []any{map[string]any{"type": "output_text", "text": string(payload)}}})
@@ -51,17 +64,133 @@ func TestSourceAndReadingHaveSeparateContracts(t *testing.T) {
 	if source.ContextText != "a comment" || source.OriginalText != "immutable source" {
 		t.Fatalf("source/context merged: %+v", source)
 	}
-	r, err := c.Transform(context.Background(), Input{SourceText: source.OriginalText})
+	r, err := c.Transform(context.Background(), Input{SourceText: source.OriginalText, RelatedLinks: []string{"https://example.com/related"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r.OriginalText != source.OriginalText {
 		t.Fatal("reading changed archived source")
 	}
+	if len(r.RelatedLinks) != 1 || r.RelatedLinks[0] != "https://example.com/related" {
+		t.Fatalf("reading must inject source links, got %v", r.RelatedLinks)
+	}
+	if len(r.ImageURLs) != 0 {
+		t.Fatalf("reading must not fabricate images, got %v", r.ImageURLs)
+	}
 }
 
 func TestSourceRequiresSearchEvidence(t *testing.T) {
 	if _, err := decodeSource(responseEnvelope{Status: "completed"}); err == nil {
 		t.Fatal("unverified source accepted")
+	}
+}
+
+func TestManualSourceKeepsExactInput(t *testing.T) {
+	client := NewResponsesClient("https://unused.example", "fixture", "grok-test", 1024, "", nil, testTaxonomy())
+	original := " \n人工原文\n "
+	source, err := client.FetchSource(context.Background(), Input{SourceText: original})
+	if err != nil || source.OriginalText != original {
+		t.Fatalf("manual source changed: %q, %v", source.OriginalText, err)
+	}
+}
+
+// TestReadingContractIsIndependentAndStrict pins the B02-T03/T04 contract: the
+// reading pass decodes only reading fields, rejects source echo, and never
+// falls back to defaults on malformed or trailing output.
+func TestReadingContractIsIndependentAndStrict(t *testing.T) {
+	readingEnvelope := func(text string) responseEnvelope {
+		return responseEnvelope{Status: "completed", Model: "grok-test", Output: []responseOutputItem{
+			{Type: "message", Content: []responseOutputContent{{Type: "output_text", Text: text}}},
+		}}
+	}
+	valid := `{"ai_title":"用于测试的阅读标题","original_language":"en","translated_text":"译文","summary":"摘要"}`
+
+	got, err := decodeReading(readingEnvelope(valid), "groK")
+	if err != nil {
+		t.Fatalf("valid reading rejected: %v", err)
+	}
+	if got.AITitle == "" || got.Model != "grok-test" {
+		t.Fatalf("reading = %+v", got)
+	}
+
+	for name, payload := range map[string]string{
+		"missing summary":    `{"ai_title":"用于测试的阅读标题","original_language":"en","translated_text":"译文"}`,
+		"trailing content":   valid + `{"extra":true}`,
+		"non-json":           `not json`,
+		"duplicate field":    valid[:len(valid)-1] + `,"summary":"另一个摘要"}`,
+		"unknown source key": `{"ai_title":"用于测试的阅读标题","original_language":"en","translated_text":"译文","summary":"摘要","original_text":"模型重写的原文"}`,
+		"unknown tag key":    `{"ai_title":"用于测试的阅读标题","original_language":"en","translated_text":"译文","summary":"摘要","classification":{"topics":[]}}`,
+	} {
+		if _, err := decodeReading(readingEnvelope(payload), "grok"); err == nil {
+			t.Errorf("%s: reading accepted malformed payload", name)
+		}
+	}
+
+	// A model that ignores the contract and echoes source must not be trusted to
+	// change the archived original.
+	if _, err := validateReading(Input{SourceText: "immutable"}, Result{
+		AITitle: "用于测试的阅读标题", OriginalLanguage: "en", OriginalText: "rewritten",
+		TranslatedText: "译文", Summary: "摘要", Model: "grok",
+	}); err == nil {
+		t.Fatal("reading accepted a mutated original text")
+	}
+}
+
+func TestReadingRejectsValidJSONHiddenInsideOversizedOutput(t *testing.T) {
+	valid := `{"ai_title":"用于测试的阅读标题","original_language":"en","translated_text":"译文","summary":"摘要"}`
+	envelope := responseEnvelope{Status: "completed", Model: "grok-test", Output: []responseOutputItem{
+		{Type: "message", Content: []responseOutputContent{{Type: "output_text",
+			Text: valid + strings.Repeat(" ", maxModelOutputBytes)}}},
+	}}
+	if _, err := decodeReading(envelope, "grok"); err == nil {
+		t.Fatal("reading accepted a valid JSON prefix followed by hidden oversized output")
+	}
+}
+
+func TestTransformPreservesLongSourceExactly(t *testing.T) {
+	prefix, suffix := " \n", "\n末尾 "
+	source := prefix + strings.Repeat("x", maxOriginalTextLength-len(prefix)-len(suffix)) + suffix
+	if len(source) != maxOriginalTextLength {
+		t.Fatalf("fixture source length = %d", len(source))
+	}
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		calls++
+		var payload struct {
+			Input []struct {
+				Content string `json:"content"`
+			} `json:"input"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || len(payload.Input) != 1 {
+			t.Errorf("decode reading request: %v", err)
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		start := strings.LastIndex(payload.Input[0].Content, "\n{")
+		if start < 0 {
+			t.Error("reading request omitted source state")
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var state map[string]string
+		if err := json.Unmarshal([]byte(payload.Input[0].Content[start+1:]), &state); err != nil ||
+			state["original_text"] != source {
+			t.Errorf("reading request did not include the exact long source: %v", err)
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		reading := `{"ai_title":"用于验证长文保留的中文标题","original_language":"fr","translated_text":"长文完整译文","summary":"长文摘要"}`
+		_ = json.NewEncoder(writer).Encode(map[string]any{"status": "completed", "model": "grok-test",
+			"output": []any{map[string]any{"type": "message", "content": []any{
+				map[string]any{"type": "output_text", "text": reading}}}}})
+	}))
+	defer server.Close()
+	client := NewResponsesClient(server.URL, "fixture", "grok-test", 1024, "", server.Client(), testTaxonomy())
+	result, err := client.Transform(context.Background(), Input{SourceText: source})
+	if err != nil || result.OriginalText != source || calls != 1 {
+		t.Fatalf("long source changed or rejected: bytes=%d calls=%d error=%v", len(result.OriginalText), calls, err)
+	}
+	if _, err := client.Transform(context.Background(), Input{SourceText: source + "x"}); err == nil || calls != 1 {
+		t.Fatalf("oversized source reached provider: calls=%d error=%v", calls, err)
 	}
 }

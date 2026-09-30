@@ -1,0 +1,12 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+tests/localintegration/classify_cli_test.go:114:11: G204: Subprocess launched with variable (gosec)
+	build := exec.CommandContext(ctx, "go", "build", "-o", binary, "./cmd/cairn-x-enricher")
+	         ^
+tests/localintegration/classify_cli_test.go:121:14: G204: Subprocess launched with a potential tainted input or cmd arguments (gosec)
+		command := exec.CommandContext(ctx, "./cairn-x-enricher", append([]string{"classify", "--max-jobs", "1"}, args...)...)
+		           ^
+2 issues:
+* gosec: 2
+exit status 1
+make: *** [Makefile:39: lint-ci] Error 1

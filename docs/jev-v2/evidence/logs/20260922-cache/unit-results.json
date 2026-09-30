@@ -1,0 +1,98 @@
+{
+  "totals": {
+    "tests": 65,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "suites": [
+    {
+      "file": "TEST-com.alpenl.cairn.share.network.LinkEnrichmentTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d82511822aae939c4312d52d6b0f0504d021965b38f66e2b34d2fedbb924931e"
+    },
+    {
+      "file": "TEST-com.alpenl.cairn.share.network.V2CurationRepositoryTest.xml",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "03d6c8a09e0438035d3fb66b632c0ae9d7f2173aaa3fc92da2c2d3b461010470"
+    },
+    {
+      "file": "TEST-com.alpenl.cairn.share.UrlDisplayLabelTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "30fb27c930ab2c163cbb577490fb419bb0810261b6d3b222a608c68fffb4c160"
+    },
+    {
+      "file": "TEST-com.alpenl.cairn.share.network.ShareApiClientTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "74dad27278c00570b77b80171cbde91317bb4f0197bec9ddb725aa916ca830b3"
+    },
+    {
+      "file": "TEST-com.alpenl.cairn.share.PendingUploadJsonTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "04e75a8d9082ad8e71f3c68cde3c0eb4e70b9eab42ee1cff1a4cd23dbe5f83bd"
+    },
+    {
+      "file": "TEST-com.alpenl.cairn.share.CurationActionJsonTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "3c2498beda0550121e8bdc6fb717eec49a63883153cbe6bafaa0351ede6c195f"
+    },
+    {
+      "file": "TEST-com.alpenl.cairn.share.network.UpdateApiClientTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "7d5fbc403de64990c36339faa2504281f2621077dda429b89b26164c631be093"
+    },
+    {
+      "file": "TEST-com.alpenl.cairn.share.network.V2CompatibilityTest.xml",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "8f0b13d020aeae89423deac3c5dacab7e5ca9650c62b46b43b14ac592a861315"
+    },
+    {
+      "file": "TEST-com.alpenl.cairn.share.NativeShareExtractionTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c86d5115ffb2e73fc8c860057ee138bc4bfefd76626481d779ad8aaa34a08429"
+    },
+    {
+      "file": "TEST-com.alpenl.cairn.share.network.LinkRequestJsonTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "82979631a666494a905038f2f2bea12919de182c4e53e1c2650874c25bc47458"
+    },
+    {
+      "file": "TEST-com.alpenl.cairn.share.ShareCandidatePresenterTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "828e65f6a4495a4f87ca2ee2e204a50c177d14abff382402c24a6ed43c29f076"
+    }
+  ]
+}

@@ -1,0 +1,683 @@
+{
+  "intervention": "only carriers question criteria changed; observed structure precedence and distinct insufficient/no-match outcomes",
+  "verified_pairs": 42,
+  "verified_question_replacements": 42,
+  "all_actual_request_states_identical": true,
+  "reference_hash": "ea14264cbaabcedd13a328bfef6473cf31a18827ca0285b27c8047150370b414",
+  "model": "jev-1.13.0",
+  "policy": "jev-policy-v3",
+  "new_calls": 84,
+  "historical_calls_including_smoke": 127,
+  "cumulative_calls": 211,
+  "baseline_input_tokens": 430541,
+  "baseline_p50_latency_ms": 426,
+  "baseline_p95_latency_ms": 603,
+  "baseline_reserved_input_tokens": 2752512,
+  "baseline_input_price_estimate_usd": 0.018082722000000002,
+  "variant_input_tokens": 449609,
+  "variant_reserved_input_tokens": 2752512,
+  "variant_p50_latency_ms": 460,
+  "variant_p95_latency_ms": 537,
+  "variant_input_price_estimate_usd": 0.018883578,
+  "price_source": "https://docs.typesafe.ai/models",
+  "price_checked_at": "2026-09-23",
+  "price_is_estimate_not_bill": true,
+  "subsets": {
+    "all": {
+      "samples": 42,
+      "groups": 7,
+      "baseline": {
+        "micro_precision": 0.9292929292929293,
+        "micro_recall": 0.8761904761904762,
+        "macro_precision": 0.8941440604484083,
+        "macro_recall": 0.8339947089947088,
+        "accepted_error_rate": 0.0707070707070707,
+        "coverage": 0.6095238095238096,
+        "review_fields_per_sample": 1.9523809523809523,
+        "brier": 0.018386414565826514,
+        "ece": 0.05855742296918748
+      },
+      "variant": {
+        "micro_precision": 0.9320388349514563,
+        "micro_recall": 0.9142857142857143,
+        "macro_precision": 0.8896827809871288,
+        "macro_recall": 0.8664021164021163,
+        "accepted_error_rate": 0.06796116504854369,
+        "coverage": 0.6476190476190476,
+        "review_fields_per_sample": 1.7619047619047619,
+        "brier": 0.018588095238095393,
+        "ece": 0.05651260504201661
+      },
+      "delta": {
+        "micro_precision": 0.002745905658527059,
+        "micro_recall": 0.03809523809523807,
+        "macro_precision": -0.004461279461279499,
+        "macro_recall": 0.03240740740740744,
+        "accepted_error_rate": -0.0027459056585270175,
+        "coverage": 0.03809523809523807,
+        "review_fields_per_sample": -0.19047619047619047,
+        "brier": 0.00020168067226887867,
+        "ece": -0.0020448179271708652
+      },
+      "dimensions": {
+        "topics": {
+          "baseline_f1": 0.909090909090909,
+          "variant_f1": 0.909090909090909,
+          "delta": 0.0,
+          "support": 42,
+          "comparable": true
+        },
+        "content_functions": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 36,
+          "comparable": true
+        },
+        "carriers": {
+          "baseline_f1": 0.8974358974358975,
+          "variant_f1": 1,
+          "delta": 0.10256410256410253,
+          "support": 42,
+          "comparable": true
+        },
+        "affordances": {
+          "baseline_f1": 0.5454545454545454,
+          "variant_f1": 0.5217391304347826,
+          "delta": -0.02371541501976282,
+          "support": 12,
+          "comparable": true
+        },
+        "form": {
+          "baseline_f1": 0.888888888888889,
+          "variant_f1": 0.888888888888889,
+          "delta": 0.0,
+          "support": 42,
+          "comparable": true
+        },
+        "use": {
+          "baseline_f1": 0.9253731343283582,
+          "variant_f1": 0.9411764705882353,
+          "delta": 0.015803336259877065,
+          "support": 36,
+          "comparable": true
+        }
+      }
+    },
+    "language-en": {
+      "samples": 14,
+      "groups": 7,
+      "baseline": {
+        "micro_precision": 0.9682539682539683,
+        "micro_recall": 0.8714285714285714,
+        "macro_precision": 0.9777777777777779,
+        "macro_recall": 0.8253968253968255,
+        "accepted_error_rate": 0.031746031746031744,
+        "coverage": 0.6142857142857143,
+        "review_fields_per_sample": 1.9285714285714286,
+        "brier": 0.016117226890756307,
+        "ece": 0.05735294117647055
+      },
+      "variant": {
+        "micro_precision": 0.9682539682539683,
+        "micro_recall": 0.8714285714285714,
+        "macro_precision": 0.9761904761904763,
+        "macro_recall": 0.8273809523809524,
+        "accepted_error_rate": 0.031746031746031744,
+        "coverage": 0.6428571428571429,
+        "review_fields_per_sample": 1.7857142857142858,
+        "brier": 0.01647268907563026,
+        "ece": 0.05978991596638651
+      },
+      "delta": {
+        "micro_precision": 0.0,
+        "micro_recall": 0.0,
+        "macro_precision": -0.0015873015873015817,
+        "macro_recall": 0.001984126984126977,
+        "accepted_error_rate": 0.0,
+        "coverage": 0.02857142857142858,
+        "review_fields_per_sample": -0.1428571428571428,
+        "brier": 0.0003554621848739538,
+        "ece": 0.0024369747899159605
+      },
+      "dimensions": {
+        "topics": {
+          "baseline_f1": 0.896551724137931,
+          "variant_f1": 0.8571428571428571,
+          "delta": -0.039408866995073955,
+          "support": 14,
+          "comparable": true
+        },
+        "content_functions": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 12,
+          "comparable": true
+        },
+        "carriers": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 14,
+          "comparable": true
+        },
+        "affordances": {
+          "baseline_f1": 0.6666666666666666,
+          "variant_f1": 0.6666666666666666,
+          "delta": 0.0,
+          "support": 4,
+          "comparable": true
+        },
+        "form": {
+          "baseline_f1": 0.923076923076923,
+          "variant_f1": 0.923076923076923,
+          "delta": 0.0,
+          "support": 14,
+          "comparable": true
+        },
+        "use": {
+          "baseline_f1": 0.8,
+          "variant_f1": 0.8571428571428571,
+          "delta": 0.05714285714285705,
+          "support": 12,
+          "comparable": true
+        }
+      }
+    },
+    "language-mixed": {
+      "samples": 14,
+      "groups": 7,
+      "baseline": {
+        "micro_precision": 0.9166666666666666,
+        "micro_recall": 0.9428571428571428,
+        "macro_precision": 0.8663461538461538,
+        "macro_recall": 0.8928571428571428,
+        "accepted_error_rate": 0.08333333333333333,
+        "coverage": 0.6428571428571429,
+        "review_fields_per_sample": 1.7857142857142858,
+        "brier": 0.019528991596638633,
+        "ece": 0.061386554621848714
+      },
+      "variant": {
+        "micro_precision": 0.9166666666666666,
+        "micro_recall": 0.9428571428571428,
+        "macro_precision": 0.8663461538461538,
+        "macro_recall": 0.8928571428571428,
+        "accepted_error_rate": 0.08333333333333333,
+        "coverage": 0.6285714285714286,
+        "review_fields_per_sample": 1.8571428571428572,
+        "brier": 0.019933193277310902,
+        "ece": 0.05575630252100838
+      },
+      "delta": {
+        "micro_precision": 0.0,
+        "micro_recall": 0.0,
+        "macro_precision": 0.0,
+        "macro_recall": 0.0,
+        "accepted_error_rate": 0.0,
+        "coverage": -0.014285714285714346,
+        "review_fields_per_sample": 0.0714285714285714,
+        "brier": 0.0004042016806722684,
+        "ece": -0.005630252100840331
+      },
+      "dimensions": {
+        "topics": {
+          "baseline_f1": 0.9333333333333333,
+          "variant_f1": 0.9333333333333333,
+          "delta": 0.0,
+          "support": 14,
+          "comparable": true
+        },
+        "content_functions": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 12,
+          "comparable": true
+        },
+        "carriers": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 14,
+          "comparable": true
+        },
+        "affordances": {
+          "baseline_f1": 0.4444444444444445,
+          "variant_f1": 0.4444444444444445,
+          "delta": 0.0,
+          "support": 4,
+          "comparable": true
+        },
+        "form": {
+          "baseline_f1": 0.888888888888889,
+          "variant_f1": 0.888888888888889,
+          "delta": 0.0,
+          "support": 14,
+          "comparable": true
+        },
+        "use": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 12,
+          "comparable": true
+        }
+      }
+    },
+    "language-zh": {
+      "samples": 14,
+      "groups": 7,
+      "baseline": {
+        "micro_precision": 0.9047619047619048,
+        "micro_recall": 0.8142857142857143,
+        "macro_precision": 0.877579365079365,
+        "macro_recall": 0.7837301587301587,
+        "accepted_error_rate": 0.09523809523809523,
+        "coverage": 0.5714285714285714,
+        "review_fields_per_sample": 2.142857142857143,
+        "brier": 0.019513025210084,
+        "ece": 0.05802521008403356
+      },
+      "variant": {
+        "micro_precision": 0.9154929577464789,
+        "micro_recall": 0.9285714285714286,
+        "macro_precision": 0.8720238095238094,
+        "macro_recall": 0.878968253968254,
+        "accepted_error_rate": 0.08450704225352113,
+        "coverage": 0.6714285714285714,
+        "review_fields_per_sample": 1.6428571428571428,
+        "brier": 0.019358403361344506,
+        "ece": 0.05735294117647052
+      },
+      "delta": {
+        "micro_precision": 0.010731052984574108,
+        "micro_recall": 0.11428571428571432,
+        "macro_precision": -0.005555555555555536,
+        "macro_recall": 0.09523809523809523,
+        "accepted_error_rate": -0.010731052984574108,
+        "coverage": 0.09999999999999998,
+        "review_fields_per_sample": -0.5,
+        "brier": -0.0001546218487394925,
+        "ece": -0.0006722689075630353
+      },
+      "dimensions": {
+        "topics": {
+          "baseline_f1": 0.896551724137931,
+          "variant_f1": 0.9333333333333333,
+          "delta": 0.0367816091954023,
+          "support": 14,
+          "comparable": true
+        },
+        "content_functions": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 12,
+          "comparable": true
+        },
+        "carriers": {
+          "baseline_f1": 0.6363636363636364,
+          "variant_f1": 1,
+          "delta": 0.36363636363636365,
+          "support": 14,
+          "comparable": true
+        },
+        "affordances": {
+          "baseline_f1": 0.5714285714285715,
+          "variant_f1": 0.5,
+          "delta": -0.07142857142857151,
+          "support": 4,
+          "comparable": true
+        },
+        "form": {
+          "baseline_f1": 0.8571428571428571,
+          "variant_f1": 0.8571428571428571,
+          "delta": 0.0,
+          "support": 14,
+          "comparable": true
+        },
+        "use": {
+          "baseline_f1": 0.9565217391304348,
+          "variant_f1": 0.9565217391304348,
+          "delta": 0.0,
+          "support": 12,
+          "comparable": true
+        }
+      }
+    },
+    "context-author_continuation": {
+      "samples": 7,
+      "groups": 7,
+      "baseline": {
+        "micro_precision": 0.8918918918918919,
+        "micro_recall": 0.9428571428571428,
+        "macro_precision": 0.8541666666666666,
+        "macro_recall": 0.8928571428571428,
+        "accepted_error_rate": 0.10810810810810811,
+        "coverage": 0.6285714285714286,
+        "review_fields_per_sample": 1.8571428571428572,
+        "brier": 0.020295798319327735,
+        "ece": 0.06100840336134454
+      },
+      "variant": {
+        "micro_precision": 0.8918918918918919,
+        "micro_recall": 0.9428571428571428,
+        "macro_precision": 0.8541666666666666,
+        "macro_recall": 0.8928571428571428,
+        "accepted_error_rate": 0.10810810810810811,
+        "coverage": 0.6,
+        "review_fields_per_sample": 2,
+        "brier": 0.021142857142857144,
+        "ece": 0.06218487394957984
+      },
+      "delta": {
+        "micro_precision": 0.0,
+        "micro_recall": 0.0,
+        "macro_precision": 0.0,
+        "macro_recall": 0.0,
+        "accepted_error_rate": 0.0,
+        "coverage": -0.02857142857142858,
+        "review_fields_per_sample": 0.1428571428571428,
+        "brier": 0.0008470588235294091,
+        "ece": 0.0011764705882352997
+      },
+      "dimensions": {
+        "topics": {
+          "baseline_f1": 0.9333333333333333,
+          "variant_f1": 0.9333333333333333,
+          "delta": 0.0,
+          "support": 7,
+          "comparable": true
+        },
+        "content_functions": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 6,
+          "comparable": true
+        },
+        "carriers": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 7,
+          "comparable": true
+        },
+        "affordances": {
+          "baseline_f1": 0.3333333333333333,
+          "variant_f1": 0.3333333333333333,
+          "delta": 0.0,
+          "support": 2,
+          "comparable": true
+        },
+        "form": {
+          "baseline_f1": 0.923076923076923,
+          "variant_f1": 0.923076923076923,
+          "delta": 0.0,
+          "support": 7,
+          "comparable": true
+        },
+        "use": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 6,
+          "comparable": true
+        }
+      }
+    },
+    "context-external_article": {
+      "samples": 7,
+      "groups": 7,
+      "baseline": {
+        "micro_precision": 0.8666666666666667,
+        "micro_recall": 0.7428571428571429,
+        "macro_precision": 0.7053571428571429,
+        "macro_recall": 0.7261904761904763,
+        "accepted_error_rate": 0.13333333333333333,
+        "coverage": 0.4857142857142857,
+        "review_fields_per_sample": 2.5714285714285716,
+        "brier": 0.017173109243697467,
+        "ece": 0.055126050420168056
+      },
+      "variant": {
+        "micro_precision": 0.8918918918918919,
+        "micro_recall": 0.9428571428571428,
+        "macro_precision": 0.8442460317460317,
+        "macro_recall": 0.8928571428571428,
+        "accepted_error_rate": 0.10810810810810811,
+        "coverage": 0.6571428571428571,
+        "review_fields_per_sample": 1.7142857142857142,
+        "brier": 0.017593277310924357,
+        "ece": 0.05731092436974789
+      },
+      "delta": {
+        "micro_precision": 0.02522522522522519,
+        "micro_recall": 0.19999999999999996,
+        "macro_precision": 0.13888888888888884,
+        "macro_recall": 0.16666666666666652,
+        "accepted_error_rate": -0.025225225225225217,
+        "coverage": 0.17142857142857143,
+        "review_fields_per_sample": -0.8571428571428574,
+        "brier": 0.00042016806722688926,
+        "ece": 0.0021848739495798353
+      },
+      "dimensions": {
+        "topics": {
+          "baseline_f1": 0.9333333333333333,
+          "variant_f1": 0.9333333333333333,
+          "delta": 0.0,
+          "support": 7,
+          "comparable": true
+        },
+        "content_functions": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 6,
+          "comparable": true
+        },
+        "carriers": {
+          "baseline_f1": 0,
+          "variant_f1": 1,
+          "delta": 1,
+          "support": 7,
+          "comparable": true
+        },
+        "affordances": {
+          "baseline_f1": 0.5,
+          "variant_f1": 0.4,
+          "delta": -0.09999999999999998,
+          "support": 2,
+          "comparable": true
+        },
+        "form": {
+          "baseline_f1": 0.8571428571428571,
+          "variant_f1": 0.8571428571428571,
+          "delta": 0.0,
+          "support": 7,
+          "comparable": true
+        },
+        "use": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 6,
+          "comparable": true
+        }
+      }
+    },
+    "context-primary-only": {
+      "samples": 21,
+      "groups": 7,
+      "baseline": {
+        "micro_precision": 0.9494949494949495,
+        "micro_recall": 0.8952380952380953,
+        "macro_precision": 0.9606060606060606,
+        "macro_recall": 0.8492063492063492,
+        "accepted_error_rate": 0.050505050505050504,
+        "coverage": 0.6285714285714286,
+        "review_fields_per_sample": 1.8571428571428572,
+        "brier": 0.020445378151260442,
+        "ece": 0.06414565826330525
+      },
+      "variant": {
+        "micro_precision": 0.9494949494949495,
+        "micro_recall": 0.8952380952380953,
+        "macro_precision": 0.9606060606060606,
+        "macro_recall": 0.8492063492063492,
+        "accepted_error_rate": 0.050505050505050504,
+        "coverage": 0.638095238095238,
+        "review_fields_per_sample": 1.8095238095238095,
+        "brier": 0.02053053221288512,
+        "ece": 0.06285714285714278
+      },
+      "delta": {
+        "micro_precision": 0.0,
+        "micro_recall": 0.0,
+        "macro_precision": 0.0,
+        "macro_recall": 0.0,
+        "accepted_error_rate": 0.0,
+        "coverage": 0.00952380952380949,
+        "review_fields_per_sample": -0.04761904761904767,
+        "brier": 8.515406162467806e-05,
+        "ece": -0.0012885154061624687
+      },
+      "dimensions": {
+        "topics": {
+          "baseline_f1": 0.8837209302325582,
+          "variant_f1": 0.8837209302325582,
+          "delta": 0.0,
+          "support": 21,
+          "comparable": true
+        },
+        "content_functions": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 18,
+          "comparable": true
+        },
+        "carriers": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 21,
+          "comparable": true
+        },
+        "affordances": {
+          "baseline_f1": 0.6666666666666666,
+          "variant_f1": 0.6666666666666666,
+          "delta": 0.0,
+          "support": 6,
+          "comparable": true
+        },
+        "form": {
+          "baseline_f1": 0.8780487804878048,
+          "variant_f1": 0.8780487804878048,
+          "delta": 0.0,
+          "support": 21,
+          "comparable": true
+        },
+        "use": {
+          "baseline_f1": 0.9090909090909091,
+          "variant_f1": 0.9090909090909091,
+          "delta": 0.0,
+          "support": 18,
+          "comparable": true
+        }
+      }
+    },
+    "context-quoted": {
+      "samples": 7,
+      "groups": 7,
+      "baseline": {
+        "micro_precision": 0.96875,
+        "micro_recall": 0.8857142857142857,
+        "macro_precision": 0.9791666666666666,
+        "macro_recall": 0.8373015873015873,
+        "accepted_error_rate": 0.03125,
+        "coverage": 0.6571428571428571,
+        "review_fields_per_sample": 1.7142857142857142,
+        "brier": 0.011513445378151242,
+        "ece": 0.042773109243697476
+      },
+      "variant": {
+        "micro_precision": 0.9696969696969697,
+        "micro_recall": 0.9142857142857143,
+        "macro_precision": 0.9791666666666666,
+        "macro_recall": 0.865079365079365,
+        "accepted_error_rate": 0.030303030303030304,
+        "coverage": 0.7142857142857143,
+        "review_fields_per_sample": 1.4285714285714286,
+        "brier": 0.011200840336134435,
+        "ece": 0.04176470588235295
+      },
+      "delta": {
+        "micro_precision": 0.0009469696969697239,
+        "micro_recall": 0.02857142857142858,
+        "macro_precision": 0.0,
+        "macro_recall": 0.02777777777777768,
+        "accepted_error_rate": -0.0009469696969696961,
+        "coverage": 0.05714285714285716,
+        "review_fields_per_sample": -0.2857142857142856,
+        "brier": -0.0003126050420168072,
+        "ece": -0.0010084033613445287
+      },
+      "dimensions": {
+        "topics": {
+          "baseline_f1": 0.9333333333333333,
+          "variant_f1": 0.9333333333333333,
+          "delta": 0.0,
+          "support": 7,
+          "comparable": true
+        },
+        "content_functions": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 6,
+          "comparable": true
+        },
+        "carriers": {
+          "baseline_f1": 1,
+          "variant_f1": 1,
+          "delta": 0,
+          "support": 7,
+          "comparable": true
+        },
+        "affordances": {
+          "baseline_f1": 0.6666666666666666,
+          "variant_f1": 0.6666666666666666,
+          "delta": 0.0,
+          "support": 2,
+          "comparable": true
+        },
+        "form": {
+          "baseline_f1": 0.923076923076923,
+          "variant_f1": 0.923076923076923,
+          "delta": 0.0,
+          "support": 7,
+          "comparable": true
+        },
+        "use": {
+          "baseline_f1": 0.8,
+          "variant_f1": 0.9090909090909091,
+          "delta": 0.10909090909090902,
+          "support": 6,
+          "comparable": true
+        }
+      }
+    }
+  },
+  "limitations": [
+    "7 independent authored training groups; translations/variants are not independent",
+    "fixed baseline-then-variant order; no repeated run to estimate provider/temporal variation",
+    "reference-scope bias is not included in bootstrap intervals",
+    "reported intervals are within-condition group bootstrap, not a paired delta confidence interval",
+    "no dev/holdout model calls, fitting or quality scoring",
+    "no policy calibration or production promotion"
+  ]
+}

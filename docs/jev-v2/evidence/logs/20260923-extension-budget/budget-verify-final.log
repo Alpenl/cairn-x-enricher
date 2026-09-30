@@ -1,0 +1,35 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+0 issues.
+go test -race -coverprofile=coverage.out ./...
+ok  	github.com/Alpenl/cairn-x-enricher/cmd/cairn-x-enricher	3.083s	coverage: 43.1% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/ablation	1.045s	coverage: 31.6% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/ablation/main		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/ablation-report		coverage: 0.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/classification/main	2.117s	coverage: 43.5% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/classification/referencegen	1.269s	coverage: 82.7% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/harvest		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/identity		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/rescore		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/threadreport		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/threadvalue		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/verifyurls		coverage: 0.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/buildinfo	1.032s	coverage: 100.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/cairn	1.856s	coverage: 41.5% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/classify	1.393s	coverage: 76.2% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/config	1.022s	coverage: 91.0% of statements
+--- FAIL: TestRerankEndpointIsBoundedAndFallsBackExplicitly (0.00s)
+    reader_v2_test.go:119: run 1 ordered [{ID:1 Text:低相关材料 无关内容 Rank:0 Role: Allowed:true} {ID:2 Text:高相关材料 LLM 评估方法 Rank:1 Role: Allowed:true}]
+FAIL
+coverage: 53.3% of statements
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/dashboard	0.359s
+ok  	github.com/Alpenl/cairn-x-enricher/internal/enrich	1.381s	coverage: 83.6% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/evaluation	1.607s	coverage: 89.1% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/extension	1.541s	coverage: 82.4% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/health	1.019s	coverage: 94.2% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/processor	1.331s	coverage: 83.7% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/taxonomy	1.024s	coverage: 93.3% of statements
+	github.com/Alpenl/cairn-x-enricher/tests/acceptance/budget-probe		coverage: 0.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.016s	coverage: [no statements]
+FAIL
+make: *** [Makefile:19: test] Error 1

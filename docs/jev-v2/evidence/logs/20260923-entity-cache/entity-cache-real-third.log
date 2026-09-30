@@ -1,0 +1,6 @@
+== TestLocalWorkerEntityCacheCLI: starting worker on 127.0.0.1:42953 ==
+=== RUN   TestLocalWorkerEntityCacheCLI
+    entity_cache_test.go:262: PASS: five real CLI processes; 5 ordinary classification HTTP / 2 entity HTTP to local fixture; lost cache and state acknowledgments recovered; restart/human override/exhausted-budget reuse; source invalidation and explicit budget failure; deletion removes all private results; zero paid calls
+--- PASS: TestLocalWorkerEntityCacheCLI (2.23s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	2.236s

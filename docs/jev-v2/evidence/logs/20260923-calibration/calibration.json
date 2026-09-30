@@ -1,0 +1,4491 @@
+{
+  "version": "probability-diagnostics-v1",
+  "dataset_hash": "fff1c997066a85e4b7ba16726c57d2b9523ac52a66af45f0c4fc46c42cc66054",
+  "reference_hash": "ea14264cbaabcedd13a328bfef6473cf31a18827ca0285b27c8047150370b414",
+  "split": "train",
+  "binding": {
+    "resolved_model": "jev-1.13.0",
+    "spec_id": "classify-ffb0edb18cb5",
+    "spec_hash": "cfe187bd9786171a7636fd31b4a01b6767f4c8fd67d40cfddc261a1ce00a58ee",
+    "taxonomy_version": "2026-09-20.1",
+    "batch_semantics": "single-request"
+  },
+  "config": {
+    "version": "reference-probability-diagnostics-v1",
+    "bins": 10,
+    "policy": {
+      "version": "jev-policy-v3",
+      "calibrated": false,
+      "topic_accept": 0.8,
+      "topic_reject": 0.2,
+      "choice_accept": 0.65,
+      "choice_margin": 0.15,
+      "max_display_topics": 3,
+      "max_effective_topics": 64,
+      "allow_alias_drift": false,
+      "block_personal_use": true
+    },
+    "cutoffs": [
+      0,
+      0.15,
+      0.3,
+      0.5,
+      0.65,
+      0.8,
+      0.9,
+      1
+    ]
+  },
+  "model_calls": 0,
+  "promote": false,
+  "calibrated": false,
+  "samples": 42,
+  "independent_groups": 7,
+  "reference_provenance": {
+    "automatic_reference": 42
+  },
+  "dimensions": [
+    {
+      "name": "affordances",
+      "kind": "noul",
+      "observations": 48,
+      "independent_groups": 2,
+      "unknown_reference": 120,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.2647979166666667,
+      "ece": 0.3660416666666667,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.18,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.215,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 5,
+          "positive_outcomes": 0,
+          "mean_probability": 0.352,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 7,
+          "positive_outcomes": 0,
+          "mean_probability": 0.4471428571428572,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 4,
+          "positive_outcomes": 1,
+          "mean_probability": 0.5425,
+          "observed_rate": 0.25
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 10,
+          "positive_outcomes": 1,
+          "mean_probability": 0.628,
+          "observed_rate": 0.1
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 8,
+          "positive_outcomes": 4,
+          "mean_probability": 0.7337499999999999,
+          "observed_rate": 0.5
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 9,
+          "positive_outcomes": 4,
+          "mean_probability": 0.8411111111111111,
+          "observed_rate": 0.4444444444444444
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 2,
+          "positive_outcomes": 2,
+          "mean_probability": 0.91,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "carriers",
+      "kind": "choice",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "multiclass_sum_[0,2]",
+      "reliability_target": "chosen_option_correctness",
+      "brier": 0.01763809523809524,
+      "ece": 0.050000000000000086,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 1,
+          "positive_outcomes": 1,
+          "mean_probability": 0.69,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 5,
+          "positive_outcomes": 5,
+          "mean_probability": 0.768,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 1,
+          "positive_outcomes": 1,
+          "mean_probability": 0.81,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 35,
+          "positive_outcomes": 35,
+          "mean_probability": 0.9874285714285713,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "content_functions",
+      "kind": "noul",
+      "observations": 180,
+      "independent_groups": 6,
+      "unknown_reference": 30,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.04534222222222218,
+      "ece": 0.1372222222222222,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 84,
+          "positive_outcomes": 0,
+          "mean_probability": 0.04761904761904759,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 25,
+          "positive_outcomes": 0,
+          "mean_probability": 0.1364,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 10,
+          "positive_outcomes": 0,
+          "mean_probability": 0.25199999999999995,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 7,
+          "positive_outcomes": 0,
+          "mean_probability": 0.3457142857142857,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 8,
+          "positive_outcomes": 0,
+          "mean_probability": 0.455,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 4,
+          "positive_outcomes": 0,
+          "mean_probability": 0.53,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.6533333333333333,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.7566666666666667,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 3,
+          "positive_outcomes": 3,
+          "mean_probability": 0.85,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 33,
+          "positive_outcomes": 33,
+          "mean_probability": 0.9421212121212122,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "form",
+      "kind": "choice",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "multiclass_sum_[0,2]",
+      "reliability_target": "chosen_option_correctness",
+      "brier": 0.16205238095238098,
+      "ece": 0.09428571428571422,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.33999999999999997,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.41000000000000003,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.58,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 3,
+          "positive_outcomes": 1,
+          "mean_probability": 0.7633333333333333,
+          "observed_rate": 0.3333333333333333
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.84,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 35,
+          "positive_outcomes": 35,
+          "mean_probability": 0.9857142857142858,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topics",
+      "kind": "noul",
+      "observations": 714,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.018588095238095393,
+      "ece": 0.05651260504201661,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 560,
+          "positive_outcomes": 0,
+          "mean_probability": 0.025839285714285475,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 63,
+          "positive_outcomes": 0,
+          "mean_probability": 0.13587301587301587,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 25,
+          "positive_outcomes": 0,
+          "mean_probability": 0.24559999999999998,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 6,
+          "positive_outcomes": 0,
+          "mean_probability": 0.3316666666666667,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 4,
+          "positive_outcomes": 0,
+          "mean_probability": 0.445,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.5433333333333333,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 3,
+          "positive_outcomes": 1,
+          "mean_probability": 0.68,
+          "observed_rate": 0.3333333333333333
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 4,
+          "positive_outcomes": 1,
+          "mean_probability": 0.7525,
+          "observed_rate": 0.25
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 12,
+          "positive_outcomes": 8,
+          "mean_probability": 0.8583333333333334,
+          "observed_rate": 0.6666666666666666
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 34,
+          "positive_outcomes": 32,
+          "mean_probability": 0.9285294117647059,
+          "observed_rate": 0.9411764705882353
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "use",
+      "kind": "choice",
+      "observations": 12,
+      "independent_groups": 2,
+      "unknown_reference": 6,
+      "ambiguous_reference": 24,
+      "brier_scale": "multiclass_sum_[0,2]",
+      "reliability_target": "chosen_option_correctness",
+      "brier": 0.003750000000000001,
+      "ece": 0.03833333333333326,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 1,
+          "positive_outcomes": 1,
+          "mean_probability": 0.89,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 11,
+          "positive_outcomes": 11,
+          "mean_probability": 0.9681818181818183,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    }
+  ],
+  "questions": [
+    {
+      "name": "affordances_background",
+      "kind": "noul",
+      "observations": 12,
+      "independent_groups": 2,
+      "unknown_reference": 30,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.32943333333333336,
+      "ece": 0.54,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 4,
+          "positive_outcomes": 0,
+          "mean_probability": 0.365,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 4,
+          "positive_outcomes": 0,
+          "mean_probability": 0.44499999999999995,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 4,
+          "positive_outcomes": 0,
+          "mean_probability": 0.81,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "affordances_material",
+      "kind": "noul",
+      "observations": 12,
+      "independent_groups": 2,
+      "unknown_reference": 30,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.36525,
+      "ece": 0.5983333333333334,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.42,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.54,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 6,
+          "positive_outcomes": 0,
+          "mean_probability": 0.6083333333333334,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.745,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "affordances_practice",
+      "kind": "noul",
+      "observations": 12,
+      "independent_groups": 2,
+      "unknown_reference": 30,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.057033333333333325,
+      "ece": 0.21166666666666664,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 1,
+          "positive_outcomes": 1,
+          "mean_probability": 0.55,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 1,
+          "positive_outcomes": 1,
+          "mean_probability": 0.68,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 4,
+          "positive_outcomes": 4,
+          "mean_probability": 0.7274999999999999,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 4,
+          "positive_outcomes": 4,
+          "mean_probability": 0.875,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 2,
+          "positive_outcomes": 2,
+          "mean_probability": 0.91,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "affordances_quote",
+      "kind": "noul",
+      "observations": 12,
+      "independent_groups": 2,
+      "unknown_reference": 30,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.307475,
+      "ece": 0.5075,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.18,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.215,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.3,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.46499999999999997,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.65,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.735,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.83,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "carriers",
+      "kind": "choice",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "multiclass_sum_[0,2]",
+      "reliability_target": "chosen_option_correctness",
+      "brier": 0.01763809523809524,
+      "ece": 0.050000000000000086,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 1,
+          "positive_outcomes": 1,
+          "mean_probability": 0.69,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 5,
+          "positive_outcomes": 5,
+          "mean_probability": 0.768,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 1,
+          "positive_outcomes": 1,
+          "mean_probability": 0.81,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 35,
+          "positive_outcomes": 35,
+          "mean_probability": 0.9874285714285713,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "content_functions_case",
+      "kind": "noul",
+      "observations": 36,
+      "independent_groups": 6,
+      "unknown_reference": 6,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.040772222222222224,
+      "ece": 0.1338888888888889,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 26,
+          "positive_outcomes": 0,
+          "mean_probability": 0.058846153846153874,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 4,
+          "positive_outcomes": 0,
+          "mean_probability": 0.15000000000000002,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.26,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.38,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.4766666666666666,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.62,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "content_functions_data",
+      "kind": "noul",
+      "observations": 36,
+      "independent_groups": 6,
+      "unknown_reference": 6,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.030363888888888874,
+      "ece": 0.10861111111111113,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 27,
+          "positive_outcomes": 0,
+          "mean_probability": 0.043703703703703724,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.12333333333333334,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.28,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.3433333333333333,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.525,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "content_functions_method",
+      "kind": "noul",
+      "observations": 36,
+      "independent_groups": 6,
+      "unknown_reference": 6,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.039191666666666666,
+      "ece": 0.15805555555555553,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.09,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 13,
+          "positive_outcomes": 0,
+          "mean_probability": 0.13153846153846152,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 6,
+          "positive_outcomes": 0,
+          "mean_probability": 0.23666666666666666,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.37,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.4633333333333333,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 12,
+          "positive_outcomes": 12,
+          "mean_probability": 0.9408333333333333,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "content_functions_opinion",
+      "kind": "noul",
+      "observations": 36,
+      "independent_groups": 6,
+      "unknown_reference": 6,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.10969166666666667,
+      "ece": 0.2241666666666667,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.28,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.32,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.41,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.535,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.67,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.7566666666666667,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 3,
+          "positive_outcomes": 3,
+          "mean_probability": 0.85,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 21,
+          "positive_outcomes": 21,
+          "mean_probability": 0.9428571428571428,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "content_functions_tool",
+      "kind": "noul",
+      "observations": 36,
+      "independent_groups": 6,
+      "unknown_reference": 6,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.006691666666666668,
+      "ece": 0.061388888888888916,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 30,
+          "positive_outcomes": 0,
+          "mean_probability": 0.04000000000000002,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 5,
+          "positive_outcomes": 0,
+          "mean_probability": 0.14600000000000002,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.28,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "form",
+      "kind": "choice",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "multiclass_sum_[0,2]",
+      "reliability_target": "chosen_option_correctness",
+      "brier": 0.16205238095238098,
+      "ece": 0.09428571428571422,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.33999999999999997,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.41000000000000003,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.58,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 3,
+          "positive_outcomes": 1,
+          "mean_probability": 0.7633333333333333,
+          "observed_rate": 0.3333333333333333
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.84,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 35,
+          "positive_outcomes": 35,
+          "mean_probability": 0.9857142857142858,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_city",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.0019642857142857136,
+      "ece": 0.03071428571428573,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 39,
+          "positive_outcomes": 0,
+          "mean_probability": 0.022820512820512836,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.13333333333333333,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_design",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.02645000000000001,
+      "ece": 0.09404761904761906,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 26,
+          "positive_outcomes": 0,
+          "mean_probability": 0.02923076923076924,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.12666666666666668,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 4,
+          "positive_outcomes": 0,
+          "mean_probability": 0.245,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.46,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.53,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 6,
+          "positive_outcomes": 6,
+          "mean_probability": 0.9483333333333333,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_edu",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.0029357142857142863,
+      "ece": 0.044523809523809535,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 38,
+          "positive_outcomes": 0,
+          "mean_probability": 0.036578947368421065,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 4,
+          "positive_outcomes": 0,
+          "mean_probability": 0.12,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_eng",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.017352380952380956,
+      "ece": 0.09095238095238095,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 26,
+          "positive_outcomes": 0,
+          "mean_probability": 0.02307692307692308,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 8,
+          "positive_outcomes": 0,
+          "mean_probability": 0.1475,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 7,
+          "positive_outcomes": 0,
+          "mean_probability": 0.24857142857142858,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.3,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_eval",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.014371428571428571,
+      "ece": 0.07476190476190477,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 30,
+          "positive_outcomes": 0,
+          "mean_probability": 0.027666666666666683,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.175,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.25,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.375,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 1,
+          "positive_outcomes": 1,
+          "mean_probability": 0.78,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 2,
+          "positive_outcomes": 2,
+          "mean_probability": 0.845,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 3,
+          "positive_outcomes": 3,
+          "mean_probability": 0.9400000000000001,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_health",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.004983333333333333,
+      "ece": 0.04738095238095238,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 31,
+          "positive_outcomes": 0,
+          "mean_probability": 0.02161290322580646,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 4,
+          "positive_outcomes": 0,
+          "mean_probability": 0.15,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.21,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 6,
+          "positive_outcomes": 6,
+          "mean_probability": 0.915,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_history",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.0005809523809523808,
+      "ece": 0.020476190476190488,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 42,
+          "positive_outcomes": 0,
+          "mean_probability": 0.020476190476190488,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_invest",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.0012357142857142862,
+      "ece": 0.024523809523809517,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 35,
+          "positive_outcomes": 0,
+          "mean_probability": 0.017142857142857144,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.13,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 6,
+          "positive_outcomes": 6,
+          "mean_probability": 0.9500000000000001,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_law",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.00505952380952381,
+      "ece": 0.04023809523809523,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 36,
+          "positive_outcomes": 0,
+          "mean_probability": 0.020555555555555566,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 1,
+          "positive_outcomes": 1,
+          "mean_probability": 0.67,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 3,
+          "positive_outcomes": 3,
+          "mean_probability": 0.8566666666666668,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 2,
+          "positive_outcomes": 2,
+          "mean_probability": 0.905,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_life",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.11085476190476184,
+      "ece": 0.13547619047619047,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 28,
+          "positive_outcomes": 0,
+          "mean_probability": 0.02607142857142858,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.11,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 4,
+          "positive_outcomes": 0,
+          "mean_probability": 0.8525,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 8,
+          "positive_outcomes": 6,
+          "mean_probability": 0.91625,
+          "observed_rate": 0.75
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_llm",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.01307857142857141,
+      "ece": 0.05214285714285716,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 37,
+          "positive_outcomes": 0,
+          "mean_probability": 0.01891891891891893,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.15,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.21,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.46,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_manage",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.0015214285714285718,
+      "ece": 0.027857142857142865,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 40,
+          "positive_outcomes": 0,
+          "mean_probability": 0.02250000000000001,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.135,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_media",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.0028809523809523803,
+      "ece": 0.035714285714285726,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 39,
+          "positive_outcomes": 0,
+          "mean_probability": 0.025384615384615394,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.17,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_product",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.0890904761904762,
+      "ece": 0.1919047619047619,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 19,
+          "positive_outcomes": 0,
+          "mean_probability": 0.033684210526315796,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 4,
+          "positive_outcomes": 0,
+          "mean_probability": 0.1175,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 4,
+          "positive_outcomes": 0,
+          "mean_probability": 0.2775,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.315,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.4,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.57,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 2,
+          "positive_outcomes": 0,
+          "mean_probability": 0.685,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.7433333333333333,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 3,
+          "positive_outcomes": 3,
+          "mean_probability": 0.8766666666666666,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 3,
+          "positive_outcomes": 3,
+          "mean_probability": 0.91,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_psych",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.007142857142857147,
+      "ece": 0.06571428571428574,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 31,
+          "positive_outcomes": 0,
+          "mean_probability": 0.03870967741935486,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 10,
+          "positive_outcomes": 0,
+          "mean_probability": 0.13200000000000003,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.24,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_science",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.009230952380952387,
+      "ece": 0.061666666666666675,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 34,
+          "positive_outcomes": 0,
+          "mean_probability": 0.030294117647058836,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 4,
+          "positive_outcomes": 0,
+          "mean_probability": 0.135,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 3,
+          "positive_outcomes": 0,
+          "mean_probability": 0.23666666666666666,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.31,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "topic_writing",
+      "kind": "noul",
+      "observations": 42,
+      "independent_groups": 7,
+      "unknown_reference": 0,
+      "ambiguous_reference": 0,
+      "brier_scale": "binary_[0,1]",
+      "reliability_target": "statement_truth",
+      "brier": 0.007264285714285721,
+      "ece": 0.06500000000000002,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 29,
+          "positive_outcomes": 0,
+          "mean_probability": 0.032413793103448295,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 12,
+          "positive_outcomes": 0,
+          "mean_probability": 0.13,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 1,
+          "positive_outcomes": 0,
+          "mean_probability": 0.23,
+          "observed_rate": 0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        }
+      ],
+      "inconclusive": true
+    },
+    {
+      "name": "use",
+      "kind": "choice",
+      "observations": 12,
+      "independent_groups": 2,
+      "unknown_reference": 6,
+      "ambiguous_reference": 24,
+      "brier_scale": "multiclass_sum_[0,2]",
+      "reliability_target": "chosen_option_correctness",
+      "brier": 0.003750000000000001,
+      "ece": 0.03833333333333326,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "positive_outcomes": 0,
+          "mean_probability": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 1,
+          "positive_outcomes": 1,
+          "mean_probability": 0.89,
+          "observed_rate": 1
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "count": 11,
+          "positive_outcomes": 11,
+          "mean_probability": 0.9681818181818183,
+          "observed_rate": 1
+        }
+      ],
+      "inconclusive": true
+    }
+  ],
+  "choice_risk": [
+    {
+      "dimension": "all_choices",
+      "feature": "production_policy",
+      "cutoff": 0,
+      "support": 96,
+      "accepted": 93,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.96875,
+      "accepted_error": 0.03225806451612903
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "chosen_probability",
+      "cutoff": 0,
+      "support": 96,
+      "accepted": 93,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.96875,
+      "accepted_error": 0.03225806451612903
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "chosen_probability",
+      "cutoff": 0.15,
+      "support": 96,
+      "accepted": 93,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.96875,
+      "accepted_error": 0.03225806451612903
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "chosen_probability",
+      "cutoff": 0.3,
+      "support": 96,
+      "accepted": 93,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.96875,
+      "accepted_error": 0.03225806451612903
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "chosen_probability",
+      "cutoff": 0.5,
+      "support": 96,
+      "accepted": 93,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.96875,
+      "accepted_error": 0.03225806451612903
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "chosen_probability",
+      "cutoff": 0.65,
+      "support": 96,
+      "accepted": 93,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.96875,
+      "accepted_error": 0.03225806451612903
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "chosen_probability",
+      "cutoff": 0.8,
+      "support": 96,
+      "accepted": 84,
+      "errors": 1,
+      "missing_feature": 0,
+      "coverage": 0.875,
+      "accepted_error": 0.011904761904761904
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "chosen_probability",
+      "cutoff": 0.9,
+      "support": 96,
+      "accepted": 81,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.84375,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "chosen_probability",
+      "cutoff": 1,
+      "support": 96,
+      "accepted": 38,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.3958333333333333,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "margin",
+      "cutoff": 0,
+      "support": 96,
+      "accepted": 93,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.96875,
+      "accepted_error": 0.03225806451612903
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "margin",
+      "cutoff": 0.15,
+      "support": 96,
+      "accepted": 93,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.96875,
+      "accepted_error": 0.03225806451612903
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "margin",
+      "cutoff": 0.3,
+      "support": 96,
+      "accepted": 93,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.96875,
+      "accepted_error": 0.03225806451612903
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "margin",
+      "cutoff": 0.5,
+      "support": 96,
+      "accepted": 92,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9583333333333334,
+      "accepted_error": 0.03260869565217391
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "margin",
+      "cutoff": 0.65,
+      "support": 96,
+      "accepted": 83,
+      "errors": 1,
+      "missing_feature": 0,
+      "coverage": 0.8645833333333334,
+      "accepted_error": 0.012048192771084338
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "margin",
+      "cutoff": 0.8,
+      "support": 96,
+      "accepted": 82,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.8541666666666666,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "margin",
+      "cutoff": 0.9,
+      "support": 96,
+      "accepted": 73,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.7604166666666666,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "margin",
+      "cutoff": 1,
+      "support": 96,
+      "accepted": 38,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.3958333333333333,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "confidence",
+      "cutoff": 0,
+      "support": 96,
+      "accepted": 93,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.96875,
+      "accepted_error": 0.03225806451612903
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "confidence",
+      "cutoff": 0.15,
+      "support": 96,
+      "accepted": 93,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.96875,
+      "accepted_error": 0.03225806451612903
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "confidence",
+      "cutoff": 0.3,
+      "support": 96,
+      "accepted": 93,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.96875,
+      "accepted_error": 0.03225806451612903
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "confidence",
+      "cutoff": 0.5,
+      "support": 96,
+      "accepted": 93,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.96875,
+      "accepted_error": 0.03225806451612903
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "confidence",
+      "cutoff": 0.65,
+      "support": 96,
+      "accepted": 92,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9583333333333334,
+      "accepted_error": 0.03260869565217391
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "confidence",
+      "cutoff": 0.8,
+      "support": 96,
+      "accepted": 83,
+      "errors": 1,
+      "missing_feature": 0,
+      "coverage": 0.8645833333333334,
+      "accepted_error": 0.012048192771084338
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "confidence",
+      "cutoff": 0.9,
+      "support": 96,
+      "accepted": 79,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.8229166666666666,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "all_choices",
+      "feature": "confidence",
+      "cutoff": 1,
+      "support": 96,
+      "accepted": 33,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.34375,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "production_policy",
+      "cutoff": 0,
+      "support": 42,
+      "accepted": 42,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "chosen_probability",
+      "cutoff": 0,
+      "support": 42,
+      "accepted": 42,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "chosen_probability",
+      "cutoff": 0.15,
+      "support": 42,
+      "accepted": 42,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "chosen_probability",
+      "cutoff": 0.3,
+      "support": 42,
+      "accepted": 42,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "chosen_probability",
+      "cutoff": 0.5,
+      "support": 42,
+      "accepted": 42,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "chosen_probability",
+      "cutoff": 0.65,
+      "support": 42,
+      "accepted": 42,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "chosen_probability",
+      "cutoff": 0.8,
+      "support": 42,
+      "accepted": 36,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.8571428571428571,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "chosen_probability",
+      "cutoff": 0.9,
+      "support": 42,
+      "accepted": 35,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.8333333333333334,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "chosen_probability",
+      "cutoff": 1,
+      "support": 42,
+      "accepted": 15,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.35714285714285715,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "margin",
+      "cutoff": 0,
+      "support": 42,
+      "accepted": 42,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "margin",
+      "cutoff": 0.15,
+      "support": 42,
+      "accepted": 42,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "margin",
+      "cutoff": 0.3,
+      "support": 42,
+      "accepted": 42,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "margin",
+      "cutoff": 0.5,
+      "support": 42,
+      "accepted": 41,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.9761904761904762,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "margin",
+      "cutoff": 0.65,
+      "support": 42,
+      "accepted": 35,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.8333333333333334,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "margin",
+      "cutoff": 0.8,
+      "support": 42,
+      "accepted": 35,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.8333333333333334,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "margin",
+      "cutoff": 0.9,
+      "support": 42,
+      "accepted": 34,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.8095238095238095,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "margin",
+      "cutoff": 1,
+      "support": 42,
+      "accepted": 15,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.35714285714285715,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "confidence",
+      "cutoff": 0,
+      "support": 42,
+      "accepted": 42,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "confidence",
+      "cutoff": 0.15,
+      "support": 42,
+      "accepted": 42,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "confidence",
+      "cutoff": 0.3,
+      "support": 42,
+      "accepted": 42,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "confidence",
+      "cutoff": 0.5,
+      "support": 42,
+      "accepted": 42,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "confidence",
+      "cutoff": 0.65,
+      "support": 42,
+      "accepted": 41,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.9761904761904762,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "confidence",
+      "cutoff": 0.8,
+      "support": 42,
+      "accepted": 35,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.8333333333333334,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "confidence",
+      "cutoff": 0.9,
+      "support": 42,
+      "accepted": 35,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.8333333333333334,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "carriers",
+      "feature": "confidence",
+      "cutoff": 1,
+      "support": 42,
+      "accepted": 13,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.30952380952380953,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "form",
+      "feature": "production_policy",
+      "cutoff": 0,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "chosen_probability",
+      "cutoff": 0,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "chosen_probability",
+      "cutoff": 0.15,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "chosen_probability",
+      "cutoff": 0.3,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "chosen_probability",
+      "cutoff": 0.5,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "chosen_probability",
+      "cutoff": 0.65,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "chosen_probability",
+      "cutoff": 0.8,
+      "support": 42,
+      "accepted": 36,
+      "errors": 1,
+      "missing_feature": 0,
+      "coverage": 0.8571428571428571,
+      "accepted_error": 0.027777777777777776
+    },
+    {
+      "dimension": "form",
+      "feature": "chosen_probability",
+      "cutoff": 0.9,
+      "support": 42,
+      "accepted": 35,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.8333333333333334,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "form",
+      "feature": "chosen_probability",
+      "cutoff": 1,
+      "support": 42,
+      "accepted": 21,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.5,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "form",
+      "feature": "margin",
+      "cutoff": 0,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "margin",
+      "cutoff": 0.15,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "margin",
+      "cutoff": 0.3,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "margin",
+      "cutoff": 0.5,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "margin",
+      "cutoff": 0.65,
+      "support": 42,
+      "accepted": 36,
+      "errors": 1,
+      "missing_feature": 0,
+      "coverage": 0.8571428571428571,
+      "accepted_error": 0.027777777777777776
+    },
+    {
+      "dimension": "form",
+      "feature": "margin",
+      "cutoff": 0.8,
+      "support": 42,
+      "accepted": 35,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.8333333333333334,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "form",
+      "feature": "margin",
+      "cutoff": 0.9,
+      "support": 42,
+      "accepted": 30,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.7142857142857143,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "form",
+      "feature": "margin",
+      "cutoff": 1,
+      "support": 42,
+      "accepted": 21,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.5,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "form",
+      "feature": "confidence",
+      "cutoff": 0,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "confidence",
+      "cutoff": 0.15,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "confidence",
+      "cutoff": 0.3,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "confidence",
+      "cutoff": 0.5,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "confidence",
+      "cutoff": 0.65,
+      "support": 42,
+      "accepted": 39,
+      "errors": 3,
+      "missing_feature": 0,
+      "coverage": 0.9285714285714286,
+      "accepted_error": 0.07692307692307693
+    },
+    {
+      "dimension": "form",
+      "feature": "confidence",
+      "cutoff": 0.8,
+      "support": 42,
+      "accepted": 36,
+      "errors": 1,
+      "missing_feature": 0,
+      "coverage": 0.8571428571428571,
+      "accepted_error": 0.027777777777777776
+    },
+    {
+      "dimension": "form",
+      "feature": "confidence",
+      "cutoff": 0.9,
+      "support": 42,
+      "accepted": 34,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.8095238095238095,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "form",
+      "feature": "confidence",
+      "cutoff": 1,
+      "support": 42,
+      "accepted": 20,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.47619047619047616,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "production_policy",
+      "cutoff": 0,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "chosen_probability",
+      "cutoff": 0,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "chosen_probability",
+      "cutoff": 0.15,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "chosen_probability",
+      "cutoff": 0.3,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "chosen_probability",
+      "cutoff": 0.5,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "chosen_probability",
+      "cutoff": 0.65,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "chosen_probability",
+      "cutoff": 0.8,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "chosen_probability",
+      "cutoff": 0.9,
+      "support": 12,
+      "accepted": 11,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.9166666666666666,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "chosen_probability",
+      "cutoff": 1,
+      "support": 12,
+      "accepted": 2,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.16666666666666666,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "margin",
+      "cutoff": 0,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "margin",
+      "cutoff": 0.15,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "margin",
+      "cutoff": 0.3,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "margin",
+      "cutoff": 0.5,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "margin",
+      "cutoff": 0.65,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "margin",
+      "cutoff": 0.8,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "margin",
+      "cutoff": 0.9,
+      "support": 12,
+      "accepted": 9,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.75,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "margin",
+      "cutoff": 1,
+      "support": 12,
+      "accepted": 2,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.16666666666666666,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "confidence",
+      "cutoff": 0,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "confidence",
+      "cutoff": 0.15,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "confidence",
+      "cutoff": 0.3,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "confidence",
+      "cutoff": 0.5,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "confidence",
+      "cutoff": 0.65,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "confidence",
+      "cutoff": 0.8,
+      "support": 12,
+      "accepted": 12,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 1,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "confidence",
+      "cutoff": 0.9,
+      "support": 12,
+      "accepted": 10,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0.8333333333333334,
+      "accepted_error": 0
+    },
+    {
+      "dimension": "use",
+      "feature": "confidence",
+      "cutoff": 1,
+      "support": 12,
+      "accepted": 0,
+      "errors": 0,
+      "missing_feature": 0,
+      "coverage": 0,
+      "accepted_error": null
+    }
+  ],
+  "score_observations": 0,
+  "ordinal_quality_evaluated": false,
+  "limitations": [
+    "descriptive train/dev analysis; no fitting, selection, calibration claim or promotion",
+    "Noul Brier is binary [0,1]; Choice Brier is multiclass sum [0,2]; do not average these scales",
+    "Noul reliability uses statement truth; Choice reliability uses chosen-option correctness",
+    "unknown references and ambiguous Choice alternatives are excluded, not invented as negatives or uniform targets",
+    "pooled Noul observations share samples and groups; rare-label and reference-scope bias remains",
+    "fixed-width ECE depends on binning; no uncertainty interval or confidence-as-probability claim",
+    "rounded raw probabilities are not renormalized; the ideal multiclass Brier range assumes unit mass",
+    "risk coverage denominator is known unambiguous Choice observations, not all collection fields",
+    "no ordinal reference corpus or Score-enabled evaluations in this diagnostic interface"
+  ]
+}

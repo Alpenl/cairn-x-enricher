@@ -1,0 +1,5 @@
+--- FAIL: TestClassifyCommandUsesSameMultidimensionalSpecAsService (0.00s)
+    classify_catalog_test.go:59: command cannot serve the multidimensional target: classification component is paused: configuration: classification target "classify-8adbb91ae7fc" generation 1 is not supported by this consumer; v2 reads=0 legacy reads=1
+FAIL
+FAIL	github.com/Alpenl/cairn-x-enricher/cmd/cairn-x-enricher	0.005s
+FAIL

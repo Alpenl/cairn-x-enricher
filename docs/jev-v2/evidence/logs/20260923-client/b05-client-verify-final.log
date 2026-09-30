@@ -1,0 +1,73 @@
+go vet ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
+0 issues.
+go test -race -coverprofile=coverage.out ./...
+ok  	github.com/Alpenl/cairn-x-enricher/cmd/cairn-x-enricher	3.062s	coverage: 38.9% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/ablation	1.065s	coverage: 31.6% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/ablation/main		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/ablation-report		coverage: 0.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/classification/main	1.625s	coverage: 35.1% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/classification/referencegen	1.265s	coverage: 82.8% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/harvest		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/identity		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/rescore		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/threadreport		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/threadvalue		coverage: 0.0% of statements
+	github.com/Alpenl/cairn-x-enricher/experiments/verifyurls		coverage: 0.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/buildinfo	1.014s	coverage: 100.0% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/cairn	1.840s	coverage: 41.9% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/classify	1.252s	coverage: 75.7% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/config	1.032s	coverage: 88.3% of statements
+--- FAIL: TestFrontendAssetsPassTheirChecks (0.03s)
+    frontend_test.go:38: frontend checks failed: exit status 1
+        ok   common.js parses
+        FAIL home.js parses: control.options is not iterable
+        ok   backstage.js parses
+        ok   reader.js parses
+        ok   reader bounds its polling attempts
+        ok   formatDate empty
+        ok   formatDate invalid
+        ok   formatDate formats
+        ok   formatDate same local day is stable
+        ok   formatDate different days differ
+        ok   formatDateTime formats
+        ok   formatDateTime distinguishes instants
+        ok   formatDateTime is stable for one instant
+        ok   formatDate still collapses one local day
+        ok   bucket invalid
+        ok   bucket today
+        ok   bucket 3 days
+        ok   bucket 10 days
+        ok   bucket 60 days
+        ok   shortURL strips www
+        ok   shortURL repeated
+        ok   shortURL invalid
+        ok   termLabel unknown
+        ok   metadata sparse
+        ok   metadata empty
+        ok   exportMarkdown returns a promise
+        ok   exportMarkdown resolves
+        asset.js:315
+              for (const option of control.options) option.selected = state.filters[key].split(",").includes(option.value);
+                                           ^
+        
+        TypeError: control.options is not iterable
+            at eval (asset.js:315:36)
+            at eval (asset.js:462:3)
+            at loadScript (file:///tmp/cairn-b05-client-next/internal/dashboard/frontend-check.mjs:230:3)
+            at renderHome (file:///tmp/cairn-b05-client-next/internal/dashboard/frontend-check.mjs:366:3)
+            at file:///tmp/cairn-b05-client-next/internal/dashboard/frontend-check.mjs:393:26
+        
+        Node.js v22.22.2
+FAIL
+coverage: 50.5% of statements
+FAIL	github.com/Alpenl/cairn-x-enricher/internal/dashboard	0.272s
+ok  	github.com/Alpenl/cairn-x-enricher/internal/enrich	1.357s	coverage: 83.6% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/evaluation	1.129s	coverage: 88.8% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/extension	1.234s	coverage: 87.2% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/health	1.016s	coverage: 94.2% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/processor	1.325s	coverage: 83.7% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/internal/taxonomy	1.021s	coverage: 94.2% of statements
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.015s	coverage: [no statements]
+FAIL
+make: *** [Makefile:19: test] Error 1

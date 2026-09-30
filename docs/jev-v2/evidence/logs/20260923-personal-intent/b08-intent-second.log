@@ -1,0 +1,5 @@
+ok  	github.com/Alpenl/cairn-x-enricher/internal/classify	0.041s
+ok  	github.com/Alpenl/cairn-x-enricher/internal/taxonomy	(cached)
+ok  	github.com/Alpenl/cairn-x-enricher/internal/evaluation	0.058s
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/classification/main	0.180s
+ok  	github.com/Alpenl/cairn-x-enricher/experiments/classification/referencegen	0.026s

@@ -1,0 +1,39 @@
+package com.alpenl.cairn.share
+
+import com.alpenl.cairn.share.network.BookmarkClassification
+import com.alpenl.cairn.share.network.BookmarkFilters
+import com.alpenl.cairn.share.network.LinkEnrichment
+import com.alpenl.cairn.share.network.MultidimensionalSelection
+import com.alpenl.cairn.share.network.SavedLink
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class LibraryFilterTest {
+    private val link = SavedLink(
+        id = 7, url = "https://example.com/four-topics", note = "", createdAt = "2026-09-23T00:00:00Z",
+        learned = false, learnedAt = null,
+        enrichment = LinkEnrichment(classification = BookmarkClassification(
+            topics = listOf("llm", "eng", "eval"), form = "method", use = "try", uncertainty = false,
+        )),
+    )
+    private val current = MultidimensionalSelection(
+        topics = listOf("llm", "eng", "eval", "design"), contentFunctions = listOf("method"),
+        carriers = listOf("single"), affordances = listOf("practice"), available = true,
+        form = "method", use = "try", v1ProjectionTopics = listOf("llm", "eng", "eval"),
+    )
+    private fun state(filters: BookmarkFilters) = CairnLinksUiState(
+        apiBaseUrl = "https://example.com", releasesApiUrl = "https://example.com/releases",
+        currentVersionName = "test", currentVersionCode = 1, links = listOf(link), bookmarkFilters = filters,
+        v2Selections = mapOf(7 to current),
+    )
+
+    @Test fun fourthConfirmedTopicRemainsVisibleInTheLibrary() {
+        assertEquals(listOf(7), state(BookmarkFilters(topic = "design")).visibleLibraryLinks().map { it.id })
+    }
+
+    @Test fun confirmedHiddenDimensionsRemainVisibleInTheLibrary() {
+        assertEquals(listOf(7), state(BookmarkFilters(
+            contentFunctions = listOf("method"), carriers = listOf("single"), affordances = listOf("practice"),
+        )).visibleLibraryLinks().map { it.id })
+    }
+}

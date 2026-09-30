@@ -1,12 +1,28 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
+	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
 )
+
+func TestMainErrorDoesNotCopyPrivateCommandText(t *testing.T) {
+	const private = "private-source-token-123"
+	command := newRootCommand()
+	command.SetArgs([]string{private})
+	var stderr bytes.Buffer
+	if code := executeCommand(command, &stderr); code != 1 {
+		t.Fatalf("command exit = %d, output = %q", code, stderr.String())
+	}
+	if strings.Contains(stderr.String(), private) || !strings.Contains(stderr.String(), "error: unknown") {
+		t.Fatalf("unsafe command failure output: %q", stderr.String())
+	}
+}
 
 func TestIsContractFailureClassifiesConfigurationFaults(t *testing.T) {
 	// These statuses mean the deployment is misconfigured or the provider
@@ -14,7 +30,7 @@ func TestIsContractFailureClassifiesConfigurationFaults(t *testing.T) {
 	for _, status := range []int{
 		http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusBadRequest,
 	} {
-		err := &enrich.ModelHTTPError{StatusCode: status, Message: "no"}
+		err := &enrich.ModelHTTPError{StatusCode: status}
 		if !isContractFailure(err) {
 			t.Errorf("isContractFailure(HTTP %d) = false, want true", status)
 		}
@@ -46,6 +62,20 @@ func TestIsContractFailureSeesWrappedErrors(t *testing.T) {
 	}
 }
 
+// A typed stale conflict and an undocumented model conflict have different
+// meanings. Only the typed lease conflict proves that the job was superseded.
+func TestIsContractFailureDistinguishesStaleFromMisconfiguration(t *testing.T) {
+	if !isContractFailure(&enrich.ModelHTTPError{StatusCode: http.StatusConflict}) {
+		t.Error("an undocumented model conflict must be treated as a contract failure")
+	}
+	if isContractFailure(&cairn.APIError{StatusCode: http.StatusConflict, Code: "lease_conflict"}) {
+		t.Error("a lease conflict must not be treated as a contract failure")
+	}
+	if !isContractFailure(&cairn.APIError{StatusCode: http.StatusUnauthorized, Code: "unauthorized"}) {
+		t.Error("a rejected Worker token must be treated as a contract failure")
+	}
+}
+
 func TestRootCommandExposesExpectedSubcommands(t *testing.T) {
 	root := newRootCommand()
 	names := map[string]bool{}
@@ -67,5 +97,63 @@ func TestNewLoggerAcceptsEveryConfiguredLevel(t *testing.T) {
 		if logger := newLogger(level); logger == nil {
 			t.Errorf("newLogger(%q) = nil", level)
 		}
+	}
+}
+
+// The root/help path and command discovery must never make a paid call. The
+// commands are constructed but not executed, so no client is created.
+func TestRootHelpAndCommandDiscoveryMakeNoCalls(t *testing.T) {
+	root := newRootCommand()
+	root.SetArgs([]string{"--help"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("root --help: %v", err)
+	}
+	root = newRootCommand()
+	root.SetArgs([]string{"help"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("help: %v", err)
+	}
+	wanted := map[string]bool{"serve": false, "once": false, "classify": false, "replay": false, "refresh-source": false, "version": false}
+	for _, command := range newRootCommand().Commands() {
+		if _, ok := wanted[command.Name()]; ok {
+			wanted[command.Name()] = true
+		}
+	}
+	for name, found := range wanted {
+		if !found {
+			t.Errorf("command %q is not registered", name)
+		}
+	}
+}
+
+// Replay is an inspection by default and must not silently commit.
+func TestReplayCommandRequiresAnIDAndDefaultsToNoCommit(t *testing.T) {
+	command := newReplayCommand()
+	if flag := command.Flags().Lookup("commit"); flag == nil || flag.DefValue != "false" {
+		t.Fatal("replay must default to no commit")
+	}
+	command.SetArgs([]string{"--id", "0"})
+	if err := command.Execute(); err == nil {
+		t.Fatal("replay without a positive id must fail before any network call")
+	}
+}
+
+func TestExportDatasetCommandIsExplicitAndBounded(t *testing.T) {
+	command := newExportDatasetCommand()
+	if flag := command.Flags().Lookup("ids"); flag == nil || flag.DefValue != "" {
+		t.Fatal("export-dataset must require explicit ids")
+	}
+	if _, err := parseLinkIDs(""); err == nil {
+		t.Fatal("an empty id list must be refused")
+	}
+	if _, err := parseLinkIDs("1,abc"); err == nil {
+		t.Fatal("a non-numeric id must be refused")
+	}
+	if _, err := parseLinkIDs("0"); err == nil {
+		t.Fatal("a zero id must be refused")
+	}
+	ids, err := parseLinkIDs("3, 7,9")
+	if err != nil || len(ids) != 3 || ids[0] != 3 || ids[2] != 9 {
+		t.Fatalf("parseLinkIDs = %v (%v)", ids, err)
 	}
 }

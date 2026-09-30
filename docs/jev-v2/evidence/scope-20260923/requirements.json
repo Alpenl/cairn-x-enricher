@@ -1,0 +1,1937 @@
+{
+  "tasks": [
+    {
+      "task": "B01-T01",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/28",
+      "checked": false,
+      "requirement": "检索实际claim/complete/fail/retry/sourceRoute、触发器和URL/note路径，记录源码位置。真正Worker测试构造同词表A用policy-v2完成、B用policy-v1领取、A再领取，观察基线失败；SQLite只作补充。"
+    },
+    {
+      "task": "B01-T02",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/28",
+      "checked": false,
+      "requirement": "冻结server desired spec（spec/hash、requested pinned model、policy、generation）及consumer capabilities fixture。目标由受控配置/管理产生，不由claim的policy定义，启动不自动全库改目标。"
+    },
+    {
+      "task": "B01-T03",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/28",
+      "checked": false,
+      "requirement": "新增迁移保存目标及job绑定generation/spec。保留任务生命周期；目标回滚使用新generation指向旧spec；旧job按明确兼容规则登记，不伪造历史审计或自动重排全部历史。"
+    },
+    {
+      "task": "B01-T04",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/28",
+      "checked": false,
+      "requirement": "实现原子claim，只领取消费者支持且属于服务器目标的任务；不能更改全局/其他job目标。legacy consumer只取legacy目标；v2启用后明确拒绝或安全空闲，旧二进制不能复现循环。"
+    },
+    {
+      "task": "B01-T05",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/28",
+      "checked": false,
+      "requirement": "complete/fail同时验证target generation/spec、输入revision、lease和有效期。目标切换、URL/内容变更及旧token不能覆盖当前投影；失效不消耗新目标attempt。"
+    },
+    {
+      "task": "B01-T06",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/28",
+      "checked": false,
+      "requirement": "区分retry当前目标与显式重分类到新目标；retry不改server目标。仅显式ID/有界范围，无默认全库；活跃lease不随意抢占，返回可解析且不含正文的reason code。"
+    },
+    {
+      "task": "B01-T07",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/28",
+      "checked": false,
+      "requirement": "拆全部URL变化与note-only更新路径。只改note保留快照、原文、译文、图片；legacy含note的分类可按旧语义失效，B03/B04后只影响personal维度。URL变化等待新source，人工curation/why/status保留。"
+    },
+    {
+      "task": "B01-T08",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/28",
+      "checked": false,
+      "requirement": "定义并实现完成幂等与结果查询：同operation key和payload返回既有结果，不同payload冲突；links与job原子提交。B02实现前提供fixture，完成响应丢失后无需重新付费推断。"
+    },
+    {
+      "task": "B01-T09",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/28",
+      "checked": false,
+      "requirement": "实现capability_mismatch/target_changed/input_changed/lease_expired/already_completed/configuration_error/transient_error等typed错误与HTTP映射；legacy shape或协商保护严格解码器，不只剩通用409。"
+    },
+    {
+      "task": "B01-T10",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/28",
+      "checked": false,
+      "requirement": "更新Worker文档、迁移和握手兼容表；本地测试后在实现PR提交`docs/jev-v2/evidence/B01.md`，本Issue登记任务→PR/commit→测试。不得远端迁移或部署。"
+    },
+    {
+      "task": "B02-T01",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/11",
+      "checked": false,
+      "requirement": "未reviewed收藏仅改why/status，断言PATCH不含classification并观察原逻辑失败。标签与原因分别维护dirty状态；主动编辑是人工选择，未触摸AI建议不是。"
+    },
+    {
+      "task": "B02-T02",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/11",
+      "checked": false,
+      "requirement": "独立“确认这些标签”动作，普通保存只提交改动字段；取消/reset/失败重试不偷带分类，保留人工优先。DOM测试覆盖首次保存、已确认、仅原因/状态、明确标签改动和网络失败。"
+    },
+    {
+      "task": "B02-T03",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/11",
+      "checked": false,
+      "requirement": "定义独立ReadingResult与strict schema，只返回title/translation/summary及确需生成的语言字段；不从旧enrichmentSchema删字段拼装，不要求original_text/links/images输出，Completion从source构建。"
+    },
+    {
+      "task": "B02-T04",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/11",
+      "checked": false,
+      "requirement": "拆阅读decoder/validator，保持严格JSON、标题/长度和错误校验；省输出不丢原文、链接、图片及语言来源。长文不静默截断，遗漏/非JSON/尾随内容不能默认空通过；旧Generate/Workflow仅实验使用。"
+    },
+    {
+      "task": "B02-T05",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/11",
+      "checked": false,
+      "requirement": "实现B01 capabilities/target握手及job绑定；consumer不能用自己的policy重定义服务器目标。版本不支持是组件状态，不耗尽整库attempt；serve/once/classify/人工source路径一致。"
+    },
+    {
+      "task": "B02-T06",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/11",
+      "checked": false,
+      "requirement": "typed错误区分configuration/auth/contract、暂时transport/throttle/overload、stale input/target/lease和already_completed。核对实施时官方错误码，用401/422/429/5xx/超时/畸形响应/409 fixture覆盖；不能把所有409一概忽略。"
+    },
+    {
+      "task": "B02-T07",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/11",
+      "checked": false,
+      "requirement": "单一持久化退避层，合理且有上限的Retry-After/jitter/预算；配置错误暂停对应组件并可恢复，不能每job重复失败。source/reading/classification健康分开，liveness不依赖外部API。"
+    },
+    {
+      "task": "B02-T08",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/11",
+      "checked": false,
+      "requirement": "完成提交失败使用同operation ID重试/查询，不再次盲目付费推断；superseded不记模型失败、不阻断其他job。每job明确deadline，shutdown有界等待已领任务，不继续领取，不无限WithoutCancel。"
+    },
+    {
+      "task": "B02-T09",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/11",
+      "checked": false,
+      "requirement": "按CLI职责校验配置：classify不要求未使用的Grok配置或self-test；serve按启用组件验证。root/help/普通测试零收费，覆盖缺key/无source/组件暂停。"
+    },
+    {
+      "task": "B02-T10",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/11",
+      "checked": false,
+      "requirement": "回归source-first：Transform失败保留source，分类失败不X Search，note-only不重抓，人工source走受控路径；阅读完成不写分类，why/status保存零模型调用。"
+    },
+    {
+      "task": "B02-T11",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/11",
+      "checked": false,
+      "requirement": "执行make verify、make test-ablation及受影响实验；真实浏览器证明只存原因不确认标签、dirty草稿不被轮询覆盖。提交evidence/B02.md及安全合成请求fixture，并在本Issue关联实现PR/commit。"
+    },
+    {
+      "task": "B03-T01",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "提交领域ADR及Go/TS共享fixture：EvidenceSnapshot、QuestionSpec、Run、Decision、Override、CurationEvent、CurrentProjection；冻结JSON结构、枚举、null/空/未运行、大小上限、错误码和hash golden vectors。"
+    },
+    {
+      "task": "B03-T02",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "拆content与personal/curation revision。客观证据不含note/why/status；note-only不改content hash，整理不使来源/阅读失效。URL/content变化保留人工历史并说明来源适用性变化。"
+    },
+    {
+      "task": "B03-T03",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "快照支持block ID/role/text/URL/作者关系依据/取得方式/时间/完整性/truncation。原文、续帖、引用、外链、第三方分开；旧context无法拆时legacy_unknown，不编造身份。可恢复实际评估输入。"
+    },
+    {
+      "task": "B03-T04",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "保存不可变QuestionSpec及requested/resolved model，hash规则按EXECUTION并跨语言一致；同hash不同字节拒绝。显示元数据独立；历史模型未知保持unknown；B01目标引用不可变spec。"
+    },
+    {
+      "task": "B03-T05",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "追加classification_runs：输入/问题引用、typed answers、usage、model、attempt、时间、幂等key、coverage和状态。job只管队列；失效不删除旧run，保留来源适用范围。"
+    },
+    {
+      "task": "B03-T06",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "独立decision绑定run(s)/policy，保存逐项决定和有依据reason；policy replay只追加decision/更新投影，不新建模型成功run、不修改source。partial coverage明确，不把缺答案当complete。"
+    },
+    {
+      "task": "B03-T07",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "原子提交run/decision/job/projection/cache失效，守卫lease/有效期/input/target/spec。同key同payload返回既有结果，不同payload冲突；operation查询可恢复响应丢失。过期结果最多留superseded审计，不改有效视图。"
+    },
+    {
+      "task": "B03-T08",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "字段/tag级accept/reject/set-empty/reset及事件，expected curation revision做CAS、operation ID幂等。只改why/status无accept事件；同有效证据上policy replay保留reject，empty不等于unset。"
+    },
+    {
+      "task": "B03-T09",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "legacy整份curation保留为来源/确认行为未知的override，不能升级为可靠gold。建立v1写入不清v2隐藏字段保护测试；复杂公共映射由B05完成。"
+    },
+    {
+      "task": "B03-T10",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "实现内部target/spec读取、claim、run提交/查询、受控policy replay、decision/overrides读取、curation operation和队列cursor。显式版本协商保护旧strict客户端；管理仅内部权限。"
+    },
+    {
+      "task": "B03-T11",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "实现B09所需通用存储/API：实体not_run/failed/completed_empty/completed_nonempty/stale、补证据块追加和revision、候选检索权限边界、单条/整体预算与去重。无需做Jev扩展算法，但后端不能只留TODO。"
+    },
+    {
+      "task": "B03-T12",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "有界历史遍历/重放：显式ID或cursor、dry-run、最大条数/取消/目标/预算；默认不扫收费队列。幂等登记历史source不等于调用模型；drop记录仅明确手工命令可处理。"
+    },
+    {
+      "task": "B03-T13",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "删除/保留期清理覆盖快照/runs/events/entity/cache，仍被当前decision引用的输入不可被清掉后假称可复现。核实D1上限，大快照必要时引用现有授权存储；权限、分页、JSON校验和脱敏日志落实。"
+    },
+    {
+      "task": "B03-T14",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/29",
+      "checked": false,
+      "requirement": "空库及0009历史fixture本地迁移、旧应用回滚读写和Go/TS vectors；提交evidence/B03.md并向B04/B05提供固定实现SHA，在本Issue关联所有代码PR和结果。"
+    },
+    {
+      "task": "B04-T01",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "读取项目TypeSafe skill及实施时HTTP/State/Noul/Choice/Score/Confidence官方文档，记录日期、实际model、限额和脱敏响应fixture。不可达时明确外部合同未验证，不猜Score字段/token上限。"
+    },
+    {
+      "task": "B04-T02",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "冻结v1选择fixture，抽transport/decision保持legacy输出兼容；旧prompt/schema renderer放明确legacy适配边界，生产Transform/Jev不依赖旧整包schema，实验可运行。"
+    },
+    {
+      "task": "B04-T03",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "可区分Noul/Choice/Score类型；instructions/criteria支持对象、有序数组。按官方格式校验答案集合、类型、概率范围/和、选项/等级、必要字段、重复键/尾随JSON/大小；完整原始分布和模型保留，不静默吞契约变化。"
+    },
+    {
+      "task": "B04-T04",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "词条编译完整定义、includes/excludes/边界例子/关系；ID只关联不承担语义。真正互斥才Choice；topics/functions/affordances多Noul；Score只用于有产品用途的程度判断。"
+    },
+    {
+      "task": "B04-T05",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "客观state序列化彻底排除note/why/status/立场；blocks按primary/author_continuation/quoted/third_party/external/legacy_unknown区分。测试实际body缺少个人字段，不能只提示“忽略”。"
+    },
+    {
+      "task": "B04-T06",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "state+问题+criteria/candidates总预算：用已核实tokenizer或注明保守估算，不把字符当精确token。确定性块选择/分批保留coverage/truncation，不截断JSON、不把没发材料当已评估；同state独立问题批量，依赖新state才第二次请求。"
+    },
+    {
+      "task": "B04-T07",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "纯policy逐项accepted/rejected/abstained，合法none/empty可completed；边缘问题不污染整条。reason来自可观察缺口/专门判断，不从p中猜原因；全局uncertainty仅旧投影导出。"
+    },
+    {
+      "task": "B04-T08",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "删除/重设计v1冗余margin并写数学边界测试；confidence不作为独立证据乘p。Score同均值不同分布不混同；主题成立与重要性分开，无深度判断时稳定显式排序。"
+    },
+    {
+      "task": "B04-T09",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "有效标签安全上限与卡片显示数分开，第四主题不丢失/不自动不确定；policy版本独立、初始阈值标uncalibrated。无gold沿用明确baseline或shadow，不宣称虚构准确率。"
+    },
+    {
+      "task": "B04-T10",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "接B03 run/decision存储、目标generation、模型与幂等；claim绑定不可变spec，处理中不读漂移全局词表覆写。alias返回模型变化记录漂移，禁止旧校准自动晋升。"
+    },
+    {
+      "task": "B04-T11",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "离线replay读取保存的runs/spec/policy，在禁网环境Decide/Resolve输出新decision/diff，可受控提交。CLI分classify/replay/refresh-source；root/help零调用，dry-run默认不写生产；快照缺失明确不可重放。"
+    },
+    {
+      "task": "B04-T12",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "增量影响分析：display/阈值只重放，语义变化重评依赖闭包。cache key含实际evidence/state/criteria/model及batch语义；partial coverage明确；同ID不同含义不能复用，不能跨模型拼完整run。先保守整批正确，再验证问题级重用。"
+    },
+    {
+      "task": "B04-T13",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "用户意图仅明确人工输入或独立opt-in建议请求；客观请求无个人备注，模型不写why/status/stance。用途模板明确只是潜在用途，不冒充真实收藏动机。"
+    },
+    {
+      "task": "B04-T14",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "独立分类worker可配置有界并发、单job deadline、整体预算，默认保守；复用B02 typed错误，stale非语义失败、配置错暂停组件，结果提交可恢复，不叠多层重试。"
+    },
+    {
+      "task": "B04-T15",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/12",
+      "checked": false,
+      "requirement": "表驱动/fuzz/property/合同fixture/禁网replay测试，make verify、test-ablation；提交evidence/B04.md、前后diff/调用数、锁定契约和合成样例，在本Issue登记各PR。"
+    },
+    {
+      "task": "B05-T01",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "梳理原17主题/7形态/5用途的定义、正反例、边界、真正同义/上下位/相关关系；产出v1→v2保持/拆分/停用/不确定映射，不用当前显示名猜历史含义。"
+    },
+    {
+      "task": "B05-T02",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "实现versioned taxonomy v2，definition/includes/excludes/examples/relations与display分离；ID稳定、别名无冲突、层级无环、引用存在、active/deprecated校验。Worker为唯一可执行词表来源，跨端同合同。"
+    },
+    {
+      "task": "B05-T03",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "多维分类与局部状态校验，不因缺form/use强设全局uncertainty；区分决定accepted/rejected/abstained、任务not_run/failed/stale及not_applicable/insufficient_evidence。无依据reason可unknown，不编原因。"
+    },
+    {
+      "task": "B05-T04",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "有效投影人工优先，unset/empty/reject/reset不同；why/status不改label、不造accept事件。字段返回origin/revision/decision/可选候选，大分布不塞入所有列表。"
+    },
+    {
+      "task": "B05-T05",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "显式v2 opt-in/version协商，旧六字段/旧include=enrichment key、type和语义稳定。v1投影选择顺序固定，旧Go strict decoder安全；不支持版本错误明确。"
+    },
+    {
+      "task": "B05-T06",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "v1写入只影响其明确表达的旧维度/可见标签，不清隐藏v2、第四主题、拒绝或实体状态。用当前投影/可用revision判断；旧协议无revision或存在不可表达歧义时保护数据并明确冲突，不能虚构CAS保证。classification:null仅旧恢复自动范围，不删why/历史/无关v2。"
+    },
+    {
+      "task": "B05-T07",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "列表/详情分来源阅读、AI分类、人工整理；字段弃权与队列失败分别筛选；权限受限的仅分类retry/仅policy replay。列表有界summary、详情按需，cursor绑定表示/排序约束。"
+    },
+    {
+      "task": "B05-T08",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "冻结同维OR/跨维AND与既有单值兼容规则；主题/功能/载体/用途/人工状态组合。参数校验、参数化SQL、LIKE转义、停用标签处理；统计和结果按人工覆盖后的有效分类计算。"
+    },
+    {
+      "task": "B05-T09",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "搜索含原文/译文/摘要/标题/实体/备注/人工原因；来源版本可解释。B09候选接口有界且先权限过滤，含受控文本/角色/原排序/cursor或session；未召回内容不能算重排收益。"
+    },
+    {
+      "task": "B05-T10",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "接实体独立状态与结果：not_run/failed不空覆盖同revision成功值，completed_empty有明确成功来源，source变化stale；surface/canonical分离，同名不自动认人，人工修正持久化。"
+    },
+    {
+      "task": "B05-T11",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "实现补证据/词表提案工作流API：范围、revision、预算/去重、pending/approved/rejected。提案不直接改taxonomy；批准有语义diff、版本、影响范围、dry-run、回滚映射；display-only不调模型。"
+    },
+    {
+      "task": "B05-T12",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "缓存按representation和content/decision/curation revision失效，App/NAS过滤/详情/搜索/导出一致；实体完成也适当失效，不清source。排序稳定，跨页重排冻结session或明确当前候选范围。"
+    },
+    {
+      "task": "B05-T13",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "Markdown导出完整有效v2、why、来源、AI/人工和stale信息；partial数量明确，不冒充全库备份，旧导出仍可读。"
+    },
+    {
+      "task": "B05-T14",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/30",
+      "checked": false,
+      "requirement": "Go/TS共享fixture、旧新App/Go shape/PATCH矩阵、本地迁移回滚、查询性能和权限/恶意payload测试。执行Worker门禁，提交evidence/B05.md及固定contract SHA给B06/B07/B09。"
+    },
+    {
+      "task": "B06-T01",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/13",
+      "checked": false,
+      "requirement": "Go同源代理/DTO显式协商v2 summary/detail/classification view；旧strict路径shape稳定，缓存含representation/revision。旧Worker降级为安全v1或明确只读，不清数据。"
+    },
+    {
+      "task": "B06-T02",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/13",
+      "checked": false,
+      "requirement": "分离有效标签/AI候选/人工覆盖/来源版本展示；超过三个主题只折叠，能展开及选择第四个；inactive/historical可读，不堆概率。"
+    },
+    {
+      "task": "B06-T03",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/13",
+      "checked": false,
+      "requirement": "字段/tag accept/reject/set-empty/reset，payload带operation ID、expected revision和来源；只改该字段才发该字段。why/status独立保存，empty/reset不同按钮说明，reject不复活。"
+    },
+    {
+      "task": "B06-T04",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/13",
+      "checked": false,
+      "requirement": "轮询和其他客户端更新不覆盖dirty草稿；CAS冲突展示差异并由用户重应用，不last-write-wins。失败保留草稿，重复点击/重试幂等，reset不丢未存why。"
+    },
+    {
+      "task": "B06-T05",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/13",
+      "checked": false,
+      "requirement": "依据只渲染真实snapshot block/span，注明原帖/续帖/引用/外链/第三方/legacy unknown；失效引用显示不可用。概率标模型判断，不冒充校准准确率或用户立场。"
+    },
+    {
+      "task": "B06-T06",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/13",
+      "checked": false,
+      "requirement": "分来源/阅读、AI分类pending/processing/failed/exhausted、字段abstained/not_applicable/stale及人工状态；合法空值不红色失败。后台独立分类队列/原因筛选。"
+    },
+    {
+      "task": "B06-T07",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/13",
+      "checked": false,
+      "requirement": "分只重试分类、当前策略重算、刷新原文；标清是否收费/调用模型，扩大范围有确认与ID上限，活跃任务防重，409按reason解释。分类失败不重新X Search。"
+    },
+    {
+      "task": "B06-T08",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/13",
+      "checked": false,
+      "requirement": "多维筛选与URL状态、前进后退、AND/OR同B05；实体/来源/人工状态可组合。高亮安全text防XSS，快速请求竞争只显示最新，分页稳定，空结果不等于错误。"
+    },
+    {
+      "task": "B06-T09",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/13",
+      "checked": false,
+      "requirement": "单条/已加载导出含全部v2有效维度、why/source、AI/人工/stale及partial数量，折叠第四标签不丢。导出不改status/不调用模型。"
+    },
+    {
+      "task": "B06-T10",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/13",
+      "checked": false,
+      "requirement": "实体not_run/failed/empty/stale及人工修正按通用合同展示；扩展入口根据capability/flag显示，未启用明确，不做假成功按钮，不等待B09算法才写已有合同UI。"
+    },
+    {
+      "task": "B06-T11",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/13",
+      "checked": false,
+      "requirement": "键盘焦点、aria-live、长标签换行、错误关联、320/375/768/1440视口及reduced-motion；小屏关键操作不丢，保持现有CSS体系。"
+    },
+    {
+      "task": "B06-T12",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/13",
+      "checked": false,
+      "requirement": "零依赖前端测试及真实浏览器自动用例，make verify；保存合成截图/trace与请求断言，提交evidence/B06.md。向Android共享操作fixture，本Issue关联所有实现PR/commit。"
+    },
+    {
+      "task": "B07-T01",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/31",
+      "checked": false,
+      "requirement": "Kotlin DTO/解析覆盖旧单值form/use与v2多选、字段状态/origin/revision/候选/实体；共享v1/v2 fixture。未知可选字段安全，不把未知状态当已确认，无v2保留旧读取。"
+    },
+    {
+      "task": "B07-T02",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/31",
+      "checked": false,
+      "requirement": "按能力协商v2，summary/详情按需加载；缓存按representation/revision，登录/服务器切换、schema及分类/整理更新正确失效，不把旧缓存硬读成v2。"
+    },
+    {
+      "task": "B07-T03",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/31",
+      "checked": false,
+      "requirement": "阅读显示多维结果、候选和人工来源，前三topic只是折叠；carrier独立，潜在用途不冒充真实意图；空/未运行/失败/过期分别表达。"
+    },
+    {
+      "task": "B07-T04",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/31",
+      "checked": false,
+      "requirement": "字段/tag accept/reject/set-empty/reset贯穿operation ID、expected revision、请求/缓存/重试；why/status保存不带分类，不自动接受初次AI；legacy来源不升级可靠gold。"
+    },
+    {
+      "task": "B07-T05",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/31",
+      "checked": false,
+      "requirement": "网络失败保草稿、重复提交幂等；Web更改后旧revision不能覆盖，冲突后明确重应用。离线队列只存用户动作而非完整旧对象；账号/服务器切换不误发。"
+    },
+    {
+      "task": "B07-T06",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/31",
+      "checked": false,
+      "requirement": "来源/阅读、分类、人工状态分开；仅在权限能力允许时提供分类retry/policy replay。App Token不得调用任意内部spec/model/迁移管理，普通阅读不收费，无接口就明确不可用而非绕鉴权。"
+    },
+    {
+      "task": "B07-T07",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/31",
+      "checked": false,
+      "requirement": "多维过滤/搜索/Markdown分享导出保留所有有效分类、why/source/partial；实体not_run/failed/stale不混同empty。证据仅真实block/URL，外链安全打开。"
+    },
+    {
+      "task": "B07-T08",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/31",
+      "checked": false,
+      "requirement": "导航返回、分页、快速搜索、旋转/进程恢复不丢动作/不重复提交；大字体/小屏/触控与可访问标签，现有图片译文不退化。"
+    },
+    {
+      "task": "B07-T09",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/31",
+      "checked": false,
+      "requirement": "旧App→新Worker、新App→旧Worker、新App→新Worker，涵盖v1 classification:null、空use、第四主题/隐藏功能、人工reject、source过期。旧全量PATCH不能无声压平新数据；不可表达写入按B05明确冲突/范围适配。"
+    },
+    {
+      "task": "B07-T10",
+      "issue": "https://github.com/Alpenl/cairn-share/issues/31",
+      "checked": false,
+      "requirement": "Android CI等价门禁、Worker及合同测试；设备/模拟器可用时真实UI并记录环境，缺设备列blocked_external，编译androidTest不算运行。提交evidence/B07.md、锁定两仓SHA和代码PR链接给B10。"
+    },
+    {
+      "task": "B08-T01",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "保存两仓基线SHA、v1 schema/policy、已有授权raw记录和脱敏fixture；记录私有数据位置/权限。不存在的历史输出标missing，不用新模型补造旧结果，私人内容不公开。"
+    },
+    {
+      "task": "B08-T02",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "数据schema/校验器含sample ID、source revision/hash、语言/载体/长度/完整性、thread/near-duplicate group、多维gold/可接受集合、ambiguity、标注provenance与检索相关性；允许unknown/not_applicable。"
+    },
+    {
+      "task": "B08-T03",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "分层采样覆盖中英混合、短/长/外链/图片依赖、多主题/引用反驳/领域外/边界；显式ID和授权本地导出，不自动全库。建议初始200–300条，不承诺覆盖稀有标签，公开只合成或安全聚合。"
+    },
+    {
+      "task": "B08-T04",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "标注指南落实主题/功能/载体/用途/用户意图区别；困难样本独立复核、记录争议，缺第二标注者报告限制。模型不是人工gold，旧隐式reviewed不是自动正样本，不给用户stance猜真值。"
+    },
+    {
+      "task": "B08-T05",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "thread/近重复先分组，再固定train/dev/holdout种子，支持时间切分；检查同组不跨集合、snapshot不重复、候选固定，记录holdout访问，禁止看后调参再称独立测试。"
+    },
+    {
+      "task": "B08-T06",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "纯离线每标签/维度precision/recall、micro/macro、accepted错误率、coverage/abstention、review字段数/条、合法空处理、confusion、样本数、零分母和区间；多标签不用单类accuracy，不能无限弃权换漂亮precision。"
+    },
+    {
+      "task": "B08-T07",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "概率校准Brier/ECE/reliability适用范围、分箱及小样本限制；Score有序误差和分布保留；验证confidence/margin增益而非默认乘分；稀有标签共享/分组阈值。"
+    },
+    {
+      "task": "B08-T08",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "阈值搜索仅train/dev，导出版本化policy含风险/损失权重、样本范围、model/spec绑定。改policy用同raw重放，改问题/state需新推断，不混不匹配数据。"
+    },
+    {
+      "task": "B08-T09",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "消融比较v1、局部弃权、词条边界、单多选维度、必要Score、中英文问题、来源角色/备注隔离。单次改变因素；v1/v2任务不同用显式mapping或共同子集，不直接相减异任务指标。"
+    },
+    {
+      "task": "B08-T10",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "授权真实找回任务，固定相关性gold和候选；candidate Recall@K与重排nDCG/MRR分开，重排不能冒充召回收益；评估多维过滤找回效果。"
+    },
+    {
+      "task": "B08-T11",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "成本/性能runner记录requested/resolved模型、spec、语言、tokens、问题/候选数、p50/p95、attempt/retry/cache、人工负担；价格明确日期来源，不硬编实时价格，同条件比较。"
+    },
+    {
+      "task": "B08-T12",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "Live runner显式opt-in、样本数/调用/token预算、timeout、失败停止和dry-run清单；环境有key不等于收费授权，普通make verify/CI零付费，请求响应仅授权私有目录。"
+    },
+    {
+      "task": "B08-T13",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "先冻结风险/coverage/负担/成本门槛再看holdout；P0/数据/兼容不变量零容忍，统计质量允许inconclusive。alias漂移/新模型重新评估，未通过shadow/flag off，不自动晋升。"
+    },
+    {
+      "task": "B08-T14",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/14",
+      "checked": false,
+      "requirement": "工具测试、合成指标golden vectors、可重复命令和机器报告；提交evidence/B08.md，分engineering_done/quality_verified/blocked_external，明确缺gold数量，在本Issue关联实现PR给B09/B10使用。"
+    },
+    {
+      "task": "B09-T01",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "独立feature flags、每条/全局调用与token预算、timeout、去重、取消/恢复，默认全部off。扩展关闭不影响普通分类；用户材料/模型答案不能提高预算或选择任意执行URL。"
+    },
+    {
+      "task": "B09-T02",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "从存档text/links生成带精确span/来源的surface/project URL候选；确需开放式提取用独立获授权生成请求，不让Jev自由造名字、不重新X Search。每候选可定位，去重并限量。"
+    },
+    {
+      "task": "B09-T03",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "Jev只判断候选实质相关、有限canonical匹配、偶然提及；有none/unknown，同名无证据不合并，不能选集合外名称；surface与canonical来源分开。"
+    },
+    {
+      "task": "B09-T04",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "实体独立生命周期：not_run/failed不清同revision成功值，completed_empty明确，source变stale；幂等提交、人工修正优先，索引缓存与Web/Android合同一致。"
+    },
+    {
+      "task": "B09-T05",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "补证据只对外链未取得、关键图片文字缺失、可观察截断等明确缺口；合法none/词条边界不升级。记录原因/来源/范围/预算，优先人工补充；无provider/授权明确blocked，不假成功。"
+    },
+    {
+      "task": "B09-T06",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "至少实现一个真实受控外链材料适配器，优先允许名单和已有设施。校验实际连接地址、DNS重绑定、私网/loopback/link-local/metadata、IP字面量/端口/scheme、每跳重定向、大小/超时/MIME；不得跨域带token/key或按材料指令任意抓取。"
+    },
+    {
+      "task": "B09-T07",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "图中文字等额外适配器仅已有且授权能力可用时启用；转录/译文注明方法来源，不覆盖原文，可靠性/遗漏明确；不支持时人工入口和unsupported，不声称Jev看图，不按URL臆测正文。"
+    },
+    {
+      "task": "B09-T08",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "补充成功追加来源block，更新影响revision并受控重评；去重、attempt与收费有界，已取得同内容不重复。失败保留原文与可用分类，不使收藏不可读，变化可审计。"
+    },
+    {
+      "task": "B09-T09",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "先召回后重排：B05提供已授权/过滤/有界候选；同query、同等级rubric比较，稳定ties，不拿不同Noul概率当全局重要性；分批仍同rubric并记录实际state/model。"
+    },
+    {
+      "task": "B09-T10",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "重排预算/cache/失败降级，关闭或错误回原序；权限过滤不变。冻结candidate session或明确当前候选内重排，避免跨页重复漏项；key含query/filter/candidate与content revision/spec/model，私人检索词不公开日志。"
+    },
+    {
+      "task": "B09-T11",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "汇总有依据词表外、明确人工纠正与混淆对生成pending提案，含计数/定义/反例/影响映射；未知原因不硬当词表外。概念名可人工/生成候选，但Jev不能直接修改可执行词表。"
+    },
+    {
+      "task": "B09-T12",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "人工批准/拒绝流程有语义diff、稳定ID/mapping、影响范围dry-run和版本；display只重显、定义变化受控重评、历史可读，不自动批准/造空标签/全库入队。"
+    },
+    {
+      "task": "B09-T13",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "用B08比较off/on的实体precision/span/canonical误合并、补材料收益/成本/重复率、candidate recall与rerank指标、p95及预算；无真实gold只报工程，默认off，不以一次live成功称改进。"
+    },
+    {
+      "task": "B09-T14",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/15",
+      "checked": false,
+      "requirement": "恶意URL/注入/超预算/幂等/分页/实体/未审批词表测试、make verify和跨仓合同；提交evidence/B09.md列每flag、实际provider、未支持来源、预算、回滚及PR/commit，交B10验收。"
+    },
+    {
+      "task": "B10-T01",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+      "checked": false,
+      "requirement": "汇总实际实现PR、head/base、依赖与companion SHA、schema/spec/model/policy和flags；确认当前Issue流程文档纳入工作树。保留无关改动；不再沿用已关闭计划PR链或把旧计划SHA当实现。"
+    },
+    {
+      "task": "B10-T02",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+      "checked": false,
+      "requirement": "生成R01–R39→任务ID→Issue/实现PR/commit/文件→SC01–SC30→命令/结果/日志的完整矩阵。126任务保留；拆分保留映射，未经批准不减范围。任务进度只维护Issue，报告为带SHA/日期的证据快照。"
+    },
+    {
+      "task": "B10-T03",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+      "checked": false,
+      "requirement": "隔离本地Worker/D1/R2+Go+模型mock执行新收藏、旧原文、人工原文、reading/classify失败、retry/replay/refresh、实体/补材料。断言source-first、租约/revision/调用数/人工覆盖/缓存，使用合成数据。"
+    },
+    {
+      "task": "B10-T04",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+      "checked": false,
+      "requirement": "并发故障：旧新consumer交替、同spec多实例、target/source切换、lease过期、完成响应丢失、重复提交、超时/401/422/429/过载/shutdown。证明不循环、不因提交重试重复模型调用、不覆盖新投影/丢人工事件，配置错不耗尽整库。"
+    },
+    {
+      "task": "B10-T05",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+      "checked": false,
+      "requirement": "旧六字段App、旧enrichment、新v2、Go strict、NAS Web、Android对旧新Worker/flag矩阵；真实浏览器和可用设备验证字段操作、冲突/dirty、分页导出。未运行设备明确，编译不冒充执行。"
+    },
+    {
+      "task": "B10-T06",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+      "checked": false,
+      "requirement": "本地空库/0009历史库、legacy curation/停用标签/实体/活跃lease迁移演练；核对row counts/source hash/人工值/映射，应用和目标回滚；不改已发布迁移，不清库规避兼容，不破坏性down。"
+    },
+    {
+      "task": "B10-T07",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+      "checked": false,
+      "requirement": "删除/保留期清理所有私人快照/runs/events/entity/cache；token边界、日志/公开artifact脱敏；恶意URL/DNS/重定向/超大内容/HTML注入/预算耗尽。扫描整个实现diff和截图fixture，不能因测试公开私人数据。"
+    },
+    {
+      "task": "B10-T08",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+      "checked": false,
+      "requirement": "验证禁网重放、实际input预算和有界任务；用B08生成工程baseline/candidate及真实质量报告或明确阻塞，逐flag列实现/测试/收益/默认启用依据。p50/p95注明环境和规模，不以十条fixture声称大库合格。"
+    },
+    {
+      "task": "B10-T09",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+      "checked": false,
+      "requirement": "清理生产耦合：ReadingResult独立、Evaluate/Decide/Resolve清楚、taxonomy不承载旧整包职责，legacy实验可跑但不入生产。同步README/architecture/jev-classification/bookmark-management/deployment/cloudflare-backend/CLI/config/CHANGELOG，历史研究原样标历史。"
+    },
+    {
+      "task": "B10-T10",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+      "checked": false,
+      "requirement": "编写不执行的部署/回填runbook：兼容Worker+新增迁移→Go/Web/Android→获批spec/flags，备份恢复、兼容表、generation回滚、监控/停止阈值、ID/cursor范围、dry-run预算。收费/远端迁移/生产切换分别需授权。"
+    },
+    {
+      "task": "B10-T11",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+      "checked": false,
+      "requirement": "全量make verify、test-ablation及受影响architecture回归，Worker tests/typecheck/deploy:dry-run，Android CI等价unit/lint/build，加合同/浏览器/迁移/故障测试。实际命令存在、执行并记录退出码/环境/两仓SHA；失败修复后重跑，不删断言凑绿。"
+    },
+    {
+      "task": "B10-T12",
+      "issue": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+      "checked": false,
+      "requirement": "提交evidence/B10.md和FINAL-REVIEW.md，含完整矩阵、diff导航、各代码PR、两仓SHA、设计偏离依据、未验证项/风险、flags、未做生产操作；在本Issue和总控登记交接，等待独立复审，不自批合并或上线。"
+    }
+  ],
+  "controls": [
+    {
+      "id": "R01",
+      "requirement": "保留source-first和队列边界\n原文先存、阅读增强与分类分离、独立lease/revision及人工优先已经存在，不推倒重来。B01/B03/B04/B10持续回归。[stages.go](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/processor/stages.go)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R02",
+      "requirement": "不要把已有能力当新成果\n多问题同请求、typed answers/model/usage保存已实现。短板是语义结果压回三个topic/单form/单use/global uncertainty；下一步是判断、决策与人工整理分层，而不是再包API。B04。[jev.go](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/classify/jev.go)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R03",
+      "requirement": "内容主题、功能和载体分离\nmethod/tool/data可并存，thread/longform是组织载体，不应单选竞争。primary_form只能是展示投影。B05/B04/B06/B07。[原词表](https://github.com/Alpenl/cairn-share/blob/5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b/worker/src/taxonomy.json)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R04",
+      "requirement": "潜在用途不是个人动机\nquote/try/background/material可并存，contra是明确人工针对主张的关系。actionable不等于用户已决定to_try；收藏/引用/作者观点不代表用户立场。B05/B06/B07，个人维度独立。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R05",
+      "requirement": "同义、层级和相关关系不能混同\nllm/AI/agent、eng/前后端等宽窄关系不应都当等价alias，eval可作为跨领域方法。稳定ID保历史含义，显式mapping，不骤增数百标签。B05/B09。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R06",
+      "requirement": "三主题上限是展示策略\n限制散布Go归一化/人工校验、Worker、Web；只改分类器无效。底层完整、有效策略上限独立、卡片显示三项可展开，第四项不自动不确定。B04/B05/B06/B07。[Go taxonomy](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/taxonomy/taxonomy.go)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R07",
+      "requirement": "概率不是重要性\n不同Noul命题的成立概率不天然可比较主题主次。需要程度时用具体等级，否则显式稳定排序。B04/B09。[Noul](https://docs.typesafe.ai/primitives/noul)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R08",
+      "requirement": "全局uncertainty放大审核负担\n任一主题0.2<p<0.8就令整条待确认会浪费人工。逐字段接受/拒绝/弃权，让明确值生效；优先复核会改变有效整理/检索的分歧。B04/B06。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R09",
+      "requirement": "合法空值与服务失败分开\nnot_applicable、out_of_taxonomy、insufficient_evidence、ambiguous_boundary不等于HTTP失败。原因有观察或专门判断依据，unknown允许，不能从p=0.5臆断缺材料。B03/B04/B05/B06。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R10",
+      "requirement": "当前margin条件冗余\n归一化pmax>=0.65时次高<=0.35，差至少0.30，因此margin0.15不再筛选；微小和误差不改变结论。先边界测试，再离线校准有效规则，不堆阈值。B04/B08。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R11",
+      "requirement": "confidence不是独立正确率\n它概括已有分布，不能默认乘概率，也不证明整体工作流正确。是否有决策增益须评估，稀有标签采用共享/分组策略防过拟合。B04/B08。[Confidence](https://docs.typesafe.ai/confidence)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R12",
+      "requirement": "按语义选Noul、Choice、Score\n是否成立用Noul，真正互斥才Choice，程度用具体有序Score。可执行程度从无动作、缺步骤、具体步骤到可运行且可检验；同均值不同分布保留，不给每标签机械加两种问题。B04/B08/B09。[Score](https://docs.typesafe.ai/primitives/score)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R13",
+      "requirement": "词条成为可执行定义\n补definition/includes/excludes/正反例/边界与概念关系；优先工程vs工具推荐、产品vs设计、评估vs泛体验。结构化instructions/criteria不硬拼长字符串，请求类型支持对象和有序数组。B04/B05。[高级问题](https://docs.typesafe.ai/primitives/advanced)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R14",
+      "requirement": "ID不提供语义，问题不共享答案\n完整问题含义在instructions/criteria，不能依赖另一个未返回答案。同state独立问题仍批量；真需新材料/候选才第二次调用。B04/B09。[API](https://docs.typesafe.ai/api)、[fan-out](https://docs.typesafe.ai/patterns/fan-out)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R15",
+      "requirement": "来源角色与provenance保留\n原帖、作者续帖、引用、外链、第三方评论不压成一个context字符串；block ID/URL/关系依据/抓取方式/完整性可追溯，legacy未知不编造。B03/B04/B09。[source.go](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/enrich/source.go)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R16",
+      "requirement": "客观与个人输入物理隔离\n提示“忽略note”不是隔离；客观HTTP body不含note/why/status，个人建议另行opt-in。同一请求问题共享state。B03/B04。[State](https://docs.typesafe.ai/concepts/state)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R17",
+      "requirement": "长度与语言质量实测\n实施时核实上下文/问题/候选限额，字节、rune、token估算分清，不静默截断。中文/英文/混合分层评估，中英文问题规格比较；翻译仅辅助有来源，不能替代原文。B04/B08/B09。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R18",
+      "requirement": "Evaluate/Decide/Resolve分层\nHTTP与typed校验、问题编译、policy、人工resolve拆开；后两者纯函数，保留单进程与Go接口。B03/B04/B10。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R19",
+      "requirement": "失效键分开\nevidence、问题语义、actual model、policy各自版本化。label只重显、阈值重放、定义重评依赖、note只个人；同ID不等于可复用。B03/B04/B08。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R20",
+      "requirement": "当前job.result不足长期审计\n该字段会失效/覆盖，需要追加runs和可恢复输入/spec；只有hash不能复现。业务不可变不能阻止用户删除或保留期清理。B03/B10。[迁移0009](https://github.com/Alpenl/cairn-share/blob/5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b/worker/migrations/0009_independent_classification.sql)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R21",
+      "requirement": "固定模型和漂移管理\njev-latest移动而请求字符串不变，校准绑定实际model/spec；记录requested/resolved，漂移先评估，不自动晋升。B01/B04/B08。[Models](https://docs.typesafe.ai/models)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R22",
+      "requirement": "P0：消费者交替重跑\n同词表A-v2完成、B-v1因不等重领，A再重领且attempt重置是代码允许路径，不代表已发生生产事故。Worker权威target，job绑定spec/generation，旧consumer只声明能力；必须重新生成Worker回归。B01。[classification.ts](https://github.com/Alpenl/cairn-share/blob/5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b/worker/src/classification.ts)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R23",
+      "requirement": "P0：保存原因隐式确认标签\nreader.js未reviewed时发送整组classification，Worker人工覆盖并消除uncertainty，既锁错标签又污染反馈。why/status独立、接受明确、历史reviewed不自动当gold。B02/B03/B06/B07/B08。[reader.js](https://github.com/Alpenl/cairn-x-enricher/blob/cb13d0e543e54f18baf6e151630d728b3175e792/internal/dashboard/reader.js)、[curation.ts](https://github.com/Alpenl/cairn-share/blob/5cf3b0d45c8fbae07d0fb5be1772e7d747c69b4b/worker/src/curation.ts)。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R24",
+      "requirement": "阅读增强不该重抄原文\nTransform从旧schema删classification仍要求source再丢弃。独立ReadingResult只生成阅读字段，source由程序注入，保留严格验证。B02/B04/B10。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R25",
+      "requirement": "错误类型与提交幂等\n配置/鉴权/契约、临时限流/网络、stale/superseded分开，有界退避/组件状态/安全日志。已知complete成功但响应丢失不重发模型；未知提供方执行不能虚称全流程exactly-once。B01/B02/B03/B04/B10。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R26",
+      "requirement": "默认少打扰，依据是真实原文\n展示可用值、边缘候选按需接受，分布默认折叠。解释引用真实block/span，有限候选可选none；概率或生成解释不是证据。B06/B07/B09。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R27",
+      "requirement": "三状态与三种重做分离\n来源阅读、AI分类、人工整理分开；只分类retry、纯policy replay、刷新来源分开，不由模型改inbox/kept/compiled/drop。B05/B06/B07。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R28",
+      "requirement": "字段/tag级人工覆盖\nunset、明确空、accept/reject、reset语义独立；重放不复活拒绝，来源变保历史并标适用变化；CAS和幂等保护并发。B03/B05/B06/B07。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R29",
+      "requirement": "纠正是反馈，不是偏好画像\ncuration event关联revision/run/spec和明确动作。只存why/浏览不是接受标签，拒绝一条工程不等于不喜欢工程；先用于回归/边界/校准。B03/B06/B08。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R30",
+      "requirement": "实体独立生命周期\n新版entities=[]不应将未运行提取当无实体。候选提取→Jev有限验证/对齐→有来源结果，surface/canonical分开；not_run/failed/empty/stale分开，人工优先，旧结果不假新鲜。B03/B05/B06/B07/B09。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R31",
+      "requirement": "明确缺口才补证据\n图文缺失、外链未取得、截断不同于标签边界。按预算/去重/安全URL补材料、有provenance、不覆盖原文；无授权/能力明确blocked，低置信不一律升级大模型。B09。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R32",
+      "requirement": "先召回后重排\n已过滤有界候选上同rubric比较，稳定分页、预算/cache/原序降级；不增加向量库前提，不声称重排找回漏掉候选。B05/B08/B09。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R33",
+      "requirement": "受控词表治理\n词表外/混淆/明确人工反馈形成提案，人工审批；未知词或一次输出不自动建label。停用/合并有历史mapping，显示与语义变更分别重显/重评。B05/B09。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R34",
+      "requirement": "代表性人工评估集\n建议200–300起步不保证稀有标签覆盖；中英混合、短长文/外链/图依赖、多主题/引用反驳/领域外分层，thread近重复分组隔离；无人工gold只报工程。B08。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R35",
+      "requirement": "指标包括找回与审核负担\n每维precision/recall、accepted错误、coverage、审核字段数、补材料成本/延迟及真实找回指标，样本数/区间透明。不能以更自信或无限弃权称变好。B08/B09。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R36",
+      "requirement": "逐项消融\n冻结v1，分别改变局部弃权、定义、单多选、Score、语言/证据规格。阈值重用raw、问题变化新推断；先冻结门槛再看holdout，任务不同明确mapping。B08。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R37",
+      "requirement": "跨仓兼容与清理\nv2显式opt-in，旧type不偷改，Go严格解码、Worker/Android/cache/export联动；新增迁移不改0009，先兼容后启用，回滚不销毁人工/来源。生产与legacy实验边界清晰。B02/B03/B04/B05/B06/B07/B10。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R38",
+      "requirement": "安全、预算与隐私\n保留分离token/受控R2/服务端密钥与日志边界；输入输出/超时/重试/幂等/组件健康有上限。外链防SSRF/redirect/凭据泄漏；评估不公开私人内容，真实质量未过不开flag。所有批次。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R39",
+      "requirement": "分阶段实证与独立复审\nP0先行、合同/纯策略、多维与前端、评估扩展、集成。39发现→126任务→代码PR/commit→30场景证据，迁移/回滚/旧新实例/浏览器/设备不遗漏。工程、真实质量、审查、合并、部署分开，不以叙述“全部完成”代替。B10总验收，任务进度在Issues。",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/REVIEW.md",
+        "sha256": "60a17e20ef2ddfb8caede3459ebad678c11072b5f4003ac4ae2d3dde98cfe4cf",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "SC01",
+      "requirement": "A/B旧新policy交替至少20轮：完成任务不循环领取、不无限重置attempt",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC02",
+      "requirement": "推断途中源revision/目标generation变化：旧结果不覆盖当前投影",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC03",
+      "requirement": "仅保存why/status且未触摸标签：无分类写入、无accept事件",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC04",
+      "requirement": "阅读输出schema不含原文/links/images，已存来源完整保留",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC05",
+      "requirement": "note-only不X Search、不改客观state/hash；URL变化明确来源过期",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC06",
+      "requirement": "两topic明确一模糊：前两者生效，仅第三项弃权",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC07",
+      "requirement": "none、词表外、未运行、失败、证据不足在API/UI分开",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC08",
+      "requirement": "threshold/display-only禁网重放完成，模型调用计数严格0",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC09",
+      "requirement": "同均值不同Score分布保留差异，confidence不当独立证据乘分",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC10",
+      "requirement": "客观body不含note/why/stance，恶意内容不改变操作/词表",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC11",
+      "requirement": "complete已成功但响应丢失：不双run/event，不重发模型",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC12",
+      "requirement": "配置/契约问题按类型处理，429/过载有界，stale409非模型失败",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC13",
+      "requirement": "四个有效topic底层完整、卡片折叠、v1合法",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC14",
+      "requirement": "reject/set-empty/reset-unset区别，重放不复活人工拒绝",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC15",
+      "requirement": "Web/Android并发CAS不丢更新，离线重试幂等",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC16",
+      "requirement": "v1读写不破坏隐藏v2，strict解码与表示缓存正确",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC17",
+      "requirement": "引用/续帖/第三方分离，legacy unknown不编身份",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC18",
+      "requirement": "超长/截断有明确状态，字节/rune/预算边界正确",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC19",
+      "requirement": "实体not_run/failed不清同revision成功值，source变化stale",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC20",
+      "requirement": "补证据防SSRF/redirect/凭据泄漏、去重且预算到界停",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC21",
+      "requirement": "重排失败原序、不越筛选权限、不冒称提高候选召回",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC22",
+      "requirement": "train/dev/test线程近重复隔离，mock不冒充人工gold",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC23",
+      "requirement": "空库/0009迁移通过，应用回滚不删人工和来源",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC24",
+      "requirement": "删除/保留期覆盖snapshots/runs/events/entity/cache，无私人悬挂",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC25",
+      "requirement": "普通CI/make verify不收费，公开日志/fixture/artifact无密钥私文",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC26",
+      "requirement": "部分重评仅复用同证据/模型/语义合法结果，缺coverage不假complete",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC27",
+      "requirement": "legacy实验可回归而不入生产Jev路径，安全合同不降低",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC28",
+      "requirement": "真实浏览器键盘/手机/刷新竞争/dirty/局部确认/只分类重试",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC29",
+      "requirement": "alias模型变化不沿用校准自动晋升，spec/generation可回滚",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "SC30",
+      "requirement": "后台分类/补证据/重排单条及全局预算、取消/耗尽，无隐式全库",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/EXECUTION.md",
+        "sha256": "06410af0661ff844d2044ad0a47123c36ebcb4cc1279b682ca12a358a12e941f",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/EXECUTION.md"
+      },
+      "historical": false
+    },
+    {
+      "id": "F01",
+      "requirement": "| F01 | 内部 QuestionSpec 与官方 provider DTO 分离；questions 为 map、使用 `type`、结构化 instructions/criteria；Score 浮点位置 + 索引 legend + 有序概率 | E `internal/classify/{jev,questions,primitives,policy}.go` | `contractServer` 拒绝旧数组/`kind`；`TestProviderRequestMatchesOfficialFixture`；`TestScoreUsesOfficialFloatLegendContract`；官方文档 2026-09-21 核实 | engineering_done（contract） |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "F02",
+      "requirement": "| F02 | Worker v2 claim 从服务器 target 绑定 spec/taxonomy/policy/model + 原子目标指针守卫；Go 使用编译出的 SpecID 声明能力 | S `classification.ts`；E `cairn/stages.go` | S 回归（修复前失败：绑定 \"undefined\"/complete 0 行；修复后 14/14）；真实 Go→Worker/D1 claim→complete（local integration） | engineering_done（contract + real_local） |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "F03",
+      "requirement": "| F03 | V2SelectionView 覆盖真实 fallback/v2 两种响应；冲突透传 revision，不折成 502 | E `cairn/v2.go`、`dashboard.go`；S `taxonomy-routes.ts` | `TestSelectionDecodesBothRealWorkerShapes`、`TestConflictRevisionIsForwarded`；真实 Worker 响应经实际 Go client/代理 | engineering_done |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "F04",
+      "requirement": "| F04 | 四维 override 与操作语义统一；selection/effective/投影同一结果；revision_conflict 安全透传 | S `domain.ts`、`domain-routes.ts`、`taxonomy-routes.ts`；E proxy/UI | S `test/domain.test.ts`（四维操作→刷新一致）；浏览器断言；真实集成 selection/effective | engineering_done |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "F05",
+      "requirement": "| F05 | 生产链路：v2 词表→不可变 spec→evidence→真实 Evaluate→run/decision 同事务→有效视图/v1 投影；第四主题保留 | E `main.go`、`processor/stages.go`、`classify`；S complete handler | `tests/local-integration/run.sh` 从新收藏生成 run/decision（无手工 seed）；断言 effective projected=true | engineering_done（real_local） |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "F06",
+      "requirement": "| F06 | RawAnswer 编解码互逆；runs/spec 结构化读取；重放加载真实 spec + 历史 policy；缺 policy 显式失败；`--commit` 需 `--authorize-write` | E `classify/primitives.go`、`resolve.go`、`replay.go`；S `domain-routes.ts` | `TestRawAnswerRoundTripsThroughProviderShape`、`TestReplayRefusesDefaultPolicySubstitution`、`selectReplayRun`；真实 Evaluate→存→读→Replay | engineering_done |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "F07",
+      "requirement": "| F07 | decision 校验 run 归属/spec/model/coverage/内容 revision；服务端重放 override；过期 run 拒绝 | S `domain-routes.ts` | `test/domain.test.ts`：unknown/foreign/model mismatch/run_stale；人工 reject 在 replay 后保留（真实集成） | engineering_done |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "F08",
+      "requirement": "| F08 | 快照只追加（同身份异 bytes 冲突）；override CAS/事件/revision 同事务；source/URL 变化推进 content revision | S `domain-routes.ts`、migrations 0013/0014 | S 并发断言：两个同 revision 请求恰好一个 200 一个 409、revision 只 +1、事件/override 各 1；快照 bytes 不变 | engineering_done |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "F09",
+      "requirement": "| F09 | 熔断跨 poll：claim 前检查；暂停期间不领取；退避后单次探测；当前 lease 留待过期；健康上报 | E `processor/stages.go` | `TestPauseSurvivesPollsAndDoesNotClaim`、`TestClaimLevel401PausesWithoutConsumingJobs` | engineering_done（unit） |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "F10",
+      "requirement": "| F10 | Worker result/job/run/decision/operation 同事务；同 key 异 payload 冲突；客户端查询+同 key 有界重试，不重复推断 | S `classification.ts`；E `cairn/stages.go` | Worker 幂等/冲突测试；`internal/cairn/recovery_test.go`（真丢响应只提交 1 次；未提交同 key 重试；conflict 不重试） | engineering_done |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "F11",
+      "requirement": "| F11 | 单值 accept 替换、多值累加、逐 tag reset 恢复该 tag、整维 reset 恢复自动、set_empty 区分 | E `classify/resolve.go`；S `domain.ts` | 共享 vectors（两仓字节一致，sha256 `e5d86393…d661`）在 Go/TS 双双通过；浏览器断言 | engineering_done |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "F12",
+      "requirement": "| F12 | 每动作独立 UUID、仅重试复用；保存中排队不丢弃；冲突保草稿并显式重新应用；单值替换 | E `dashboard/curation-v2.js`、`common.js`、`reader.html` | 浏览器 29/29（快速双动作、reload 新 key、冲突保草稿+重应用、单值替换） | engineering_done（browser） |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "F13",
+      "requirement": "| F13 | `refresh-source` 调度真实有界获取任务（保旧内容/人工数据），与 retry/replay 行为分离 | S `classification.ts`、`index.ts`；E `cairn/stages.go`、`replay.go` | Worker 路由 + Go CLI；真实 Worker 端点；未跑长周期抓取任务 | engineering_done（contract） |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "F14",
+      "requirement": "| F14 | usage 原值落库、缺失标 missing；语义 spec hash 覆盖真实问题、显示 label 排除；证据预算/截断进入实际请求；alias 漂移门槛 | E `classify/{jev,questions}.go`；S `domain.ts` | `TestMissingUsageIsMarkedNotZero`、`TestSpecHashIgnoresInactiveTermsAndDisplayLabels`、`TestEvidenceBudgetBoundsTheActualRequestBody`、`TestAliasDriftBlocksCalibratedPolicy`；共享 spec hash 在真实 Worker 注册/校验通过 | engineering_done |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-01",
+      "requirement": "| R2-01 | 同一事务谓词守卫 links/run/decision/operation；失败无成功历史，同 key 不能变成功 | Worker `R2-01` 回归（409×2、三表 0 行、projection 不变） |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-02",
+      "requirement": "| R2-02 | claim 绑定 content revision/snapshot id/evidence hash；complete 事务内校验当前 target 与回显身份；run 用领取时 revision | `R2-02` 回归；真实集成生命周期 |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-03",
+      "requirement": "| R2-03 | 旧 curation 导入 legacy_unknown override；automatic 用 AI 结果而非人工投影；旧端点写同一 override/事件；`classification:null` 恢复真实自动值 | 3 个既有 curation/App 回归 + 新测试；真实集成 |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-04",
+      "requirement": "| R2-04 | Android flush 仅确认 Applied 才出队；离线/超时保留动作与草稿 | `V2CurationRepositoryTest`（离线/超时/混合） |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-05",
+      "requirement": "| R2-05 | 串行动作队列不丢快速编辑；冲突重放原始逻辑动作与原 key | 单测 + 设备测试断言 `reject llm` 与原 key |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-06",
+      "requirement": "| R2-06 | refresh epoch 持久意图；processor 绕过两种缓存真实抓取；成功/失败都 ack | `TestRefreshIntentBypassesSourceCaches` |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-07",
+      "requirement": "| R2-07 | 消费领取时结构化快照（全 block/role/truncation）；内容 hash 排除 fetched_at；已决请求不重复 fetch | `TestBoundEvidenceUsesTheStructuredSnapshot`、`TestEvidenceEscalationSkipsDecidedRequests` |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-08",
+      "requirement": "| R2-08 | entity_states 成功值成为实体自动基线；stale 用实体自身 revision | `R2-08` 回归 |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-09",
+      "requirement": "| R2-09 | 仅模型成功清熔断；半开探测原子限量；退避跨故障增长 | `TestCircuitBreakerBackoffGrowsAcrossFailedProbes`、`TestCircuitBreakerProbeIsAtomic` |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-10",
+      "requirement": "| R2-10 | Go DTO 接受 display_overridden；rename 不改语义身份、不阻断启动 | 真实集成 `TestLocalWorkerDisplayRenameKeepsSemantics` |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-11",
+      "requirement": "| R2-11 | 测试按候选身份赋分；每问在 instructions 绑定自己的候选，越界回退原序 | `reader_v2_test.go`（捕获请求+重复 5 次）、`service_test.go` |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-12",
+      "requirement": "| R2-12 | 各写入口比较归属收藏与规范 payload hash；异 link/payload/动作冲突 409 | `R2-12` 回归、run 同 key 异 payload |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-13",
+      "requirement": "| R2-13 | 实际 state 重算 hash、batch 语义比较、跨模型不合并、usage 汇总、超限自动分批；生产复用 opt-in 且失败回退 | reuse/batch 单测、`TestPartialReuseIsOptInAndFallsBackSafely` |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R2-14",
+      "requirement": "| R2-14 | includes/excludes 进入问题与 hash；spec id 内容寻址，语义变化注册新 spec，旧 spec 可重放 | excludes/label 单测、真实 rename 集成 |",
+      "source": {
+        "repo": "E",
+        "path": "docs/jev-v2/FINAL-REVIEW.md",
+        "sha256": "2dfcc4cd4f7e9a6a5f29661b8442b20f112031977c9d8bd31795a7ec312f8b0c",
+        "url": "https://github.com/Alpenl/cairn-x-enricher/blob/7936be090cf731664e4c05d39327aab11021856d/docs/jev-v2/FINAL-REVIEW.md"
+      },
+      "historical": true
+    },
+    {
+      "id": "R3-01",
+      "requirement": "| R3-01 | P1：最后preflight后切target/content/lease，所有守卫失败时job也不能completed；成功历史为0，同operation不能伪成功。确认具体操作而非任意completed | [cairn-share#28](https://github.com/Alpenl/cairn-share/issues/28) | Alpenl/cairn-share#28、Alpenl/cairn-share#29、#11 |",
+      "source": {
+        "url": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+        "snapshot_date": "2026-09-23"
+      },
+      "historical": false
+    },
+    {
+      "id": "R3-02",
+      "requirement": "| R3-02 | P1：claim只绑定当前匹配快照；source成功snapshot失败可恢复；快照404/503/畸形/错hash或版本停止本次推断，不能退回plain沿用旧身份 | [cairn-share#28](https://github.com/Alpenl/cairn-share/issues/28) | Alpenl/cairn-share#28、Alpenl/cairn-share#29、#12 |",
+      "source": {
+        "url": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+        "snapshot_date": "2026-09-23"
+      },
+      "historical": false
+    },
+    {
+      "id": "R3-03",
+      "requirement": "| R3-03 | P1：AI-only四主题及两次重建不产生人工层/确认；AI删标签正常反映；旧完整集合/显式空语义及新旧端点/过滤/导出一致 | [cairn-share#29](https://github.com/Alpenl/cairn-share/issues/29) | Alpenl/cairn-share#29、Alpenl/cairn-share#30、#13 |",
+      "source": {
+        "url": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+        "snapshot_date": "2026-09-23"
+      },
+      "historical": false
+    },
+    {
+      "id": "R3-04",
+      "requirement": "| R3-04 | P1：单值A→B→A最后为A，按实际动作时序解析；accept/reject/reaccept及tag/field reset共享向量和真实UI正确 | [cairn-share#29](https://github.com/Alpenl/cairn-share/issues/29) | Alpenl/cairn-share#29、Alpenl/cairn-share#30、#12、#13 |",
+      "source": {
+        "url": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+        "snapshot_date": "2026-09-23"
+      },
+      "historical": false
+    },
+    {
+      "id": "R3-05",
+      "requirement": "| R3-05 | P1：结构化快照也经过输入总预算；实际HTTP state长度/块/criteria开销有界，coverage/truncation诚实，完整存档不被改写 | [cairn-x-enricher#12](https://github.com/Alpenl/cairn-x-enricher/issues/12) | #12、#14 |",
+      "source": {
+        "url": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+        "snapshot_date": "2026-09-23"
+      },
+      "historical": false
+    },
+    {
+      "id": "R3-06",
+      "requirement": "| R3-06 | P1（补证据启用前）：真实Go解码Worker含replayed的新建/重复响应；执行所有权限制pending只抓一次，新文本入下次state，无变化不循环 | [cairn-x-enricher#15](https://github.com/Alpenl/cairn-x-enricher/issues/15) | #15、#12、Alpenl/cairn-share#29 |",
+      "source": {
+        "url": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+        "snapshot_date": "2026-09-23"
+      },
+      "historical": false
+    },
+    {
+      "id": "R3-07",
+      "requirement": "| R3-07 | P1：同收藏多条离线动作按已确认前序推进；真正远端变化进入可操作冲突；首次/重放确认shape和revision一致，丢响应/进程重启不丢意图 | [cairn-share#31](https://github.com/Alpenl/cairn-share/issues/31) | Alpenl/cairn-share#31、Alpenl/cairn-share#29、#13 |",
+      "source": {
+        "url": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+        "snapshot_date": "2026-09-23"
+      },
+      "historical": false
+    },
+    {
+      "id": "R3-08",
+      "requirement": "| R3-08 | P1：半开探测所有退出释放/转移占用，claim临时错、模型临时错、取消、maxJobs=0后仍可有限恢复；空队列不当作模型已恢复 | [cairn-x-enricher#11](https://github.com/Alpenl/cairn-x-enricher/issues/11) | #11、#12 |",
+      "source": {
+        "url": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+        "snapshot_date": "2026-09-23"
+      },
+      "historical": false
+    },
+    {
+      "id": "R3-09",
+      "requirement": "| R3-09 | P1（实体启用前）：生产实体使用实际分析快照的ContentRevision/hash/blocks；inputrevision不同仍可正常提交，真正stale拒绝，有效查询与reset一致 | [cairn-x-enricher#15](https://github.com/Alpenl/cairn-x-enricher/issues/15) | #15、Alpenl/cairn-share#29、Alpenl/cairn-share#30 |",
+      "source": {
+        "url": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+        "snapshot_date": "2026-09-23"
+      },
+      "historical": false
+    },
+    {
+      "id": "R3-10",
+      "requirement": "| R3-10 | P2（复用启用前）：真实存读恢复EvidenceHash/QuestionHashes/BatchSemantics/模型/调用来源；只改一个问题只问变化问题；缺历史/alias安全有界回退而非伪复用或直接失败 | [cairn-x-enricher#12](https://github.com/Alpenl/cairn-x-enricher/issues/12) | #12、#14、Alpenl/cairn-share#29 |",
+      "source": {
+        "url": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+        "snapshot_date": "2026-09-23"
+      },
+      "historical": false
+    },
+    {
+      "id": "R3-11",
+      "requirement": "| R3-11 | P1（验收门禁）：修当前context参数顺序lint，不关闭规则；当前两仓CI与真实测试范围准确，报告不混旧SHA/设备状态/spec说明 | [cairn-x-enricher#16](https://github.com/Alpenl/cairn-x-enricher/issues/16) | 本Issue |",
+      "source": {
+        "url": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+        "snapshot_date": "2026-09-23"
+      },
+      "historical": false
+    },
+    {
+      "id": "R3-12",
+      "requirement": "| R3-12 | P1：decision必要personal_revision检查在事务内；多run核对真实resolved_model、输入/目标/coverage并保存完整引用；已成功operation可准确重放确认 | [cairn-share#29](https://github.com/Alpenl/cairn-share/issues/29) | Alpenl/cairn-share#29、#12 |",
+      "source": {
+        "url": "https://github.com/Alpenl/cairn-x-enricher/issues/16",
+        "snapshot_date": "2026-09-23"
+      },
+      "historical": false
+    }
+  ]
+}

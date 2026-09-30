@@ -1,0 +1,10 @@
+09-22 21:23:04.224  8250  8250 I CairnCacheDiag: persist start generation=2
+09-22 21:23:04.243  8250  8250 I CairnCacheDiag: persist done generation=2
+09-22 21:23:04.324  8250  8250 I CairnCacheDiag: persist start generation=3
+09-22 21:23:04.335  8250  8250 I CairnCacheDiag: persist done generation=3
+09-22 21:23:04.519  8250  8250 I CairnCacheDiag: persist start generation=2
+09-22 21:23:04.530  8250  8250 I CairnCacheDiag: persist done generation=2
+09-22 21:23:09.534  8250  8267 E CacheRegression: stored matches expected=true, expected A=false
+09-22 21:23:09.535  8250  8250 E CacheRegression: UI matches expected=true, generation=2
+09-22 21:23:09.853  8250  8250 I CairnCacheDiag: persist start generation=2
+09-22 21:23:09.909  8250  8250 I CairnCacheDiag: persist done generation=2

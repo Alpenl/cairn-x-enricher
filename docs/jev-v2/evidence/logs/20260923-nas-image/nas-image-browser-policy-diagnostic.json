@@ -1,0 +1,31 @@
+{
+  "observation": "Original browser run 56159 still live; target policy v2, consumer source supports v3; reading completed and classification pending with attempts=0.",
+  "/api/enrichment/classifications/target": {
+    "target": {
+      "generation": 1,
+      "spec_id": "classify-ffb0edb18cb5",
+      "spec_hash": "cfe187bd9786171a7636fd31b4a01b6767f4c8fd67d40cfddc261a1ce00a58ee",
+      "taxonomy_version": "2026-09-20.1",
+      "policy_version": "jev-policy-v2",
+      "requested_model": "jev-latest",
+      "protocol": "v2"
+    },
+    "supported": false
+  },
+  "/api/enrichment/classifications/1": {
+    "id": 1,
+    "revision": 2,
+    "input_revision": 1,
+    "target_generation": 0,
+    "spec_id": "",
+    "status": "pending",
+    "attempts": 0,
+    "next_retry_at": null,
+    "taxonomy_version": "",
+    "policy_version": "",
+    "requested_model": "",
+    "error": null,
+    "result": null,
+    "updated_at": null
+  }
+}

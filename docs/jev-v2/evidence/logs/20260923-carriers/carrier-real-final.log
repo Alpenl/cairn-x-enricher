@@ -1,0 +1,8 @@
+[36mWHAT[0m: 验证载体升级存读链
+[35mWHY[0m:  确认 canonical 新旧 spec 均独立保存
+== TestLocalWorkerCarrierDefinitionUpgrade: starting worker on 127.0.0.1:38899 ==
+=== RUN   TestLocalWorkerCarrierDefinitionUpgrade
+    carrier_catalog_test.go:88: actual Worker definition v2 -> production catalog -> experiment spec exact match; only carriers changed; old classify-736e775b96c2 and new classify-ffb0edb18cb5 separately persisted/read; legacy 17/7/5 vocabulary retained; zero model calls
+--- PASS: TestLocalWorkerCarrierDefinitionUpgrade (0.11s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.111s

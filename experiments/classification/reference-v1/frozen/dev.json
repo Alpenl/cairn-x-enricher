@@ -1,0 +1,2144 @@
+{
+  "name": "cairn-auto-reference-v1",
+  "split": "dev",
+  "seed": 20260922,
+  "samples": [
+    {
+      "sample_id": "auto-health-opinion-0",
+      "source_hash": "4e895b88fff180e2eb3bcda49cf3d779fcdf44bfab26968f938bdc3d3253854a",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "health-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "health"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#health-opinion"
+      },
+      "material": {
+        "primary": "Single post. Discussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 164
+      }
+    },
+    {
+      "sample_id": "auto-health-opinion-1",
+      "source_hash": "fa09356538f85860dadb924d252dbd828556f32b4badb6a03229434c8fb9acb3",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "health-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "health"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#health-opinion"
+      },
+      "material": {
+        "primary": "单条帖子。谈论身体健康时需要区分个人体验与医疗证据，单个饮食故事不能说明疾病预防效果。",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 43
+      }
+    },
+    {
+      "sample_id": "auto-health-opinion-2",
+      "source_hash": "2dc432c989bfd14dc2c3fae59b4989a1a72aa6aac7eeee4bb5208f7eeefc4174",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "health-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "health"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#health-opinion"
+      },
+      "material": {
+        "primary": "单条双语帖子。谈论身体健康时需要区分个人体验与医疗证据，单个饮食故事不能说明疾病预防效果。 English version: Discussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 214
+      }
+    },
+    {
+      "sample_id": "auto-health-opinion-3",
+      "source_hash": "5c039e4ce13ebda30916d030a18f944a49b1ff41855b23bea25990c184807320",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "external_article",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "health-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "health"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "external_article"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#health-opinion"
+      },
+      "material": {
+        "primary": "谈论身体健康时需要区分个人体验与医疗证据，单个饮食故事不能说明疾病预防效果。 这条摘要附有外部文章链接 https://example.invalid/article/health-opinion",
+        "context": [
+          {
+            "id": "article",
+            "role": "external_article",
+            "text": "Discussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.",
+            "url": "https://example.invalid/article/health-opinion",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 249
+      }
+    },
+    {
+      "sample_id": "auto-health-opinion-4",
+      "source_hash": "0fb8133be4cb59a47ceeddf4f2d1c6765bb163603665ad7148916fd72e8c911d",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "author_continuation",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "health-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "health"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "author_continuation"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#health-opinion"
+      },
+      "material": {
+        "primary": "Author thread, post 1/2. Discussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.",
+        "context": [
+          {
+            "id": "author-post-2",
+            "role": "author_continuation",
+            "text": "同一作者的第二条续帖，用中文重复前文：谈论身体健康时需要区分个人体验与医疗证据，单个饮食故事不能说明疾病预防效果。",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 233
+      }
+    },
+    {
+      "sample_id": "auto-health-opinion-5",
+      "source_hash": "d8484843e0e452d41328da2a2873c917aa2c1f436ba00f5b7a6c6467a25fe225",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "long",
+      "completeness": "complete",
+      "group_id": "health-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "health"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#health-opinion"
+      },
+      "material": {
+        "primary": "One long post; the following passage is repeated as a length stress fixture. Discussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\nDiscussion of physical health should distinguish personal experience from medical evidence; one diet story cannot establish disease-prevention effects.\n\n",
+        "context": [
+          {
+            "id": "unrelated-quote",
+            "role": "quoted",
+            "text": "Unrelated quotation: Software development uses source code. This quoted subject does not replace the primary post.",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 2945
+      }
+    },
+    {
+      "sample_id": "auto-llm-method-0",
+      "source_hash": "ef7f34a6543661b56d79028029e8894455ae58d61692da8e9760cf9b3cc9af85",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "llm-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "llm",
+            "eval"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#llm-method"
+      },
+      "material": {
+        "primary": "Single post. Freeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 123
+      }
+    },
+    {
+      "sample_id": "auto-llm-method-1",
+      "source_hash": "d4c7f087f58eddb68277ab82df73f36c7de32677bec6be89ffec1290f2482e71",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "llm-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "llm",
+            "eval"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#llm-method"
+      },
+      "material": {
+        "primary": "单条帖子。冻结提示词和输入案例；让语言模型逐条作答；记录幻觉出现在哪些上下文。",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 39
+      }
+    },
+    {
+      "sample_id": "auto-llm-method-2",
+      "source_hash": "70f6857cd5151598a46ae20c3f0ab056f990580ee516b2a243d24861c1a36667",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "llm-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "llm",
+            "eval"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#llm-method"
+      },
+      "material": {
+        "primary": "单条双语帖子。冻结提示词和输入案例；让语言模型逐条作答；记录幻觉出现在哪些上下文。 English version: Freeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 169
+      }
+    },
+    {
+      "sample_id": "auto-llm-method-3",
+      "source_hash": "8a8d446fcaf95f5d7c368c3cef5d08ccf0e21867edfe16bfb4d6a5c73e58f942",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "external_article",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "llm-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "llm",
+            "eval"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "external_article"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#llm-method"
+      },
+      "material": {
+        "primary": "冻结提示词和输入案例；让语言模型逐条作答；记录幻觉出现在哪些上下文。 这条摘要附有外部文章链接 https://example.invalid/article/llm-method",
+        "context": [
+          {
+            "id": "article",
+            "role": "external_article",
+            "text": "Freeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.",
+            "url": "https://example.invalid/article/llm-method",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 200
+      }
+    },
+    {
+      "sample_id": "auto-llm-method-4",
+      "source_hash": "c92389f204d7ec1ea710fa895078d6cf8b9d3ff327ee6abe659cf91f13fa6b42",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "author_continuation",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "llm-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "llm",
+            "eval"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "author_continuation"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#llm-method"
+      },
+      "material": {
+        "primary": "Author thread, post 1/2. Freeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.",
+        "context": [
+          {
+            "id": "author-post-2",
+            "role": "author_continuation",
+            "text": "同一作者的第二条续帖，用中文重复前文：冻结提示词和输入案例；让语言模型逐条作答；记录幻觉出现在哪些上下文。",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 188
+      }
+    },
+    {
+      "sample_id": "auto-llm-method-5",
+      "source_hash": "5ffbd1ad8879b6eb23f73b0847fdc941faa01c3f89c88667dff374b916236dce",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "long",
+      "completeness": "complete",
+      "group_id": "llm-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "llm",
+            "eval"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#llm-method"
+      },
+      "material": {
+        "primary": "One long post; the following passage is repeated as a length stress fixture. Freeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\nFreeze prompts and input cases, have a language model answer each case, and record where hallucinations occur.\n\n",
+        "context": [
+          {
+            "id": "unrelated-quote",
+            "role": "quoted",
+            "text": "Unrelated quotation: Software development uses source code. This quoted subject does not replace the primary post.",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 2207
+      }
+    },
+    {
+      "sample_id": "auto-manage-opinion-0",
+      "source_hash": "a3a92549c8104671f72e9f5a368806df8b18744ab07c345e10b1c9c4fa698b5f",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "manage-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "manage"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#manage-opinion"
+      },
+      "material": {
+        "primary": "Single post. Unclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 168
+      }
+    },
+    {
+      "sample_id": "auto-manage-opinion-1",
+      "source_hash": "7a30872e58d9d0a9b8e56b882b4f45c25060dfe313d5a23be98a89b8032e1d7c",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "manage-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "manage"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#manage-opinion"
+      },
+      "material": {
+        "primary": "单条帖子。组织中的责任不清会把协调成本转嫁给个人；管理应让决策权与执行责任相匹配。",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 41
+      }
+    },
+    {
+      "sample_id": "auto-manage-opinion-2",
+      "source_hash": "703c4cd375ef6e884cb74e55d87e507fabcb8785a65f8cd4cd4e12adde76b9fd",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "manage-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "manage"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#manage-opinion"
+      },
+      "material": {
+        "primary": "单条双语帖子。组织中的责任不清会把协调成本转嫁给个人；管理应让决策权与执行责任相匹配。 English version: Unclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 216
+      }
+    },
+    {
+      "sample_id": "auto-manage-opinion-3",
+      "source_hash": "b287cdcb84ec325ac4d479c9c57bbcffcf645845474c5ecc7b4ca15395296586",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "external_article",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "manage-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "manage"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "external_article"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#manage-opinion"
+      },
+      "material": {
+        "primary": "组织中的责任不清会把协调成本转嫁给个人；管理应让决策权与执行责任相匹配。 这条摘要附有外部文章链接 https://example.invalid/article/manage-opinion",
+        "context": [
+          {
+            "id": "article",
+            "role": "external_article",
+            "text": "Unclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.",
+            "url": "https://example.invalid/article/manage-opinion",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 251
+      }
+    },
+    {
+      "sample_id": "auto-manage-opinion-4",
+      "source_hash": "4d9d80f900459403c5c7795a4972b458bd4d89141e34e3615dc9385074b2a185",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "author_continuation",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "manage-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "manage"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "author_continuation"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#manage-opinion"
+      },
+      "material": {
+        "primary": "Author thread, post 1/2. Unclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.",
+        "context": [
+          {
+            "id": "author-post-2",
+            "role": "author_continuation",
+            "text": "同一作者的第二条续帖，用中文重复前文：组织中的责任不清会把协调成本转嫁给个人；管理应让决策权与执行责任相匹配。",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 235
+      }
+    },
+    {
+      "sample_id": "auto-manage-opinion-5",
+      "source_hash": "339d39be148ac3a6f3e4cc812a444d05a8d592e0308fd945bdcacbba89b1912b",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "long",
+      "completeness": "complete",
+      "group_id": "manage-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "manage"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#manage-opinion"
+      },
+      "material": {
+        "primary": "One long post; the following passage is repeated as a length stress fixture. Unclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\nUnclear organizational responsibility shifts coordination costs onto individuals; management should align decision authority with execution responsibility.\n\n",
+        "context": [
+          {
+            "id": "unrelated-quote",
+            "role": "quoted",
+            "text": "Unrelated quotation: Software development uses source code. This quoted subject does not replace the primary post.",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 3017
+      }
+    },
+    {
+      "sample_id": "auto-media-opinion-0",
+      "source_hash": "252932be172d0105d741ae22cd58e011575fad2379d54df6bef38a6146a817a0",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "media-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "media"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#media-opinion"
+      },
+      "material": {
+        "primary": "Single post. Recommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 127
+      }
+    },
+    {
+      "sample_id": "auto-media-opinion-1",
+      "source_hash": "b6c6133bceef0cf2814ffe5814cddacb96148150f377f431650a26c7774d4bf5",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "media-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "media"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#media-opinion"
+      },
+      "material": {
+        "primary": "单条帖子。传播平台的推荐机制会改变新闻被看见的概率；曝光量本身不能证明报道准确。",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 40
+      }
+    },
+    {
+      "sample_id": "auto-media-opinion-2",
+      "source_hash": "85bab0d8d73794b59f0e4db3242232584126c00d9223daeb336da110911f47c3",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "media-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "media"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#media-opinion"
+      },
+      "material": {
+        "primary": "单条双语帖子。传播平台的推荐机制会改变新闻被看见的概率；曝光量本身不能证明报道准确。 English version: Recommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 174
+      }
+    },
+    {
+      "sample_id": "auto-media-opinion-3",
+      "source_hash": "27a5215efca21a8e440a9fb06a53c5f1116a982d1bae797b927524e702888534",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "external_article",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "media-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "media"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "external_article"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#media-opinion"
+      },
+      "material": {
+        "primary": "传播平台的推荐机制会改变新闻被看见的概率；曝光量本身不能证明报道准确。 这条摘要附有外部文章链接 https://example.invalid/article/media-opinion",
+        "context": [
+          {
+            "id": "article",
+            "role": "external_article",
+            "text": "Recommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.",
+            "url": "https://example.invalid/article/media-opinion",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 208
+      }
+    },
+    {
+      "sample_id": "auto-media-opinion-4",
+      "source_hash": "b7a9646a481d66c835d52f55ba1c0277e05455f6e95fa2365a091e75bf5be145",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "author_continuation",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "media-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "media"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "author_continuation"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#media-opinion"
+      },
+      "material": {
+        "primary": "Author thread, post 1/2. Recommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.",
+        "context": [
+          {
+            "id": "author-post-2",
+            "role": "author_continuation",
+            "text": "同一作者的第二条续帖，用中文重复前文：传播平台的推荐机制会改变新闻被看见的概率；曝光量本身不能证明报道准确。",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 193
+      }
+    },
+    {
+      "sample_id": "auto-media-opinion-5",
+      "source_hash": "8410be0239df74980e61c4a552e28c1650d89c238d0bbca9a9aec15f180e1190",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "long",
+      "completeness": "complete",
+      "group_id": "media-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "media"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#media-opinion"
+      },
+      "material": {
+        "primary": "One long post; the following passage is repeated as a length stress fixture. Recommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\nRecommendation mechanisms affect the chance that news is seen; exposure alone cannot establish reporting accuracy.\n\n",
+        "context": [
+          {
+            "id": "unrelated-quote",
+            "role": "quoted",
+            "text": "Unrelated quotation: Software development uses source code. This quoted subject does not replace the primary post.",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 2279
+      }
+    },
+    {
+      "sample_id": "auto-product-opinion-0",
+      "source_hash": "89d1b95868c85b181340806cb80aa7a6b3d949619663f9c90916289ac8275693",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "product-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "product"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#product-opinion"
+      },
+      "material": {
+        "primary": "Single post. Feature count is not product value; whether users can finish their core task should guide feature decisions.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 121
+      }
+    },
+    {
+      "sample_id": "auto-product-opinion-1",
+      "source_hash": "c8ba51e5dcfd02acdeac2d8845a76197118c68f7fc93a426b15e964d85e708d3",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "product-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "product"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#product-opinion"
+      },
+      "material": {
+        "primary": "单条帖子。新增功能的数量不等于产品价值；用户能否完成核心任务才是功能取舍的依据。",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 40
+      }
+    },
+    {
+      "sample_id": "auto-product-opinion-2",
+      "source_hash": "533009c9e9274ffd42f8d89674636d57e8fc4b1917bf51cfe275d9162bcdad9d",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "product-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "product"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#product-opinion"
+      },
+      "material": {
+        "primary": "单条双语帖子。新增功能的数量不等于产品价值；用户能否完成核心任务才是功能取舍的依据。 English version: Feature count is not product value; whether users can finish their core task should guide feature decisions.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 168
+      }
+    },
+    {
+      "sample_id": "auto-product-opinion-3",
+      "source_hash": "d82b94a79cd07824bc3da1e810f89162368f0a0be2fa1d877ea05b7ca63deb80",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "external_article",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "product-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "product"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "external_article"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#product-opinion"
+      },
+      "material": {
+        "primary": "新增功能的数量不等于产品价值；用户能否完成核心任务才是功能取舍的依据。 这条摘要附有外部文章链接 https://example.invalid/article/product-opinion",
+        "context": [
+          {
+            "id": "article",
+            "role": "external_article",
+            "text": "Feature count is not product value; whether users can finish their core task should guide feature decisions.",
+            "url": "https://example.invalid/article/product-opinion",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 204
+      }
+    },
+    {
+      "sample_id": "auto-product-opinion-4",
+      "source_hash": "5a81afbb6c02088749e313169b938968a2ea3560f605c6640270bcb4667ce3f0",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "author_continuation",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "product-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "product"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "author_continuation"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#product-opinion"
+      },
+      "material": {
+        "primary": "Author thread, post 1/2. Feature count is not product value; whether users can finish their core task should guide feature decisions.",
+        "context": [
+          {
+            "id": "author-post-2",
+            "role": "author_continuation",
+            "text": "同一作者的第二条续帖，用中文重复前文：新增功能的数量不等于产品价值；用户能否完成核心任务才是功能取舍的依据。",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 187
+      }
+    },
+    {
+      "sample_id": "auto-product-opinion-5",
+      "source_hash": "aac3c560fc266cc64ad2d0c405abc9354a5fff07ada32aae6db01d9062c86ab9",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "long",
+      "completeness": "complete",
+      "group_id": "product-opinion",
+      "gold": {
+        "topics": {
+          "values": [
+            "product"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": null,
+          "unknown": true
+        },
+        "form": {
+          "values": [
+            "opinion"
+          ]
+        },
+        "use": {
+          "values": [
+            "quote",
+            "background"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#product-opinion"
+      },
+      "material": {
+        "primary": "One long post; the following passage is repeated as a length stress fixture. Feature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\nFeature count is not product value; whether users can finish their core task should guide feature decisions.\n\n",
+        "context": [
+          {
+            "id": "unrelated-quote",
+            "role": "quoted",
+            "text": "Unrelated quotation: Software development uses source code. This quoted subject does not replace the primary post.",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 2171
+      }
+    },
+    {
+      "sample_id": "auto-psych-method-0",
+      "source_hash": "eb7ef63d458db099850190e1ae9314685e923ad399d24499e14d61f8c3ebbfa2",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "psych-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "psych"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#psych-method"
+      },
+      "material": {
+        "primary": "Single post. Record the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 170
+      }
+    },
+    {
+      "sample_id": "auto-psych-method-1",
+      "source_hash": "2489639ab857d111facea7fd835c040f989181b23916c8eae8891fd4f0bd6cf2",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "psych-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "psych"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#psych-method"
+      },
+      "material": {
+        "primary": "单条帖子。记录情绪出现时的情境；区分观察到的事实与自动想法；比较不同情境下的认知解释。",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 43
+      }
+    },
+    {
+      "sample_id": "auto-psych-method-2",
+      "source_hash": "4d92ce69c8143031b9b9612fedca88f98cbbf4f352b63d30a40d784e3037e8ea",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "single",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "psych-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "psych"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#psych-method"
+      },
+      "material": {
+        "primary": "单条双语帖子。记录情绪出现时的情境；区分观察到的事实与自动想法；比较不同情境下的认知解释。 English version: Record the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.",
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 220
+      }
+    },
+    {
+      "sample_id": "auto-psych-method-3",
+      "source_hash": "3959436b76de32a14781ee01a1404dbb5e40050373a30a6362304607a5b379be",
+      "revision": 1,
+      "language": "zh",
+      "carrier": "external_article",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "psych-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "psych"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "external_article"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#psych-method"
+      },
+      "material": {
+        "primary": "记录情绪出现时的情境；区分观察到的事实与自动想法；比较不同情境下的认知解释。 这条摘要附有外部文章链接 https://example.invalid/article/psych-method",
+        "context": [
+          {
+            "id": "article",
+            "role": "external_article",
+            "text": "Record the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.",
+            "url": "https://example.invalid/article/psych-method",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 253
+      }
+    },
+    {
+      "sample_id": "auto-psych-method-4",
+      "source_hash": "e7decd68a6c8a037be0d2e2e5921742c4b770b6d485f18c2f9fda76f94801551",
+      "revision": 1,
+      "language": "mixed",
+      "carrier": "author_continuation",
+      "length_bucket": "short",
+      "completeness": "complete",
+      "group_id": "psych-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "psych"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "author_continuation"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#psych-method"
+      },
+      "material": {
+        "primary": "Author thread, post 1/2. Record the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.",
+        "context": [
+          {
+            "id": "author-post-2",
+            "role": "author_continuation",
+            "text": "同一作者的第二条续帖，用中文重复前文：记录情绪出现时的情境；区分观察到的事实与自动想法；比较不同情境下的认知解释。",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 239
+      }
+    },
+    {
+      "sample_id": "auto-psych-method-5",
+      "source_hash": "4bc436f2a5acaf765ba6ee807f8fbb51c9e036e3212a8666508239d6674c124e",
+      "revision": 1,
+      "language": "en",
+      "carrier": "single",
+      "length_bucket": "long",
+      "completeness": "complete",
+      "group_id": "psych-method",
+      "gold": {
+        "topics": {
+          "values": [
+            "psych"
+          ]
+        },
+        "content_functions": {
+          "values": [
+            "method"
+          ]
+        },
+        "carriers": {
+          "values": [
+            "single"
+          ]
+        },
+        "affordances": {
+          "values": [
+            "practice"
+          ]
+        },
+        "form": {
+          "values": [
+            "method"
+          ]
+        },
+        "use": {
+          "values": [
+            "try"
+          ]
+        }
+      },
+      "provenance": "automatic_reference",
+      "reference": {
+        "method": "authored_synthetic_scenario",
+        "version": "cairn-auto-reference-v1",
+        "basis": "Labels and acceptable choices are fixed by the scenario author before model evaluation. Unspecified functions/affordances and missing-image content remain unknown. No private user intent is inferred.",
+        "source": "scenarios.json#psych-method"
+      },
+      "material": {
+        "primary": "One long post; the following passage is repeated as a length stress fixture. Record the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\nRecord the situation in which an emotion occurs, distinguish observed facts from automatic thoughts, and compare cognitive interpretations across situations.\n\n",
+        "context": [
+          {
+            "id": "unrelated-quote",
+            "role": "quoted",
+            "text": "Unrelated quotation: Software development uses source code. This quoted subject does not replace the primary post.",
+            "acquired": "synthetic_fixture"
+          }
+        ],
+        "truncated": false,
+        "coverage": "complete",
+        "total_runes": 3053
+      }
+    }
+  ],
+  "predictions": null
+}

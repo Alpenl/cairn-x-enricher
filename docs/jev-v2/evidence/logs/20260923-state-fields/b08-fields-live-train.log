@@ -1,0 +1,51 @@
+sample=auto-design-opinion-0 phase=finished usage_known=true input_tokens=6257 elapsed_ms=844
+sample=auto-design-opinion-1 phase=finished usage_known=true input_tokens=6273 elapsed_ms=366
+sample=auto-design-opinion-2 phase=finished usage_known=true input_tokens=6298 elapsed_ms=366
+sample=auto-design-opinion-3 phase=finished usage_known=true input_tokens=6360 elapsed_ms=348
+sample=auto-design-opinion-4 phase=finished usage_known=true input_tokens=6357 elapsed_ms=389
+sample=auto-design-opinion-5 phase=finished usage_known=true input_tokens=6686 elapsed_ms=374
+sample=auto-eval-opinion-0 phase=finished usage_known=true input_tokens=6257 elapsed_ms=371
+sample=auto-eval-opinion-1 phase=finished usage_known=true input_tokens=6273 elapsed_ms=351
+sample=auto-eval-opinion-2 phase=finished usage_known=true input_tokens=6298 elapsed_ms=334
+sample=auto-eval-opinion-3 phase=finished usage_known=true input_tokens=6362 elapsed_ms=410
+sample=auto-eval-opinion-4 phase=finished usage_known=true input_tokens=6357 elapsed_ms=380
+sample=auto-eval-opinion-5 phase=finished usage_known=true input_tokens=6686 elapsed_ms=364
+sample=auto-health-method-0 phase=finished usage_known=true input_tokens=6268 elapsed_ms=346
+sample=auto-health-method-1 phase=finished usage_known=true input_tokens=6285 elapsed_ms=405
+sample=auto-health-method-2 phase=finished usage_known=true input_tokens=6321 elapsed_ms=314
+sample=auto-health-method-3 phase=finished usage_known=true input_tokens=6383 elapsed_ms=358
+sample=auto-health-method-4 phase=finished usage_known=true input_tokens=6380 elapsed_ms=437
+sample=auto-health-method-5 phase=finished usage_known=true input_tokens=6884 elapsed_ms=350
+sample=auto-incidental-ai-0 phase=finished usage_known=true input_tokens=6261 elapsed_ms=391
+sample=auto-incidental-ai-1 phase=finished usage_known=true input_tokens=6272 elapsed_ms=356
+sample=auto-incidental-ai-2 phase=finished usage_known=true input_tokens=6301 elapsed_ms=446
+sample=auto-incidental-ai-3 phase=finished usage_known=true input_tokens=6365 elapsed_ms=335
+sample=auto-incidental-ai-4 phase=finished usage_known=true input_tokens=6360 elapsed_ms=382
+sample=auto-incidental-ai-5 phase=finished usage_known=true input_tokens=6758 elapsed_ms=332
+sample=auto-invest-opinion-0 phase=finished usage_known=true input_tokens=6261 elapsed_ms=382
+sample=auto-invest-opinion-1 phase=finished usage_known=true input_tokens=6272 elapsed_ms=364
+sample=auto-invest-opinion-2 phase=finished usage_known=true input_tokens=6301 elapsed_ms=359
+sample=auto-invest-opinion-3 phase=finished usage_known=true input_tokens=6365 elapsed_ms=402
+sample=auto-invest-opinion-4 phase=finished usage_known=true input_tokens=6360 elapsed_ms=423
+sample=auto-invest-opinion-5 phase=finished usage_known=true input_tokens=6758 elapsed_ms=400
+sample=auto-law-opinion-0 phase=finished usage_known=true input_tokens=6262 elapsed_ms=446
+sample=auto-law-opinion-1 phase=finished usage_known=true input_tokens=6275 elapsed_ms=395
+sample=auto-law-opinion-2 phase=finished usage_known=true input_tokens=6305 elapsed_ms=362
+sample=auto-law-opinion-3 phase=finished usage_known=true input_tokens=6369 elapsed_ms=392
+sample=auto-law-opinion-4 phase=finished usage_known=true input_tokens=6364 elapsed_ms=313
+sample=auto-law-opinion-5 phase=finished usage_known=true input_tokens=6776 elapsed_ms=393
+sample=auto-product-method-0 phase=finished usage_known=true input_tokens=6261 elapsed_ms=407
+sample=auto-product-method-1 phase=finished usage_known=true input_tokens=6275 elapsed_ms=432
+sample=auto-product-method-2 phase=finished usage_known=true input_tokens=6304 elapsed_ms=397
+sample=auto-product-method-3 phase=finished usage_known=true input_tokens=6364 elapsed_ms=363
+sample=auto-product-method-4 phase=finished usage_known=true input_tokens=6363 elapsed_ms=345
+sample=auto-product-method-5 phase=finished usage_known=true input_tokens=6758 elapsed_ms=343
+{
+  "artifacts": "/home/alpen/.local/share/cairn/evaluations/20260923-reference-v1-state-fields-train",
+  "calls": 42,
+  "completed": true,
+  "input_tokens": 268295,
+  "reference_hash": "ea14264cbaabcedd13a328bfef6473cf31a18827ca0285b27c8047150370b414",
+  "reserved_input_tokens": 2752512,
+  "usage_missing_calls": 0
+}

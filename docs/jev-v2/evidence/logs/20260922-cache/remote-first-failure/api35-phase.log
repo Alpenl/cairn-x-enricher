@@ -1,0 +1,50 @@
+INSTRUMENTATION_STATUS: class=com.alpenl.cairn.share.CurationWorkerRecoveryTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.alpenl.cairn.share.CurationWorkerRecoveryTest:
+INSTRUMENTATION_STATUS: test=preserveAmbiguousLegacyAndSeparateSameSuffixAccounts
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.alpenl.cairn.share.CurationWorkerRecoveryTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stack=kotlinx.coroutines.TimeoutCancellationException: Timed out waiting for 20000 ms
+	at kotlinx.coroutines.TimeoutKt.TimeoutCancellationException(Timeout.kt:191)
+	at kotlinx.coroutines.TimeoutCoroutine.run(Timeout.kt:159)
+	at kotlinx.coroutines.EventLoopImplBase$DelayedRunnableTask.run(EventLoop.common.kt:501)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:280)
+	at kotlinx.coroutines.DefaultExecutor.run(DefaultExecutor.kt:109)
+	at java.lang.Thread.run(Thread.java:1012)
+
+INSTRUMENTATION_STATUS: stream=
+Error in preserveAmbiguousLegacyAndSeparateSameSuffixAccounts(com.alpenl.cairn.share.CurationWorkerRecoveryTest):
+kotlinx.coroutines.TimeoutCancellationException: Timed out waiting for 20000 ms
+	at kotlinx.coroutines.TimeoutKt.TimeoutCancellationException(Timeout.kt:191)
+	at kotlinx.coroutines.TimeoutCoroutine.run(Timeout.kt:159)
+	at kotlinx.coroutines.EventLoopImplBase$DelayedRunnableTask.run(EventLoop.common.kt:501)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:280)
+	at kotlinx.coroutines.DefaultExecutor.run(DefaultExecutor.kt:109)
+	at java.lang.Thread.run(Thread.java:1012)
+
+INSTRUMENTATION_STATUS: test=preserveAmbiguousLegacyAndSeparateSameSuffixAccounts
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 20.287
+There was 1 failure:
+1) preserveAmbiguousLegacyAndSeparateSameSuffixAccounts(com.alpenl.cairn.share.CurationWorkerRecoveryTest)
+kotlinx.coroutines.TimeoutCancellationException: Timed out waiting for 20000 ms
+	at kotlinx.coroutines.TimeoutKt.TimeoutCancellationException(Timeout.kt:191)
+	at kotlinx.coroutines.TimeoutCoroutine.run(Timeout.kt:159)
+	at kotlinx.coroutines.EventLoopImplBase$DelayedRunnableTask.run(EventLoop.common.kt:501)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:280)
+	at kotlinx.coroutines.DefaultExecutor.run(DefaultExecutor.kt:109)
+	at java.lang.Thread.run(Thread.java:1012)
+
+FAILURES!!!
+Tests run: 1,  Failures: 1
+
+
+INSTRUMENTATION_CODE: -1

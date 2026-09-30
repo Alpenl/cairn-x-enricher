@@ -1,0 +1,39 @@
+WHAT: 重跑真实快照跨服务场景
+WHY:  验证最终迁移与完整模型 fixture 下的恢复和错误拦截
+== TestLocalWorkerFullLifecycle: starting worker on 127.0.0.1:40285 ==
+=== RUN   TestLocalWorkerFullLifecycle
+--- PASS: TestLocalWorkerFullLifecycle (0.90s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.903s
+== TestLocalWorkerVersionCompetition: starting worker on 127.0.0.1:35213 ==
+=== RUN   TestLocalWorkerVersionCompetition
+--- PASS: TestLocalWorkerVersionCompetition (0.71s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.712s
+== TestLocalWorkerDisplayRenameKeepsSemantics: starting worker on 127.0.0.1:50059 ==
+=== RUN   TestLocalWorkerDisplayRenameKeepsSemantics
+--- PASS: TestLocalWorkerDisplayRenameKeepsSemantics (0.10s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	0.100s
+== TestLocalWorkerEvidenceCheckpointAndBoundRead: starting worker on 127.0.0.1:33799 ==
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead
+    evidence_test.go:122: source saved, snapshot 503, three empty claims without attempt consumption, retry repairs snapshot with one retrieval
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/404
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/503
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/malformed
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/id
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/revision
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/hash
+=== RUN   TestLocalWorkerEvidenceCheckpointAndBoundRead/body
+=== NAME  TestLocalWorkerEvidenceCheckpointAndBoundRead
+    evidence_test.go:210: seven bound-read failures: zero model calls/commits; recovery: 1 model call, 1 run
+--- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead (1.33s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/404 (0.11s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/503 (0.12s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/malformed (0.14s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/id (0.09s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/revision (0.11s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/hash (0.13s)
+    --- PASS: TestLocalWorkerEvidenceCheckpointAndBoundRead/body (0.09s)
+PASS
+ok  	github.com/Alpenl/cairn-x-enricher/tests/localintegration	1.329s
