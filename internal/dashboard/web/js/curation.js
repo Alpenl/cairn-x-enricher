@@ -86,6 +86,37 @@ function setSaveState(session, value, { error = false } = {}) {
   els.saveState.textContent = value;
   els.saveState.classList.toggle("error", error);
   els.saveState.classList.toggle("saving", value === "保存中…");
+  renderSummary();
+}
+
+// The closed panel shows only saved/effective information. Suggestions and
+// editor controls stay inside the native disclosure.
+function renderSummary() {
+  const session = sessions.get(currentId);
+  if (!session || !els.summaryTags) return;
+  const item = getItem(currentId);
+  const modern = tagSystem.tagSystemOverview(currentId);
+  const selection = modern?.selection || (session.v2.status === "ready" ? session.v2.selection : session.v1.selection) || item?.classification || {};
+  const tags = (selection.topics || []).map((term) => termLabel("topics", term))
+    .concat((selection.resource_kinds || []).map((term) => termLabel("resource_kinds", term)))
+    .concat((modern?.custom_tags || item?.custom_tags || []).map((tag) => tag.label));
+  els.summaryTags.replaceChildren(...tags.slice(0, 2).map((label) => h("span.tag.curate-summary-tag", label)),
+    ...(tags.length > 2 ? [h("span.tag.curate-summary-more", `+${tags.length - 2}`)] : []));
+  els.summaryTags.hidden = !tags.length;
+  const why = (session.why.dirty || session.why.saving ? session.why.draft : item?.why || "") || "";
+  els.summaryWhy.textContent = why.replace(/\s+/g, " ").trim();
+  els.summaryWhy.title = why;
+  els.summaryWhy.hidden = !why.trim();
+  const status = modern?.blocked ? "有修改待处理" : session.saveError ? "保存失败" : session.why.dirty || session.v1.dirty ? "未保存" : "";
+  els.summaryState.textContent = status;
+  els.summaryState.hidden = !status;
+}
+
+function openPanel() {
+  if (!currentId || els.section.hidden) return false;
+  els.section.open = true;
+  autoGrow();
+  return true;
 }
 
 // --- Reason (why) -----------------------------------------------------------------
@@ -152,6 +183,7 @@ function autoGrow() {
 }
 
 export function focusWhy() {
+  if (!openPanel()) return;
   els.why.focus();
   els.why.setSelectionRange(els.why.value.length, els.why.value.length);
 }
@@ -572,8 +604,8 @@ function renderV2Rows(session, item) {
     rows.push(row(dimension.key, dimension.label, field, { id: `v2-${dimension.key}` }));
   }
   const topics = selection.topics || [];
-  if (topics.length > 3) {
-    rows.push(h("p.curate-note#v2-folded-note", `列表卡片只展示前 3 个主题；另外 ${topics.length - 3} 个仍然保留。`));
+  if (topics.length > 2) {
+    rows.push(h("p.curate-note#v2-folded-note", "列表卡片最多展示 2 个标签；其余标签仍然保留。"));
   }
   return rows;
 }
@@ -662,7 +694,8 @@ function renderFoot(session, item, compact = false) {
 function captureFocus() {
   const active = document.activeElement;
   if (!active || !els.tags.contains(active)) return null;
-  return { field: active.dataset.field, term: active.dataset.term, action: active.dataset.action, edit: active.dataset.edit, id: active.id };
+  return { field: active.dataset.field, term: active.dataset.term, action: active.dataset.action, edit: active.dataset.edit, id: active.id,
+    value: active instanceof HTMLInputElement ? active.value : undefined, start: active.selectionStart, end: active.selectionEnd };
 }
 
 function restoreFocus(saved) {
@@ -673,6 +706,10 @@ function restoreFocus(saved) {
   else if (saved.field) {
     target = [...els.tags.querySelectorAll(`[data-field="${saved.field}"]`)].find((node) => node.dataset.term === saved.term)
       || els.tags.querySelector(`[data-edit="${saved.field}"]`);
+  }
+  if (target && saved.value !== undefined) {
+    target.value = saved.value;
+    target.setSelectionRange(saved.start, saved.end);
   }
   target?.focus({ preventScroll: true });
 }
@@ -687,7 +724,7 @@ function hasAnyTags(session, item, mode) {
 }
 
 export function renderTags() {
-  if (tagSystem.renderTagSystem(currentId)) return;
+  if (tagSystem.renderTagSystem(currentId)) { renderSummary(); return; }
   const session = sessions.get(currentId);
   if (!session) return;
   const item = getItem(currentId);
@@ -709,6 +746,7 @@ export function renderTags() {
   els.tags.replaceChildren(...rows);
   renderFoot(session, item, compact);
   restoreFocus(saved);
+  renderSummary();
 }
 
 function renderWhy(session, item, { switched = false } = {}) {
@@ -725,6 +763,7 @@ function renderWhy(session, item, { switched = false } = {}) {
   els.suggestionBlock.hidden = !suggestion || els.why.value.trim() === suggestion.trim();
   renderWhyCounter();
   autoGrow();
+  renderSummary();
 }
 
 // show renders the curation card for a bookmark and starts its reads. A deep
@@ -734,6 +773,7 @@ export function show(id) {
   const switched = currentId !== id;
   if (currentId && switched) flushPending(currentId);
   currentId = id;
+  if (switched) els.section.open = false;
   tagSystem.showTagSystem(id);
   pruneSessions();
   const session = sessionFor(id);
@@ -748,6 +788,7 @@ export function show(id) {
   } else if (switched) {
     els.why.value = session.why.draft ?? "";
   }
+  renderSummary();
   // Remote reads wait a beat so skimming past a bookmark costs nothing.
   clearTimeout(remoteTimer);
   remoteTimer = setTimeout(() => {
@@ -786,6 +827,7 @@ export function reloadRemote(id) {
 }
 
 export function toggleEditingAll() {
+  if (!openPanel()) return;
   if (tagSystem.editTagSystem(currentId)) return;
   const session = sessions.get(currentId);
   if (!session) return;
@@ -807,12 +849,15 @@ export function initCuration() {
     if (secondary.length) els.tags.append(h("details.tag-secondary", h("summary", "更多内容属性与实体"), ...secondary));
   });
   on("tag-system:fallback", (id) => { if (id === currentId) renderTags(); });
+  on("tag-system:render", (id) => { if (id === currentId) renderSummary(); });
   Object.assign(els, {
     section: byId("curate"), fields: byId("curate-fields"), why: byId("curation-why"), whyCount: byId("why-count"),
     suggestion: byId("why-suggestion"), suggestionBlock: byId("why-suggestion-block"), useSuggestion: byId("use-suggestion"),
     tags: byId("tag-rows"), review: byId("review-state"), confirm: byId("confirm-classification"),
-    reset: byId("reset-classification"), saveState: byId("save-state"), conflict: byId("v2-conflict")
+    reset: byId("reset-classification"), saveState: byId("save-state"), conflict: byId("v2-conflict"),
+    summaryTags: byId("curate-summary-tags"), summaryWhy: byId("curate-summary-why"), summaryState: byId("curate-summary-state")
   });
+  els.section.addEventListener("toggle", () => { if (els.section.open) autoGrow(); });
 
   els.why.addEventListener("input", () => {
     const session = sessionFor(currentId);
