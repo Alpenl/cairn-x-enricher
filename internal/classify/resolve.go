@@ -39,6 +39,7 @@ type Override struct {
 // one (F11).
 type EffectiveView struct {
 	Topics           []string `json:"topics"`
+	ResourceKinds    []string `json:"resource_kinds"`
 	ContentFunctions []string `json:"content_functions"`
 	Carriers         []string `json:"carriers"`
 	Affordances      []string `json:"affordances"`
@@ -49,6 +50,7 @@ type EffectiveView struct {
 	// different from having no decision at all.
 	Empty struct {
 		Topics           bool `json:"topics"`
+		ResourceKinds    bool `json:"resource_kinds"`
 		ContentFunctions bool `json:"content_functions"`
 		Carriers         bool `json:"carriers"`
 		Affordances      bool `json:"affordances"`
@@ -61,7 +63,7 @@ type EffectiveView struct {
 // effectiveFields are the field names shared with the Worker. The list is the
 // single source of truth for the dimension set so Go and TypeScript cannot
 // drift into "topic" vs "topics" style incompatibilities (F04).
-var effectiveFields = []string{"topics", "content_functions", "carriers", "affordances", "form", "use"}
+var effectiveFields = []string{"topics", "resource_kinds", "content_functions", "carriers", "affordances", "form", "use"}
 
 // OverrideVector is one shared, vocabulary-independent override action.
 type OverrideVector struct {
@@ -254,6 +256,7 @@ func Resolve(proposals Proposals, overrides []Override) EffectiveView {
 	}
 	view := EffectiveView{
 		Topics:           states["topics"].resolveMulti(proposals.Topics),
+		ResourceKinds:    states["resource_kinds"].resolveMulti(proposals.ResourceKinds),
 		ContentFunctions: states["content_functions"].resolveMulti(proposals.ContentFunctions),
 		// Carrier is single-valued: an accept replaces the automatic carrier.
 		Carriers:    resolveCarrier(proposals.Carriers, states["carriers"]),
@@ -269,6 +272,7 @@ func Resolve(proposals Proposals, overrides []Override) EffectiveView {
 		}
 	}
 	view.Empty.Topics = states["topics"].resolvedEmpty()
+	view.Empty.ResourceKinds = states["resource_kinds"].resolvedEmpty()
 	view.Empty.ContentFunctions = states["content_functions"].resolvedEmpty()
 	view.Empty.Carriers = states["carriers"].resolvedEmpty()
 	view.Empty.Affordances = states["affordances"].resolvedEmpty()
@@ -287,6 +291,8 @@ func normalizeField(field string) string {
 		return "entities"
 	case "content_function":
 		return "content_functions"
+	case "resource_kind":
+		return "resource_kinds"
 	case "carrier":
 		return "carriers"
 	case "affordance":
@@ -331,6 +337,19 @@ func diffProposals(before, after Proposals) []string {
 	changes := []string{}
 	if !equalStrings(before.Topics, after.Topics) {
 		changes = append(changes, "topics")
+	}
+	for _, dimension := range []struct {
+		name          string
+		before, after []string
+	}{
+		{"resource_kinds", before.ResourceKinds, after.ResourceKinds},
+		{"content_functions", before.ContentFunctions, after.ContentFunctions},
+		{"carriers", before.Carriers, after.Carriers},
+		{"affordances", before.Affordances, after.Affordances},
+	} {
+		if !equalStrings(dimension.before, dimension.after) {
+			changes = append(changes, dimension.name)
+		}
 	}
 	if before.Form != after.Form {
 		changes = append(changes, "form")

@@ -16,6 +16,7 @@ import (
 // dimensions are additive, so a v1-only Worker simply does not return them.
 type V2Selection struct {
 	Topics           []string `json:"topics"`
+	ResourceKinds    []string `json:"resource_kinds,omitempty"`
 	ContentFunctions []string `json:"content_functions"`
 	Carriers         []string `json:"carriers"`
 	Affordances      []string `json:"affordances"`
@@ -163,14 +164,17 @@ func (c *Client) GetV2Catalog(ctx context.Context) (taxonomy.Catalog, error) {
 				ID: term.ID, Label: term.Label, Description: term.Description,
 				Aliases: term.Aliases, Active: term.Active && !term.Deprecated,
 				Includes: term.Includes, Excludes: term.Excludes,
+				DefinitionVersion: term.DefinitionVersion, DisplayRevision: term.DisplayRevision, Status: term.Status,
 			})
 		}
 		return out
 	}
 	catalog := taxonomy.Catalog{
 		Version: vocabulary.Version, Topics: convert(vocabulary.Topics),
-		Forms: convert(vocabulary.Forms), Uses: convert(vocabulary.Uses),
+		DefinitionVersion: vocabulary.DefinitionVersion,
+		Forms:             convert(vocabulary.Forms), Uses: convert(vocabulary.Uses),
 		ContentFunctions: convert(vocabulary.ContentFunctions),
+		ResourceKinds:    convert(vocabulary.ResourceKinds),
 		Carriers:         convert(vocabulary.Carriers),
 		Affordances:      convert(vocabulary.Affordances),
 	}
@@ -189,24 +193,37 @@ type V2Taxonomy struct {
 	Forms             []TaxonomyTerm `json:"forms"`
 	Uses              []TaxonomyTerm `json:"uses"`
 	ContentFunctions  []TaxonomyTerm `json:"content_functions"`
+	ResourceKinds     []TaxonomyTerm `json:"resource_kinds,omitempty"`
 	Carriers          []TaxonomyTerm `json:"carriers"`
 	Affordances       []TaxonomyTerm `json:"affordances"`
 }
 
 // TaxonomyTerm is one vocabulary entry in the v2 shape.
 type TaxonomyTerm struct {
-	ID          string   `json:"id"`
-	Label       string   `json:"label"`
-	Active      bool     `json:"active"`
-	Deprecated  bool     `json:"deprecated,omitempty"`
-	Aliases     []string `json:"aliases"`
-	Description string   `json:"description,omitempty"`
-	Includes    []string `json:"includes,omitempty"`
-	Excludes    []string `json:"excludes,omitempty"`
+	DefinitionVersion int                    `json:"definition_version,omitempty"`
+	DisplayRevision   int                    `json:"display_revision,omitempty"`
+	Status            string                 `json:"status,omitempty"`
+	ID                string                 `json:"id"`
+	Label             string                 `json:"label"`
+	Active            bool                   `json:"active"`
+	Deprecated        bool                   `json:"deprecated,omitempty"`
+	Aliases           []string               `json:"aliases"`
+	Description       string                 `json:"description,omitempty"`
+	Includes          []string               `json:"includes,omitempty"`
+	Excludes          []string               `json:"excludes,omitempty"`
+	Relations         []TaxonomyTermRelation `json:"relations,omitempty"`
+	Facet             bool                   `json:"facet,omitempty"`
 	// DisplayOverridden marks a label that was changed by an approved
 	// display-only proposal. It is display metadata: it must never influence the
 	// semantic question or the spec hash (R2-10).
 	DisplayOverridden bool `json:"display_overridden,omitempty"`
+}
+
+// TaxonomyTermRelation is catalog metadata. It does not silently map an old
+// human tag to a new term or alter the provider-facing definition.
+type TaxonomyTermRelation struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
 }
 
 // GetV2Taxonomy loads the multidimensional vocabulary.

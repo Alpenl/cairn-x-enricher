@@ -347,6 +347,34 @@ equal("errorLabel unknown is shown verbatim", errorLabel("brand_new_code"), "bra
   } finally { globalThis.fetch = originalFetch; }
 }
 
+// --- Stable tag identity and incremental draft semantics ----------------------------
+const tags = await load("tag-state.js");
+{
+  const state = { selection: { topics: ["image_creation", "ai_coding"], resource_kinds: ["skill"] },
+    automatic: { topics: ["image_creation", "ai_coding"], resource_kinds: ["skill", "prompt"] },
+    custom_tags: [], state: { fields: { topics: { values: [{term:"image_creation", origin:"automatic"}, {term:"ai_coding",origin:"automatic"}],
+      candidates:[{term_id:"video_creation",verdict:"abstained"},{term_id:"writing_creation",verdict:"rejected"}] } } } };
+  const removed = tags.previewTagActions(state, [{action:"reject",tag_ref:"system/topics/ai_coding"}]);
+  equal("single removal preserves untouched labels", removed.selection.topics, ["image_creation"]);
+  equal("single removal does not confirm untouched AI labels", tags.tagOrigin(removed,"topics","image_creation"), "自动标签");
+  equal("only boundary candidates are optional suggestions", tags.reviewCandidates(state,"topics").map((entry)=>entry.term_id), ["video_creation"]);
+  const adopted = tags.previewTagActions(removed,[{action:"accept",tag_ref:"system/topics/video_creation"}]);
+  equal("manual adoption stays distinct from confirmation",tags.tagOrigin(adopted,"topics","video_creation"),"你添加");
+  const confirmed = tags.previewTagActions(adopted,[{action:"confirm",tag_ref:"system/topics/image_creation"}]);
+  equal("explicit confirmation has per-tag identity",tags.tagOrigin(confirmed,"topics","image_creation"),"你已确认");
+  const cleared = tags.previewTagActions(state,[{action:"set_empty",dimension:"resource_kinds"}]);
+  const readmitted = tags.previewTagActions(cleared,[{action:"reset",tag_ref:"system/resource_kinds/skill"}]);
+  equal("single reset readmits only its term under a group clear",readmitted.selection.resource_kinds,["skill"]);
+  equal("single reset keeps automatic additions closed",tags.tagStatusText(readmitted,"resource_kinds"),"已关闭本组自动新增");
+  equal("group restore uses the latest automatic result",tags.previewTagActions(readmitted,[{action:"reset_group",dimension:"resource_kinds"}]).selection.resource_kinds,["skill","prompt"]);
+  equal("normalization detects explicit prompt alias",tags.findTagName("  ＰＲＯＭＰＴ  ",[{id:"prompt",label:"提示词",aliases:["Prompt"]}]).id,"prompt");
+  equal("similar project mark is not silently merged",tags.findTagName("我的图片项目",[{id:"image_creation",label:"图像生成"}]),undefined);
+  equal("identity stays scoped to dimension",tags.parseTagRef("system/resource_kinds/skill"),{field:"resource_kinds",term:"skill"});
+  const tagFilters = query.toggleValue(query.emptyFilters(),"resource_kinds","skill");
+  const withCustom = query.toggleValue(tagFilters,"custom_tags","123e4567-e89b-12d3-a456-426614174000");
+  equal("resource and custom filters survive URL navigation",query.parseQuery(query.buildQuery(withCustom,"" )).filters.resource_kinds,"skill");
+}
+
 // --- Markdown export ---------------------------------------------------------------------
 
 const { buildMarkdown } = await load("export.js");

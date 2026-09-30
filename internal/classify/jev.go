@@ -42,6 +42,7 @@ type Input struct {
 // effective view without trusting a caller-supplied `effective` object.
 type AutomaticView struct {
 	Topics           []string    `json:"topics"`
+	ResourceKinds    []string    `json:"resource_kinds"`
 	ContentFunctions []string    `json:"content_functions"`
 	Carriers         []string    `json:"carriers"`
 	Affordances      []string    `json:"affordances"`
@@ -64,6 +65,7 @@ type Assessment struct {
 func AutomaticFromProposals(proposals Proposals) AutomaticView {
 	view := AutomaticView{
 		Topics:           append([]string{}, proposals.Topics...),
+		ResourceKinds:    append([]string{}, proposals.ResourceKinds...),
 		ContentFunctions: append([]string{}, proposals.ContentFunctions...),
 		Carriers:         append([]string{}, proposals.Carriers...),
 		Affordances:      append([]string{}, proposals.Affordances...),

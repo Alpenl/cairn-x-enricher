@@ -183,6 +183,7 @@ type Proposals struct {
 	SpecID           string             `json:"spec_id"`
 	Decisions        []FieldDecision    `json:"decisions"`
 	Topics           []string           `json:"topics"`
+	ResourceKinds    []string           `json:"resource_kinds"`
 	ContentFunctions []string           `json:"content_functions"`
 	Carriers         []string           `json:"carriers"`
 	Affordances      []string           `json:"affordances"`
@@ -238,9 +239,13 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 				candidatesByDimension[dimension] = append(candidatesByDimension[dimension],
 					candidate{term: judgment.TermID, p: p})
 			case p <= policy.TopicReject:
+				reason := "evidence is present but the topic is not substantively discussed"
+				if dimension == "resource_kinds" {
+					reason = "evidence is present but does not establish this reusable resource"
+				}
 				proposals.Decisions = append(proposals.Decisions, FieldDecision{
 					Dimension: dimension, TermID: judgment.TermID, Verdict: VerdictRejected,
-					Reason: "evidence is present but the topic is not substantively discussed", Probability: p,
+					Reason: reason, Probability: p,
 				})
 			default:
 				// A single ambiguous candidate abstains locally and does not
@@ -327,6 +332,7 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 		name   string
 		target *[]string
 	}{
+		{"resource_kinds", &proposals.ResourceKinds},
 		{"content_functions", &proposals.ContentFunctions},
 		{"affordances", &proposals.Affordances},
 	}

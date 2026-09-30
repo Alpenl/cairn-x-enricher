@@ -151,7 +151,7 @@ func CompileSpec(catalog taxonomy.Catalog, scoreEnabled bool) (QuestionSpec, err
 	if err := catalog.Validate(); err != nil {
 		return QuestionSpec{}, err
 	}
-	questions := make([]Question, 0, len(catalog.Topics)+len(catalog.Forms)+len(catalog.Uses))
+	questions := make([]Question, 0, len(catalog.Topics)+len(catalog.ResourceKinds)+len(catalog.Forms)+len(catalog.Uses))
 	// Topics are independent Noul judgments: whether a topic is substantively
 	// discussed does not depend on the answer to another topic.
 	for _, term := range catalog.Topics {
@@ -165,6 +165,23 @@ func CompileSpec(catalog taxonomy.Catalog, scoreEnabled bool) (QuestionSpec, err
 			Criteria: mustJSON(map[string]string{
 				"true":  "主题是原帖主要讨论对象之一，有实质信息、论点、方法或案例。",
 				"false": "未讨论此主题，或仅偶然提及、仅在评论出现。",
+			}),
+		})
+	}
+	// Resource kinds identify reusable resources, independently of subject,
+	// carrier and content function. A Skill can also ship software or a model;
+	// there is deliberately no competing single-choice winner.
+	for _, term := range catalog.ResourceKinds {
+		if !term.Active {
+			continue
+		}
+		questions = append(questions, Question{
+			ID: "resource_kind_" + term.ID, Kind: QuestionNoul, Dimension: "resource_kinds", TermID: term.ID,
+			Instructions: mustJSON(materialRule + "原帖是否明确介绍或提供以下可复用资源：" + semanticDescription(term) +
+				"？根据材料中的资源本身判断，不因文章值得参考、出现项目名或只有链接就自动归入。"),
+			Criteria: mustJSON(map[string]string{
+				"true":  "原帖明确介绍或提供符合定义的可复用资源；不要求已安装或外链目前仍可用。",
+				"false": "没有明确资源，或仅偶然提及、仅在评论出现、缺少可判断证据。",
 			}),
 		})
 	}

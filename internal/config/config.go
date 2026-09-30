@@ -172,13 +172,13 @@ func splitCSV(value string) []string {
 
 func (c *Config) readNumbers() error {
 	var err error
-	if c.ClassificationMaxCalls, err = intValue("CAIRN_CLASSIFICATION_MAX_CALLS", 20, 1, 20); err != nil {
+	if c.ClassificationMaxCalls, err = intValue("CAIRN_CLASSIFICATION_MAX_CALLS", 20, 1, 200); err != nil {
 		return err
 	}
 	if c.ClassificationMaxCallsPerItem, err = intValue("CAIRN_CLASSIFICATION_MAX_CALLS_PER_ITEM", 5, 1, 5); err != nil {
 		return err
 	}
-	if c.ClassificationMaxInputTokens, err = intValue("CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS", 20*65536, 1, 20*65536); err != nil {
+	if c.ClassificationMaxInputTokens, err = intValue("CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS", 20*65536, 1, 200*65536); err != nil {
 		return err
 	}
 	if c.ClassificationMaxInputTokensPerItem, err = intValue("CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS_PER_ITEM", 5*65536, 1, 5*65536); err != nil {

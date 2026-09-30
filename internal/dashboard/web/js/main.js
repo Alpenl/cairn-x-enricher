@@ -16,7 +16,7 @@ import {
 import { initShortcuts, showHelp } from "./shortcuts.js";
 import * as sidebar from "./sidebar.js";
 import { emit, getItem, mergeItem, on, state } from "./store.js";
-import { ENTITY_STATES, loadV1, loadV2 } from "./taxonomy.js";
+import { ENTITY_STATES, loadV1, loadV2, vocab } from "./taxonomy.js";
 import { initTheme } from "./theme.js";
 import { confirmAction, openMenu, runLastToastAction, toast } from "./ui.js";
 
@@ -400,7 +400,7 @@ async function setStatuses(ids, status, { advance = true } = {}) {
 async function confirmOne(id) {
   const item = getItem(id);
   if (!item) return;
-  if (item.classification_reviewed) {
+  if (item.classification_reviewed && !vocab.tagSystemAvailable) {
     toast("这条的标签已经确认过了");
     return;
   }
@@ -409,7 +409,7 @@ async function confirmOne(id) {
   } catch {
     return;
   }
-  toast("已确认 AI 标签", { tone: "ok" });
+  if (!vocab.tagSystemAvailable) toast("已确认 AI 标签", { tone: "ok" });
   scheduleOverview();
   const updated = getItem(id);
   if (state.order.includes(id) && !matchesStatusView(updated, state.filters)) {
@@ -422,7 +422,7 @@ async function confirmOne(id) {
 async function confirmMany(ids) {
   const candidates = ids.filter((id) => {
     const item = getItem(id);
-    return item && !item.classification_reviewed && (item.classification?.topics?.length || item.classification?.form || item.classification?.use);
+    return item && (vocab.tagSystemAvailable || !item.classification_reviewed) && (item.classification?.topics?.length || item.classification?.resource_kinds?.length || item.classification?.form || item.classification?.use);
   });
   if (!candidates.length) {
     toast("所选收藏没有待确认的 AI 标签");
@@ -615,6 +615,8 @@ async function boot() {
   });
   wireSearch();
 
+  on("tags:changed", () => { scheduleOverview(); list.reload({ silent: true }); });
+  on("tag-filter-request", ({ field, term }) => setFilters(toggleValue(state.filters, field, term)));
   on("confirm-request", (id) => confirmOne(id));
   on("select-request", (id) => select(id));
   on("list:loaded", ({ silent } = {}) => {

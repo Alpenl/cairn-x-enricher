@@ -2,9 +2,11 @@
 // multidimensional v2 vocabulary is optional and its absence switches the UI
 // to the v1 editor and hides filters the backend cannot evaluate.
 import { api } from "./api.js";
+import { emit } from "./store.js";
 
 export const V2_DIMENSIONS = Object.freeze([
   { key: "topics", label: "主题", multi: true, max: 64 },
+  { key: "resource_kinds", label: "资源类型", multi: true, max: 64, optional: true },
   { key: "content_functions", label: "内容功能", multi: true, max: 8 },
   { key: "carriers", label: "载体", multi: false, max: 1 },
   { key: "affordances", label: "潜在用途", multi: true, max: 8 }
@@ -25,6 +27,8 @@ export const ENTITY_STATES = Object.freeze([
 ]);
 
 export const vocab = {
+  custom: [],
+  tagSystemAvailable: null,
   v1: null,
   v2: null,
   v2Available: null,
@@ -48,10 +52,11 @@ export async function loadV2() {
   try {
     const catalog = await api.taxonomyV2();
     const valid = catalog && catalog.available !== false
-      && V2_DIMENSIONS.every(({ key }) => Array.isArray(catalog[key]));
+      && V2_DIMENSIONS.every(({ key, optional }) => optional || Array.isArray(catalog[key]));
     vocab.v2Available = Boolean(valid);
     if (!valid) return null;
     vocab.v2 = catalog;
+    if (Array.isArray(catalog.resource_kinds)) loadCustomTags().then(() => emit("taxonomy")).catch(() => {});
     for (const { key } of V2_DIMENSIONS) index(key, catalog[key]);
     return catalog;
   } catch (error) {
@@ -75,9 +80,22 @@ export function termActive(dimension, id) {
 }
 
 export function terms(dimension) {
+  if (dimension === "custom_tags") return vocab.custom;
   if (dimension === "form") return vocab.v1?.forms || [];
   if (dimension === "use") return vocab.v1?.uses || [];
   if (V2_DIMENSIONS.some(({ key }) => key === dimension) && vocab.v2) return vocab.v2[dimension] || [];
   if (dimension === "topics") return vocab.v1?.topics || [];
   return [];
+}
+
+export async function loadCustomTags() {
+  const payload = await api.customTags();
+  if (payload.available === false) return [];
+  vocab.custom = (payload.tags || []).map((tag) => ({ ...tag, active: tag.status !== "archived" && tag.status !== "inactive" }));
+  index("custom_tags", vocab.custom);
+  return vocab.custom;
+}
+
+export function visibleDimensions() {
+  return V2_DIMENSIONS.filter(({ key, optional }) => !optional || Array.isArray(vocab.v2?.[key]));
 }

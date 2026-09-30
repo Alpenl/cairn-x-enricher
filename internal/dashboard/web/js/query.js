@@ -2,14 +2,14 @@
 // what the list shows, so every view, filter and search is linkable and the
 // browser history restores it. Pure module: no DOM access.
 
-export const MULTI_KEYS = Object.freeze(["topics", "content_functions", "carriers", "affordances", "entity_state"]);
-export const SINGLE_KEYS = Object.freeze(["curation_status", "form", "use", "source", "since", "uncertain"]);
+export const MULTI_KEYS = Object.freeze(["topics", "resource_kinds", "custom_tags", "content_functions", "carriers", "affordances", "entity_state"]);
+export const SINGLE_KEYS = Object.freeze(["topics_mode", "resource_mode", "custom_mode", "curation_status", "form", "use", "source", "since", "uncertain"]);
 export const FILTER_KEYS = Object.freeze([...SINGLE_KEYS, ...MULTI_KEYS]);
 
 // Dimensions whose values only the multidimensional (v2) Worker can evaluate.
 // Sending them requires the explicit filter contract so an old backend fails
 // loudly instead of silently ignoring a condition.
-const CONTRACT_KEYS = Object.freeze([...MULTI_KEYS, "form", "use"]);
+const CONTRACT_KEYS = Object.freeze([...MULTI_KEYS, "topics_mode", "resource_mode", "custom_mode", "form", "use"]);
 
 export const VIEWS = Object.freeze([
   { id: "inbox", label: "收件箱", icon: "inbox", key: "g i" },

@@ -18,14 +18,22 @@ type CallBudgetLimits struct {
 	MaxTokensPerItem int `json:"max_tokens_per_item"`
 }
 
-// DefaultCallBudgetLimits is the server-enforced maximum; clients may tighten.
+// DefaultCallBudgetLimits keeps daily processing at the ordinary 20-call bound.
+// A bounded, explicitly configured backfill can request more only when the
+// deployment's server ceiling allows it; persistent admission remains required.
 func DefaultCallBudgetLimits() CallBudgetLimits {
 	return CallBudgetLimits{20, 5, 20 * 65536, 5 * 65536}
 }
 
+// MaximumCallBudgetLimits is the hard implementation limit, not a grant. The
+// Worker independently applies the deployment ceiling and the existing ledger.
+func MaximumCallBudgetLimits() CallBudgetLimits {
+	return CallBudgetLimits{200, 5, 200 * 65536, 5 * 65536}
+}
+
 // Validate prevents caller-owned settings from widening the server ceiling.
 func (b CallBudgetLimits) Validate() error {
-	ceiling := DefaultCallBudgetLimits()
+	ceiling := MaximumCallBudgetLimits()
 	if b.MaxCallsTotal < 1 || b.MaxCallsTotal > ceiling.MaxCallsTotal || b.MaxCallsPerItem < 1 || b.MaxCallsPerItem > ceiling.MaxCallsPerItem || b.MaxTokens < 1 || b.MaxTokens > ceiling.MaxTokens || b.MaxTokensPerItem < 1 || b.MaxTokensPerItem > ceiling.MaxTokensPerItem {
 		return errors.New("classification budget exceeds server limits")
 	}

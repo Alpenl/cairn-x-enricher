@@ -225,7 +225,7 @@ func TestClassificationBudgetConfiguration(t *testing.T) {
 	if cfg.TypesafeModel != "jev-1.13.0" || cfg.ClassificationMaxCalls != 20 || cfg.ClassificationMaxCallsPerItem != 5 || cfg.ClassificationMaxInputTokens != 20*65536 || cfg.ClassificationMaxInputTokensPerItem != 5*65536 {
 		t.Fatalf("defaults %+v", cfg)
 	}
-	for _, pair := range [][2]string{{"CAIRN_CLASSIFICATION_MAX_CALLS", "21"}, {"CAIRN_CLASSIFICATION_MAX_CALLS_PER_ITEM", "6"}, {"CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS", "0"}, {"CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS_PER_ITEM", "327681"}, {"TYPESAFE_MODEL", "jev-latest"}} {
+	for _, pair := range [][2]string{{"CAIRN_CLASSIFICATION_MAX_CALLS", "201"}, {"CAIRN_CLASSIFICATION_MAX_CALLS_PER_ITEM", "6"}, {"CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS", "0"}, {"CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS_PER_ITEM", "327681"}, {"TYPESAFE_MODEL", "jev-latest"}} {
 		t.Run(pair[0], func(t *testing.T) {
 			t.Setenv(pair[0], pair[1])
 			if _, err := LoadFor(RoleClassify); err == nil {
@@ -233,6 +233,15 @@ func TestClassificationBudgetConfiguration(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("explicit bulk allowance", func(t *testing.T) {
+		t.Setenv("CAIRN_CLASSIFICATION_MAX_CALLS", "60")
+		t.Setenv("CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS", "3932160")
+		bulk, loadErr := LoadFor(RoleClassify)
+		if loadErr != nil || bulk.ClassificationMaxCalls != 60 || bulk.ClassificationMaxInputTokens != 60*65536 {
+			t.Fatalf("bulk allowance %v %+v", loadErr, bulk)
+		}
+	})
 	t.Setenv("CAIRN_CLASSIFICATION_MAX_CALLS", "1")
 	t.Setenv("CAIRN_CLASSIFICATION_MAX_INPUT_TOKENS", "1")
 	cfg, err = LoadFor(RoleClassify)

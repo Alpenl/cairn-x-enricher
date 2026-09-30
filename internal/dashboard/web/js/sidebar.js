@@ -1,9 +1,10 @@
 // Navigation: library views with live counts, facet filters and the service
 // status line. On narrower screens the same element becomes a drawer.
+import { api } from "./api.js";
 import { byId, clear, h } from "./dom.js";
 import { icon } from "./icons.js";
 import {
-  activeView, dateInputFromSince, sinceDaysAgo, sinceFromDateInput, sinceLabel, splitList, VIEWS
+  apiParams, activeView, dateInputFromSince, sinceDaysAgo, sinceFromDateInput, sinceLabel, splitList, VIEWS
 } from "./query.js";
 import { on, state } from "./store.js";
 import { ENTITY_STATES, V2_DIMENSIONS, vocab } from "./taxonomy.js";
@@ -11,7 +12,10 @@ import { ENTITY_STATES, V2_DIMENSIONS, vocab } from "./taxonomy.js";
 const OPEN_KEY = "cairn.facets.open";
 const els = {};
 let hooks = {};
-let openGroups = new Set(["topics", "content_functions"]);
+let openGroups = new Set(["topics", "resource_kinds"]);
+let countsSignature = "";
+let tagCounts = {};
+let countsEpoch = 0;
 
 try {
   const saved = JSON.parse(localStorage.getItem(OPEN_KEY) || "null");
@@ -75,10 +79,19 @@ function vocabularyGroup(key, label, terms) {
   for (const term of terms) {
     known.add(term.id);
     if ((term.active === false || term.deprecated) && !selected.has(term.id)) continue;
-    chips.append(facetChip(key, term.id, `${term.label || term.id}${term.active === false || term.deprecated ? "（已停用）" : ""}`, selected.has(term.id)));
+    const count = (tagCounts[key] || []).find((entry) => entry.id === term.id)?.count;
+    chips.append(facetChip(key, term.id, `${term.label || term.id}${term.active === false || term.deprecated ? "（已停用）" : ""}${Number.isFinite(count) ? ` ${count}` : ""}`, selected.has(term.id)));
   }
   // A saved URL never silently loses an unknown requested ID.
   for (const id of selected) if (!known.has(id)) chips.append(facetChip(key, id, `${id}（词表不可用）`, true));
+  const modeKey = ({ topics: "topics_mode", resource_kinds: "resource_mode", custom_tags: "custom_mode" })[key];
+  if (modeKey && vocab.tagSystemAvailable !== false) {
+    const mode = h("select.facet-mode", { "aria-label": `${label}匹配方式`, value: state.filters[modeKey] || "any" },
+      h("option", { value: "any" }, "匹配任一"), h("option", { value: "all" }, "全部匹配"));
+    mode.value = state.filters[modeKey] || "any";
+    mode.addEventListener("change", () => hooks.setFilter(modeKey, mode.value === "all" ? "all" : ""));
+    return group(key, label, h("div", chips, mode), { selectedCount: selected.size, hint: "同组默认任一匹配；跨组同时满足。" });
+  }
   return group(key, label, chips, { selectedCount: selected.size });
 }
 
@@ -118,7 +131,13 @@ function uncertainToggle() {
 export function renderFacets() {
   const groups = [];
   if (vocab.v2Available && vocab.v2) {
-    for (const dimension of V2_DIMENSIONS) groups.push(vocabularyGroup(dimension.key, dimension.label, vocab.v2[dimension.key] || []));
+    for (const dimension of V2_DIMENSIONS.filter((entry) => entry.key === "topics" || entry.key === "resource_kinds")) {
+      if (Array.isArray(vocab.v2[dimension.key])) groups.push(vocabularyGroup(dimension.key, dimension.label, vocab.v2[dimension.key]));
+    }
+    if (vocab.custom.length || state.filters.custom_tags) groups.push(vocabularyGroup("custom_tags", "自定义标记", vocab.custom));
+    const secondary = V2_DIMENSIONS.filter((entry) => !["topics", "resource_kinds"].includes(entry.key));
+    const advanced = h("div", secondary.map((dimension) => vocabularyGroup(dimension.key, dimension.label, vocab.v2[dimension.key] || [])));
+    groups.push(group("advanced", "更多内容属性", advanced, { selectedCount: secondary.reduce((count, entry) => count + splitList(state.filters[entry.key]).length, 0) }));
   }
   groups.push(singleGroup("source", "来源", [["x", "X"], ["wechat", "公众号"], ["other", "其他网页"]]));
   groups.push(timeGroup());
@@ -169,6 +188,18 @@ function renderService() {
 }
 
 export function renderSidebar() {
+  if (Array.isArray(vocab.v2?.resource_kinds)) {
+    const signature = JSON.stringify([state.filters, state.search]);
+    if (signature !== countsSignature) {
+      countsSignature = signature;
+      tagCounts = {};
+      const epoch = ++countsEpoch;
+      api.tagCounts(apiParams(state.filters, state.search)).then((counts) => {
+        if (epoch !== countsEpoch || counts.available === false) return;
+        tagCounts = counts; renderFacets();
+      }).catch(() => {});
+    }
+  }
   renderViews();
   renderFacets();
   const count = [...els.facets.querySelectorAll(".facet-chip[aria-pressed='true']")].length + (state.filters.uncertain === "true" && activeView(state.filters) !== "uncertain" ? 1 : 0);
@@ -189,4 +220,5 @@ export function initSidebar(options) {
   });
   on("overview", () => { renderViews(); renderService(); });
   on("taxonomy", renderSidebar);
+  on("tags:changed", () => { countsSignature = ""; renderSidebar(); });
 }

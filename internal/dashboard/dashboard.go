@@ -321,6 +321,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/bookmarks", s.listBookmarks)
 	mux.HandleFunc("GET /api/taxonomy", s.getTaxonomy)
 	mux.HandleFunc("PATCH /api/bookmarks/{id}/curation", s.updateCuration)
+	mux.HandleFunc("GET /api/bookmarks/{id}/tags", s.tagSystemProxy)
+	mux.HandleFunc("POST /api/bookmarks/{id}/tags", s.tagSystemProxy)
+	mux.HandleFunc("GET /api/bookmarks/{id}/tag-history", s.tagSystemProxy)
+	mux.HandleFunc("GET /api/custom-tags", s.tagSystemProxy)
+	mux.HandleFunc("POST /api/custom-tags", s.tagSystemProxy)
+	mux.HandleFunc("PATCH /api/custom-tags/{id}", s.tagSystemProxy)
+	mux.HandleFunc("DELETE /api/custom-tags/{id}", s.tagSystemProxy)
+	mux.HandleFunc("GET /api/tag-counts", s.tagSystemProxy)
+	mux.HandleFunc("GET /api/tag-export", s.tagSystemProxy)
 	mux.HandleFunc("GET /api/bookmarks/{id}/v2-selection", s.getV2Selection)
 	mux.HandleFunc("PATCH /api/bookmarks/{id}/v2-selection", s.updateV2Selection)
 	mux.HandleFunc("GET /api/v2-taxonomy", s.getV2Taxonomy)
@@ -1118,6 +1127,24 @@ func writeProcessingResult(writer http.ResponseWriter, status int, accepted []in
 	})
 }
 
+func validCustomFilterID(term string) bool {
+	if len(term) != 36 {
+		return false
+	}
+	for index, c := range term {
+		if index == 8 || index == 13 || index == 18 || index == 23 {
+			if c != '-' {
+				return false
+			}
+			continue
+		}
+		if (c < 'a' || c > 'f') && (c < '0' || c > '9') {
+			return false
+		}
+	}
+	return true
+}
+
 // Validate transport syntax here; the Worker owns known/retired vocabulary IDs.
 func validFilterID(term string) bool {
 	if len(term) == 0 || len(term) > 40 || term[0] < 'a' || term[0] > 'z' {
@@ -1173,7 +1200,7 @@ func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 		key    string
 		target *[]string
 	}{
-		{"topics", &query.Topics}, {"content_functions", &query.ContentFunctions}, {"carriers", &query.Carriers},
+		{"topics", &query.Topics}, {"resource_kinds", &query.ResourceKinds}, {"custom_tags", &query.CustomTags}, {"content_functions", &query.ContentFunctions}, {"carriers", &query.Carriers},
 		{"affordances", &query.Affordances}, {"entity_state", &query.EntityStates},
 	} {
 		entries, present := values[filter.key]
@@ -1193,7 +1220,7 @@ func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 		}
 		seen := map[string]bool{}
 		for _, term := range terms {
-			if !validFilterID(term) {
+			if (filter.key != "custom_tags" && !validFilterID(term)) || (filter.key == "custom_tags" && !validCustomFilterID(term)) {
 				return cairn.BookmarkQuery{}, errors.New("invalid filter term")
 			}
 			if filter.key == "entity_state" && term != "not_run" && term != "failed" && term != "completed_empty" && term != "completed_nonempty" && term != "stale" {
@@ -1203,6 +1230,20 @@ func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 				*filter.target = append(*filter.target, term)
 				seen[term] = true
 			}
+		}
+	}
+
+	for _, mode := range []struct {
+		key    string
+		target *string
+	}{
+		{"topics_mode", &query.TopicMode}, {"resource_mode", &query.ResourceMode}, {"custom_mode", &query.CustomMode},
+	} {
+		if entries, present := values[mode.key]; present {
+			if len(entries) != 1 || (entries[0] != "any" && entries[0] != "all") {
+				return cairn.BookmarkQuery{}, errors.New("invalid tag mode")
+			}
+			*mode.target = entries[0]
 		}
 	}
 	if entries, present := values["filter_contract_version"]; present {

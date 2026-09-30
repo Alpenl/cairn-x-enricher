@@ -149,9 +149,30 @@ func TestClassificationBudgetOnlyAcceptsVerifiedPinnedModelAndLimits(t *testing.
 	if err := client.SetCallBudget(store, DefaultCallBudgetLimits()); err == nil {
 		t.Fatal("alias accepted")
 	}
-	for _, limits := range []CallBudgetLimits{{21, 5, 20 * 65536, 5 * 65536}, {20, 6, 20 * 65536, 5 * 65536}, {20, 5, 20*65536 + 1, 5 * 65536}, {20, 5, 20 * 65536, 0}} {
+	for _, limits := range []CallBudgetLimits{{201, 5, 200 * 65536, 5 * 65536}, {20, 6, 20 * 65536, 5 * 65536}, {20, 5, 200*65536 + 1, 5 * 65536}, {20, 5, 20 * 65536, 0}} {
 		if limits.Validate() == nil {
 			t.Fatal("widened/zero limit accepted")
 		}
+	}
+}
+
+func TestClassificationBudgetBackfillLimitRequiresExplicitConfiguration(t *testing.T) {
+	defaults := DefaultCallBudgetLimits()
+	if defaults.MaxCallsTotal != 20 || defaults.MaxTokens != 20*65536 {
+		t.Fatal("ordinary daily budget was widened")
+	}
+	backfill := CallBudgetLimits{60, 5, 60 * 65536, 5 * 65536}
+	if err := backfill.Validate(); err != nil {
+		t.Fatalf("explicit bounded backfill cannot request server admission: %v", err)
+	}
+	client, store, ctx, bodies := budgetedClassification(t, 0)
+	if err := client.SetCallBudget(store, backfill); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Evaluate(ctx, Input{OriginalText: "synthetic source"}); err == nil || len(*bodies) != 0 {
+		t.Fatal("larger client bound bypassed server denial")
+	}
+	if len(store.requests) != 1 || store.requests[0].Limits != backfill {
+		t.Fatal("backfill did not carry its explicit bounds to persistent admission")
 	}
 }

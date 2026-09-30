@@ -398,6 +398,11 @@ func (s *Server) exportMarkdown(writer http.ResponseWriter, request *http.Reques
 		s.writeBackendError(writer, "export effective views", 0, err)
 		return
 	}
+	tags, err := s.hydrateExportTags(request.Context(), items)
+	if err != nil {
+		s.writeBackendError(writer, "export tags", 0, err)
+		return
+	}
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "# Cairn 收藏导出\n\n生成时间：%s\n\n", exportTimestamp())
 	fmt.Fprintf(&builder, "共 %d 条；导出包含多维有效结果与人工来源，不调用模型。\n\n", len(items))
@@ -409,7 +414,12 @@ func (s *Server) exportMarkdown(writer http.ResponseWriter, request *http.Reques
 		fmt.Fprintf(&builder, "## %s\n\n", exportLine(item.URL))
 		fmt.Fprintf(&builder, "- 收藏 ID：%d\n- 来源：%s\n- 整理状态：%s\n", item.ID, exportLine(item.Source), exportLine(item.CurationStatus))
 		if view := views[index]; view != nil {
-			fmt.Fprintf(&builder, "- 主题：%s\n", exportList(view.Effective.Topics))
+			topics, resources := view.Effective.Topics, view.Effective.ResourceKinds
+			if tagView := tags[index]; tagView != nil {
+				topics, resources = tagView.Selection.Topics, tagView.Selection.ResourceKinds
+			}
+			fmt.Fprintf(&builder, "- 主题：%s\n", exportList(topics))
+			fmt.Fprintf(&builder, "- 资源类型：%s\n", exportList(resources))
 			fmt.Fprintf(&builder, "- 实体：%s\n", exportList(view.Effective.Entities))
 			fmt.Fprintf(&builder, "- 内容功能：%s\n", exportList(view.Effective.ContentFunctions))
 			fmt.Fprintf(&builder, "- 载体：%s\n", exportList(view.Effective.Carriers))
@@ -422,6 +432,25 @@ func (s *Server) exportMarkdown(writer http.ResponseWriter, request *http.Reques
 		} else {
 			partial++
 			builder.WriteString("- 有效结果：不可用（当前 Worker 未提供 v2 有效视图）\n")
+		}
+		if tagView := tags[index]; tagView != nil {
+			fmt.Fprintf(&builder, "- 自定义标记：%s\n", exportList(tagView.CustomLabels()))
+			for _, key := range []string{"topics", "resource_kinds"} {
+				for _, value := range tagView.State.Fields[key].Values {
+					origin := value.Origin
+					switch origin {
+					case "human":
+						if value.Confirmed {
+							origin = "你已确认"
+						} else {
+							origin = "你添加"
+						}
+					case "automatic":
+						origin = "自动标签"
+					}
+					fmt.Fprintf(&builder, "- 标签来源：%s / %s：%s\n", key, exportLine(value.Term), exportLine(origin))
+				}
+			}
 		}
 		for _, field := range []struct{ label, value string }{
 			{"收藏原因", item.Why}, {"收藏备注", item.Note}, {"AI 标题", item.AITitle}, {"摘要", item.Summary},
@@ -464,6 +493,7 @@ func (s *Server) collectExport(ctx context.Context, query cairn.BookmarkQuery, l
 type exportView struct {
 	Effective struct {
 		Topics           []string `json:"topics"`
+		ResourceKinds    []string `json:"resource_kinds"`
 		ContentFunctions []string `json:"content_functions"`
 		Carriers         []string `json:"carriers"`
 		Affordances      []string `json:"affordances"`

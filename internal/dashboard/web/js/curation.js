@@ -14,9 +14,10 @@ import { api, errorLabel, newOperationKey } from "./api.js";
 import { byId, clear, h } from "./dom.js";
 import { needsReview } from "./format.js";
 import { icon } from "./icons.js";
-import { emit, getItem, mergeItem } from "./store.js";
-import { terms, termActive, termLabel, V1_DIMENSIONS, V2_DIMENSIONS, vocab } from "./taxonomy.js";
+import { emit, getItem, mergeItem, on } from "./store.js";
+import { terms, termActive, termLabel, V1_DIMENSIONS, V2_DIMENSIONS, visibleDimensions, vocab } from "./taxonomy.js";
 import { toast } from "./ui.js";
+import * as tagSystem from "./tag-system.js";
 
 const WHY_SAVE_DELAY = 1200;
 const V1_SAVE_DELAY = 700;
@@ -71,6 +72,7 @@ function pruneSessions() {
 }
 
 export function hasUnsavedWork() {
+  if (tagSystem.hasUnsavedTagWork()) return true;
   for (const session of sessions.values()) if (busy(session)) return true;
   return false;
 }
@@ -215,6 +217,7 @@ function toggleV1(session, dimension, term) {
 
 // confirmTags is the explicit "these AI labels are right" action.
 export async function confirmTags(id, { quiet = false } = {}) {
+  if (vocab.tagSystemAvailable || tagSystem.tagSystemReady(id)) return tagSystem.confirmTagSystem(id);
   const item = getItem(id);
   if (!item || item.classification_reviewed) return false;
   const session = sessionFor(id);
@@ -537,7 +540,7 @@ function renderV2Rows(session, item) {
   const automatic = session.v2.automatic;
   const unreviewed = !item?.classification_reviewed;
   const rows = [];
-  for (const dimension of V2_DIMENSIONS) {
+  for (const dimension of visibleDimensions()) {
     const selected = Array.isArray(selection[dimension.key]) ? selection[dimension.key] : [];
     const suggested = Array.isArray(automatic?.[dimension.key]) ? automatic[dimension.key] : [];
     const editing = session.editing.has(dimension.key);
@@ -684,6 +687,7 @@ function hasAnyTags(session, item, mode) {
 }
 
 export function renderTags() {
+  if (tagSystem.renderTagSystem(currentId)) return;
   const session = sessions.get(currentId);
   if (!session) return;
   const item = getItem(currentId);
@@ -730,6 +734,7 @@ export function show(id) {
   const switched = currentId !== id;
   if (currentId && switched) flushPending(currentId);
   currentId = id;
+  tagSystem.showTagSystem(id);
   pruneSessions();
   const session = sessionFor(id);
   const item = getItem(id);
@@ -755,6 +760,7 @@ export function show(id) {
 // refresh re-renders from the latest item without discarding drafts.
 export function refresh(id) {
   if (id !== currentId) return;
+  tagSystem.refreshTagSystem(id);
   const session = sessionFor(id);
   const item = getItem(id);
   if (!item) return;
@@ -780,9 +786,10 @@ export function reloadRemote(id) {
 }
 
 export function toggleEditingAll() {
+  if (tagSystem.editTagSystem(currentId)) return;
   const session = sessions.get(currentId);
   if (!session) return;
-  const keys = session.v2.status === "ready" ? V2_DIMENSIONS.map((entry) => entry.key) : V1_DIMENSIONS.map((entry) => entry.key);
+  const keys = session.v2.status === "ready" ? visibleDimensions().map((entry) => entry.key) : V1_DIMENSIONS.map((entry) => entry.key);
   const open = keys.some((key) => !session.editing.has(key));
   session.editing = new Set(open ? keys : []);
   renderTags();
@@ -790,6 +797,16 @@ export function toggleEditingAll() {
 }
 
 export function initCuration() {
+  tagSystem.setTagSupplement(() => {
+    const session = sessions.get(currentId);
+    if (!session) return;
+    const secondary = session.v2.status === "ready"
+      ? renderV2Rows(session, getItem(currentId)).filter((entry) => entry.dataset?.dimension && !["topics", "resource_kinds"].includes(entry.dataset.dimension)) : [];
+    const entity = renderEntityRow(session);
+    if (entity) secondary.push(entity);
+    if (secondary.length) els.tags.append(h("details.tag-secondary", h("summary", "更多内容属性与实体"), ...secondary));
+  });
+  on("tag-system:fallback", (id) => { if (id === currentId) renderTags(); });
   Object.assign(els, {
     section: byId("curate"), fields: byId("curate-fields"), why: byId("curation-why"), whyCount: byId("why-count"),
     suggestion: byId("why-suggestion"), suggestionBlock: byId("why-suggestion-block"), useSuggestion: byId("use-suggestion"),

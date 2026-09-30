@@ -63,10 +63,13 @@ function processBadge(item) {
 
 function rowMeta(item) {
   const topics = item.classification?.topics || [];
+  const resources = item.classification?.resource_kinds || [];
   return h("div.row-meta",
     statusBadge(item),
     processBadge(item),
-    ...topics.slice(0, 3).map((topic) => h("span.tag", termLabel("topics", topic))),
+    ...topics.slice(0, 2).map((topic) => h("span.tag", termLabel("topics", topic))),
+    ...resources.slice(0, 1).map((term) => h("span.tag.tag-resource", termLabel("resource_kinds", term))),
+    topics.length > 2 || resources.length > 1 ? h("span.tag-more", `+${topics.length + resources.length - Math.min(topics.length, 2) - Math.min(resources.length, 1)}`) : null,
     // Most bookmarks come from X, so only a different source is worth a label.
     item.source && item.source !== "x" ? h("span.row-source", sourceLabels[item.source] || item.source) : null,
     needsReview(item) && item.status === "completed" ? h("span.badge.badge-review", "待确认") : null
@@ -208,8 +211,8 @@ function renderActiveFilters() {
   holder.replaceChildren();
   const filters = state.filters;
   const chips = [];
-  const labels = { topics: "主题", content_functions: "内容功能", carriers: "载体", affordances: "潜在用途", entity_state: "实体" };
-  for (const key of ["topics", "content_functions", "carriers", "affordances", "entity_state"]) {
+  const labels = { topics: "主题", resource_kinds: "资源类型", custom_tags: "自定义", content_functions: "内容功能", carriers: "载体", affordances: "潜在用途", entity_state: "实体" };
+  for (const key of ["topics", "resource_kinds", "custom_tags", "content_functions", "carriers", "affordances", "entity_state"]) {
     for (const value of splitList(filters[key])) {
       const label = key === "entity_state" ? (hooks.entityStateLabel?.(value) || value) : termLabel(key, value);
       chips.push(filterChip(`${labels[key]}：${label}`, () => hooks.toggleFilter(key, value)));

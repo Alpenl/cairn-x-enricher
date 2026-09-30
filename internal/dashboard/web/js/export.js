@@ -3,7 +3,7 @@
 // the chosen bookmarks with their full text. Neither calls a model.
 import { api } from "./api.js";
 import { curationLabels, displayTitle } from "./format.js";
-import { termLabel } from "./taxonomy.js";
+import { termLabel, vocab } from "./taxonomy.js";
 
 // Yields to the event loop so a large export does not freeze the page: a
 // full-text export can involve megabytes of string work on the UI thread.
@@ -28,7 +28,7 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export async function buildMarkdown(items, { hasMore = false, scope = "所选收藏", fetchDetail = (id) => api.detail(id), fetchEntities = (id) => api.entities(id) } = {}) {
+export async function buildMarkdown(items, { hasMore = false, scope = "所选收藏", fetchDetail = (id) => api.detail(id), fetchEntities = (id) => api.entities(id), fetchTags = null } = {}) {
   // Capture the list so a change of selection during a long export cannot mix
   // two different sets of bookmarks.
   items = items.slice();
@@ -52,11 +52,24 @@ export async function buildMarkdown(items, { hasMore = false, scope = "所选收
       ? await fetchDetail(summary.id)
       : summary;
     const classification = item.classification || {};
+    let tagView = null;
+    if (fetchTags || vocab.tagSystemAvailable || Array.isArray(vocab.v2?.resource_kinds)) {
+      tagView = await (fetchTags || api.tags)(item.id);
+      if (tagView.available === false) tagView = null;
+    }
+    const effective = tagView?.selection || classification;
     lines.push(`## ${line(displayTitle(item).text)}`, "", `收藏 ID：${item.id}`, `来源：${link(item.url)}`,
       `收藏时间：${line(item.created_at)}`, `整理状态：${curationLabels[item.curation_status || "inbox"]}`,
-      `主题：${(classification.topics || []).map((id) => line(termLabel("topics", id))).join(" / ")}`,
+      `主题：${(effective.topics || []).map((id) => line(termLabel("topics", id))).join(" / ")}`,
       `形态：${line(termLabel("forms", classification.form || ""))}`, `用途：${line(termLabel("uses", classification.use || ""))}`,
-      `分类确认：${item.classification_reviewed ? "已确认" : "未确认"}`, "");
+      `资源类型：${(effective.resource_kinds || []).map((id) => line(termLabel("resource_kinds", id))).join(" / ")}`,
+      `自定义标记：${(tagView?.custom_tags || []).map((tag) => line(tag.label)).join(" / ")}`, "");
+    if (tagView) {
+      for (const field of ["topics", "resource_kinds"]) for (const value of tagView.state?.fields?.[field]?.values || []) {
+        lines.push(`标签来源：${line(termLabel(field, value.term))} — ${value.origin === "human" ? value.confirmed ? "你已确认" : "你添加" : value.origin === "legacy_unknown" ? "历史来源未知" : "自动标签"}`);
+      }
+      lines.push("");
+    }
     for (const [label, value] of [["收藏原因", item.why], ["收藏备注", item.note], ["用途建议（AI）", classification.why_suggestion],
       ["摘要", item.summary], ["中文全文", item.translated_text], ["原文", item.original_text]]) {
       if (value) lines.push(`### ${label}`, "", escape(value), "");
