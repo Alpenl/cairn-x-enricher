@@ -110,6 +110,8 @@ function createMock() {
     identityReads: 0,
     detailReads: 0,
     combinedReading: false,
+    holdReading: false,
+    releaseReading: null,
     readingReads: 0,
     readingBodyOmissions: 0,
     selectionReads: 0,
@@ -158,9 +160,18 @@ function startMockServer(state) {
       body_revision: state.identityRevision, personal_revision: state.revision,
       latest_decision_id: 0, latest_entity_revision: state.revision };
     const curated = { ...BOOKMARK, why: state.curation.why, curation_status: state.curation.status,
-      classification_reviewed: state.curation.reviewed };
+      classification_reviewed: state.curation.reviewed,
+      ...(state.combinedReading ? {
+        classification: { ...BOOKMARK.classification, topics: state.selection.topics,
+          resource_kinds: state.selection.resource_kinds, content_functions: state.selection.content_functions },
+        custom_tags: [{ id: "personal", tag_ref: "custom/default/personal", label: "我的项目", revision: 2, status: "active" }]
+      } : {}) };
     if (url.pathname === "/api/bookmarks/12/reading" && state.combinedReading) {
       state.readingReads++;
+      if (state.holdReading) {
+        state.holdReading = false;
+        await new Promise((resolve) => { state.releaseReading = resolve; });
+      }
       const bodyUnchanged = url.searchParams.get("body_revision") === String(state.identityRevision);
       if (bodyUnchanged) state.readingBodyOmissions++;
       return send(200, { version: 1, body_unchanged: bodyUnchanged,
@@ -186,7 +197,8 @@ function startMockServer(state) {
     if (url.pathname === "/api/taxonomy") {
       return send(200, { version: "2026-09-20.1", topics: taxonomyV2().topics, forms: taxonomyV2().forms, uses: taxonomyV2().uses });
     }
-    if (url.pathname === "/api/v2-taxonomy") return send(200, taxonomyV2());
+    if (url.pathname === "/api/v2-taxonomy") return send(200, { ...taxonomyV2(),
+      ...(state.combinedReading ? { resource_kinds: [{ id: "software", label: "软件与服务", active: true, aliases: [], description: "d" }] } : {}) });
     if (url.pathname === "/api/overview") return send(200, { views: { all: 1, inbox: 1, kept: 0, compiled: 0, drop: 0, uncertain: 0 }, counts: { total: 1 }, attention: 0, queued: 0 });
     if (url.pathname === "/status") return send(200, { ready: true, build: {} });
     if (url.pathname === "/api/bookmarks/12/v2-selection") {
@@ -849,6 +861,8 @@ async function partD(browser) {
 async function partE(browser) {
   const state = createMock();
   state.combinedReading = true;
+  state.holdReading = true;
+  state.selection = { ...state.selection, topics: ["llm"], resource_kinds: ["software"], content_functions: ["tool"] };
   const server = await startMockServer(state);
   const base = `http://127.0.0.1:${server.address().port}`;
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
@@ -856,9 +870,25 @@ async function partE(browser) {
   page.on("pageerror", (error) => pageErrors.push(String(error)));
   try {
     await page.clock.install();
-    await page.goto(`${base}/bookmarks/12`, { waitUntil: "networkidle" });
+    await page.goto(`${base}/bookmarks/12`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => document.querySelector('.row[data-id="12"] .row-meta .tag-resource')?.textContent === "软件与服务");
+    equal("list shows both topic and resource before the delayed reading", await page.locator('.row[data-id="12"] .row-meta .tag').allTextContents(), ["LLM", "软件与服务"]);
+    check("list retains function and custom labels before reading", await page.locator('.row[data-id="12"] .tag-more').getAttribute("title") === "工具 / 我的项目");
+    check("reading waits until the complete list has rendered", await waitFor(() => Boolean(state.releaseReading)));
+    state.releaseReading?.();
+    await page.waitForFunction(() => document.querySelector("#detail-title")?.textContent === "测试标题");
     await openCuration(page);
     await page.waitForSelector("#v2-topics .chip.on");
+    await page.locator("#curate > summary").click();
+    equal("late combined reading and panel toggle retain list tags", await page.locator('.row[data-id="12"] .row-meta .tag').allTextContents(), ["LLM", "软件与服务"]);
+    check("late combined reading retains function and custom labels", await page.locator('.row[data-id="12"] .tag-more').getAttribute("title") === "工具 / 我的项目");
+    equal("combined snapshot keeps all three dimensions and personal tag", await page.evaluate(async () => {
+      const { getItem } = await import("/assets/js/store.js");
+      const item = getItem(12);
+      return { topics: item.classification.topics, resources: item.classification.resource_kinds,
+        functions: item.classification.content_functions, custom: item.custom_tags.map((tag) => tag.label) };
+    }), { topics: ["llm"], resources: ["software"], functions: ["tool"], custom: ["我的项目"] });
+    await openCuration(page);
     check("combined reading displays the article", (await page.textContent("#detail-title")) === BOOKMARK.ai_title);
     check("combined reading displays effective tags", (await chipTerms(page, "#v2-topics .chip.on")).includes("llm"));
     check("one request supplies detail, selection and entities",
@@ -875,6 +905,7 @@ async function partE(browser) {
     check("a body-free refresh keeps the cached original", (await page.textContent("#original")).includes("<script>"));
     check("combined reading causes no page error", pageErrors.length === 0, pageErrors.join("; "));
   } finally {
+    state.releaseReading?.();
     await page.close();
     server.close();
   }
@@ -1055,6 +1086,9 @@ async function partJ(browser) {
 async function main() {
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ["--no-sandbox"] });
   try {
+    if (process.env.CAIRN_BROWSER_CASE === "reading") {
+      await partE(browser);
+    } else {
     await partA(browser);
     await partB(browser);
     await partC(browser);
@@ -1065,6 +1099,7 @@ async function main() {
     await partH(browser);
     await partI(browser);
     await partJ(browser);
+    }
   } finally {
     await browser.close();
   }

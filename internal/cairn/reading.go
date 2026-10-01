@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 )
 
 // ReadingSnapshot is the Worker's one-statement view of article text, effective
@@ -43,6 +44,12 @@ func (c *Client) GetReading(ctx context.Context, id int64, knownBodyRevision *in
 	if response.StatusCode != http.StatusOK {
 		return ReadingSnapshot{}, apiError(response)
 	}
+	// A legacy reading projection can omit effective resource/function tags.
+	// Use the ordinary detail route rather than narrow a complete list item.
+	if response.Header.Get("X-Cairn-Tag-System") != "1" ||
+		response.Header.Get("X-Cairn-Content-Functions") != "1" {
+		return ReadingSnapshot{}, ErrV2Unsupported
+	}
 	var reading ReadingSnapshot
 	if err := decodeJSON(response.Body, &reading); err != nil {
 		return ReadingSnapshot{}, fmt.Errorf("decode reading snapshot: %w", err)
@@ -65,6 +72,20 @@ func (c *Client) GetReading(ctx context.Context, id int64, knownBodyRevision *in
 	if err := json.Unmarshal(reading.Entities, &entity); err != nil || entity.ID != id ||
 		entity.Revision != identity.PersonalRevision || entity.State == "" {
 		return ReadingSnapshot{}, errors.New("reading entity state is invalid")
+	}
+	selection := reading.Selection.Selection
+	if selection.Topics == nil || selection.ResourceKinds == nil || selection.ContentFunctions == nil {
+		return ReadingSnapshot{}, errors.New("reading snapshot is missing effective tag dimensions")
+	}
+	classification := reading.Detail.Classification
+	if classification == nil {
+		if len(selection.Topics)+len(selection.ResourceKinds)+len(selection.ContentFunctions) != 0 {
+			return ReadingSnapshot{}, errors.New("reading detail is missing effective tags")
+		}
+	} else if !slices.Equal(classification.Topics, selection.Topics) ||
+		!slices.Equal(classification.ResourceKinds, selection.ResourceKinds) ||
+		!slices.Equal(classification.ContentFunctions, selection.ContentFunctions) {
+		return ReadingSnapshot{}, errors.New("reading detail and selection tags differ")
 	}
 	normalizeBookmarkCollections(&reading.Detail.Bookmark)
 	if !validBookmarkImages(reading.Detail.Bookmark) {
