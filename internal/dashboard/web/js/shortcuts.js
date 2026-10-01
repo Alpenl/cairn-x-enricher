@@ -43,7 +43,7 @@ export function initShortcuts(actions) {
   document.addEventListener("keydown", (event) => {
     if (event.defaultPrevented || event.isComposing) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
-    if (document.querySelector("dialog[open]") || isMenuOpen()) return;
+    if (document.querySelector("dialog[open], #sidebar[aria-modal='true']") || isMenuOpen()) return;
     const key = event.key;
     const target = event.target;
 
@@ -78,6 +78,7 @@ export function initShortcuts(actions) {
       case "ArrowDown": if (inList || onBody) { event.preventDefault(); actions.step(1); } return;
       case "ArrowUp": if (inList || onBody) { event.preventDefault(); actions.step(-1); } return;
       case "Enter":
+        if (target instanceof Element && target.closest("button, summary, select, [role='button'], a[href]:not(.row-main)")) return;
         if (inList || onBody) { event.preventDefault(); actions.open(); }
         return;
       case "/": event.preventDefault(); actions.search(); return;

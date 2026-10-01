@@ -3,6 +3,7 @@ package localintegration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -99,7 +100,12 @@ func TestLocalWorkerProviderSettlementFailureSurvivesProcessExit(t *testing.T) {
 		t.Fatalf("expire local D1 lease: %v: %s", err, strings.TrimSpace(string(output)))
 	}
 	restarted := cairn.NewClient(base, "internal", &http.Client{Timeout: 10 * time.Second})
-	if claim, err := restarted.Claim(ctx); err != nil || claim != nil || posts.Load() != 1 {
+	claim, err := restarted.Claim(ctx)
+	var gateErr *cairn.APIError
+	// An unresolved paid receipt keeps the shared source circuit paused. Both
+	// an empty queue and this explicit gate must preserve the original attempt.
+	paused := errors.As(err, &gateErr) && gateErr.StatusCode == http.StatusServiceUnavailable && gateErr.Code == "component_paused"
+	if err != nil && !paused || claim != nil || posts.Load() != 1 {
 		t.Fatalf("unsettled attempt was reclaimed or resent: claim=%+v posts=%d error=%v", claim, posts.Load(), err)
 	}
 }

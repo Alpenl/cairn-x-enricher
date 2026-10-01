@@ -91,10 +91,10 @@ func Score(dataset Dataset) (Report, error) {
 	}
 	report := Report{DatasetHash: hash, ReferenceHash: referenceHash, DatasetName: dataset.Name, Split: dataset.Split, SamplesTotal: len(dataset.Samples),
 		ByLanguage: map[string]int{}, ByLengthBucket: map[string]int{}, ByCarrier: map[string]int{}, ReferenceProvenance: map[Provenance]int{}, Confusion: map[string]map[string]int{}}
-	order := []string{"topics", "content_functions", "carriers", "affordances", "form", "use"}
+	order := policyDimensions
 	dimensions, labels := map[string]*DimensionMetric{}, map[string]*DimensionMetric{}
 	for _, name := range order {
-		dimensions[name] = &DimensionMetric{Dimension: name, MultiLabel: name == "topics" || name == "content_functions" || name == "affordances"}
+		dimensions[name] = &DimensionMetric{Dimension: name, MultiLabel: name == "topics" || name == "resource_kinds" || name == "content_functions" || name == "affordances"}
 	}
 	var reviewFields, brierCount int
 	var brierSum float64
@@ -116,7 +116,7 @@ func Score(dataset Dataset) (Report, error) {
 		}
 		beforeKnown := report.KnownFields
 		references := referenceLabels(*sample.Gold)
-		predicted := map[string][]string{"topics": prediction.Topics, "content_functions": prediction.ContentFunctions, "carriers": prediction.Carriers, "affordances": prediction.Affordances, "form": nonEmpty(prediction.Form), "use": nonEmpty(prediction.Use)}
+		predicted := map[string][]string{"topics": prediction.Topics, "resource_kinds": prediction.ResourceKinds, "content_functions": prediction.ContentFunctions, "carriers": prediction.Carriers, "affordances": prediction.Affordances, "form": nonEmpty(prediction.Form), "use": nonEmpty(prediction.Use)}
 		group := sample.GroupID
 		if group == "" {
 			group = sample.SampleID

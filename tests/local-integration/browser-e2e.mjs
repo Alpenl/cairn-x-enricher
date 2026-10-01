@@ -12,8 +12,8 @@ const workerURL = process.env.CAIRN_WORKER_URL;
 const goBin = process.env.GO_BIN;
 const enricherToken = process.env.CAIRN_ENRICHER_TOKEN || "internal";
 const appToken = process.env.CAIRN_APP_TOKEN || "app";
-// Explicit current production policy: the personal-use guard changes semantics.
-const policyVersion = "jev-policy-v3";
+// Match the current production policy; a stale target must not be consumed.
+const policyVersion = "jev-policy-v4";
 if (!workerURL || !goBin) {
   process.stderr.write("CAIRN_WORKER_URL and GO_BIN are required\n");
   process.exit(1);
@@ -27,7 +27,7 @@ function check(name, condition, detail = "") {
   else { failures++; process.stdout.write(`FAIL ${name}${detail ? `: ${detail}` : ""}\n`); }
 }
 
-const auth = (token) => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" });
+const auth = (token) => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-Cairn-Tag-System": "1", "X-Cairn-Content-Functions": "1" });
 async function jsonFetch(url, options = {}) {
   const response = await fetch(url, options);
   const text = await response.text();
@@ -122,10 +122,10 @@ async function main() {
     const job = await jsonFetch(`${workerURL}/api/enrichment/classifications/${id}`, { headers: auth(enricherToken) });
     check("the classification job completed against the target", job.payload.status === "completed", JSON.stringify(job.payload).slice(0, 200));
 
-    const selection = await jsonFetch(`${workerURL}/api/v2/links/${id}/selection`, { headers: auth(enricherToken) });
-    const topics = selection.payload.selection?.topics || [];
+    let selection = await jsonFetch(`${workerURL}/api/v2/links/${id}/selection`, { headers: auth(enricherToken) });
     check("the effective view is derived from the real decision", selection.payload.provenance?.source === "decision", JSON.stringify(selection.payload).slice(0, 300));
-    check("the multidimensional topics are present", topics.length > 3, JSON.stringify(topics));
+    const automaticCount = ["topics", "resource_kinds", "content_functions"].reduce((count, key) => count + (selection.payload.selection?.[key]?.length || 0), 0);
+    check("the current policy keeps two to five supported automatic tags", automaticCount >= 2 && automaticCount <= 5, String(automaticCount));
 
     // Rebuild two identical policy projections from the actual production run.
     // AI-only display values must never become legacy or human source data.
@@ -146,19 +146,36 @@ async function main() {
     const aiView = await jsonFetch(`${workerURL}/api/v2/links/${id}/effective`, { headers: auth(enricherToken) });
     check("the current endpoint still reports AI-only as unreviewed", aiView.payload.effective?.reviewed === false);
 
+    // Explicit human additions exercise full membership beyond the small
+    // automatic budget and the legacy three-topic summary. They are fixtures,
+    // not simulated model output or evidence of model quality.
+    const catalog = (await jsonFetch(`http://127.0.0.1:${goPort}/api/v2-taxonomy`)).payload;
+    const addedTopics = catalog.topics.filter(term => term.active !== false).slice(0, 4);
+    const labelFor = id => catalog.topics.find(term => term.id === id)?.label || id;
+    for (const [field, term] of [...addedTopics.map(term => ["topics", term.id]), ["content_functions", "method"]]) {
+      const current = await jsonFetch(`${workerURL}/api/v2/links/${id}/selection`, { headers: auth(enricherToken) });
+      const added = await jsonFetch(`${workerURL}/api/v2/links/${id}/overrides`, { method: "POST", headers: auth(enricherToken),
+        body: JSON.stringify({ field, term, action: "accept", operation_key: `browser-human-${field}-${term}`, expected_revision: current.payload.revision }) });
+      if (added.status !== 200) throw new Error(`human fixture rejected: ${JSON.stringify(added.payload)}`);
+    }
+    selection = await jsonFetch(`${workerURL}/api/v2/links/${id}/selection`, { headers: auth(enricherToken) });
+    const topics = selection.payload.selection.topics;
+    check("explicit human labels survive beyond the automatic display budget", topics.length >= 4);
+
     // 4. The real browser loads the real Go proxy over the real Worker.
     browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ["--no-sandbox"] });
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(String(error)));
     await page.goto(`http://127.0.0.1:${goPort}/bookmarks/${id}`, { waitUntil: "load" });
-    await page.waitForSelector("#v2-topics .chip.on", { timeout: 30000 });
-    check("the multidimensional editor loads through the real proxy", await page.isVisible("#v2-topics"));
-    const effectiveTopics = () => page.$$eval("#v2-topics .chip.on", (nodes) => nodes.map((node) => node.dataset.term));
+    await page.waitForSelector('.tag-system-row[data-dimension="topics"] .tag-name', { state: "attached", timeout: 30000 });
+    check("the real tag editor starts collapsed", !await page.locator("#curate").evaluate(node => node.open));
+    await page.locator("#curate > summary").click();
+    check("the modern editor loads through the real proxy", await page.isVisible('.tag-system-row[data-dimension="topics"]'));
+    const effectiveTopics = async () => (await page.locator('.tag-system-row[data-dimension="topics"] .tag-name').allTextContents()).map(label => catalog.topics.find(term => term.label === label)?.id || label);
     const checked = await effectiveTopics();
     check("the browser shows the same effective topics as the Worker", JSON.stringify([...checked].sort()) === JSON.stringify([...topics].sort()), JSON.stringify({ checked, topics }));
-    const folded = await page.textContent("#v2-folded-note");
-    check("the fourth effective topic is folded, not deleted", /另外 [1-9]/.test(folded || ""), folded || "");
+    check("the editor retains every topic while the compact summary stays bounded", await page.locator(".curate-summary-tag").count() <= 5 && checked.length >= 4);
 
     // A blank-keyword library query must use the full effective dimensions,
     // even when the v1 summary omits the fourth topic. Nothing is intercepted.
@@ -174,6 +191,10 @@ async function main() {
     const toggleFacet = async (key, value) => {
       if (!await library.evaluate(() => document.getElementById("app").classList.contains("sidebar-open"))) {
         await library.click("#list-pane [data-open-sidebar]");
+      }
+      if (["carriers", "affordances", "entity_state"].includes(key)) {
+        const more = library.locator("details[data-group='more']");
+        if (!await more.evaluate(node => node.open)) await more.locator(":scope > summary").click();
       }
       const group = library.locator(`details[data-group='${key}']`);
       if (!await group.evaluate((node) => node.open)) await group.locator("summary").click();
@@ -211,7 +232,7 @@ async function main() {
 
     // 5. A human reject reaches the real Worker and survives a refresh.
     const rejected = checked[0];
-    await page.click(`#v2-topics .chip.on[data-term='${rejected}']`);
+    await page.locator('.tag-system-row[data-dimension="topics"]').getByRole("button", { name: `移除${labelFor(rejected)}`, exact: true }).click();
     await waitFor("the override to reach the real Worker", async () => {
       const overrides = await jsonFetch(`${workerURL}/api/v2/links/${id}/overrides`, { headers: auth(enricherToken) });
       return overrides.payload.overrides?.some((entry) => entry.field === "topics" && entry.action === "reject" && entry.term === rejected);
@@ -220,7 +241,7 @@ async function main() {
     const afterReject = await jsonFetch(`${workerURL}/api/v2/links/${id}/selection`, { headers: auth(enricherToken) });
     check("the effective view no longer contains the rejected topic", !(afterReject.payload.selection.topics || []).includes(rejected), JSON.stringify(afterReject.payload.selection.topics));
     await page.reload({ waitUntil: "load" });
-    await page.waitForSelector("#v2-topics .chip.on", { timeout: 30000 });
+    await page.waitForSelector('.tag-system-row[data-dimension="topics"] .tag-name', { state: "attached", timeout: 30000 });
     check("the refreshed UI shows the human decision", !(await effectiveTopics()).includes(rejected));
     await library.reload({ waitUntil: "load" });
     await library.waitForSelector("#empty:not([hidden])");
@@ -233,6 +254,8 @@ async function main() {
 
     // 6. Re-selecting an earlier single-valued option must use action order,
     // including after the next request reconstructs the view from D1 rows.
+    if (!await page.locator("#curate").evaluate(node => node.open)) await page.locator("#curate > summary").click();
+    if (!await page.locator(".tag-secondary").evaluate(node => node.open)) await page.locator(".tag-secondary > summary").click();
     await page.click("#v2-carriers [data-edit='carriers']");
     const carrierOptions = await page.$$eval("#v2-carriers [data-field='carriers'][data-term]:not([data-term=''])", (nodes) => nodes.map((node) => ({ value: node.dataset.term, checked: node.classList.contains("on") })));
     const firstCarrier = carrierOptions.find((option) => !option.checked)?.value;
@@ -258,6 +281,8 @@ async function main() {
     await otherPage.close();
 
     // Entity processing uses the actual opt-in extension and model client.
+    if (!await page.locator("#curate").evaluate(node => node.open)) await page.locator("#curate > summary").click();
+    if (!await page.locator(".tag-secondary").evaluate(node => node.open)) await page.locator(".tag-secondary > summary").click();
     await page.waitForFunction(() => document.querySelector("#v2-entity-list")?.textContent.includes("BrowserEntity"));
     check("the entity row shows the production entity", (await page.textContent("#v2-entity-list")).includes("BrowserEntity"));
     await page.click("#diagnostics > summary");

@@ -241,6 +241,9 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 	}
 	wakeup := make(chan struct{}, 1)
 	management.SetWakeup(wakeup)
+	classificationWakeup := make(chan struct{}, 1)
+	management.SetClassificationWakeup(classificationWakeup)
+	worker.SetClassificationWakeup(classificationWakeup)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           management.Handler(),
@@ -255,27 +258,22 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 		auditCtx, stopAudit := context.WithCancel(ctx)
 		defer stopAudit()
 		go func() {
-			defer processor.RecoverTask(logger, "Worker observability publisher")
-			runWorkerPolicyPublisher(auditCtx, observer, queue)
+			superviseLane(auditCtx, tracker, logger, "policy_publisher", func(ctx context.Context) {
+				runWorkerPolicyPublisher(ctx, observer, queue, tracker)
+			}, defaultRestartPolicy())
 		}()
 		controlServer = &http.Server{Handler: observer.Handler(), ReadHeaderTimeout: 5 * time.Second,
 			ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
 		controlErrors = make(chan error, 1)
 		go func() {
-			defer processor.RecoverTask(logger, "observability control server")
-			controlErrors <- controlServer.Serve(controlListener)
+			controlErrors <- criticalServerResult(func() error { return controlServer.Serve(controlListener) })
 		}()
 		go func() {
-			ticker := time.NewTicker(time.Hour)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-auditCtx.Done():
-					return
-				case <-ticker.C:
+			superviseLane(auditCtx, tracker, logger, "audit_pruning", func(ctx context.Context) {
+				runMonitoredPeriodic(ctx, tracker, "audit_pruning", time.Hour, time.Minute, func() {
 					_ = observer.PruneAudit() // failures remain visible in control_audit_errors while logs are off
-				}
-			}
+				})
+			}, defaultRestartPolicy())
 		}()
 	}
 
@@ -283,9 +281,10 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 	go func() {
 		// If this goroutine panicked, runServe would block forever waiting on
 		// serverErrors while the process kept running without an HTTP server.
-		defer processor.RecoverTask(logger, "health server")
-		logger.Info("health server listening", "address", cfg.HTTPAddr)
-		serverErrors <- server.ListenAndServe()
+		serverErrors <- criticalServerResult(func() error {
+			logger.Info("health server listening", "address", cfg.HTTPAddr)
+			return server.ListenAndServe()
+		})
 	}()
 	// Track the scheduler so shutdown can wait for an in-flight batch. Without
 	// this, main returns while a batch is still running and the process exits,
@@ -293,7 +292,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 	schedulerDone := make(chan struct{})
 	go func() {
 		defer close(schedulerDone)
-		runScheduler(ctx, worker, tracker, cfg, logger, wakeup)
+		runScheduler(ctx, worker, tracker, cfg, logger, wakeup, classificationWakeup)
 	}()
 
 	select {
@@ -357,25 +356,32 @@ func runScheduler(
 	wakeup ...<-chan struct{},
 ) {
 	var notified <-chan struct{}
+	var classificationNotified <-chan struct{}
 	if len(wakeup) > 0 {
 		notified = wakeup[0]
+	}
+	if len(wakeup) > 1 {
+		classificationNotified = wakeup[1]
 	}
 	var loops sync.WaitGroup
 	loops.Add(3)
 	go func() {
 		defer loops.Done()
-		defer processor.RecoverTask(logger, "source scheduler")
-		runSourceScheduler(ctx, worker, tracker, cfg, logger, notified)
+		superviseLane(ctx, tracker, logger, "source", func(ctx context.Context) {
+			runSourceScheduler(ctx, worker, tracker, cfg, logger, notified)
+		}, defaultRestartPolicy())
 	}()
 	go func() {
 		defer loops.Done()
-		defer processor.RecoverTask(logger, "classification scheduler")
-		runClassificationScheduler(ctx, worker, tracker, cfg, logger)
+		superviseLane(ctx, tracker, logger, "classification", func(ctx context.Context) {
+			runClassificationScheduler(ctx, worker, tracker, cfg, logger, classificationNotified)
+		}, defaultRestartPolicy())
 	}()
 	go func() {
 		defer loops.Done()
-		defer processor.RecoverTask(logger, "evidence scheduler")
-		runEvidenceScheduler(ctx, worker, cfg, logger)
+		superviseLane(ctx, tracker, logger, "evidence", func(ctx context.Context) {
+			runEvidenceSchedulerTracked(ctx, worker, tracker, cfg, logger)
+		}, defaultRestartPolicy())
 	}()
 	<-ctx.Done()
 	// Each loop stops claiming on cancellation. Already leased jobs retain
@@ -384,12 +390,14 @@ func runScheduler(
 }
 
 func runSourceScheduler(ctx context.Context, worker *processor.Processor, tracker *health.Tracker, cfg config.Config, logger *slog.Logger, notified <-chan struct{}) {
+	ctx = processor.WithLaneProgress(ctx, func(grace time.Duration) func() { return tracker.BeginLaneWork("source", grace) })
 	ticker := time.NewTicker(cfg.PollInterval)
 	defer ticker.Stop()
 	for {
 		if ctx.Err() != nil {
 			return
 		}
+		tracker.PulseLane("source", "running", cfg.WorkerRequestTimeout+30*time.Second)
 		stats, err := runSourceSweepSafely(ctx, worker, cfg, logger)
 		tracker.Record(stats, err)
 		if err != nil && isContractFailure(err) {
@@ -410,6 +418,7 @@ func runSourceScheduler(ctx context.Context, worker *processor.Processor, tracke
 		} else {
 			logger.InfoContext(ctx, "scheduled batch finished", attributes...)
 		}
+		tracker.PulseLane("source", "waiting", waitingGrace(cfg))
 		select {
 		case <-ctx.Done():
 			return
@@ -419,7 +428,12 @@ func runSourceScheduler(ctx context.Context, worker *processor.Processor, tracke
 	}
 }
 
-func runClassificationScheduler(ctx context.Context, worker *processor.Processor, tracker *health.Tracker, cfg config.Config, logger *slog.Logger) {
+func runClassificationScheduler(ctx context.Context, worker *processor.Processor, tracker *health.Tracker, cfg config.Config, logger *slog.Logger, wakeup ...<-chan struct{}) {
+	ctx = processor.WithLaneProgress(ctx, func(grace time.Duration) func() { return tracker.BeginLaneWork("classification", grace) })
+	var notified <-chan struct{}
+	if len(wakeup) > 0 {
+		notified = wakeup[0]
+	}
 	// Create the ticker before the first round: a long initial drain cannot
 	// postpone the next scheduling opportunity by another full interval.
 	ticker := time.NewTicker(cfg.PollInterval)
@@ -428,6 +442,7 @@ func runClassificationScheduler(ctx context.Context, worker *processor.Processor
 		if ctx.Err() != nil {
 			return
 		}
+		tracker.PulseLane("classification", "running", cfg.WorkerRequestTimeout+30*time.Second)
 		stats, err := runClassificationSafely(ctx, worker, cfg, logger)
 		tracker.RecordClassification(stats, err)
 		if err != nil && isContractFailure(err) {
@@ -441,22 +456,33 @@ func runClassificationScheduler(ctx context.Context, worker *processor.Processor
 		} else {
 			logger.InfoContext(ctx, "classification round finished", attributes...)
 		}
+		tracker.PulseLane("classification", "waiting", waitingGrace(cfg))
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+		case <-notified:
 		}
 	}
 }
 
-func runEvidenceScheduler(ctx context.Context, worker *processor.Processor, cfg config.Config, logger *slog.Logger) {
+func runEvidenceSchedulerTracked(ctx context.Context, worker *processor.Processor, tracker *health.Tracker, cfg config.Config, _ *slog.Logger) {
+	if tracker != nil {
+		ctx = processor.WithLaneProgress(ctx, func(grace time.Duration) func() { return tracker.BeginLaneWork("evidence", grace) })
+	}
 	ticker := time.NewTicker(cfg.PollInterval)
 	defer ticker.Stop()
 	for {
 		if ctx.Err() != nil {
 			return
 		}
-		runEvidenceSafely(ctx, worker, cfg, logger)
+		if tracker != nil {
+			tracker.PulseLane("evidence", "running", cfg.WorkerRequestTimeout+30*time.Second)
+		}
+		worker.RunEvidenceRecovery(ctx, cfg.MaxJobsPerRun)
+		if tracker != nil {
+			tracker.PulseLane("evidence", "waiting", waitingGrace(cfg))
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -497,11 +523,6 @@ func newProcessor(
 	withSource bool,
 ) (*processor.Processor, *cairn.Client, error) {
 	queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, upstreamHTTPClient(cfg.WorkerRequestTimeout))
-	if withSource {
-		if err := queue.VerifySourceLeaseCapability(ctx); err != nil {
-			return nil, nil, fmt.Errorf("verify Worker source lease admission: %w", err)
-		}
-	}
 	catalog, legacyCatalog, err := queue.GetClassificationCatalog(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -510,6 +531,8 @@ func newProcessor(
 		logger.Warn("backend has no v2 taxonomy; running the legacy single-dimension vocabulary")
 	}
 	var reader processor.SourceReader
+	var preflight func(context.Context) error
+	var preflightErr error
 	if withSource {
 		model := enrich.NewResponsesClient(
 			cfg.GrokBaseURL, cfg.GrokAPIKey, cfg.GrokModel, cfg.GrokMaxTokens,
@@ -518,11 +541,15 @@ func newProcessor(
 		model.SetReadingHTTPClient(upstreamHTTPClient(cfg.GrokReadingTimeout))
 		model.SetPaidAttemptLedger(queue)
 		model.SetLogger(logger)
-		if _, err := model.Transform(ctx, enrich.Input{URL: "https://x.com/canary/status/0", Attempt: 1,
-			SourceText: "Canary check: validate structured reading aids.", Canary: true}); err != nil {
-			// A contract break must fail loudly before a source lease is claimed.
-			return nil, nil, fmt.Errorf("model endpoint contract check failed (check GROK_MODELS_BASE_URL, GROK_MODEL, XAI_API_KEY and strict schema support): %w", err)
+		preflight = func(ctx context.Context) error {
+			if err := queue.VerifySourceLeaseCapability(ctx); err != nil {
+				return err
+			}
+			_, err := model.Transform(ctx, enrich.Input{URL: "https://x.com/canary/status/0", Attempt: 1,
+				SourceText: "Canary check: validate structured reading aids.", Canary: true})
+			return err
 		}
+		preflightErr = processor.ErrSourcePreflightUnverified
 		reader = model
 	}
 	classifier, err := classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel,
@@ -545,6 +572,11 @@ func newProcessor(
 	}
 	tracker.MarkStarted()
 	worker := processor.NewStaged(queue, reader, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
+	worker.SetSourcePreflight(preflight, preflightErr)
+	if preflightErr != nil {
+		tracker.MarkComponentDegraded("source", "source provider contract check pending")
+		tracker.MarkComponentDegraded("reading", "source provider contract check pending")
+	}
 	worker.SetClaimTimeout(batchTimeout(cfg))
 	worker.SetPaidStageTimeout(max(cfg.GrokFetchTimeout, cfg.GrokReadingTimeout))
 	fetcher, policy := evidenceFetcher(cfg)
@@ -658,11 +690,6 @@ func runClassificationSafely(ctx context.Context, worker *processor.Processor, c
 	stats.Classified, stats.ClassificationFailed, err = worker.RunClassifications(ctx, cfg.MaxJobsPerRun)
 	stats.Duration = time.Since(stats.StartedAt)
 	return stats, err
-}
-
-func runEvidenceSafely(ctx context.Context, worker *processor.Processor, cfg config.Config, logger *slog.Logger) {
-	defer processor.RecoverTask(logger, "scheduled evidence recovery")
-	worker.RunEvidenceRecovery(ctx, cfg.MaxJobsPerRun)
 }
 
 // readinessReason extracts the human-readable reason from a /readyz body so a

@@ -46,8 +46,11 @@ func (p *Processor) recoverEvidence(ctx context.Context, remaining *int) {
 		return
 	}
 	readCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	finishRead := trackProgress(ctx, 50*time.Second)
+	defer finishRead()
 	requests, err := p.stages.queue.RecoverableEvidenceRequests(readCtx, min(*remaining, 20))
 	cancel()
+	finishRead()
 	if err != nil {
 		p.logger.WarnContext(ctx, "evidence recovery listing failed", "error", err)
 		return
@@ -60,6 +63,9 @@ func (p *Processor) recoverEvidence(ctx context.Context, remaining *int) {
 	}
 }
 func (p *Processor) executeEvidence(ctx context.Context, requestID string, remaining *int) {
+	// Claim 20s + fetch 30s + checkpoint 20s + finalize 20s, plus margin.
+	finish := trackProgress(ctx, 2*time.Minute)
+	defer finish()
 	s := p.stages
 	if *remaining <= 0 || !s.extensions.Flags.Evidence {
 		return
@@ -124,6 +130,8 @@ func (p *Processor) executeEvidence(ctx context.Context, requestID string, remai
 	})
 	if err != nil {
 		p.logger.WarnContext(ctx, "evidence result remains recoverable", "request_id", request.ID, "error", err)
+	} else {
+		p.notifyClassification()
 	}
 }
 

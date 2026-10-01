@@ -45,9 +45,73 @@ jobs:
       - name: Build
         run: go build -trimpath ./cmd/cairn-x-enricher
 
+  integration:
+    name: Real Worker, D1 and browser contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    defaults:
+      run:
+        working-directory: cairn-x-enricher
+    steps:
+      - name: Check out Enricher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: cairn-x-enricher
+      - name: Read the pinned Worker revision
+        id: contract
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          contract = json.load(open('deploy/stack-contract.json'))
+          assert re.fullmatch(r'[0-9a-f]{40}', contract['worker_revision'])
+          assert contract['worker_repository'] == 'Alpenl/cairn-share'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('revision=' + contract['worker_revision'] + '\n')
+          PY
+      - name: Check out the paired Worker
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: Alpenl/cairn-share
+          ref: ${{ steps.contract.outputs.revision }}
+          path: cairn-share
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: cairn-x-enricher/go.mod
+          cache-dependency-path: cairn-x-enricher/go.sum
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            cairn-share/worker/package-lock.json
+            cairn-x-enricher/package-lock.json
+      - name: Install local test dependencies
+        run: |
+          npm ci
+          npm ci --prefix ../cairn-share/worker
+          npx playwright install --with-deps chromium
+      - name: Validate the paired migration boundary
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          contract = json.load(open('deploy/stack-contract.json'))
+          migrations = sorted(pathlib.Path('../cairn-share/worker/migrations').glob('*.sql'))
+          assert migrations[-1].name == contract['last_worker_migration'], 'Update the tested stack contract with the Worker revision'
+          PY
+      - name: Run real Go and Worker integration
+        run: bash tests/local-integration/run.sh
+      - name: Run browser interaction regressions
+        run: npm run test-browser
+      - name: Run browser against the real local stack
+        run: bash tests/local-integration/browser-e2e.sh
+
   docker:
     name: Build container
-    needs: test
+    needs: [test, integration]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:

@@ -23,6 +23,8 @@ func TestBookmarkQueryRejectsMalformedV2Filters(t *testing.T) {
 		"carriers=",
 		"affordances=practice,%27OR%201=1",
 		"entity_state=failed,unknown",
+		"functions_mode=any&functions_mode=all",
+		"functions_mode=bogus",
 	} {
 		t.Run(query, func(t *testing.T) {
 			request := httptest.NewRequestWithContext(context.Background(), "GET", "/api/bookmarks?"+query, nil)
@@ -59,7 +61,7 @@ func TestOldWorkerCannotSilentlyIgnoreDashboardFilters(t *testing.T) {
 }
 
 func TestBookmarkQueryPreservesAllEffectiveDimensions(t *testing.T) {
-	request := httptest.NewRequestWithContext(context.Background(), "GET", "/api/bookmarks?topics=llm,design,llm&content_functions=method,data&carriers=single,external_article&affordances=practice&entity_state=failed,stale&filter_contract_version=1", nil)
+	request := httptest.NewRequestWithContext(context.Background(), "GET", "/api/bookmarks?topics=llm,design,llm&content_functions=method,data&functions_mode=all&carriers=single,external_article&affordances=practice&entity_state=failed,stale&filter_contract_version=1", nil)
 	query, err := bookmarkQuery(request)
 	if err != nil {
 		t.Fatal(err)
@@ -75,5 +77,8 @@ func TestBookmarkQueryPreservesAllEffectiveDimensions(t *testing.T) {
 	}
 	if !query.NeedsFilterContract() || !query.RequireEffectiveFilters {
 		t.Fatal("missing explicit contract")
+	}
+	if query.FunctionsMode != "all" {
+		t.Fatal("content function intersection was lost")
 	}
 }

@@ -22,6 +22,7 @@ fi
 
 work_root="$(mktemp -d "${TMPDIR:-/tmp}/cairn-local-integration.XXXXXX")"
 worker_pid=""
+resume_pending="${CAIRN_INTEGRATION_FROM:-}"
 cleanup() {
   if [ -n "$worker_pid" ] && kill -0 "$worker_pid" 2>/dev/null; then
     kill -- "-$worker_pid" 2>/dev/null || true
@@ -137,7 +138,7 @@ EOF
     (cd "$share_root/worker" && ./node_modules/.bin/wrangler r2 object put "cairn-x-enrichment-images-$name/enrichment/1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png" --local --config "$work/wrangler.jsonc" --file "$work/pixel.png" --content-type image/png >"$work/seed-image.log" 2>&1) \
       || { cat "$work/seed-image.log"; exit 1; }
   fi
-  (cd "$share_root/worker" && exec setsid "$share_root/worker/node_modules/.bin/wrangler" dev --local --port "$port" --ip 127.0.0.1 --config "$work/wrangler.jsonc" >"$work/dev.log" 2>&1) &
+  (cd "$share_root/worker" && exec setsid "$share_root/worker/node_modules/.bin/wrangler" dev --local --port "$port" --inspector-port 0 --ip 127.0.0.1 --config "$work/wrangler.jsonc" >"$work/dev.log" 2>&1) &
   worker_pid=$!
   local ready=""
   for _ in $(seq 1 120); do
@@ -165,6 +166,12 @@ stop_worker() {
 run_case() {
   local name="$1" test_name="$2"
   if [ -n "${CAIRN_INTEGRATION_CASE:-}" ] && [ "$CAIRN_INTEGRATION_CASE" != "$name" ]; then return; fi
+  # Local failure recovery may resume at one named scenario. CI leaves this
+  # unset and always exercises the entire suite against fresh databases.
+  if [ -n "$resume_pending" ]; then
+    if [ "$resume_pending" != "$name" ]; then return; fi
+    resume_pending=""
+  fi
   local port work race_change
   port="$(free_port)"
   work="$work_root/$name"
@@ -242,3 +249,8 @@ run_case entitycache TestLocalWorkerEntityCacheCLI
 run_case sourcerevision TestLocalWorkerSourceRevisionOnce
 
 run_case canonicalentities TestLocalWorkerCanonicalEntitiesCLI
+
+if [ -n "$resume_pending" ]; then
+  echo "Unknown integration resume scenario: $resume_pending" >&2
+  exit 1
+fi

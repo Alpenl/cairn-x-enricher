@@ -11,6 +11,39 @@ const REFRESH_INTERVAL = 15000;
 const els = {};
 let hooks = {};
 let timer = 0;
+let qualityLoaded = false;
+let qualityBusy = false;
+
+async function loadQuality() {
+  if (qualityBusy) return;
+  qualityBusy = true;
+  const target = byId("tag-quality-report");
+  const button = byId("tag-quality-refresh");
+  button.disabled = true;
+  try {
+    const report = await api.tagQuality();
+    if (report.available === false || report.version !== 1) { clear(target, h("p.muted", "后端暂不支持标签统计。")); return; }
+    qualityLoaded = true;
+    const coverage = report.coverage || {};
+    clear(target, h("p.muted", `${coverage.human_operations || 0} 次纠正操作 · ${coverage.human_facts || 0} 条明确操作事实 · ${coverage.unknown_facts || 0} 条来源不明确的事实`));
+    const terms = [...(report.terms || [])].sort((a, b) =>
+      (b.rejections + b.additions) - (a.rejections + a.additions) || b.current_count - a.current_count).slice(0, 20);
+    const table = h("table.quality-table", h("thead", h("tr", ...["标签", "当前收藏", "补加", "移除", "确认"].map((name) => h("th", name)))));
+    table.append(h("tbody", terms.map((term) => h("tr", h("td", term.label || term.term_id),
+      ...[term.current_count, term.additions, term.rejections, term.confirmations].map((value) => h("td", String(value ?? 0)))))));
+    target.append(h("div.quality-table-scroll", table));
+    const dimensions = { topics: "主题", resource_kinds: "资源类型", content_functions: "内容特征" };
+    for (const dimension of report.retrieval?.dimensions || []) {
+      target.append(h("p.muted", `${dimensions[dimension.dimension] || dimension.dimension}：${dimension.tagged_links} 条有标签，${dimension.distinct_terms} 种标签；最常用标签覆盖 ${dimension.largest_term_count} / ${report.retrieval.total_links} 条收藏。`));
+    }
+    const labels = new Map((report.terms || []).map((term) => [term.tag_ref, term.label]));
+    for (const pair of (report.confusion_pairs || []).slice(0, 8)) {
+      target.append(h("p.muted", `同次操作的移除 → 补加：${labels.get(pair.from_tag_ref) || pair.from_tag_ref} → ${labels.get(pair.to_tag_ref) || pair.to_tag_ref}（${pair.count} 次）`));
+    }
+    target.append(h("p.muted", "这些统计用于发现候选问题，不自动调整阈值或修改收藏。"));
+  } catch { clear(target, h("p.error", "标签统计暂时不可用，请稍后刷新。")); }
+  finally { qualityBusy = false; button.disabled = false; }
+}
 
 function reasonFor(item) {
   if (item.status === "exhausted") return `已经试过 ${item.attempts} 次仍然失败${item.error ? `：${item.error}` : ""}`;
@@ -151,4 +184,6 @@ export function initBackstage(options) {
     foot: byId("backstage-foot")
   });
   byId("backstage-refresh").addEventListener("click", refresh);
+  byId("tag-quality").addEventListener("toggle", (event) => { if (event.target.open && !qualityLoaded) loadQuality(); });
+  byId("tag-quality-refresh").addEventListener("click", loadQuality);
 }

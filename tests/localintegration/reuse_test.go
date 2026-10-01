@@ -253,8 +253,10 @@ func TestLocalWorkerStoredQuestionReuse(t *testing.T) {
 	if err == nil || done != 0 || failed != 0 || len(sent) != before+1 || len(sent[len(sent)-1]) != 1 || latest().ID != prior.ID {
 		t.Fatalf("drift retried or committed: calls=%v done=%d failed=%d err=%v", sent, done, failed, err)
 	}
-	if !strings.Contains(log.String(), "provider_calls") || !strings.Contains(log.String(), "jev-1.14.0") {
-		t.Fatal("failed paid attempt trace lost")
+	// Failure logs expose the actual call count. Full per-call model/request
+	// metadata belongs in audit receipts, rather than an object dump in logs.
+	if !strings.Contains(log.String(), `"provider_calls":1`) || strings.Contains(log.String(), `"provider_calls":[`) {
+		t.Fatal("failed inference did not retain its numeric single-call trace")
 	}
 	t.Logf("production store/read/reuse: initial=%d changed=1 display=0 policy=0; legacy/partial/alias bounded full; drift=1 and no fallback; total requests=%d", totalQuestions, len(sent))
 }

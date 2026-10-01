@@ -21,14 +21,23 @@ import (
 
 // This fixture replaces only retrieval/reading model boundaries. All source,
 // snapshot, lease and completion operations use the real HTTP client and D1.
-type checkpointReader struct{ fetches int }
+type checkpointReader struct {
+	localSourceReader
+	fetches int
+}
 
-func (r *checkpointReader) FetchSource(context.Context, enrich.Input) (enrich.Source, error) {
+func (r *checkpointReader) FetchSource(ctx context.Context, input enrich.Input) (enrich.Source, error) {
 	r.fetches++
+	if err := r.reserve(ctx, input, "fetch", true); err != nil {
+		return enrich.Source{}, err
+	}
 	return enrich.Source{OriginalText: "Synthetic <LLM> & evaluation 中文\u2028source " + strings.Repeat("长材料", 5000), OriginalLanguage: "en", Model: "fixture", RelatedLinks: []string{}, ImageURLs: []string{}}, nil
 }
 
-func (*checkpointReader) Transform(_ context.Context, input enrich.Input) (enrich.Result, error) {
+func (r *checkpointReader) Transform(ctx context.Context, input enrich.Input) (enrich.Result, error) {
+	if err := r.reserve(ctx, input, "reading", true); err != nil {
+		return enrich.Result{}, err
+	}
 	return enrich.Result{OriginalText: input.SourceText, OriginalLanguage: "en", AITitle: "Synthetic title", TranslatedText: "合成评估材料", Summary: "Synthetic reading aid", Model: "fixture"}, nil
 }
 
@@ -102,19 +111,20 @@ func TestLocalWorkerEvidenceCheckpointAndBoundRead(t *testing.T) {
 		return http.DefaultTransport.RoundTrip(r)
 	})}
 	faultQueue := cairn.NewClient(base, token, faultHTTP)
-	reader := &checkpointReader{}
+	reader := &checkpointReader{localSourceReader: localSourceReader{queue: faultQueue}}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	p := processor.NewStaged(faultQueue, reader, classifier, catalog.Version, "jev-latest", logger, 1)
 	job, err := queue.ClaimByID(ctx, id)
 	if err != nil || job == nil {
 		t.Fatalf("claim source: %v", err)
 	}
-	if err := p.Process(ctx, job); err == nil {
+	processErr := p.Process(ctx, job)
+	if processErr == nil {
 		t.Fatal("expected first snapshot write to fail")
 	}
 	stored, err := queue.GetSource(ctx, id)
 	if err != nil || stored == nil {
-		t.Fatalf("source checkpoint lost: %v", err)
+		t.Fatalf("source checkpoint lost: %v (processing error: %v, fetches=%d, snapshotPosts=%d)", err, processErr, reader.fetches, snapshotPosts)
 	}
 	for range 3 {
 		pending, err := queue.ClaimClassification(ctx, classifier.SpecID(), catalog.Version, "jev-latest")
@@ -216,10 +226,13 @@ func TestLocalWorkerEvidenceCheckpointAndBoundRead(t *testing.T) {
 				return response, nil
 			})}
 			q := cairn.NewClient(base, token, httpClient)
+			if err := q.PutQuestionSpec(ctx, classifier.Spec()); err != nil {
+				t.Fatal(err)
+			}
 			attempt := processor.NewStaged(q, nil, classifier, catalog.Version, "jev-latest", logger, 1)
-			done, _, _ := attempt.RunClassifications(ctx, 1)
+			done, _, processingErr := attempt.RunClassifications(ctx, 1)
 			if leased == nil || done != 0 || calls.Load() != 0 {
-				t.Fatalf("invalid evidence reached model: lease=%v done=%d calls=%d", leased != nil, done, calls.Load())
+				t.Fatalf("invalid evidence reached model: lease=%v done=%d calls=%d err=%v", leased != nil, done, calls.Load(), processingErr)
 			}
 			runs, err := queue.GetRuns(ctx, id)
 			if err != nil || len(runs) != 0 {

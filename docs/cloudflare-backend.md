@@ -1,5 +1,21 @@
 # Cloudflare Backend Contract
 
+当前部署以 [stack manifest](../deploy/stack-contract.json) 和 [部署合同](deployment.md) 为准，候选版本需要全部迁移至 `0050_classification_audit_archive.sql`。以下早期迁移列表用于说明字段来源，不是完整升级清单。
+
+现代客户端显式协商能力，旧客户端保留原响应形状：
+
+| 能力 | 请求头 / 接口 | 合同 |
+| --- | --- | --- |
+| 有效标签 | `X-Cairn-Tag-System: 1` | 列表和标签同一读取边界；持久事实驱动索引投影，精确 SQL 聚合计数 |
+| 内容特征 | `X-Cairn-Content-Functions: 1` | `functions_mode=any/all`，旧默认 any |
+| 搜索摘要 | `X-Cairn-Search-Summary: 1` | 非空 q 返回最多 240 Unicode 字符的 `search_excerpt`，不带全文；响应确认能力 |
+| 最早未读队列 | `X-Cairn-Queue: 1` | 服务端稳定分页、全库计数，不从最新 5000 条推算 |
+| 运行历史 | `X-Cairn-Run-History: 1`；`/api/v2/links/{id}/runs?view=summary` | 每页最多 50 条，倒序游标；`/runs/{run_id}` 按需读取完整冷/热记录 |
+| 标签质量 | `GET /api/v2/tags/quality` | 明确来源的操作统计、同次纠正对及检索覆盖；不含正文，不自动修改策略 |
+| 受控重放 | `POST /api/v2/links/{id}/policy-replays` | 完整 policy hash、个人版本/目标 generation CAS；保留内容/spec/模型校验，零模型调用 |
+
+`Server-Timing` 暴露 Worker 总耗时与 D1 耗时，NAS 聚合为 `nas/upstream/worker/d1`。大 payload 冷归档保留轻量审计身份与可恢复引用。
+
 配套改造位于 Cairn Share 仓库：
 
 - `worker/migrations/0005_add_x_enrichment.sql`
@@ -29,7 +45,7 @@
 | 诊断 | `enrichment_error`, `enrichment_updated_at`, `enriched_at` |
 | 收藏整理 | `classification`, `curation`, `why`, `curation_status` |
 
-迁移只有 `ADD COLUMN` 和新增索引，不删除或改名现有字段。原 App API 仍显式只选择并返回 `id, url, note, created_at, learned, learned_at`。
+早期迁移增加阅读字段，后续还包括队列、事实、触发器、索引投影及归档元数据，升级必须演练。原 App 默认 API 仍显式只返回 `id, url, note, created_at, learned, learned_at`。
 
 Worker 绑定名为 `ENRICHMENT_IMAGES` 的 R2 bucket，生产 bucket 名为 `cairn-x-enrichment-images`。D1 的 `images` 字段只保存经过校验的对象 key 和 MIME，不保存外部图片 URL。
 
@@ -68,7 +84,7 @@ Worker 绑定名为 `ENRICHMENT_IMAGES` 的 R2 bucket，生产 bucket 名为 `ca
 
 不要把内部 token 配置成 `CAIRN_API_TOKEN`，也不要把这些内部响应暴露给 App。NAS 页面经 Go 同源 API 使用这些接口，浏览器不持有内部 token。
 
-收藏分类与整理的完整字段语义、过滤参数、升级兼容性和词表维护见 [收藏管理说明](bookmark-management.md)。分类版必须先应用迁移 0007 并部署对应 Worker，再启动新版 Enricher；旧版 Go 客户端不能解析新增的列表字段，需要配套升级。
+收藏分类与整理的完整字段语义、过滤参数和词表维护见 [收藏管理说明](bookmark-management.md)。升级使用固定 stack manifest 并应用全部待执行迁移；新增字段通过能力协商保护旧客户端。
 
 ## 部署命令
 
@@ -83,4 +99,4 @@ npm run typecheck
 npx wrangler deploy
 ```
 
-R2 bucket 和 secret 只需首次部署时创建，已有部署不需要重复创建或轮换。迁移 0007 和配套 Worker 部署完成后再启动 `v0.5.0` Enricher。迁移完成到 Worker 发布之前仍兼容旧服务；新版 Worker 的列表响应不兼容旧版 Go，切换和回滚顺序见 [部署说明](deployment.md)。
+R2 bucket 和 secret 只在首次部署时创建，已有部署无需重复创建或轮换。上述原子命令不能代替发布门禁；当前固定版本、恢复记录、迁移演练、暂停消费者和只读验收顺序见 [部署说明](deployment.md)。

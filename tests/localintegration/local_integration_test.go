@@ -269,6 +269,11 @@ func TestLocalWorkerFullLifecycle(t *testing.T) {
 	replayPolicy.Version = historical.Version + "+local-replay"
 	replayPolicy.TopicAccept = 0.5
 	replayPolicy.TopicReject = 0.1
+	// A lower acceptance threshold also bounds the optional density support
+	// threshold; this fixture explicitly evaluates that coherent candidate.
+	if replayPolicy.FunctionSupportAccept > replayPolicy.TopicAccept {
+		replayPolicy.FunctionSupportAccept = replayPolicy.TopicAccept
+	}
 	_, after, _, err := classify.Replay(raw, historical, replayPolicy)
 	if err != nil {
 		t.Fatalf("replay: %v", err)
@@ -337,7 +342,7 @@ func TestLocalWorkerFullLifecycle(t *testing.T) {
 	if dataset.Samples[0].Gold != nil || dataset.Samples[0].Provenance != evaluation.ProvenanceMachinePrediction {
 		t.Fatalf("a machine prediction must not be exported as gold: %+v", dataset.Samples[0])
 	}
-	if dataset.Prediction[0].Model != "jev-pinned-local" || dataset.Prediction[0].PolicyVersion != "jev-policy-v3" {
+	if dataset.Prediction[0].Model != "jev-pinned-local" || dataset.Prediction[0].PolicyVersion != historical.Version {
 		t.Fatalf("export lost the run identity: %+v", dataset.Prediction[0])
 	}
 	report, err := evaluation.Score(dataset)

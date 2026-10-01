@@ -227,6 +227,12 @@
                   <h3 class="section-label">实体自动判断依据（人工整理优先）</h3>
                   <ul class="observations" id="v2-entity-observations"></ul>
                 </div>
+                <details class="diag-section" id="run-history">
+                  <summary>分类运行历史</summary>
+                  <p class="diag-note" id="run-history-status"></p>
+                  <div id="run-history-items"></div>
+                  <button class="btn btn-sm" id="run-history-more" type="button" hidden>更早的记录</button>
+                </details>
               </div>
             </details>
 
@@ -262,6 +268,14 @@
         <ul class="attention-list" id="attention-list"></ul>
         <p class="attention-empty" id="attention-empty" hidden>没有需要人工处理的收藏。新收藏一般在几分钟内出现在列表里，平时不需要打开这一页。</p>
         <p class="backstage-foot" id="backstage-foot"></p>
+        <details class="diagnostics" id="tag-quality">
+          <summary>标签使用与纠正</summary>
+          <div class="diag-body">
+            <p class="diag-note">根据实际标签和操作记录观察检索区分度。未修改不等于正确，操作记录也不等同独立人工评测。</p>
+            <div id="tag-quality-report"></div>
+            <button class="btn btn-sm" id="tag-quality-refresh" type="button">刷新统计</button>
+          </div>
+        </details>
       </div>
     </section>
   </div>

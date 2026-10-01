@@ -56,6 +56,8 @@ func (s *Server) tagSystemProxy(writer http.ResponseWriter, request *http.Reques
 		}
 	case request.URL.Path == "/api/tag-counts":
 		path = "/api/v2/tags/counts"
+	case request.URL.Path == "/api/tag-quality":
+		path = "/api/v2/tags/quality"
 	case request.URL.Path == "/api/tag-export":
 		path = "/api/v2/tags/export"
 	default:

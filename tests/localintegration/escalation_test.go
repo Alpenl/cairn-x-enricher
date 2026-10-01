@@ -150,6 +150,11 @@ func TestLocalWorkerEvidenceExecutionRecovery(t *testing.T) {
 		}
 		return response, nil
 	})})
+	// Each consumer registers its own supported spec hash before the target
+	// handshake; the fault-injecting client has independent local state.
+	if err := broken.PutQuestionSpec(ctx, classifier.Spec()); err != nil {
+		t.Fatal(err)
+	}
 	makeProcessor := func(q *cairn.Client) *processor.Processor {
 		p := processor.NewStaged(q, nil, classifier, catalog.Version, "jev-latest", slog.New(slog.NewTextHandler(&logs, nil)), 1)
 		extensions := extension.NewService(flags, extension.DefaultBudget(), nil)
@@ -172,6 +177,8 @@ func TestLocalWorkerEvidenceExecutionRecovery(t *testing.T) {
 	}()
 	select {
 	case <-fetchStarted:
+	case early := <-firstDone:
+		t.Fatalf("classification/evidence returned before external fetch: done=%d failed=%d error=%v logs=%s", early.done, early.failed, early.err, logs.String())
 	case <-ctx.Done():
 		t.Fatal("external fetch never started: " + logs.String())
 	}

@@ -32,15 +32,16 @@ func newReplayCommand() *cobra.Command {
 			}
 			httpClient := &http.Client{Timeout: cfg.RequestTimeout}
 			queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, httpClient)
-			ctx := context.Background()
-			runs, err := queue.GetRuns(ctx, id)
+			ctx, cancel := context.WithTimeout(context.Background(), cfg.RequestTimeout)
+			defer cancel()
+			storedRun, err := queue.GetReplayableRun(ctx, id)
 			if err != nil {
 				return err
 			}
-			run, err := selectReplayRun(runs)
-			if err != nil {
-				return err
+			if storedRun == nil {
+				return fmt.Errorf("bookmark has no complete succeeded run to replay")
 			}
+			run := *storedRun
 			// The exact question definition is loaded from the Worker. Deriving
 			// the dimension or the level order from the question ID would guess
 			// at meanings the run never recorded (F06).
@@ -66,7 +67,6 @@ func newReplayCommand() *cobra.Command {
 				return fmt.Errorf("stored run cannot be replayed under its historical policy: %w", err)
 			}
 			newPolicy := oldPolicy
-			newPolicy.Version = oldPolicy.Version + "+replay"
 			if cmd.Flags().Changed("topic-accept") {
 				newPolicy.TopicAccept = topicAccept
 			}
@@ -76,6 +76,10 @@ func newReplayCommand() *cobra.Command {
 			if cmd.Flags().Changed("choice-accept") {
 				newPolicy.ChoiceAccept = choiceAccept
 			}
+			newPolicy, policyHash, err := classify.WithPolicyHashIdentity(newPolicy)
+			if err != nil {
+				return err
+			}
 			before, after, changed, err := classify.Replay(raw, oldPolicy, newPolicy)
 			if err != nil {
 				return err
@@ -83,6 +87,7 @@ func newReplayCommand() *cobra.Command {
 			output := map[string]any{
 				"link_id": id, "run_id": run.ID, "spec_id": run.SpecID,
 				"historical_policy": oldPolicy.Version, "new_policy": newPolicy.Version,
+				"policy_hash": policyHash,
 				"model_calls": 0, "changed": changed, "before": before, "after": after,
 			}
 			if commit {
@@ -93,21 +98,30 @@ func newReplayCommand() *cobra.Command {
 					output["committed"] = false
 					output["committed_reason"] = "write requires --authorize-write (dry-run is the default)"
 				} else {
-					if err := queue.SubmitDecision(ctx, id, map[string]any{
-						"operation_key":    fmt.Sprintf("replay-%d-%d-%s", id, run.ID, newPolicy.Version),
-						"run_ids":          []int64{run.ID},
-						"policy_version":   newPolicy.Version,
-						"policy":           newPolicy,
-						"spec_id":          run.SpecID,
-						"spec_hash":        run.SpecHash,
-						"resolved_model":   run.ResolvedModel,
-						"requested_model":  run.RequestedModel,
-						"content_revision": run.ContentRevision,
-						"automatic":        classify.AutomaticFromProposals(after),
-					}); err != nil {
+					view, err := queue.GetV2Selection(ctx, id)
+					if err != nil {
+						return fmt.Errorf("load replay revision: %w", err)
+					}
+					handshake, err := queue.Handshake(ctx, cairn.Capabilities{Protocol: "v2"})
+					if err != nil {
+						return fmt.Errorf("load replay target: %w", err)
+					}
+					runIDs := []int64{run.ID}
+					operationKey, err := classify.PolicyReplayOperationKey(id, runIDs, policyHash, run.ContentRevision, run.SpecHash, run.RequestedModel, run.ResolvedModel, handshake.Target.Generation)
+					if err != nil {
+						return err
+					}
+					receipt, err := queue.SubmitPolicyReplay(ctx, id, cairn.PolicyReplayRequest{
+						OperationKey: operationKey, RunIDs: runIDs, PolicyVersion: newPolicy.Version, Policy: newPolicy, PolicyHash: policyHash,
+						SpecID: run.SpecID, SpecHash: run.SpecHash, RequestedModel: run.RequestedModel, ResolvedModel: run.ResolvedModel,
+						ContentRevision: run.ContentRevision, ExpectedRevision: view.Revision, ExpectedTargetGeneration: handshake.Target.Generation,
+						Automatic: classify.AutomaticFromProposals(after),
+					})
+					if err != nil {
 						return fmt.Errorf("commit decision: %w", err)
 					}
 					output["committed"] = true
+					output["receipt"] = receipt
 				}
 			}
 			if err := json.NewEncoder(cmd.OutOrStdout()).Encode(output); err != nil {
@@ -123,28 +137,6 @@ func newReplayCommand() *cobra.Command {
 	command.Flags().BoolVar(&commit, "commit", false, "request a controlled commit of the new decision (dry-run by default)")
 	command.Flags().BoolVar(&authorizeWrite, "authorize-write", false, "explicitly authorize the controlled decision write")
 	return command
-}
-
-// selectReplayRun picks the newest succeeded, complete run. A trailing
-// partial/failed run is reported rather than silently replayed as if it were
-// the current decision (F06).
-func selectReplayRun(runs []cairn.StoredRun) (cairn.StoredRun, error) {
-	if len(runs) == 0 {
-		return cairn.StoredRun{}, fmt.Errorf("bookmark has no stored run to replay")
-	}
-	for index := len(runs) - 1; index >= 0; index-- {
-		run := runs[index]
-		if run.Status != "succeeded" || run.Coverage != "complete" {
-			continue
-		}
-		if len(run.Answers) == 0 {
-			continue
-		}
-		return run, nil
-	}
-	last := runs[len(runs)-1]
-	return cairn.StoredRun{}, fmt.Errorf("the newest stored run (id %d, status %s, coverage %s) is not a complete success; there is no earlier complete run to replay",
-		last.ID, last.Status, last.Coverage)
 }
 
 // newRefreshSourceCommand explicitly re-fetches a source. It is separate from

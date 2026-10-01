@@ -16,7 +16,7 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
-var policyDimensions = []string{"topics", "content_functions", "carriers", "affordances", "form", "use"}
+var policyDimensions = []string{"topics", "resource_kinds", "content_functions", "carriers", "affordances", "form", "use"}
 
 // ReplayBinding is the exact inference identity on which a policy was fitted.
 // A changed model, question meaning, taxonomy or batching requires new evidence.
@@ -110,7 +110,7 @@ func PreparePolicyReplay(dataset Dataset, catalog taxonomy.Catalog, model string
 
 func digest(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
 
-// Replay applies all six production dimensions without changing reference labels.
+// Replay applies every production dimension without changing reference labels.
 func (v *VerifiedReplay) Replay(policy classify.Policy) (Dataset, error) {
 	if v == nil {
 		return Dataset{}, errors.New("missing verified replay")
@@ -151,7 +151,7 @@ type FitRisk struct {
 }
 
 // PolicyFitConfig freezes search space, loss, coverage constraints and scope.
-// Thresholds are shared across the three Noul and three Choice dimensions,
+// Thresholds are shared across the Noul and Choice dimensions,
 // matching production and avoiding unsupported per-rare-label tuning.
 type PolicyFitConfig struct {
 	Version          string             `json:"version"`
@@ -165,7 +165,7 @@ type PolicyFitConfig struct {
 	Risk             FitRisk            `json:"risk"`
 }
 
-// Validate checks the finite search space, six-dimensional scope and loss rules.
+// Validate checks the finite search space, explicit dimensional scope and loss.
 func (c PolicyFitConfig) Validate() error {
 	if c.Version == "" || c.Scope == "" {
 		return errors.New("fit version and sample scope are required")
@@ -188,10 +188,19 @@ func (c PolicyFitConfig) Validate() error {
 			seen[value] = true
 		}
 	}
-	if len(c.MinCoverage) != 6 || len(c.Risk.DimensionWeights) != 6 || !unitInterval(c.MaxAcceptedError) {
-		return errors.New("fit requires six explicit coverage floors and risk weights")
+	_, resourceCoverage := c.MinCoverage["resource_kinds"]
+	_, resourceWeight := c.Risk.DimensionWeights["resource_kinds"]
+	expected := len(policyDimensions)
+	if !resourceCoverage && !resourceWeight {
+		expected--
+	} // historical six-dimensional config
+	if resourceCoverage != resourceWeight || len(c.MinCoverage) != expected || len(c.Risk.DimensionWeights) != expected || !unitInterval(c.MaxAcceptedError) {
+		return errors.New("fit requires matching explicit coverage floors and risk weights")
 	}
 	for _, name := range policyDimensions {
+		if name == "resource_kinds" && !resourceCoverage {
+			continue
+		}
 		floor, ok := c.MinCoverage[name]
 		weight := c.Risk.DimensionWeights[name]
 		if !ok || !unitInterval(floor) || math.IsNaN(weight) || math.IsInf(weight, 0) || weight <= 0 {
@@ -290,7 +299,7 @@ func ReplayFittedPolicy(v *VerifiedReplay, artifact PolicyFitArtifact) (Dataset,
 	return v.Replay(p)
 }
 
-// FitProductionPolicy searches all six dimensions through production Decide.
+// FitProductionPolicy searches all declared dimensions through production Decide.
 // The verified dataset must be train or dev; holdout is never fitted.
 func FitProductionPolicy(v *VerifiedReplay, config PolicyFitConfig) (PolicyFitArtifact, error) {
 	if v == nil || (v.dataset.Split != "train" && v.dataset.Split != "dev") {
@@ -298,6 +307,13 @@ func FitProductionPolicy(v *VerifiedReplay, config PolicyFitConfig) (PolicyFitAr
 	}
 	if err := config.Validate(); err != nil {
 		return PolicyFitArtifact{}, err
+	}
+	if _, covered := config.MinCoverage["resource_kinds"]; !covered {
+		for _, sample := range v.dataset.Samples {
+			if sample.Gold != nil && knownLabel(referenceLabels(*sample.Gold)["resource_kinds"]) {
+				return PolicyFitArtifact{}, errors.New("annotated resource kinds require an explicit resource risk and coverage floor")
+			}
+		}
 	}
 	if err := ValidateSplits([]Dataset{v.dataset}); err != nil {
 		return PolicyFitArtifact{}, err
@@ -383,6 +399,9 @@ func fitCandidate(policy classify.Policy, report Report, config PolicyFitConfig)
 	c := FitCandidate{Policy: policy, Eligible: true, Coverage: report.Coverage, AcceptedError: report.AcceptedError, DimensionCoverage: map[string]float64{}}
 	weightSum := 0.0
 	for _, metric := range report.Dimensions {
+		if _, declared := config.Risk.DimensionWeights[metric.Dimension]; !declared {
+			continue
+		}
 		weight := config.Risk.DimensionWeights[metric.Dimension]
 		weightSum += weight
 		coverage := ratio(metric.Decided, metric.Support)

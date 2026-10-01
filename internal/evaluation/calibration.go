@@ -230,7 +230,7 @@ func (v *VerifiedReplay) Calibration(config CalibrationConfig) (CalibrationArtif
 			labels = referenceLabels(*sample.Gold)
 		}
 		for dimension, label := range labels {
-			if !knownLabel(label) || (dimension != "topics" && dimension != "content_functions" && dimension != "affordances") {
+			if !knownLabel(label) || (dimension != "topics" && dimension != "resource_kinds" && dimension != "content_functions" && dimension != "affordances") {
 				continue
 			}
 			for _, term := range label.Values {

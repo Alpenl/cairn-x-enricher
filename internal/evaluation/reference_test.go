@@ -19,13 +19,13 @@ func metricFor(t *testing.T, r Report, name string) DimensionMetric {
 }
 func TestAcceptedErrorsIncludeEveryDimension(t *testing.T) {
 	labels := Label{Values: []string{"correct"}}
-	g := &Gold{Topics: labels, ContentFunctions: labels, Carriers: labels, Affordances: labels, Form: labels, Use: labels}
-	p := Prediction{SampleID: "a", Topics: []string{"wrong"}, ContentFunctions: []string{"wrong"}, Carriers: []string{"wrong"}, Affordances: []string{"wrong"}, Form: "wrong", Use: "wrong"}
+	g := &Gold{Topics: labels, ResourceKinds: &labels, ContentFunctions: labels, Carriers: labels, Affordances: labels, Form: labels, Use: labels}
+	p := Prediction{SampleID: "a", Topics: []string{"wrong"}, ResourceKinds: []string{"wrong"}, ContentFunctions: []string{"wrong"}, Carriers: []string{"wrong"}, Affordances: []string{"wrong"}, Form: "wrong", Use: "wrong"}
 	r, err := Score(Dataset{Name: "wrong", Samples: []Sample{sample("a", g)}, Prediction: []Prediction{p}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.AcceptedError != 1 || r.MicroRecall != 0 || r.KnownFields != 6 || r.Coverage != 1 {
+	if r.AcceptedError != 1 || r.MicroRecall != 0 || r.KnownFields != 7 || r.Coverage != 1 {
 		t.Fatalf("wrong accepted values were hidden: %+v", r)
 	}
 	for _, m := range r.Dimensions {

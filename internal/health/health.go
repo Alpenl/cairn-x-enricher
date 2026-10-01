@@ -17,20 +17,100 @@ type Clock func() time.Time
 
 // Snapshot is the public, secret-free service status payload.
 type Snapshot struct {
-	Ready                   bool             `json:"ready"`
-	ReadyReason             string           `json:"ready_reason,omitempty"`
-	StartedAt               time.Time        `json:"started_at"`
-	LastRunAt               *time.Time       `json:"last_run_at,omitempty"`
-	LastSuccess             *time.Time       `json:"last_success_at,omitempty"`
-	LastWorkAt              *time.Time       `json:"last_work_at,omitempty"`
-	LastError               string           `json:"last_error,omitempty"`
-	LastStats               *processor.Stats `json:"last_stats,omitempty"`
-	LastWorkStats           *processor.Stats `json:"last_work_stats,omitempty"`
-	LastClassificationRunAt *time.Time       `json:"last_classification_run_at,omitempty"`
-	LastClassificationStats *processor.Stats `json:"last_classification_stats,omitempty"`
-	LastClassificationError string           `json:"last_classification_error,omitempty"`
-	UnhealthySince          *time.Time       `json:"unhealthy_since,omitempty"`
-	Build                   buildinfo.Info   `json:"build"`
+	Ready                   bool                  `json:"ready"`
+	ReadyReason             string                `json:"ready_reason,omitempty"`
+	StartedAt               time.Time             `json:"started_at"`
+	LastRunAt               *time.Time            `json:"last_run_at,omitempty"`
+	LastSuccess             *time.Time            `json:"last_success_at,omitempty"`
+	LastWorkAt              *time.Time            `json:"last_work_at,omitempty"`
+	LastError               string                `json:"last_error,omitempty"`
+	LastStats               *processor.Stats      `json:"last_stats,omitempty"`
+	LastWorkStats           *processor.Stats      `json:"last_work_stats,omitempty"`
+	LastClassificationRunAt *time.Time            `json:"last_classification_run_at,omitempty"`
+	LastClassificationStats *processor.Stats      `json:"last_classification_stats,omitempty"`
+	LastClassificationError string                `json:"last_classification_error,omitempty"`
+	UnhealthySince          *time.Time            `json:"unhealthy_since,omitempty"`
+	Build                   buildinfo.Info        `json:"build"`
+	Lanes                   map[string]LaneStatus `json:"lanes,omitempty"`
+	DegradedComponents      map[string]string     `json:"degraded_components,omitempty"`
+}
+
+// LaneStatus exposes fixed lane names and bounded status, never panic values or
+// source material. Grace accounts for one bounded task or a polling interval.
+type LaneStatus struct {
+	State         string        `json:"state"`
+	LastHeartbeat time.Time     `json:"last_heartbeat"`
+	Grace         time.Duration `json:"grace_ns"`
+	Restarts      int           `json:"restarts"`
+	ActiveWork    int           `json:"active_work,omitempty"`
+}
+
+// PulseLane reports real scheduling progress or the start of a bounded wait.
+func (t *Tracker) PulseLane(name, state string, grace time.Duration) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.snapshot.Lanes == nil {
+		t.snapshot.Lanes = map[string]LaneStatus{}
+	}
+	lane := t.snapshot.Lanes[name]
+	lane.State, lane.LastHeartbeat, lane.Grace = state, t.clock(), max(grace, time.Second)
+	t.snapshot.Lanes[name] = lane
+	if state == "waiting" {
+		delete(t.degraded, "scheduler_"+name)
+	}
+	t.refreshReadyLocked()
+}
+
+// FailLane exposes a failed or restarting scheduler without fabricating recovery.
+func (t *Tracker) FailLane(name, state string, restarts int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.snapshot.Lanes == nil {
+		t.snapshot.Lanes = map[string]LaneStatus{}
+	}
+	lane := t.snapshot.Lanes[name]
+	lane.State, lane.Restarts, lane.LastHeartbeat = state, restarts, t.clock()
+	t.snapshot.Lanes[name] = lane
+	if t.degraded == nil {
+		t.degraded = map[string]string{}
+	}
+	t.degraded["scheduler_"+name] = name + " scheduler " + state
+	t.refreshReadyLocked()
+}
+
+// BeginLaneWork watches one activity independently of parallel task progress.
+// The returned completion is idempotent, and no background timer refreshes it.
+func (t *Tracker) BeginLaneWork(name string, grace time.Duration) func() {
+	t.mu.Lock()
+	if t.snapshot.Lanes == nil {
+		t.snapshot.Lanes = make(map[string]LaneStatus)
+	}
+	if t.active == nil {
+		t.active = make(map[string]map[uint64]time.Time)
+	}
+	if t.active[name] == nil {
+		t.active[name] = make(map[uint64]time.Time)
+	}
+	t.sequence++
+	key := t.sequence
+	t.active[name][key] = t.clock().Add(max(grace, time.Second))
+	lane := t.snapshot.Lanes[name]
+	lane.LastHeartbeat, lane.ActiveWork = t.clock(), len(t.active[name])
+	t.snapshot.Lanes[name] = lane
+	t.refreshReadyLocked()
+	t.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			t.mu.Lock()
+			defer t.mu.Unlock()
+			delete(t.active[name], key)
+			lane := t.snapshot.Lanes[name]
+			lane.LastHeartbeat, lane.ActiveWork = t.clock(), len(t.active[name])
+			t.snapshot.Lanes[name] = lane
+			t.refreshReadyLocked()
+		})
+	}
 }
 
 // Tracker stores thread-safe health and latest-batch state.
@@ -44,6 +124,8 @@ type Tracker struct {
 	// configuration faults the process cannot fix by retrying.
 	degraded     map[string]string
 	lastRecovery time.Time
+	active       map[string]map[uint64]time.Time
+	sequence     uint64
 }
 
 // NewTracker creates a tracker that starts unready until the first
@@ -155,6 +237,20 @@ func (t *Tracker) Record(stats processor.Stats, err error) {
 // Callers must hold t.mu.
 func (t *Tracker) refreshReadyLocked() {
 	reason := ""
+	stale := []string{}
+	for name, lane := range t.snapshot.Lanes {
+		expired := false
+		for _, deadline := range t.active[name] {
+			if t.clock().After(deadline) {
+				expired = true
+				break
+			}
+		}
+		if lane.State != "failed" && (expired || len(t.active[name]) == 0 && t.clock().Sub(lane.LastHeartbeat) > lane.Grace) {
+			stale = append(stale, name)
+		}
+	}
+	sort.Strings(stale)
 	switch {
 	case len(t.degraded) > 0:
 		keys := make([]string, 0, len(t.degraded))
@@ -167,6 +263,8 @@ func (t *Tracker) refreshReadyLocked() {
 			reasons = append(reasons, t.degraded[key])
 		}
 		reason = strings.Join(reasons, "; ")
+	case len(stale) > 0:
+		reason = "scheduler heartbeat expired: " + strings.Join(stale, ", ")
 	case t.lastRecovery.IsZero():
 		reason = "starting"
 	}
@@ -184,16 +282,27 @@ func (t *Tracker) refreshReadyLocked() {
 
 // Ready reports whether the service can currently process work.
 func (t *Tracker) Ready() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.refreshReadyLocked()
 	return t.snapshot.Ready
 }
 
 // Snapshot returns a point-in-time copy of tracker state.
 func (t *Tracker) Snapshot() Snapshot {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.snapshot
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.refreshReadyLocked()
+	snapshot := t.snapshot
+	snapshot.Lanes = make(map[string]LaneStatus, len(t.snapshot.Lanes))
+	for name, lane := range t.snapshot.Lanes {
+		snapshot.Lanes[name] = lane
+	}
+	snapshot.DegradedComponents = make(map[string]string, len(t.degraded))
+	for name, reason := range t.degraded {
+		snapshot.DegradedComponents[name] = reason
+	}
+	return snapshot
 }
 
 // Handler serves liveness, readiness, and latest-batch status endpoints.

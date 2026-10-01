@@ -79,6 +79,7 @@ type Bookmark struct {
 	OriginalText           string                   `json:"original_text,omitempty"`
 	TranslatedText         string                   `json:"translated_text,omitempty"`
 	Summary                string                   `json:"summary,omitempty"`
+	SearchExcerpt          string                   `json:"search_excerpt,omitempty"`
 	RelatedURLs            []string                 `json:"related_links"`
 	Images                 []ImageRef               `json:"images"`
 	Model                  string                   `json:"model,omitempty"`
@@ -148,6 +149,7 @@ type BookmarkQuery struct {
 	TopicMode               string
 	ResourceMode            string
 	CustomMode              string
+	FunctionsMode           string
 	ContentFunctions        []string
 	Carriers                []string
 	Affordances             []string
@@ -170,14 +172,14 @@ type BookmarkQuery struct {
 
 // NeedsFilterContract rejects old backends that silently ignore v2 conditions.
 func (q BookmarkQuery) NeedsFilterContract() bool {
-	return q.RequireEffectiveFilters || len(q.Topics)+len(q.ResourceKinds)+len(q.CustomTags)+len(q.ContentFunctions)+len(q.Carriers)+len(q.Affordances)+len(q.EntityStates) > 0 || q.TopicMode != "" || q.ResourceMode != "" || q.CustomMode != ""
+	return q.RequireEffectiveFilters || len(q.Topics)+len(q.ResourceKinds)+len(q.CustomTags)+len(q.ContentFunctions)+len(q.Carriers)+len(q.Affordances)+len(q.EntityStates) > 0 || q.TopicMode != "" || q.ResourceMode != "" || q.CustomMode != "" || q.FunctionsMode != ""
 }
 
 // NeedsTagFilterContract detects fields that an older effective-filter backend
 // could silently ignore. Capability acknowledgement is required before using
 // its result as a filtered page.
 func (q BookmarkQuery) NeedsTagFilterContract() bool {
-	return len(q.ResourceKinds)+len(q.CustomTags) > 0 || q.TopicMode != "" || q.ResourceMode != "" || q.CustomMode != ""
+	return len(q.ResourceKinds)+len(q.CustomTags) > 0 || q.TopicMode != "" || q.ResourceMode != "" || q.CustomMode != "" || q.FunctionsMode != ""
 }
 
 // CurationUpdate applies explicit human edits; a null classification restores AI suggestions.
@@ -499,6 +501,7 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 		"curation_status": query.CurationStatus, "topic": query.Topic, "form": query.Form,
 		"use": query.Use, "source": query.Source, "since": query.Since,
 		"topics_mode": query.TopicMode, "resource_mode": query.ResourceMode, "custom_mode": query.CustomMode,
+		"functions_mode": query.FunctionsMode,
 	} {
 		if value != "" {
 			values.Set(key, value)
@@ -536,6 +539,16 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 	}
 	if query.NeedsTagFilterContract() && response.Header.Get("X-Cairn-Tag-System") != "1" {
 		return BookmarkPage{}, &APIError{StatusCode: http.StatusConflict, Code: "unsupported_tag_filter_contract"}
+	}
+	if query.FunctionsMode != "" && response.Header.Get("X-Cairn-Content-Functions") != "1" {
+		return BookmarkPage{}, &APIError{StatusCode: http.StatusConflict, Code: "unsupported_tag_filter_contract"}
+	}
+	// A legacy Worker cannot supply body-match snippets in summary mode. Retry
+	// the same bounded page once with full rows; filter/cursor semantics stay exact.
+	if query.Search != "" && query.SummaryOnly && response.Header.Get("X-Cairn-Search-Summary") != "1" {
+		_ = response.Body.Close()
+		query.SummaryOnly = false
+		return c.ListBookmarks(ctx, query)
 	}
 
 	var page BookmarkPage
@@ -800,6 +813,7 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, body an
 	// omit the header, allowing the Worker to keep strict legacy responses legal.
 	request.Header.Set("X-Cairn-Tag-System", "1")
 	request.Header.Set("X-Cairn-Content-Functions", "1")
+	request.Header.Set("X-Cairn-Search-Summary", "1")
 	if path == "/api/enrichment/jobs/claim" ||
 		(strings.HasPrefix(path, "/api/enrichment/jobs/") && strings.HasSuffix(path, "/claim")) {
 		request.Header.Set("X-Cairn-Source-Lease-Admission", "1")
@@ -827,9 +841,17 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, body an
 		request.Header.Set(name, value)
 	}
 
+	started := time.Now()
 	response, err := c.httpClient.Do(request)
+	timing, _ := ctx.Value(requestTimingKey{}).(*RequestTiming)
 	if err != nil {
+		timing.record(time.Since(started), "")
 		return nil, fmt.Errorf("call cairn API: %w", err)
+	}
+	if timing != nil {
+		response.Body = &timedResponseBody{ReadCloser: response.Body, finish: func() {
+			timing.record(time.Since(started), response.Header.Get("Server-Timing"))
+		}}
 	}
 	return response, nil
 }

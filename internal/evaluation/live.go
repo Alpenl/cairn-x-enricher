@@ -247,5 +247,5 @@ func PredictionFromJudgments(sampleID string, raw classify.RawJudgments, policy 
 		return Prediction{}, err
 	}
 	return Prediction{SampleID: sampleID, SpecID: raw.SpecID, SpecHash: raw.SpecHash, Model: raw.ResolvedModel, PolicyVersion: policy.Version,
-		Topics: proposals.Topics, ContentFunctions: proposals.ContentFunctions, Carriers: proposals.Carriers, Affordances: proposals.Affordances, Form: proposals.Form, Use: proposals.Use, TopicProbabilities: topicProbabilities(raw), Abstained: abstainedDimensions(proposals)}, nil
+		Topics: proposals.Topics, ResourceKinds: proposals.ResourceKinds, ContentFunctions: proposals.ContentFunctions, Carriers: proposals.Carriers, Affordances: proposals.Affordances, Form: proposals.Form, Use: proposals.Use, TopicProbabilities: topicProbabilities(raw), Abstained: abstainedDimensions(proposals)}, nil
 }

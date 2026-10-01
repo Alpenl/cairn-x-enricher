@@ -3,13 +3,13 @@
 // browser history restores it. Pure module: no DOM access.
 
 export const MULTI_KEYS = Object.freeze(["topics", "resource_kinds", "custom_tags", "content_functions", "carriers", "affordances", "entity_state"]);
-export const SINGLE_KEYS = Object.freeze(["topics_mode", "resource_mode", "custom_mode", "curation_status", "form", "use", "source", "since", "uncertain"]);
+export const SINGLE_KEYS = Object.freeze(["topics_mode", "resource_mode", "custom_mode", "functions_mode", "curation_status", "form", "use", "source", "since", "uncertain"]);
 export const FILTER_KEYS = Object.freeze([...SINGLE_KEYS, ...MULTI_KEYS]);
 
 // Dimensions whose values only the multidimensional (v2) Worker can evaluate.
 // Sending them requires the explicit filter contract so an old backend fails
 // loudly instead of silently ignoring a condition.
-const CONTRACT_KEYS = Object.freeze([...MULTI_KEYS, "topics_mode", "resource_mode", "custom_mode", "form", "use"]);
+const CONTRACT_KEYS = Object.freeze([...MULTI_KEYS, "topics_mode", "resource_mode", "custom_mode", "functions_mode", "form", "use"]);
 
 export const VIEWS = Object.freeze([
   { id: "inbox", label: "收件箱", icon: "inbox", key: "g i" },
@@ -62,10 +62,10 @@ export function needsFilterContract(filters) {
   return CONTRACT_KEYS.some((key) => filters[key]);
 }
 
-export function apiParams(filters, search, { limit = 40, beforeId = null, summary = !search } = {}) {
+export function apiParams(filters, search, { limit = 40, beforeId = null, summary = true } = {}) {
   const params = new URLSearchParams({ limit: String(limit) });
-  // Search results show a matching excerpt from the full text, so they need
-  // the full rows; plain browsing only needs the summary representation.
+  // Search summaries include a bounded matching excerpt. The Go client
+  // negotiates support and falls back once for older Worker versions.
   if (summary) params.set("view", "summary");
   if (search) params.set("q", search);
   for (const key of FILTER_KEYS) {

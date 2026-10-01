@@ -11,11 +11,16 @@ import (
 	"testing"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
+	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
 func policyDataset(t *testing.T) (Dataset, *atomic.Int64) {
+	return policyDatasetWithCatalog(t, exportCatalog())
+}
+
+func policyDatasetWithCatalog(t *testing.T, catalog taxonomy.Catalog) (Dataset, *atomic.Int64) {
 	t.Helper()
-	spec, err := classify.CompileSpec(exportCatalog(), false)
+	spec, err := classify.CompileSpec(catalog, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,6 +28,9 @@ func policyDataset(t *testing.T) (Dataset, *atomic.Int64) {
 	for _, q := range spec.Questions {
 		if q.Kind == classify.QuestionNoul {
 			p := 0.75
+			if q.Dimension == "resource_kinds" {
+				p = 0.9
+			}
 			if q.TermID == "eval" {
 				p = 0.1
 			}
@@ -50,7 +58,7 @@ func policyDataset(t *testing.T) (Dataset, *atomic.Int64) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-1.13.0", "answers": answers, "usage": map[string]int{"input_tokens": 100, "output_tokens": 0}})
 	}))
 	t.Cleanup(server.Close)
-	client, err := classify.NewClient(server.URL, "fixture", "jev-1.13.0", server.Client(), exportCatalog())
+	client, err := classify.NewClient(server.URL, "fixture", "jev-1.13.0", server.Client(), catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,6 +82,9 @@ func policyDataset(t *testing.T) (Dataset, *atomic.Int64) {
 func fitConfig() PolicyFitConfig {
 	weights, floors := map[string]float64{}, map[string]float64{}
 	for _, d := range policyDimensions {
+		if d == "resource_kinds" {
+			continue
+		} // this fixture predates resource annotations
 		weights[d] = 1
 		floors[d] = 0.5
 	}
@@ -114,6 +125,12 @@ func TestProductionPolicyFitUsesSixDimensionsAndZeroAdditionalCalls(t *testing.T
 		t.Fatal("reference labels changed")
 	}
 	for _, m := range fitted.SelectedReport.Dimensions {
+		if m.Dimension == "resource_kinds" {
+			if m.Unknown != 2 || m.Support != 0 {
+				t.Fatal("unannotated legacy resources acquired labels")
+			}
+			continue
+		}
 		if m.F1 != 1 {
 			t.Fatalf("dimension missing: %+v", m)
 		}

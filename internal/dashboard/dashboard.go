@@ -108,16 +108,17 @@ type Server struct {
 	// workers. Sharing one context for both would make the workers exit the
 	// instant SIGTERM arrived, leaving admitted jobs unconsumed while Drain
 	// waited for a counter that could never reach zero.
-	workerCtx   context.Context
-	stopWorkers context.CancelFunc
-	tracker     *health.Tracker
-	backend     Backend
-	processor   JobProcessor
-	logger      *slog.Logger
-	jobs        chan manualJob
-	wakeup      chan<- struct{}
-	observation func() observability.Status
-	workers     sync.WaitGroup
+	workerCtx            context.Context
+	stopWorkers          context.CancelFunc
+	tracker              *health.Tracker
+	backend              Backend
+	processor            JobProcessor
+	logger               *slog.Logger
+	jobs                 chan manualJob
+	wakeup               chan<- struct{}
+	classificationWakeup chan<- struct{}
+	observation          func() observability.Status
+	workers              sync.WaitGroup
 
 	// enqueueMu serialises admission so capacity cannot be oversold.
 	enqueueMu sync.Mutex
@@ -201,6 +202,9 @@ func New(
 // SetWakeup connects durable manual submissions to the shared scheduler.
 // It is configured once before the HTTP server starts accepting requests.
 func (s *Server) SetWakeup(wakeup chan<- struct{}) { s.wakeup = wakeup }
+
+// SetClassificationWakeup signals only the semantic queue after a durable retry.
+func (s *Server) SetClassificationWakeup(wakeup chan<- struct{}) { s.classificationWakeup = wakeup }
 
 // SetObservabilityStatus publishes read-only local state on the LAN dashboard.
 // Writes remain on the separate container-loopback control listener.
@@ -329,6 +333,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/custom-tags/{id}", s.tagSystemProxy)
 	mux.HandleFunc("DELETE /api/custom-tags/{id}", s.tagSystemProxy)
 	mux.HandleFunc("GET /api/tag-counts", s.tagSystemProxy)
+	mux.HandleFunc("GET /api/tag-quality", s.tagSystemProxy)
 	mux.HandleFunc("GET /api/tag-export", s.tagSystemProxy)
 	mux.HandleFunc("GET /api/bookmarks/{id}/v2-selection", s.getV2Selection)
 	mux.HandleFunc("PATCH /api/bookmarks/{id}/v2-selection", s.updateV2Selection)
@@ -338,6 +343,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/bookmarks/{id}/v2-effective", s.getV2Effective)
 	mux.HandleFunc("GET /api/bookmarks/{id}/evidence", s.getEvidence)
 	mux.HandleFunc("GET /api/bookmarks/{id}/classification-status", s.getClassificationStatus)
+	mux.HandleFunc("GET /api/bookmarks/{id}/runs", s.runHistory)
+	mux.HandleFunc("GET /api/bookmarks/{id}/runs/{run_id}", s.runHistory)
 	mux.HandleFunc("GET /api/bookmarks/{id}/entities", s.getEntities)
 	mux.HandleFunc("POST /api/bookmarks/{id}/entities", s.correctEntity)
 	mux.HandleFunc("POST /api/bookmarks/{id}/retry-classification", s.retryClassification)
@@ -345,6 +352,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/bookmarks/{id}/replay-policy", s.replayPolicy)
 	mux.HandleFunc("GET /api/export", s.exportMarkdown)
 	mux.HandleFunc("POST /api/rerank", s.rerank)
+	mux.HandleFunc("GET /api/offline-scope", s.offlineScope)
 	mux.HandleFunc("GET /api/bookmarks/{id}", s.getBookmark)
 	mux.HandleFunc("GET /api/bookmarks/{id}/identity", s.getBookmarkIdentity)
 	mux.HandleFunc("GET /api/bookmarks/{id}/reading", s.getReading)
@@ -353,7 +361,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/overview", s.getOverview)
 	mux.HandleFunc("POST /api/bookmarks/process", s.processBookmarks)
 	mux.HandleFunc("POST /api/bookmarks/{id}/source", s.processBookmarkSource)
-	return compressAPIResponses(mux)
+	return measureAPIRequests(compressAPIResponses(s.withOfflineScope(mux)))
 }
 
 func serveReader(writer http.ResponseWriter, request *http.Request) {
@@ -1238,6 +1246,7 @@ func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 		target *string
 	}{
 		{"topics_mode", &query.TopicMode}, {"resource_mode", &query.ResourceMode}, {"custom_mode", &query.CustomMode},
+		{"functions_mode", &query.FunctionsMode},
 	} {
 		if entries, present := values[mode.key]; present {
 			if len(entries) != 1 || (entries[0] != "any" && entries[0] != "all") {

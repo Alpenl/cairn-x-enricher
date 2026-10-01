@@ -26,6 +26,8 @@ test:
 # Enable with CHROME_PATH when Chrome is not on the default path.
 test-browser:
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/run.mjs
+	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/offline.mjs
+	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/diagnostics.mjs
 
 # Real Chrome cache + actual Go proxy/client against a legacy HTTP fixture.
 # No route interception/cache disabling; no model or external source calls.
@@ -35,6 +37,7 @@ test-image-browser:
 test-frontend:
 	node internal/dashboard/frontend-check.mjs internal/dashboard
 	node internal/dashboard/query-cache-test.mjs
+	node internal/dashboard/body-cache-test.mjs
 
 # Fast local check. CI runs the full golangci-lint suite; use `make lint-ci` to
 # reproduce it exactly before pushing.

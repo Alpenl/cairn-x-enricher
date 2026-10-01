@@ -158,6 +158,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
 
     if (route === "/status") return send(200, { ready: true, state: "ok", build: { version: "fixture", commit: "0000000" } });
     if (route === "/api/taxonomy") return send(200, taxonomyV1());
+    if (route === "/api/offline-scope") return send(200, { scope: "b".repeat(64) });
     if (route === "/api/v2-taxonomy") return state.v2 ? send(200, taxonomyV2()) : send(200, { available: false, reason: "v2_unsupported" });
     if (route === "/api/extensions") return send(200, { entities: true, evidence: false, rerank: false, proposal: false, quality_verified: false });
 

@@ -249,6 +249,10 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 		stats.Duration = time.Since(started)
 		return stats, nil
 	}
+	if err := p.checkSourcePreflight(ctx); err != nil {
+		stats.Duration = time.Since(started)
+		return stats, err
+	}
 
 	// claimCtx gates claiming only. workCtx is what in-flight jobs observe, and
 	// it is detached from claimCtx so a cancelled batch finishes its work.
@@ -297,9 +301,12 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 				}
 				// Capacity is acquired before the Worker lease. A manual task or
 				// another batch can hold the shared slots without aging a claim.
+				finishCapacity := trackProgress(claimCtx, sourceJobMaxDuration+30*time.Second)
 				select {
 				case p.slots <- struct{}{}:
+					finishCapacity()
 				case <-claimCtx.Done():
+					finishCapacity()
 					return
 				}
 				more := func() bool {
@@ -341,6 +348,8 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 					}
 					var job *cairn.Job
 					var err error
+					finishClaim := trackProgress(claimCtx, p.claimGrace())
+					defer finishClaim()
 					if staged, ok := p.queue.(sourceStageClaimer); ok {
 						job, err = staged.ClaimAllowed(requestCtx, sourceAllowed, readingAllowed)
 					} else if sourceAllowed && readingAllowed && !sourceHalf && !readingHalf {
@@ -349,6 +358,7 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 						err = errors.New("source queue does not support stage-filtered claims")
 					}
 					stopRequest()
+					finishClaim()
 					if err != nil {
 						releaseUnclaimed()
 						if claimCtx.Err() != nil {
@@ -361,6 +371,8 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 						releaseUnclaimed()
 						return false
 					}
+					finishJob := trackProgress(workCtx, sourceJobMaxDuration+30*time.Second)
+					defer finishJob()
 					var probe *sourceStageProbe
 					if sourceHalf {
 						if job.SourceComponent == "source" {

@@ -29,7 +29,7 @@ func main() {
 	flag.BoolVar(&dryRun, "dry-run", false, "print the plan without scoring or calling a model")
 	flag.BoolVar(&live, "live", false, "explicitly opt in to a live model run (costs money)")
 	flag.StringVar(&recoverFrom, "recover-from", "", "comma-separated saved live directories; validate/recover wires OFFLINE, never retry")
-	flag.StringVar(&policyFitConfig, "fit-policy", "", "frozen six-dimension fit config JSON; OFFLINE train/dev only")
+	flag.StringVar(&policyFitConfig, "fit-policy", "", "frozen seven-dimension fit config JSON (legacy six only when resource gold is unknown); OFFLINE train/dev only")
 	flag.StringVar(&calibrationConfig, "calibration", "", "frozen probability diagnostics config JSON; OFFLINE train/dev only")
 	flag.StringVar(&replayJournal, "replay-journal", "", "verified recovery.json holding original raw evaluations for policy fitting")
 	flag.IntVar(&maxCalls, "max-calls", 0, "hard budget for a live run; 0 means no live run is permitted")

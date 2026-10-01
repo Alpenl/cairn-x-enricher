@@ -150,9 +150,9 @@ func (s *Server) retryClassification(writer http.ResponseWriter, request *http.R
 		s.writeBackendError(writer, "retry classification", id, err)
 		return
 	}
-	if s.wakeup != nil {
+	if s.classificationWakeup != nil {
 		select {
-		case s.wakeup <- struct{}{}:
+		case s.classificationWakeup <- struct{}{}:
 		default:
 		}
 	}
@@ -240,6 +240,12 @@ func (s *Server) refreshSource(writer http.ResponseWriter, request *http.Request
 	})
 }
 
+type controlledPolicyReplayBackend interface {
+	GetReplayableRun(context.Context, int64) (*cairn.StoredRun, error)
+	Handshake(context.Context, cairn.Capabilities) (cairn.HandshakeResult, error)
+	SubmitPolicyReplay(context.Context, int64, cairn.PolicyReplayRequest) (json.RawMessage, error)
+}
+
 // replayPolicy re-decides the stored run under a policy without any model call.
 // Dry-run is the default; a commit appends a decision and requires the explicit
 // CAIRN_ALLOW_DECISION_WRITE opt-in.
@@ -262,15 +268,30 @@ func (s *Server) replayPolicy(writer http.ResponseWriter, request *http.Request)
 	if !ok {
 		return
 	}
-	runs, err := v2.GetRuns(request.Context(), id)
-	if err != nil {
-		s.writeBackendError(writer, "get runs", id, err)
-		return
-	}
-	run, err := newestReplayableRun(runs)
-	if err != nil {
-		writeError(writer, http.StatusConflict, "no_replayable_run")
-		return
+	modern, hasModern := s.backend.(controlledPolicyReplayBackend)
+	var run cairn.StoredRun
+	if hasModern {
+		stored, err := modern.GetReplayableRun(request.Context(), id)
+		if err != nil {
+			s.writeBackendError(writer, "get replayable run", id, err)
+			return
+		}
+		if stored == nil {
+			writeError(writer, http.StatusConflict, "no_replayable_run")
+			return
+		}
+		run = *stored
+	} else {
+		runs, err := v2.GetRuns(request.Context(), id)
+		if err != nil {
+			s.writeBackendError(writer, "get runs", id, err)
+			return
+		}
+		run, err = newestReplayableRun(runs)
+		if err != nil {
+			writeError(writer, http.StatusConflict, "no_replayable_run")
+			return
+		}
 	}
 	storedSpec, err := v2.GetQuestionSpec(request.Context(), run.SpecID)
 	if err != nil {
@@ -293,7 +314,6 @@ func (s *Server) replayPolicy(writer http.ResponseWriter, request *http.Request)
 		return
 	}
 	next := historical
-	next.Version = historical.Version + "+replay"
 	if body.TopicAccept != nil {
 		next.TopicAccept = *body.TopicAccept
 	}
@@ -303,6 +323,11 @@ func (s *Server) replayPolicy(writer http.ResponseWriter, request *http.Request)
 	if body.ChoiceAccept != nil {
 		next.ChoiceAccept = *body.ChoiceAccept
 	}
+	next, policyHash, err := classify.WithPolicyHashIdentity(next)
+	if err != nil {
+		writeError(writer, http.StatusConflict, "replay_failed")
+		return
+	}
 	before, after, changed, err := classify.Replay(raw, historical, next)
 	if err != nil {
 		writeError(writer, http.StatusConflict, "replay_failed")
@@ -311,6 +336,7 @@ func (s *Server) replayPolicy(writer http.ResponseWriter, request *http.Request)
 	output := map[string]any{
 		"id": id, "run_id": run.ID, "spec_id": run.SpecID,
 		"historical_policy": historical.Version, "new_policy": next.Version,
+		"policy_hash": policyHash,
 		"model_calls": 0, "changed": changed, "before": before, "after": after,
 		"committed": false,
 	}
@@ -318,22 +344,38 @@ func (s *Server) replayPolicy(writer http.ResponseWriter, request *http.Request)
 		if os.Getenv("CAIRN_ALLOW_DECISION_WRITE") != "1" {
 			output["committed_reason"] = "写回未授权：需要服务端显式设置 CAIRN_ALLOW_DECISION_WRITE=1"
 		} else {
-			if err := v2.SubmitDecision(request.Context(), id, map[string]any{
-				"operation_key":    fmt.Sprintf("ui-replay-%d-%d-%s", id, run.ID, next.Version),
-				"run_ids":          []int64{run.ID},
-				"policy_version":   next.Version,
-				"policy":           next,
-				"spec_id":          run.SpecID,
-				"spec_hash":        run.SpecHash,
-				"resolved_model":   run.ResolvedModel,
-				"requested_model":  run.RequestedModel,
-				"content_revision": run.ContentRevision,
-				"automatic":        classify.AutomaticFromProposals(after),
-			}); err != nil {
+			if !hasModern {
+				writeError(writer, http.StatusConflict, "policy_replay_unsupported")
+				return
+			}
+			view, err := v2.GetV2Selection(request.Context(), id)
+			if err != nil {
+				s.writeBackendError(writer, "get replay revision", id, err)
+				return
+			}
+			handshake, err := modern.Handshake(request.Context(), cairn.Capabilities{Protocol: "v2"})
+			if err != nil {
+				s.writeBackendError(writer, "get replay target", id, err)
+				return
+			}
+			runIDs := []int64{run.ID}
+			key, err := classify.PolicyReplayOperationKey(id, runIDs, policyHash, run.ContentRevision, run.SpecHash, run.RequestedModel, run.ResolvedModel, handshake.Target.Generation)
+			if err != nil {
+				writeError(writer, http.StatusConflict, "replay_failed")
+				return
+			}
+			receipt, err := modern.SubmitPolicyReplay(request.Context(), id, cairn.PolicyReplayRequest{
+				OperationKey: key, RunIDs: runIDs, PolicyVersion: next.Version, Policy: next, PolicyHash: policyHash,
+				SpecID: run.SpecID, SpecHash: run.SpecHash, RequestedModel: run.RequestedModel, ResolvedModel: run.ResolvedModel,
+				ContentRevision: run.ContentRevision, ExpectedRevision: view.Revision, ExpectedTargetGeneration: handshake.Target.Generation,
+				Automatic: classify.AutomaticFromProposals(after),
+			})
+			if err != nil {
 				s.writeBackendError(writer, "commit replay decision", id, err)
 				return
 			}
 			output["committed"] = true
+			output["receipt"] = receipt
 		}
 	}
 	writeJSON(writer, http.StatusOK, output)
@@ -726,7 +768,11 @@ func (s *Server) rerank(writer http.ResponseWriter, request *http.Request) {
 func rerankCandidates(items []cairn.Bookmark) []extension.Candidate {
 	candidates := make([]extension.Candidate, 0, len(items))
 	for index, item := range items {
-		text := strings.TrimSpace(item.AITitle + " " + item.Summary)
+		context := item.SearchExcerpt
+		if strings.TrimSpace(context) == "" {
+			context = item.Summary
+		}
+		text := strings.TrimSpace(item.AITitle + " " + context)
 		if len([]rune(text)) > 400 {
 			text = string([]rune(text)[:400])
 		}

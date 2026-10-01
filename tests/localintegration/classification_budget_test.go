@@ -53,6 +53,11 @@ func TestClassificationBudgetProcessHelper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Every fresh consumer declares its immutable spec identity before target
+	// negotiation, even when another process registered equal content already.
+	if err := queue.PutQuestionSpec(ctx, client.Spec()); err != nil {
+		t.Fatal(err)
+	}
 	limits := classify.DefaultCallBudgetLimits()
 	limits.MaxCallsTotal = 3
 	limits.MaxCallsPerItem = 2
@@ -82,6 +87,7 @@ func TestLocalWorkerClassificationBudgetAcrossProcesses(t *testing.T) {
 	}
 	var calls atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		var payload struct {
 			Model     string `json:"model"`
 			Questions map[string]struct {

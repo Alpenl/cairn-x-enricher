@@ -44,8 +44,12 @@ func exportCatalog() taxonomy.Catalog {
 }
 
 func exportFixture(t *testing.T) fakeRunSource {
+	return exportFixtureWithCatalog(t, exportCatalog())
+}
+
+func exportFixtureWithCatalog(t *testing.T, catalog taxonomy.Catalog) fakeRunSource {
 	t.Helper()
-	spec, err := classify.CompileSpec(exportCatalog(), false)
+	spec, err := classify.CompileSpec(catalog, false)
 	if err != nil {
 		t.Fatal(err)
 	}

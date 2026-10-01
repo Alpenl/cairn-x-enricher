@@ -1,69 +1,52 @@
-# Deployment
+# 部署与恢复合同
 
-## 当前 Jev 开发版
+本文是当前部署入口。`docs/jev-v2/evidence/` 和 rollout 文档保留指定日期的历史证据，其中的迁移号、镜像和词表版本不作为下一次发布的默认值。
 
-当前源码还需要 `0009_independent_classification.sql`、新 Worker 分类接口和
-`2026-09-20.1` 词表。先部署配套 Worker，再构建/发布并运行新版 Enricher。
-在已有 `.env` 中增加 `TYPESAFE_API_KEY`，不要覆盖原配置。此改动没有发布新镜像；
-NAS 清单里的固定旧版本不会自动获得这些能力。
-分类队列状态、验证方式和回滚边界见 [Jev 分类说明](jev-classification.md)。
+## 固定版本与门禁
 
-此前开发版在下述 `v0.5.0` 升级基础上，还需要配套 Worker 的迁移
-`0008_invalidate_enriched_link_cache.sql` 和增强 App API。先应用全部迁移并部署 Worker，
-再升级 Enricher 与 Android APK；0008 只增加缓存失效触发器，保留已有内容和人工整理。
-检查 App 的双语正文、图片、整理保存，以及保存后网页读取到同一结果。详情见
-[简化与同步报告](simplification-and-sync.md)。以下版本号用于已发布版本的历史部署说明。
+`deploy/stack-contract.json` 固定配套 Share 仓库的完整提交和最后迁移。CI 对这个精确版本运行真实 Go + Worker + 本地 D1/R2 集成、Chrome 阅读器场景以及零付费模型夹具；通过后才能构建镜像。
 
-## 1. 部署 Cloudflare 前置改造
+当前候选需要 Worker 迁移至 `0050_classification_audit_archive.sql`，包括 `0049_effective_tag_memberships.sql` 的有效标签索引与历史回填。先在私有数据库副本演练全部待执行迁移，比较收藏、原文、人工事实和重放引用；不能凭“只新增字段”推断安全。
 
-首次部署时创建并绑定 `cairn-x-enrichment-images` R2 bucket，把一个新生成的随机值同时配置为 Worker secret `CAIRN_ENRICHER_TOKEN` 与服务端环境变量，不要复用 App 的 `CAIRN_API_TOKEN`。升级时沿用现有 bucket 和 secret。
+Share 的 `deploy-worker` 工作流要求：
 
-`v0.5.0` 需要 Cairn Share Worker 的全部迁移（截至 `0007_add_bookmark_curation.sql`）和配套内部 API。旧版 Go 客户端不能解析新版 Worker 的列表字段，新版 Go 启动时需要读取 Worker 词表，因此升级两端需要协调：
+- 完整 Enricher 提交的 CI 已通过，该提交的 stack manifest 必须精确引用此次 Worker 提交。
+- NAS 消费者已排空并停止，旧镜像和配置已备份。
+- Cloudflare 凭据和独立的 `CAIRN_ENRICHER_TOKEN` 已作为仓库 secret 配置。
+- Worker 单测、类型检查、构建及发布验收脚本通过。
 
-1. 确认 GitHub Actions 已发布 `0.5.0` 镜像，提前在 NAS 拉取；记录当前 Worker version ID、NAS 镜像 digest 和 Compose 配置。
-2. 应用远程 D1 迁移。迁移只增加列和索引，原有数据与 App 接口继续可用。
-3. 等当前处理批次结束后停止旧 Enricher，部署新版 Worker，立即启动 `0.5.0` Enricher。
-4. 检查词表、收藏列表、阅读页、筛选和服务健康，再确认后台队列正常。
+迁移前记录 D1 Time Travel 恢复点、Worker 部署列表、迁移摘要、分类目标和近七日聚合用量。发布后只使用 GET 验证摘要、搜索片段、有效标签和质量统计，再记录新版本；不创建任务或调用模型。恢复元数据保留七天，不含正文或凭据；D1 可恢复期限以服务端实际返回为准。
 
-迁移和 Worker 发布命令见 [Cloudflare 后端说明](cloudflare-backend.md)。服务切换期间阅读库短暂不可用，App 收藏入口仍由 Worker 提供。不要启动额外的历史全库处理任务；本版本不自动回填旧收藏。
+## NAS 发布顺序
 
-## 2. 准备运行配置
+1. 保留 `.env`、Compose、镜像 tag/digest、Worker version ID 和 D1 恢复记录，文件权限为 `0600`。私有 D1 快照及迁移演练材料不进入公开仓库或公共构建产物。
+2. 本机构建唯一 tag 的镜像，完成 `make verify` 和固定版本的集成验收。NAS 不承担编译。
+3. 排空并停止 NAS 消费者，保留账本和配置。应用待执行 D1 迁移，再发布匹配的 Worker。
+4. 将镜像送入 NAS，原子更新 Compose 的固定 tag 并启动；不能用 `latest` 或本机源码状态推断线上版本。
+5. 检查 `/healthz`、`/readyz`、`/status` 的版本和各循环。验收列表、组合筛选、搜索、正文、标签历史、原帖入口；同条件记录 `Server-Timing` 与响应体大小。
 
-```bash
-cp .env.example .env
-chmod 600 .env
-```
+Momax NAS 为 `192.168.110.200:8088`，部署目录 `/vol1/1000/Docker/cairn-x-enricher`。SSH、私有恢复材料与当前镜像记录以运维仓库 `~/alpen` 为准。
 
-至少填入 `CAIRN_ENRICHER_TOKEN` 和 `XAI_API_KEY`。生产平台应使用 secret manager 注入，而不是上传 `.env`。
+普通升级不重跑全库、不切换分类目标、不放宽预算、不抹去未知调用。Android 使用独立签名发布流程；升级网页不代表手机已安装新版。
 
-## 3. 启动固定版本镜像
+## 配置与预算
 
-```bash
-export IMAGE_TAG=0.5.0
-docker compose pull
-docker compose up -d
-docker compose ps
-curl -fsS http://127.0.0.1:8080/status
-```
+从 `.env.example` 补充缺失项，不能覆盖已有密钥。`CAIRN_ENRICHER_TOKEN` 与 App token 分离，浏览器不持有任一 token。
 
-服务启动即执行第一批，默认每 5 分钟再运行。部署多个副本是安全的：D1 claim 是原子的，每项任务还有独立 lease。
+普通分类固定 `jev-1.13.0`，默认 UTC 日上限全局 20 次、单收藏 5 次，输入 token 上限全局 1,310,720、单收藏 327,680。四项 `CAIRN_CLASSIFICATION_*` 参数只能在已授权范围内配置。实体、证据、重排、词表提案独立且默认关闭；扩展预算由 `CAIRN_EXTENSION_*` 指定。来源、阅读、自检另有持久调用账本，未知用量不能视作零。
 
-Momax NAS 使用 `deploy/nas/compose.yaml` 中的固定镜像，访问端口为 `8088`。保留部署目录原有的 `.env`，更新 Compose 后在该目录执行 `docker compose pull` 和 `docker compose up -d`。
+HTTP 启动不等待 Grok 自检。后台自检失败暂停来源/阅读，已保存正文可继续阅读，分类使用独立调度。配置或 Worker 合同校验失败仍阻止启动。`/healthz` 为存活，`/readyz` 为完整处理就绪；排查应读取 `/status` 的组件状态及心跳期限。
 
-## 4. 回滚
+## 恢复
 
-从 `v0.5.0` 回滚到 `v0.4.1` 时需要同时回滚 Worker 与 Enricher：先停止新版 Enricher，用 `npx wrangler rollback <previous-worker-version-id>` 恢复部署前记录的 Worker 版本，再恢复原有 Compose 和镜像并启动。只回滚 NAS 镜像会导致旧版 Go 无法解析新版 Worker 响应。
+验收失败时保持消费者停止，保存失败版本和验收输出。优先恢复已记录的 Worker 版本及兼容的 NAS 镜像、Compose、配置；新增表和索引通常保留，但必须依据此次迁移演练判断兼容性。
 
-新增 D1 列保留，不执行删除列或数据恢复；旧 Worker 使用显式字段查询，能与新增列共存。未完成的 lease 到期后会重新进入可领取状态。回滚前后均检查 `/healthz`、收藏列表和后台处理状态。
+不要自动执行 D1 全库回退。Time Travel 会覆盖恢复点之后的合法收藏和整理，需要先保留当前快照、核对新增数据并制定补回步骤。R2 冷归档对象与 D1 引用必须成对检查，不能只恢复一侧就宣布重放正常。
 
-## 5. 观测
+供应商暂停时不重启全库处理或增加预算。先检查真实调用回执、租约和组件状态；unknown 调用按原合同等待核对。
 
-- 容器健康：`GET /healthz`（进程存活，不依赖上游）。
-- 服务就绪：`GET /readyz`；启动自检或模型契约检查失败时为 `503`，`ready_reason` 说明原因。
-- 最近批次：`GET /status`。
-- 中文收藏库：`GET /`（列表、阅读与整理在同一页面）；单条收藏的直达链接：`GET /bookmarks/{id}`；服务状态：`GET /backstage`；只允许通过可信局域网访问。
-- 收藏列表：`GET /api/bookmarks`；人工处理：`POST /api/bookmarks/process`。
-- 固定词表：`GET /api/taxonomy`；应返回 `2026-09-08.1` 版本。
-- 图片代理：`GET /api/images/{key...}`；对象本体位于 Cloudflare R2。
-- 日志：结构化 JSON，按 `link_id` 和 `attempt` 关联，不记录凭据或模型原文。
-- D1：检查 `enrichment_status`、`enrichment_error` 和 `enrichment_updated_at`。
+## 浏览器本机副本
+
+内存正文缓存最多 40 篇 / 8 MiB，当前正在阅读的单篇可短暂超过容量。持久文字副本最多 20 篇 / 8 MiB，七天过期，按后端和凭据摘要隔离；变更及明确删除会使本机副本失效。
+
+LAN HTTP 页面无法依靠 Service Worker 冷启动。列表菜单提供可独立打开的离线阅读文件和清除本机副本；下载文件包含当时的文字，不缓存图片，不会被服务器远程擦除。恢复联网后以服务端当前版本为准。
