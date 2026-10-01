@@ -1,6 +1,7 @@
 // Same-origin API client. The browser never holds a Worker token or model key:
 // every call goes to the Go service, which forwards it with its own credentials.
-import { emit, getItem, on } from "./store.js";
+import { emit, getItem, on, state } from "./store.js";
+import { beginOfflineMutation, forgetOffline, observeOfflineScope, offlineScopeVersion } from "./offline.js";
 
 const ERROR_LABELS = Object.freeze({
   job_busy: "这条正在处理中",
@@ -32,7 +33,8 @@ const ERROR_LABELS = Object.freeze({
   unsupported_filter_contract: "服务暂不支持完整筛选，请更新服务或清除筛选后浏览。",
   v2_unsupported: "后端不支持这个操作",
   no_replayable_run: "还没有可重算的分类记录",
-  network_error: "网络连接失败，请检查服务是否在线"
+  network_error: "网络连接失败，请检查服务是否在线",
+  account_changed: "连接的账号已变更，正在刷新页面"
 });
 
 // Unknown codes are surfaced verbatim rather than hidden, so a new backend
@@ -57,17 +59,26 @@ export class APIError extends Error {
 
 export async function fetchJSON(path, options = {}) {
   let response;
+  const scopeVersion = offlineScopeVersion();
   try {
     response = await fetch(path, { cache: "no-store", ...options });
   } catch (error) {
     if (error?.name === "AbortError") throw error;
     throw new APIError("network_error", 0);
   }
+  checkResponseScope(response, scopeVersion);
+  const acceptedScopeVersion = offlineScopeVersion();
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
+    assertCurrentScope(acceptedScopeVersion);
     throw new APIError(payload.error || `HTTP ${response.status}`, response.status, payload);
   }
-  return response.json();
+  const payload = await response.json().catch((error) => {
+    assertCurrentScope(acceptedScopeVersion);
+    throw error;
+  });
+  assertCurrentScope(acceptedScopeVersion);
+  return payload;
 }
 
 function jsonBody(method, body) {
@@ -78,12 +89,16 @@ function jsonBody(method, body) {
 // normal result, not a transport failure.
 async function processingRequest(path, body) {
   let response;
+  const scopeVersion = offlineScopeVersion();
   try {
     response = await fetch(path, jsonBody("POST", body));
   } catch {
     throw new APIError("network_error", 0);
   }
+  checkResponseScope(response, scopeVersion);
+  const acceptedScopeVersion = offlineScopeVersion();
   const payload = await response.json().catch(() => ({}));
+  assertCurrentScope(acceptedScopeVersion);
   if (!response.ok && !Array.isArray(payload.rejected)) {
     throw new APIError(payload.error || `HTTP ${response.status}`, response.status, payload);
   }
@@ -215,11 +230,17 @@ function queryRead(path, params, signal, { reuse = false } = {}) {
 
 async function mutate(load, id) {
   invalidateQueryReads();
-  if (id) invalidateDetail(id);
-  try { return await load(); }
+  const finishOffline = beginOfflineMutation(id);
+  invalidateDetails(id);
+  try {
+    await forgetOffline(id);
+    return await load();
+  }
   finally {
     // Reads that overlapped a write may still contain the pre-write snapshot.
     invalidateQueryReads();
+    invalidateDetails(id);
+    await finishOffline();
     emit("library:changed");
   }
 }
@@ -383,6 +404,32 @@ function invalidateDetail(id) {
   else detailStates.delete(id);
 }
 
+function invalidateDetails(id) {
+  if (id) invalidateDetail(id);
+  else for (const key of new Set([...detailStates.keys(), ...prefetchedDetails.keys(), ...auxActive.keys(), ...auxCache.values()].map((value) => typeof value === "object" ? value.id : value))) invalidateDetail(key);
+}
+
+function checkResponseScope(response, version) {
+  const observed = observeOfflineScope(response.headers?.get("X-Cairn-Offline-Scope"), version);
+  if (observed.changed) {
+    void forgetOffline();
+    invalidateQueryReads();
+    invalidateDetails();
+    once.clear();
+    readingSupported = null;
+    state.items.clear();
+    state.order = [];
+    state.checked.clear();
+    state.counts = state.overview = null;
+    emit("account:changed");
+  }
+  if (!observed.accepted || observed.changed) throw new APIError("account_changed", 409);
+}
+
+function assertCurrentScope(version) {
+  if (version !== offlineScopeVersion()) throw new APIError("account_changed", 409);
+}
+
 function readDetail(id, { prefetch = false, fresh = false } = {}) {
   let state = detailStates.get(id);
   if (!state) { state = { generation: 0, active: 0 }; detailStates.set(id, state); }
@@ -448,8 +495,11 @@ export const api = {
   renameCustomTag: (id, body) => mutate(() => fetchJSON(`/api/custom-tags/${encodeURIComponent(id)}`, jsonBody("PATCH", body))),
   archiveCustomTag: (id, body) => mutate(() => fetchJSON(`/api/custom-tags/${encodeURIComponent(id)}`, jsonBody("DELETE", body))),
   tagCounts: (params, signal) => queryRead("/api/tag-counts", params, signal, { reuse: true }),
+  tagQuality: () => fetchJSON("/api/tag-quality"),
   evidence: (id) => fetchJSON(`/api/bookmarks/${id}/evidence`),
   classificationStatus: (id) => fetchJSON(`/api/bookmarks/${id}/classification-status`),
+  runHistory: (id, cursor) => fetchJSON(`/api/bookmarks/${id}/runs${cursor ? `?after_id=${cursor}` : ""}`),
+  runDetail: (id, runID) => fetchJSON(`/api/bookmarks/${id}/runs/${runID}`),
   entities: (id, identity, options) => readAux("entities", id, identity, options),
   correctEntity: (id, body) => mutate(() => fetchJSON(`/api/bookmarks/${id}/entities`, jsonBody("POST", body)), id),
   retryClassification: (id) => mutate(() => fetchJSON(`/api/bookmarks/${id}/retry-classification`, { method: "POST" }), id),

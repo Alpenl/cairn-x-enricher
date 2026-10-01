@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "worker_repository": "Alpenl/cairn-share",
+  "worker_revision": "2397bc6220e56092f5718cf703df2b928224b54b",
+  "last_worker_migration": "0050_classification_audit_archive.sql",
+  "verification": {
+    "paid_models": false,
+    "integration": "tests/local-integration/run.sh",
+    "browser": "tests/local-integration/browser-e2e.sh"
+  }
+}

@@ -6,6 +6,7 @@ import * as diagnostics from "./diagnostics.js";
 import { byId, clear, h } from "./dom.js";
 import { displaySummary, displayTitle, formatFull, isWorking, paragraphsOf, sourceLabels, sourceLine } from "./format.js";
 import { icon } from "./icons.js";
+import { forgetOffline, offlineItem, rememberOffline } from "./offline.js";
 import { STATUSES } from "./query.js";
 import { emit, getItem, mergeItem, on, state } from "./store.js";
 import { confirmAction, openDialog, openMenu, toast } from "./ui.js";
@@ -103,7 +104,9 @@ function renderProcessBanner(item) {
   const actions = [];
   let tone = "info";
   let text = "";
-  if (item.paid_call_unresolved) {
+  if (item.offline_cached_at) {
+    text = `离线副本 · ${formatFull(new Date(item.offline_cached_at).toISOString())} · 内容可能已更新，编辑需要联网。`;
+  } else if (item.paid_call_unresolved) {
     tone = "danger";
     text = "上次模型调用结果尚未核对，已暂停自动重试。可以粘贴新的原文或更换来源。";
     actions.push(h("button.btn.btn-sm", { type: "button", onclick: () => pasteSource(item.id) }, icon("clipboard", 14), "粘贴原文"));
@@ -192,6 +195,8 @@ async function fetchDetail(id, { silent = false } = {}) {
       return false;
     }
     const merged = mergeItem(item);
+    delete merged.offline_cached_at;
+    void rememberOffline(merged);
     els.bodyLoading.hidden = true;
     els.error.hidden = true;
     els.article.hidden = false;
@@ -201,6 +206,18 @@ async function fetchDetail(id, { silent = false } = {}) {
     return true;
   } catch (error) {
     if (token !== loadToken || id !== currentId) return false;
+    if ([401, 403, 404].includes(error?.status)) void forgetOffline(id);
+    if (!error?.status || error.status >= 500) {
+      const copy = await offlineItem(id);
+      if (token !== loadToken || id !== currentId) return false;
+      if (copy) {
+        els.bodyLoading.hidden = true;
+        els.error.hidden = true;
+        els.article.hidden = false;
+        render(mergeItem(copy));
+        return true;
+      }
+    }
     els.bodyLoading.hidden = true;
     if (silent) {
       toast("刷新内容失败", { tone: "error" });

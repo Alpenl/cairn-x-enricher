@@ -96,34 +96,35 @@ func (c *Client) SetCallBudget(store CallBudgetStore, limits CallBudgetLimits) e
 	c.callBudgetLimits = limits
 	return nil
 }
-func (c *Client) reserveProviderCall(ctx context.Context, body []byte) error {
+func (c *Client) reserveProviderCall(ctx context.Context, body []byte) (string, error) {
 	if c.callBudgetStore == nil {
-		return nil
+		return "", nil
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return "", err
 	}
 	lease, ok := ctx.Value(classificationLeaseKey{}).(ClassificationLease)
 	if !ok || lease.LinkID < 1 || lease.LeaseToken == "" || lease.SpecID != c.spec.SpecID || lease.EvidenceSnapshotID < 1 || lease.EvidenceHash == "" {
-		return enrich.Classified(errors.New("classification budget requires a verified leased snapshot"), enrich.ErrorClassConfiguration)
+		return "", enrich.Classified(errors.New("classification budget requires a verified leased snapshot"), enrich.ErrorClassConfiguration)
 	}
 	nonce := make([]byte, 32)
 	if _, err := rand.Read(nonce); err != nil {
-		return err
+		return "", err
 	}
-	grant, err := c.callBudgetStore.ReserveClassificationBudget(ctx, CallReservation{ClassificationLease: lease, OperationKey: hex.EncodeToString(nonce), Model: c.model, RequestHash: sha256Hex(body), Tokens: 65536, Limits: c.callBudgetLimits})
+	key := hex.EncodeToString(nonce)
+	grant, err := c.callBudgetStore.ReserveClassificationBudget(ctx, CallReservation{ClassificationLease: lease, OperationKey: key, Model: c.model, RequestHash: sha256Hex(body), Tokens: 65536, Limits: c.callBudgetLimits})
 	if err != nil {
 		if enrich.IsStale(err) {
-			return err
+			return "", err
 		}
 		// An unknown grant must stop this component rather than draining jobs while
 		// its budget backend is unavailable. No retry or refund at this boundary.
-		return enrich.Classified(errors.New("classification budget unavailable; inference not attempted"), enrich.ErrorClassBudget)
+		return "", enrich.Classified(errors.New("classification budget unavailable; inference not attempted"), enrich.ErrorClassBudget)
 	}
 	if !grant.Granted || grant.Reason != "reserved" {
-		return enrich.Classified(errors.New("classification budget not granted: "+grant.Reason), enrich.ErrorClassBudget)
+		return "", enrich.Classified(errors.New("classification budget not granted: "+grant.Reason), enrich.ErrorClassBudget)
 	}
-	return nil
+	return key, nil
 }
 
 // attemptedCall omits a pre-admission refusal from actual provider-call history.

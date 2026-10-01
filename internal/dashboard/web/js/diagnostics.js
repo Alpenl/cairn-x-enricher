@@ -25,6 +25,45 @@ let currentId = 0;
 let loadedId = 0;
 let statusTimer = 0;
 let statusPolls = 0;
+let historyId = 0;
+let historyCursor = null;
+let historyBusy = false;
+
+async function loadRunHistory(id, append = false) {
+  if (historyBusy) return;
+  historyBusy = true;
+  els.historyMore.disabled = true;
+  try {
+    const page = await api.runHistory(id, append ? historyCursor : null);
+    if (id !== currentId) return;
+    if (!append) els.historyItems.replaceChildren();
+    historyId = id;
+    historyCursor = page.next_after_id;
+    els.historyMore.hidden = !historyCursor;
+    if (page.available === false) { note(els.historyStatus, "后端暂不支持分页历史。"); return; }
+    note(els.historyStatus, page.runs?.length ? "按时间倒序；展开一条记录读取完整判断。" : "还没有分类运行记录。");
+    for (const run of page.runs || []) {
+      const row = h("details.run-record", h("summary", `${formatDateTime(run.created_at)} · ${run.status} · ${run.resolved_model || run.requested_model}${run.archived ? " · 已归档" : ""}`));
+      let loaded = false;
+      row.addEventListener("toggle", async () => {
+        if (!row.open || loaded) return;
+        loaded = true;
+        row.querySelector("pre")?.remove();
+        const body = h("pre.run-record-body", "正在读取…");
+        row.append(body);
+        try { body.textContent = JSON.stringify(await api.runDetail(id, run.id), null, 2); }
+        catch { body.textContent = "读取失败，收起后重试。"; loaded = false; }
+      });
+      els.historyItems.append(row);
+    }
+  } catch {
+    if (id === currentId) note(els.historyStatus, "读取运行历史失败，重新展开可重试。", true);
+  } finally {
+    historyBusy = false;
+    els.historyMore.disabled = false;
+    if (id !== currentId && currentId && els.history.open) loadRunHistory(currentId);
+  }
+}
 
 function note(node, message, isError = false) {
   node.textContent = message || "";
@@ -195,6 +234,14 @@ export async function replayPolicy(id, commit = false) {
 }
 
 export function show(id) {
+  if (id !== currentId) {
+    historyId = 0;
+    historyCursor = null;
+    els.historyItems.replaceChildren();
+    note(els.historyStatus, "");
+    els.historyMore.hidden = true;
+    if (id && els.history.open && !historyBusy) loadRunHistory(id);
+  }
   currentId = id;
   if (els.root.open && loadedId !== id) load(id);
   else if (!els.root.open) loadedId = 0;
@@ -212,6 +259,10 @@ export function initDiagnostics() {
     evidenceStatus: byId("v2-evidence-status"), evidenceBlocks: byId("v2-evidence-blocks"),
     provenance: byId("v2-entity-provenance"), observations: byId("v2-entity-observations")
   });
+  Object.assign(els, { history: byId("run-history"), historyStatus: byId("run-history-status"),
+    historyItems: byId("run-history-items"), historyMore: byId("run-history-more") });
+  els.history.addEventListener("toggle", () => { if (els.history.open && currentId && historyId !== currentId) loadRunHistory(currentId); });
+  els.historyMore.addEventListener("click", () => { if (currentId && historyCursor) loadRunHistory(currentId, true); });
   els.root.addEventListener("toggle", () => {
     if (els.root.open && currentId && loadedId !== currentId) load(currentId);
   });

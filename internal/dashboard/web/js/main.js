@@ -10,11 +10,13 @@ import { byId } from "./dom.js";
 import { exportItems, exportServer } from "./export.js";
 import { curationLabels, needsReview } from "./format.js";
 import * as list from "./list.js";
+import { downloadOffline, forgetOffline } from "./offline.js";
 import {
   apiParams, buildQuery, clearFacets, matchesStatusView, parseQuery, sinceLabel, toggleValue, withView
 } from "./query.js";
 import { initShortcuts, showHelp } from "./shortcuts.js";
 import * as sidebar from "./sidebar.js";
+import { createSidebarModal } from "./sidebar-modal.js";
 import { emit, getItem, mergeItem, on, state } from "./store.js";
 import { ENTITY_STATES, loadV1, loadV2, vocab } from "./taxonomy.js";
 import { initTheme } from "./theme.js";
@@ -71,18 +73,16 @@ function applyRouteClasses() {
 
 const wideQuery = matchMedia("(min-width: 1180px)");
 const mediumQuery = matchMedia("(min-width: 760px)");
+const setSidebarModal = createSidebarModal(app);
 
 function updateLayout() {
   state.layout = wideQuery.matches ? "wide" : mediumQuery.matches ? "medium" : "narrow";
   app.dataset.layout = state.layout;
-  if (state.layout === "wide") setSidebarOpen(false);
+  setSidebarOpen(state.layout !== "wide" && app.classList.contains("sidebar-open"));
 }
 
 function setSidebarOpen(open) {
-  app.classList.toggle("sidebar-open", open);
-  byId("sidebar-backdrop").hidden = !open;
-  for (const button of document.querySelectorAll("[data-open-sidebar]")) button.setAttribute("aria-expanded", String(open));
-  if (open) byId("sidebar").querySelector("a, button")?.focus({ preventScroll: true });
+  setSidebarModal(open, { compact: state.layout !== "wide" });
 }
 
 function isFocusMode() {
@@ -536,6 +536,10 @@ function openListMenu(anchor) {
     { label: "导出当前结果（Markdown）", icon: "download", hint: state.total ? `${Math.min(state.total, 500)} 条，不调用模型` : "不调用模型", run: exportCurrentList },
     { label: state.checked.size ? "取消全部选择" : "选择全部已加载", icon: "checkSquare", kbd: "X", run: list.checkAllLoaded },
     { label: "刷新列表", icon: "refresh", run: () => list.reload() },
+    { label: "下载离线阅读文件", icon: "download", hint: "最近 20 条 · 文字副本", run: async () => {
+      if (!await downloadOffline()) toast("还没有离线副本，请先打开一篇收藏阅读。");
+    } },
+    { label: "清除本机离线副本", icon: "trash", run: async () => { await forgetOffline(); toast("已清除本机离线副本"); } },
     "separator",
     { label: "键盘快捷键", icon: "keyboard", kbd: "?", run: showHelp }
   ]);
@@ -636,6 +640,7 @@ async function boot() {
   });
   wireSearch();
 
+  on("account:changed", () => location.reload());
   on("tags:changed", () => { scheduleOverview(); list.reload({ silent: true }); });
   on("tag-filter-request", ({ field, term }) => setFilters(toggleValue(state.filters, field, term)));
   on("confirm-request", (id) => confirmOne(id));

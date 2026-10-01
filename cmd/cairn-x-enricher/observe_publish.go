@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
+	"github.com/Alpenl/cairn-x-enricher/internal/health"
 	"github.com/Alpenl/cairn-x-enricher/internal/observability"
 )
 
@@ -51,16 +52,8 @@ func publishWorkerPolicyOnce(ctx context.Context, store *observability.Store, cl
 	store.SetWorkerPublishResult(nil, "unavailable")
 }
 
-func runWorkerPolicyPublisher(ctx context.Context, store *observability.Store, client *cairn.Client) {
-	publishWorkerPolicyOnce(ctx, store, client)
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			publishWorkerPolicyOnce(ctx, store, client)
-		}
-	}
+func runWorkerPolicyPublisher(ctx context.Context, store *observability.Store, client *cairn.Client, tracker *health.Tracker) {
+	runMonitoredPeriodic(ctx, tracker, "policy_publisher", 5*time.Second, 10*time.Second, func() {
+		publishWorkerPolicyOnce(ctx, store, client)
+	})
 }

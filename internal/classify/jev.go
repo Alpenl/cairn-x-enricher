@@ -368,9 +368,11 @@ func (c *Client) callProvider(ctx context.Context, body []byte) (wire providerRe
 	if err != nil {
 		return wire, errors.New("invalid TypeSafe endpoint")
 	}
-	if err := c.reserveProviderCall(ctx, body); err != nil {
+	reservationKey, err := c.reserveProviderCall(ctx, body)
+	if err != nil {
 		return wire, err
 	}
+	call.ReservationKey = reservationKey
 	started := time.Now()
 	defer func() {
 		call.LatencyMS = time.Since(started).Milliseconds()
@@ -378,6 +380,7 @@ func (c *Client) callProvider(ctx context.Context, body []byte) (wire providerRe
 		call.Usage = wire.Usage
 		_, _, usageOK := tokenUsage(wire.Usage)
 		call.UsageMissing = !usageOK
+		call.ErrorClass = ProviderAttemptErrorClass(err, call.HTTPStatus)
 		wire.Call = call
 		wire.UsageMissing = call.UsageMissing
 	}()

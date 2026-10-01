@@ -210,7 +210,7 @@ export function highlightRanges(text, terms) {
 export function searchExcerpt(item, terms, width = 160) {
   const summary = displaySummary(item);
   if (!terms.length) return summary;
-  const fields = [item.summary, item.translated_text, item.original_text, item.classification?.entities?.join(" / "),
+  const fields = [item.search_excerpt, item.summary, item.translated_text, item.original_text, item.classification?.entities?.join(" / "),
     item.classification?.why_suggestion, item.note, item.why];
   for (const value of fields) {
     if (!value) continue;

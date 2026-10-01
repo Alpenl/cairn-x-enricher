@@ -12,6 +12,8 @@ import (
 // ProviderCall describes one actual HTTP attempt. It excludes credentials and
 // carries only this run's usage; reusing answers does not bill old usage again.
 type ProviderCall struct {
+	ReservationKey string          `json:"reservation_key,omitempty"`
+	ErrorClass     string          `json:"error_class,omitempty"`
 	RequestHash    string          `json:"request_hash"`
 	StateHash      string          `json:"state_hash"`
 	QuestionIDs    []string        `json:"question_ids"`

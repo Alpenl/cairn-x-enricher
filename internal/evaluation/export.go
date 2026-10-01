@@ -83,13 +83,28 @@ func ExportDataset(ctx context.Context, source PredictionSource, options ExportO
 }
 
 func exportLink(ctx context.Context, source PredictionSource, id int64) (*Sample, *Prediction, error) {
-	runs, err := source.GetRuns(ctx, id)
-	if err != nil {
-		return nil, nil, err
-	}
-	run, ok := newestCompleteRun(runs)
-	if !ok {
-		return nil, nil, nil
+	var run cairn.StoredRun
+	if modern, ok := source.(interface {
+		GetReplayableRun(context.Context, int64) (*cairn.StoredRun, error)
+	}); ok {
+		latest, err := modern.GetReplayableRun(ctx, id)
+		if err != nil {
+			return nil, nil, err
+		}
+		if latest == nil {
+			return nil, nil, nil
+		}
+		run = *latest
+	} else {
+		runs, err := source.GetRuns(ctx, id)
+		if err != nil {
+			return nil, nil, err
+		}
+		var found bool
+		run, found = newestCompleteRun(runs)
+		if !found {
+			return nil, nil, nil
+		}
 	}
 	storedSpec, err := source.GetQuestionSpec(ctx, run.SpecID)
 	if err != nil {
@@ -131,6 +146,7 @@ func exportLink(ctx context.Context, source PredictionSource, id int64) (*Sample
 		Model:              run.ResolvedModel,
 		PolicyVersion:      run.PolicyVersion,
 		Topics:             proposals.Topics,
+		ResourceKinds:      proposals.ResourceKinds,
 		ContentFunctions:   proposals.ContentFunctions,
 		Carriers:           proposals.Carriers,
 		Affordances:        proposals.Affordances,

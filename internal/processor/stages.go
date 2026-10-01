@@ -96,7 +96,9 @@ type stages struct {
 	fetchPolicy extension.FetchPolicy
 	// partialReuse opts in to reusing unchanged stored answers. It defaults off:
 	// the conservative full evaluation is the production default (R2-13).
-	partialReuse bool
+	partialReuse         bool
+	preflight            *sourcePreflight
+	classificationWakeup chan<- struct{}
 }
 
 // ErrComponentPaused reports that the classification component is in a
@@ -296,6 +298,11 @@ func (p *Processor) SourceStagePaused(stage string) (bool, string, time.Duration
 	if p.stages == nil {
 		return false, "", 0
 	}
+	if p.stages.preflight != nil && (stage == "source" || stage == "fetch" || stage == "reading") {
+		if paused, reason, remaining := p.stages.preflight.state(); paused {
+			return paused, reason, remaining
+		}
+	}
 	pause := p.stages.pauseFor(stage)
 	if pause == nil {
 		return false, "", 0
@@ -370,6 +377,14 @@ func (p *Processor) SetPaidStageTimeout(timeout time.Duration) {
 
 func (p *Processor) admitPaidStage(ctx context.Context, job *cairn.Job, stage string,
 	probe *sourceStageProbe) error {
+	if err := p.checkSourcePreflight(ctx); err != nil {
+		reportCtx, cancel := boundedStateReportContext(ctx)
+		defer cancel()
+		if reportErr := p.stages.queue.DeferSourceStage(reportCtx, job.ID, job.LeaseToken, stage); reportErr != nil {
+			return reportErr
+		}
+		return ErrJobDeferred
+	}
 	pause := p.stages.pauseFor(stage)
 	paused, _, _ := pause.state()
 	component := stage
@@ -608,10 +623,12 @@ func (p *Processor) persistSourceEvidence(ctx context.Context, id int64, source 
 	if err := p.stages.queue.SubmitEvidence(ctx, id, snapshot); err != nil {
 		if cairn.IsUnsupported(err) {
 			p.logger.InfoContext(ctx, "evidence snapshots unsupported by backend; continuing in v1 mode", "link_id", id)
+			p.notifyClassification()
 			return nil
 		}
 		return fmt.Errorf("persist evidence snapshot: %w", err)
 	}
+	p.notifyClassification()
 	return nil
 }
 
@@ -754,8 +771,11 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		if p.claimTimeout > 0 {
 			claimCtx, stopClaim = context.WithTimeout(ctx, p.claimTimeout)
 		}
+		finishClaim := trackProgress(ctx, p.claimGrace())
+		defer finishClaim()
 		job, err := s.queue.ClaimClassification(claimCtx, s.classifier.SpecID(), s.version, s.model)
 		stopClaim()
+		finishClaim()
 		if err != nil {
 			var apiErr *cairn.APIError
 			if errors.As(err, &apiErr) && apiErr.Code == "component_paused" {
@@ -790,6 +810,8 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		// WithoutCancel keeps shutdown from tearing down a paid inference that is
 		// about to succeed, but the deadline stops an unbounded drain.
 		workCtx, cancelWork := context.WithTimeout(context.WithoutCancel(ctx), s.classificationDeadline)
+		finishJob := trackProgress(ctx, s.classificationDeadline+30*time.Second)
+		defer finishJob()
 		workDeadline, _ := workCtx.Deadline()
 		inferenceCtx, cancelInference := context.WithDeadline(workCtx, workDeadline.Add(-classificationCommitMargin))
 		var result classify.Result
@@ -800,10 +822,11 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 			result, err = p.classifyJob(inferenceCtx, job)
 		}
 		cancelInference()
+		p.recordClassificationAttempts(workCtx, job, result.RawJudgments.Calls, err)
 		if err != nil {
 			cancelWork()
 			if len(result.RawJudgments.Calls) > 0 {
-				p.logger.WarnContext(ctx, "classification inference attempt failed; no inference fallback", "link_id", job.ID, "provider_calls", result.RawJudgments.Calls)
+				p.logger.WarnContext(ctx, "classification inference attempt failed; no inference fallback", "link_id", job.ID, "provider_calls", len(result.RawJudgments.Calls))
 			}
 			if enrich.IsStale(err) {
 				// Superseded input/target: not a semantic failure, and the Worker
@@ -814,6 +837,7 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 				if reportErr != nil && !enrich.IsStale(reportErr) {
 					return completed, failed, errors.Join(err, reportErr)
 				}
+				finishJob()
 				continue
 			}
 			if enrich.PausesComponent(err) {
@@ -847,6 +871,7 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 			if providerTransient {
 				return completed, failed, fmt.Errorf("%w: %w", ErrComponentPaused, err)
 			}
+			finishJob()
 			continue
 		}
 		// The model stage succeeded: only now may the breaker clear.
@@ -861,7 +886,11 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		}
 		cancelWork()
 		completed++
+		finishJob()
+		finishExtensions := trackProgress(ctx, 2*time.Minute)
+		defer finishExtensions()
 		p.runExtensions(ctx, job)
+		finishExtensions()
 	}
 	return completed, failed, nil
 }

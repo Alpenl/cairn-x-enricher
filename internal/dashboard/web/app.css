@@ -374,7 +374,7 @@ kbd {
     visibility: hidden;
     box-shadow: var(--shadow-lg);
   }
-  .app.sidebar-open .sidebar { transform: none; visibility: visible; }
+  .app.sidebar-open .sidebar { transform: none; visibility: visible; transition-property: transform; }
   .sidebar-backdrop {
     position: fixed;
     inset: 0;
@@ -1864,3 +1864,9 @@ button.chip:hover .chip-x, button.chip:focus-visible .chip-x { width: 11px; opac
   .tag-action,.tag-remove { min-height:32px; min-width:28px; }
   .curate-summary-tags .tag { max-width:120px; }
 }
+/* Historical payloads are deliberately outside the ordinary reading flow. */
+.run-record { margin-block: 10px; }
+.run-record-body { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28rem; overflow: auto; font-size: 12px; }
+.quality-table-scroll { overflow-x: auto; }
+.quality-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.quality-table td, .quality-table th { padding: 8px; border-bottom: 1px solid var(--line, #e4e7ea); white-space: nowrap; }

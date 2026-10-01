@@ -433,6 +433,7 @@ func (c *Client) refreshSource(ctx context.Context, id int64, operationKey strin
 // The answers field is decoded lazily by the caller so this package does not
 // depend on the classify package's internal shapes.
 type StoredRun struct {
+	Archived           bool            `json:"archived,omitempty"`
 	RawJudgments       json.RawMessage `json:"raw_judgments"`
 	EvidenceSnapshotID int64           `json:"evidence_snapshot_id"`
 	SourceHash         string          `json:"source_hash"`

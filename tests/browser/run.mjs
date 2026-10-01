@@ -551,6 +551,14 @@ async function partB(browser) {
   check("the reading pane shows the selected bookmark", (await page.textContent("#detail-title")) === (state.items.find((item) => item.id === inbox[0]).ai_title || await page.textContent("#detail-title")));
   check("the navigation shows live counts", /\d+/.test(await page.textContent("[data-view='inbox'] .nav-count") || ""));
 
+  // Enter on a list control must keep the button's native click behaviour.
+  await page.locator("#list-menu").focus();
+  await page.keyboard.press("Enter");
+  await page.waitForSelector("[role='menu']");
+  check("Enter opens the focused list menu", await page.locator("[role='menu']").isVisible());
+  await page.keyboard.press("Escape");
+  await page.locator("#list-menu").evaluate((node) => node.blur());
+
   // J/K move through the list and keep the URL shareable.
   const beforeJRequests = state.requests.length;
   await page.keyboard.press("j");
@@ -716,6 +724,19 @@ async function partB(browser) {
   await phone.goto(`${base}/?curation_status=kept`, { waitUntil: "networkidle" });
   await phone.waitForSelector("#rows li.row");
   check("the phone list does not auto-open a bookmark", !(await phone.evaluate(() => document.getElementById("app").classList.contains("detail-open"))));
+  const opener = phone.locator("#list-pane [data-open-sidebar]");
+  await opener.click();
+  check("phone navigation has modal semantics", await phone.locator("#sidebar").getAttribute("aria-modal") === "true");
+  check("phone navigation makes the background inert", await phone.locator("#list-pane").evaluate((node) => node.inert));
+  await phone.locator("#sidebar .brand").focus();
+  await phone.keyboard.press("Shift+Tab");
+  check("sidebar reverse tab wraps to its last control", await phone.evaluate(() => document.activeElement?.id === "service-link"));
+  await phone.keyboard.press("Tab");
+  check("sidebar tab wraps to its first control", await phone.evaluate(() => document.activeElement?.classList.contains("brand")));
+  await phone.keyboard.press("Escape");
+  check("closing sidebar restores the opening button", await opener.evaluate((node) => document.activeElement === node));
+  check("closed phone navigation leaves the background usable", await phone.locator("#list-pane").evaluate((node) => !node.inert));
+  check("closed phone navigation leaves the tab order", await phone.locator("#sidebar").evaluate((node) => node.inert));
   const phoneFirst = await phone.$eval("#rows li.row", (node) => Number(node.dataset.id));
   await phone.click("#rows li.row a.row-main");
   await phone.waitForFunction(() => document.getElementById("app").classList.contains("detail-open"));

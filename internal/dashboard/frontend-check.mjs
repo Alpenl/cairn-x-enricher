@@ -132,6 +132,8 @@ equal("highlight without terms", format.highlightRanges("text", []), []);
 {
   const excerpt = format.searchExcerpt({ summary: "无关", original_text: `${"x".repeat(80)} needle here` }, ["needle"]);
   check("searchExcerpt reaches into the original text", excerpt.text.includes("needle") && excerpt.text.startsWith("…"), excerpt.text);
+  const compact = format.searchExcerpt({ summary: "无关", search_excerpt: "原文深处的 needle 命中", content_loaded: false }, ["needle"]);
+  check("searchExcerpt uses a server excerpt without loading the body", compact.text.includes("needle") && !compact.wait);
 }
 equal("paragraphs drop blank lines", format.paragraphsOf("a\n\n b \n"), ["a", "b"]);
 
@@ -146,6 +148,8 @@ const query = await load("query.js");
   equal("bare inbox builds the bare URL", query.buildQuery(bare.filters, ""), "");
   const round = query.parseQuery(query.buildQuery({ ...bare.filters, curation_status: "kept", topics: "llm,eval" }, "评估"));
   equal("filters survive a URL round trip", [round.filters.curation_status, round.filters.topics, round.search], ["kept", "llm,eval", "评估"]);
+  const intersection = query.parseQuery(query.buildQuery({ ...bare.filters, content_functions: "method,case", functions_mode: "all" }, ""));
+  equal("content intersection survives URL and API round trip", [intersection.filters.functions_mode, query.apiParams(intersection.filters, "").get("functions_mode")], ["all", "all"]);
   equal("all view is explicit in the URL", query.buildQuery({ ...query.emptyFilters(), curation_status: "all" }, ""), "?curation_status=all");
 }
 {
@@ -156,7 +160,7 @@ const query = await load("query.js");
   equal("multidimensional filters negotiate the contract", params.get("filter_contract_version"), "1");
   equal("paging carries the cursor", params.get("before_id"), "99");
   const search = query.apiParams({ ...query.emptyFilters(), curation_status: "inbox" }, "关键词");
-  check("search reads full rows for excerpts", !search.has("view") && search.get("q") === "关键词" && search.get("curation_status") === "inbox");
+  check("search reads summaries with excerpts", search.get("view") === "summary" && search.get("q") === "关键词" && search.get("curation_status") === "inbox");
   check("form and use also require the contract", query.needsFilterContract({ ...query.emptyFilters(), form: "method" }));
   check("status and source alone do not require the contract", !query.needsFilterContract({ ...query.emptyFilters(), curation_status: "kept", source: "x" }));
 }
@@ -266,6 +270,7 @@ equal("errorLabel unknown is shown verbatim", errorLabel("brand_new_code"), "bra
     reply(4, { id: 704, original_text: "before write" });
     await cached;
     const write = api.curation(704, { why: "new reason" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     reply(5, { id: 704, why: "new reason" });
     await write;
     const afterWrite = api.detail(704);

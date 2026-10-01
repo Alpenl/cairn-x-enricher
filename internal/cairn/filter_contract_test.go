@@ -55,3 +55,34 @@ func TestClientLegacyListKeepsOldShapeAndOptInIsExplicit(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestClientFunctionsIntersectionRequiresBothCapabilities(t *testing.T) {
+	for _, capabilities := range []string{"none", "tags", "functions", "both"} {
+		t.Run(capabilities, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Query().Get("functions_mode") != "all" || r.URL.Query().Get("content_functions") != "method,case" || r.URL.Query().Get("filter_contract_version") != "1" {
+					t.Errorf("intersection request lost: %s", r.URL.RawQuery)
+				}
+				if capabilities == "tags" || capabilities == "both" {
+					w.Header().Set("X-Cairn-Tag-System", "1")
+				}
+				if capabilities == "functions" || capabilities == "both" {
+					w.Header().Set("X-Cairn-Content-Functions", "1")
+				}
+				_, _ = fmt.Fprint(w, `{"items":[],"next_before_id":null,"counts":{},"filter_contract_version":1}`)
+			}))
+			defer server.Close()
+			_, err := NewClient(server.URL, "token", server.Client()).ListBookmarks(context.Background(), BookmarkQuery{ContentFunctions: []string{"method", "case"}, FunctionsMode: "all"})
+			if capabilities == "both" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				var apiErr *APIError
+				if !errors.As(err, &apiErr) || apiErr.Code != "unsupported_tag_filter_contract" {
+					t.Fatalf("missing capability accepted: %v", err)
+				}
+			}
+		})
+	}
+}

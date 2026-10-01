@@ -96,7 +96,7 @@ function vocabularyGroup(key, label, terms) {
   }
   // A saved URL never silently loses an unknown requested ID.
   for (const id of selected) if (!known.has(id)) chips.append(facetChip(key, id, `${id}（词表不可用）`, true));
-  const modeKey = ({ topics: "topics_mode", resource_kinds: "resource_mode", custom_tags: "custom_mode" })[key];
+  const modeKey = ({ topics: "topics_mode", resource_kinds: "resource_mode", custom_tags: "custom_mode", content_functions: "functions_mode" })[key];
   if (modeKey && selected.size >= 2 && vocab.tagSystemAvailable !== false) {
     const mode = h("select.facet-mode", { "aria-label": `${label}匹配方式`, value: state.filters[modeKey] || "any" },
       h("option", { value: "any" }, "匹配任一"), h("option", { value: "all" }, "全部匹配"));

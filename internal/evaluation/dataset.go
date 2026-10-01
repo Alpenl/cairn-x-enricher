@@ -47,12 +47,14 @@ type Label struct {
 // Gold is the reference answer, whose origin is explicitly recorded in Sample.
 // Nil Values without NotApplicable means unspecified, not a negative label.
 type Gold struct {
-	Topics           Label `json:"topics"`
-	ContentFunctions Label `json:"content_functions"`
-	Carriers         Label `json:"carriers"`
-	Affordances      Label `json:"affordances"`
-	Form             Label `json:"form"`
-	Use              Label `json:"use"`
+	// Nil means this dimension was never annotated, including historical gold.
+	ResourceKinds    *Label `json:"resource_kinds,omitempty"`
+	Topics           Label  `json:"topics"`
+	ContentFunctions Label  `json:"content_functions"`
+	Carriers         Label  `json:"carriers"`
+	Affordances      Label  `json:"affordances"`
+	Form             Label  `json:"form"`
+	Use              Label  `json:"use"`
 }
 
 // ReferenceMetadata makes constructed/automated reference labels auditable.
@@ -97,6 +99,7 @@ type Prediction struct {
 	Model              string                 `json:"model"`
 	PolicyVersion      string                 `json:"policy_version"`
 	Topics             []string               `json:"topics"`
+	ResourceKinds      []string               `json:"resource_kinds,omitempty"`
 	ContentFunctions   []string               `json:"content_functions"`
 	Carriers           []string               `json:"carriers"`
 	Affordances        []string               `json:"affordances"`
@@ -185,7 +188,7 @@ func (d Dataset) Validate() error {
 		if predicted[prediction.SampleID] {
 			return fmt.Errorf("duplicate prediction for %s", prediction.SampleID)
 		}
-		for _, values := range [][]string{prediction.Topics, prediction.ContentFunctions, prediction.Carriers, prediction.Affordances, prediction.Abstained} {
+		for _, values := range [][]string{prediction.Topics, prediction.ResourceKinds, prediction.ContentFunctions, prediction.Carriers, prediction.Affordances, prediction.Abstained} {
 			if err := uniqueValues(values); err != nil {
 				return fmt.Errorf("prediction %s: %w", prediction.SampleID, err)
 			}
@@ -295,7 +298,11 @@ func uniqueValues(values []string) error {
 }
 
 func referenceLabels(g Gold) map[string]Label {
-	return map[string]Label{"topics": g.Topics, "content_functions": g.ContentFunctions, "carriers": g.Carriers, "affordances": g.Affordances, "form": g.Form, "use": g.Use}
+	resource := Label{Unknown: true}
+	if g.ResourceKinds != nil {
+		resource = *g.ResourceKinds
+	}
+	return map[string]Label{"topics": g.Topics, "resource_kinds": resource, "content_functions": g.ContentFunctions, "carriers": g.Carriers, "affordances": g.Affordances, "form": g.Form, "use": g.Use}
 }
 
 func knownLabel(label Label) bool {

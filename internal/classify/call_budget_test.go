@@ -79,6 +79,9 @@ func TestClassificationBudgetCountsActualBatchesWithoutInventingDeniedCalls(t *t
 		if store.requests[i].RequestHash != sha256Hex([]byte(body)) || store.requests[i].Tokens != 65536 {
 			t.Fatal("reservation not bound to actual HTTP bytes")
 		}
+		if raw.Calls[i].ReservationKey != store.requests[i].OperationKey {
+			t.Fatal("actual attempt lost its persisted reservation identity")
+		}
 	}
 	if store.requests[0].OperationKey == store.requests[1].OperationKey {
 		t.Fatal("distinct HTTP requests reused grant")

@@ -4,6 +4,8 @@
 # the actual dashboard in a real Chrome. Only the paid model endpoints are
 # replaced by tests/local-integration/mock-model.mjs.
 set -euo pipefail
+export WRANGLER_SEND_METRICS=false
+export npm_config_registry=http://127.0.0.1:9
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 enricher_root="$(cd "$here/../.." && pwd)"
@@ -14,7 +16,7 @@ if [ ! -d "$share_root/worker/node_modules" ]; then
   exit 1
 fi
 
-work="$(mktemp -d /tmp/opencode/cairn-browser-e2e.XXXXXX)"
+work="$(mktemp -d "${TMPDIR:-/tmp}/cairn-browser-e2e.XXXXXX")"
 worker_pid=""
 cleanup() {
   if [ -n "$worker_pid" ] && kill -0 "$worker_pid" 2>/dev/null; then
@@ -52,11 +54,11 @@ cat > "$work/wrangler.jsonc" <<EOF
 EOF
 
 echo "== applying real migrations to the local D1 =="
-(cd "$share_root/worker" && npx wrangler d1 migrations apply cairn-share-browser-e2e --local --config "$work/wrangler.jsonc" >"$work/migrations.log" 2>&1) \
+(cd "$share_root/worker" && ./node_modules/.bin/wrangler d1 migrations apply cairn-share-browser-e2e --local --config "$work/wrangler.jsonc" >"$work/migrations.log" 2>&1) \
   || { cat "$work/migrations.log"; exit 1; }
 
 echo "== starting wrangler dev on 127.0.0.1:$port =="
-(cd "$share_root/worker" && exec setsid "$share_root/worker/node_modules/.bin/wrangler" dev --local --port "$port" --ip 127.0.0.1 --config "$work/wrangler.jsonc" >"$work/dev.log" 2>&1) &
+(cd "$share_root/worker" && exec setsid "$share_root/worker/node_modules/.bin/wrangler" dev --local --port "$port" --inspector-port 0 --ip 127.0.0.1 --config "$work/wrangler.jsonc" >"$work/dev.log" 2>&1) &
 worker_pid=$!
 ready=""
 for _ in $(seq 1 120); do

@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -73,22 +75,83 @@ func TestLocalWorkerOnceSkipsEmptySourceCanary(t *testing.T) {
 	}
 	runServe := func(extra ...string) error {
 		t.Helper()
+		listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+		if err != nil {
+			return err
+		}
+		address := listener.Addr().String()
+		if err := listener.Close(); err != nil {
+			return err
+		}
 		command := exec.CommandContext(ctx, binary, "serve") // #nosec G204 -- isolated binary and fixed arguments.
 		command.Dir = work
-		command.Env = append(append([]string(nil), commonEnv...), extra...)
+		command.Env = append(append([]string(nil), commonEnv...), "HTTP_ADDR="+address)
+		command.Env = append(command.Env, extra...)
 		var stderr bytes.Buffer
 		command.Stderr = &stderr
-		err := command.Run()
+		if len(extra) == 0 {
+			if err := command.Run(); err != nil {
+				return fmt.Errorf("%w: %s", err, stderr.String())
+			}
+			return nil
+		}
+		if err := command.Start(); err != nil {
+			return err
+		}
+		defer func() { _ = command.Process.Kill() }()
+		client := &http.Client{Timeout: time.Second}
+		deadline := time.Now().Add(8 * time.Second)
+		var ready bool
+		for time.Now().Before(deadline) {
+			request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address+"/readyz", nil)
+			if err != nil {
+				return err
+			}
+			response, err := client.Do(request)
+			if err == nil {
+				var status struct {
+					Ready  bool   `json:"ready"`
+					Reason string `json:"ready_reason"`
+				}
+				decodeErr := json.NewDecoder(response.Body).Decode(&status)
+				_ = response.Body.Close()
+				if decodeErr == nil && !status.Ready && strings.Contains(status.Reason, "source provider contract check") && grokCalls.Load() == 1 {
+					ready = true
+					break
+				}
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if !ready {
+			_ = command.Process.Kill()
+			_ = command.Wait()
+			return fmt.Errorf("Reader did not remain reachable with paused source: %s", stderr.String())
+		}
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address+"/api/bookmarks?view=summary", nil)
 		if err != nil {
-			return fmt.Errorf("%w: %s", err, stderr.String())
+			return err
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			return err
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			return fmt.Errorf("Reader HTTP %d under source outage", response.StatusCode)
+		}
+		if err := command.Process.Signal(os.Interrupt); err != nil {
+			return err
+		}
+		if err := command.Wait(); err != nil {
+			return fmt.Errorf("shutdown: %w: %s", err, stderr.String())
 		}
 		return nil
 	}
 	if err := runServe(); err == nil || grokCalls.Load() != 0 {
 		t.Fatalf("serve accepted a missing Grok key: err=%v grok_calls=%d", err, grokCalls.Load())
 	}
-	if err := runServe("GROK_MODELS_BASE_URL="+grok.URL, "XAI_API_KEY=fixture", "GROK_MODEL=grok-test"); err == nil || grokCalls.Load() != 1 {
-		t.Fatalf("serve skipped empty-queue canary: err=%v grok_calls=%d", err, grokCalls.Load())
+	if err := runServe("GROK_MODELS_BASE_URL="+grok.URL, "XAI_API_KEY=fixture", "GROK_MODEL=grok-test"); err != nil || grokCalls.Load() != 1 {
+		t.Fatalf("serve outage blocked Reader or skipped deferred canary: err=%v grok_calls=%d", err, grokCalls.Load())
 	}
 	grokCalls.Store(0)
 	stdout, err := run()
