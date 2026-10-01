@@ -90,10 +90,20 @@ jobs:
             cairn-share/worker/package-lock.json
             cairn-x-enricher/package-lock.json
       - name: Install local test dependencies
+        timeout-minutes: 5
         run: |
-          npm ci
-          npm ci --prefix ../cairn-share/worker
-          npx playwright install --with-deps chromium
+          npm ci --no-audit --no-fund
+          npm ci --prefix ../cairn-share/worker --no-audit --no-fund
+      - name: Select the browser for contract tests
+        timeout-minutes: 5
+        run: |
+          chrome_path="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$chrome_path" ]; then
+            npx playwright install --with-deps chromium
+            chrome_path="$(node --input-type=module -e 'import { chromium } from "playwright"; console.log(chromium.executablePath())')"
+          fi
+          test -x "$chrome_path"
+          echo "CHROME_PATH=$chrome_path" >> "$GITHUB_ENV"
       - name: Validate the paired migration boundary
         run: |
           python3 - <<'PY'
