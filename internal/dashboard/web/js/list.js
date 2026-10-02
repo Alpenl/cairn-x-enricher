@@ -11,6 +11,7 @@ import { activeView, apiParams, facetFilterCount, needsFilterContract, splitList
 import { emit, getItem, mergeItem, on, state } from "./store.js";
 import { termLabel, terms } from "./taxonomy.js";
 import { primaryTags } from "./topic-presentation.js";
+import { queueImage } from "./image-loader.js";
 
 export const PAGE_SIZE = 40;
 const POLL_INTERVAL = 10000;
@@ -20,6 +21,7 @@ let requestVersion = 0;
 let firstPageSnapshot = "";
 let displayedQuery = "";
 let refreshing = false;
+let pollBusy = false;
 let anchorId = 0; // shift-click range anchor
 let hooks = {};
 
@@ -34,13 +36,14 @@ export function bookmarkHref(id) {
 function imageThumb(item, existing) {
   const images = Array.isArray(item.images) ? item.images : [];
   if (!images.length) return null;
-  const src = imagePath(images[0].key);
-  if (existing?.dataset.updated === (item.enriched_at || "") && existing.querySelector("img")?.getAttribute("src") === src) return existing;
+  const src = imagePath(images[0].key, { size: 160 });
+  if (existing?.dataset.updated === (item.enriched_at || "") && existing.querySelector("img")?.dataset.imageSource === src) return existing;
   const box = h("div.row-thumb");
   box.dataset.updated = item.enriched_at || "";
-  const image = h("img", { alt: "", loading: "lazy", decoding: "async", fetchPriority: "low", src });
+  const image = h("img", { alt: "", decoding: "async", width: 160, height: 160 });
+  queueImage(image, src);
   // Fade in once decoded so a slow image does not pop into view.
-  if (image.complete) image.classList.add("ready");
+  if (image.complete && image.naturalWidth) image.classList.add("ready");
   image.addEventListener("load", () => image.classList.add("ready"));
   image.addEventListener("error", () => box.remove());
   box.append(image);
@@ -403,10 +406,12 @@ export async function loadMore() {
 // pollFirstPage refreshes rows in place while something near the top is still
 // being processed, without disturbing scroll position or selection.
 async function pollFirstPage() {
-  if (document.hidden || state.loading || state.listError || state.search) return;
+  if (document.hidden || pollBusy || state.loading || state.listError || state.search || state.route.name === "backstage" ||
+      (state.layout === "narrow" && state.route.name === "bookmark") || !els.pane.getClientRects().length) return;
   const head = state.order.slice(0, PAGE_SIZE).map(getItem);
   if (!head.some(isWorking)) return;
   const version = requestVersion;
+  pollBusy = true;
   try {
     const params = apiParams(state.filters, state.search, { limit: PAGE_SIZE });
     params.set("counts", "0");
@@ -424,7 +429,7 @@ async function pollFirstPage() {
     }
   } catch {
     // Background refresh is best effort; the next tick retries.
-  }
+  } finally { pollBusy = false; }
 }
 
 // --- Selection & batch --------------------------------------------------------

@@ -8,7 +8,7 @@ import { PRIMARY_TAG_FIELDS, findTagName, parseTagRef, previewTagActions, reject
 
 const sessions = new Map();
 let currentID = 0;
-let catalogFlight = null;
+let active = false;
 let renderSupplement = null;
 export function setTagSupplement(renderer) { renderSupplement = renderer; }
 function sessionFor(id) {
@@ -20,35 +20,57 @@ function sessionFor(id) {
   return sessions.get(id);
 }
 function loadCatalog() {
-  if (!catalogFlight) catalogFlight = loadCustomTags().then(() => emit("taxonomy")).catch(() => {}).finally(() => { catalogFlight = null; });
-  return catalogFlight;
+  return loadCustomTags().catch(() => {});
 }
 export function hasUnsavedTagWork() { return [...sessions.values()].some((session) => session.queue.length || session.saving || session.blocked); }
 export function tagSystemReady(id) { return sessionFor(id).status === "ready"; }
 export function tagSystemOverview(id) {
   const session = sessions.get(id);
   if (session?.status !== "ready") return null;
+  if (!session.queue.length && !session.saving && !session.blocked && session.identity !== JSON.stringify(getItem(id)?.cache_identity || {})) return null;
   const payload = session.draft || session.payload;
   return { selection: payload.selection, custom_tags: payload.custom_tags || [], blocked: Boolean(session.blocked) };
 }
 export function showTagSystem(id) {
-  currentID = id;
+  if (currentID !== id) suspendTagSystem();
+  currentID = id; active = true;
   const session = sessionFor(id);
   if (vocab.tagSystemAvailable === false) { session.status = "unsupported"; return; }
-  if (session.status === "idle") load(session);
+  if (!byId("curate")?.open) return;
+  if (["idle", "error"].includes(session.status)) load(session);
   else if (session.status === "ready") refreshTagSystem(id);
 }
 export function refreshTagSystem(id) {
   const session = sessionFor(id);
+  if (!active || !byId("curate")?.open || id !== currentID) return;
   const identity = JSON.stringify(getItem(id)?.cache_identity || {});
   if (session.status === "ready" && identity !== session.identity && !session.queue.length && !session.blocked && !session.saving) load(session);
 }
-async function load(session) {
+export function suspendTagSystem() {
+  active = false;
+  const session = sessions.get(currentID);
+  if (session?.controller && !session.queue.length && !session.saving) session.controller.abort();
+}
+function load(session) {
   if (session.queue.length || session.saving || session.blocked) return;
+  if (session.flight) return session.flight;
+  let outcome;
+  const flight = loadSession(session).then(value => { outcome = value; }).finally(() => {
+    if (session.flight === flight) session.flight = null;
+    if (!active || session.id !== currentID || !byId("curate")?.open) return;
+    if (outcome === "aborted") load(session);
+    else if (outcome === "success") refreshTagSystem(session.id);
+  });
+  session.flight = flight;
+  return flight;
+}
+async function loadSession(session) {
   const epoch = ++session.epoch;
+  const identity = JSON.stringify(getItem(session.id)?.cache_identity || {});
+  const controller = new AbortController(); session.controller = controller;
   if (!session.payload) session.status = "loading";
   try {
-    const payload = await api.tags(session.id);
+    const payload = await api.tags(session.id, { signal: controller.signal });
     if (epoch !== session.epoch || session.queue.length || session.saving || session.blocked) return;
     if (payload.available === false || !payload.selection || !Number.isSafeInteger(payload.revision)) {
       session.status = "unsupported";
@@ -59,10 +81,12 @@ async function load(session) {
     session.payload = payload;
     session.draft = structuredClone(payload);
     session.status = "ready";
-    session.identity = JSON.stringify(getItem(session.id)?.cache_identity || {});
+    session.identity = identity;
     vocab.tagSystemAvailable = true;
-    await loadCatalog();
+    void loadCatalog();
+    return "success";
   } catch (error) {
+    if (error.name === "AbortError") { session.status = session.payload ? "ready" : "idle"; return "aborted"; }
     if ([404, 405].includes(error.status) || ["tag_system_unsupported", "v2_unsupported"].includes(error.message)) {
       session.status = "unsupported";
       if (!Array.isArray(vocab.v2?.resource_kinds)) vocab.tagSystemAvailable = false;
@@ -71,8 +95,10 @@ async function load(session) {
       session.status = session.payload ? "ready" : "error";
       session.error = errorLabel(error.message);
     }
+  } finally {
+    if (session.controller === controller) session.controller = null;
+    if (session.id === currentID) renderTagSystem(session.id);
   }
-  if (session.id === currentID) renderTagSystem(session.id);
 }
 function labelFor(ref) {
   const parsed = parseTagRef(ref);
@@ -249,7 +275,9 @@ function focusToolbar(session, label) {
   if (session.id !== currentID || !byId("curate")?.open || document.querySelector("dialog[open]")) return;
   [...byId("tag-rows").querySelectorAll(".tag-system-toolbar button")].find((button) => button.textContent === label)?.focus({ preventScroll: true });
 }
-function openPicker(session, { field, from } = {}) {
+async function openPicker(session, { field, from } = {}) {
+  await loadCatalog();
+  if (session.id !== currentID || !byId("curate")?.open) return;
   const input = h("input.tag-search", { type: "search", placeholder: "搜索标签或创建自定义标记", "aria-label": "搜索标签", maxLength: 80 });
   const results = h("div.tag-search-results");
   const error = h("p.tag-system-status", { role: "alert" });
@@ -375,4 +403,12 @@ export async function confirmTagSystem(id) {
   if (!actions.length) return false;
   return queue(session, actions);
 }
-export function editTagSystem(id) { const session = sessionFor(id); if (session.status !== "ready") return false; openPicker(session); return true; }
+export function editTagSystem(id) {
+  const session = sessionFor(id);
+  if (session.status === "unsupported" || !Array.isArray(vocab.v2?.resource_kinds)) return false;
+  if (session.status === "ready") { openPicker(session); return true; }
+  Promise.resolve(load(session)).then(loadCatalog).then(() => {
+    if (session.status === "ready" && id === currentID && byId("curate")?.open) openPicker(session);
+  });
+  return true;
+}

@@ -63,6 +63,7 @@ async function elapsed(started) {
 try {
   await page.goto(`${url}/?curation_status=all`);
   await ready();
+  await page.locator('.facet-group[data-group="topics"] > summary').click();
   await page.locator(".facet-chip-count").first().waitFor({ state: "attached" });
   await page.locator("#rows .row-thumb img").evaluateAll((images) => images.forEach((image) => { image.dataset.originalNode = image.closest("li.row").dataset.id; }));
   const before = lists.length;

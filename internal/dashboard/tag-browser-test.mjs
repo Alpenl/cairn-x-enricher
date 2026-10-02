@@ -16,6 +16,7 @@ const initial = {id:item.id,revision:4,content_revision:1,decision_id:3,selectio
     resource_kinds:{status:"completed_nonempty",values:[{term:"skill",origin:"automatic"}],actions:[],candidates:[]},
     content_functions:{status:"completed_nonempty",values:[{term:"method",origin:"automatic"},{term:"opinion",origin:"automatic"}],actions:[],candidates:[]}}}};
 let current = structuredClone(initial);
+item.classification = { ...item.classification, ...initial.selection };
 let custom = [];
 let conflict = false;
 let delayNext = false;
@@ -70,11 +71,13 @@ await page.route(`**/api/bookmarks/${item.id}/tags`,async route=>{
   const action=body.actions[0];events.unshift({id:events.length+1,operation_id:body.operation_key,action:action.action,tag_ref:action.tag_ref,actions:body.actions,created_at:"2026-09-30T03:00:00Z",actor_type:"human"});
   return send(route,{...current,operation_id:body.operation_key,replayed:false});
 });
+async function waitCall(action) { for(let i=0;i<200;i++){ if(calls.at(-1)?.actions?.[0]?.action===action)return;await new Promise(resolve=>setTimeout(resolve,25)); } throw new Error("tag write not received: "+action); }
 let checks=0;
 const checked=(name)=>{checks++;process.stdout.write(`ok   ${name}\n`);};
 try {
   await page.goto(`${url}/bookmarks/${item.id}`);
-  await page.locator('.tag-system-row[data-dimension="resource_kinds"]').waitFor({state:"attached"});
+  await page.locator("#curate-summary-tags .tag").first().waitFor();
+  assert.equal(await page.locator(".tag-system-row").count(),0);
   assert.equal(await page.locator("#curate").evaluate(node=>node.open),false);
   assert.equal(await page.locator("#curation-why").isVisible(),false);
   assert.equal(await page.locator(".tag-suggestions").isVisible(),false);
@@ -98,7 +101,7 @@ try {
   assert.equal(await page.evaluate(()=>document.activeElement.id),"v2-entity-input");
   assert.equal(calls.length,0);checked("same-bookmark refresh preserves a nested editor's draft, disclosure and focus");
   await page.locator("#v2-entity-input").fill("");
-  await page.locator("#curate > summary").click();
+  await page.locator("#curate > summary .curate-summary-label").click();
   await page.locator("#detail-scroll").focus();await page.keyboard.press("t");
   await page.getByRole("searchbox",{name:"搜索标签",exact:true}).waitFor();
   assert.equal(await page.locator("#curate").evaluate(node=>node.open),true);
@@ -111,7 +114,7 @@ try {
   await page.waitForFunction(id=>location.pathname.endsWith("/"+id),item.id);
   assert.equal(await page.locator("#curate").evaluate(node=>node.open),false);
   assert.equal(await page.locator("#curate-summary-why").textContent(),"留给下周复盘");checked("switching bookmarks resets disclosure while retaining the saved reason");
-  await page.locator("#curate > summary").click();
+  await page.locator("#curate > summary .curate-summary-label").click();
   await page.locator('.tag-system-row[data-dimension="resource_kinds"]').waitFor();
   assert.equal(await page.locator('.tag-system-chip.custom').count(),0);checked("custom section absent when unused");
   const functions = page.locator('.tag-system-row[data-dimension="content_functions"]');
@@ -121,6 +124,7 @@ try {
   checked("content features are visible identity-bearing tags without a duplicate advanced editor");
   await functions.getByRole("button",{name:"移除观点",exact:true}).click();
   await page.waitForFunction(()=>document.querySelectorAll('.tag-system-row[data-dimension="content_functions"] .tag-name').length===1);
+  await waitCall("reject");
   assert.deepEqual(calls.at(-1).actions,[{action:"reject",tag_ref:"system/content_functions/opinion"}]);
   assert.equal(await functions.locator('.tag-origin').textContent(),"自动标签");
   await page.locator('.toast-action').last().click();
@@ -132,18 +136,18 @@ try {
   await page.locator('.tag-system-row[data-dimension="topics"] .tag-name').filter({hasText:"图像生成"}).click();
   assert.equal(calls.length,before);assert.match(page.url(),/topics=image_creation/);checked("tag label filters without removing");
   await page.goto(`${url}/bookmarks/${item.id}`);
-  await page.locator("#curate > summary").click();
+  await page.locator("#curate > summary .curate-summary-label").click();
   await page.locator('.tag-system-row[data-dimension="resource_kinds"]').waitFor();
   await page.getByRole("button",{name:"移除AI编程",exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('.tag-save-state')?.textContent==="");
   assert.deepEqual(calls.at(-1).actions,[{action:"reject",tag_ref:"system/topics/ai_coding"}]);
   assert.equal(await page.locator('.tag-system-row[data-dimension="topics"] .tag-origin').textContent(),"自动标签");checked("single removal leaves other AI label unconfirmed");
-  await page.locator("#curate > summary").click();
+  await page.locator("#curate > summary .curate-summary-label").click();
   await page.locator('.toast-action').last().click();
   await page.waitForFunction(()=>document.querySelectorAll('.tag-system-row[data-dimension="topics"] .tag-name').length===2);
   assert.equal(calls.at(-1).actions[0].action,"undo");checked("undo uses causal operation rather than inverse toggle");
   assert.equal(await page.locator("#curate").evaluate(node=>node.open),false);checked("undo remains available while closed and does not open the editor");
-  await page.locator("#curate > summary").click();
+  await page.locator("#curate > summary .curate-summary-label").click();
   await page.getByRole("button",{name:"编辑图像生成",exact:true}).click();
   await page.getByRole("menuitem",{name:"确认这个标签"}).click();
   await page.waitForFunction(()=>document.querySelector('.tag-system-row[data-dimension="topics"]')?.textContent.includes("你已确认"));
@@ -156,20 +160,21 @@ try {
   assert.equal(await page.getByRole("button",{name:/创建自定义标记/}).count(),0);checked("explicit alias reuses system tag");
   await page.getByRole("searchbox",{name:"搜索标签",exact:true}).fill("我的项目");
   await page.getByRole("button",{name:"创建自定义标记「我的项目」"}).click();
-  await page.locator('.tag-system-chip.custom').waitFor();assert.equal(current.custom_tags[0].label,"我的项目");checked("custom creation attaches optional stable marker");
+  await page.locator('.tag-system-chip.custom').waitFor();await waitCall('attach');assert.equal(current.custom_tags[0].label,"我的项目");checked("custom creation attaches optional stable marker");
   conflict=true;
   await page.getByRole("button",{name:"移除AI编程",exact:true}).click();
   await page.locator('.tag-system-conflict').waitFor();
   assert.equal(await page.getByRole("button",{name:"移除AI编程",exact:true}).count(),0);checked("CAS conflict preserves user's local removal draft");
-  await page.locator("#curate > summary").click();
+  await page.locator("#curate > summary .curate-summary-label").click();
   assert.equal(await page.locator("#curate-summary-state").textContent(),"有修改待处理");
-  await page.locator("#curate > summary").click();checked("closed summary preserves access to a pending conflict");
+  await page.locator("#curate > summary .curate-summary-label").click();checked("closed summary preserves access to a pending conflict");
   await page.getByRole("button",{name:"重新应用我的修改"}).click();
   await page.waitForFunction(()=>!document.querySelector('.tag-system-conflict'));checked("explicit reapply uses current revision");
   await page.getByRole("button",{name:"编辑图像生成",exact:true}).click();
   await page.getByRole("menuitem",{name:"替换为其他标签"}).click();
   await page.getByRole("button",{name:"视频制作 主题",exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('.tag-system-row[data-dimension="topics"]')?.textContent.includes("视频制作"));
+  await waitCall("replace");
   assert.equal(calls.at(-1).actions.length,1);assert.equal(calls.at(-1).actions[0].action,"replace");checked("replacement is one atomic API action");
   await page.getByRole("button",{name:"查看变更",exact:true}).click();
   await page.locator('.tag-history-entry').first().waitFor();assert.match(await page.locator('.tag-history').textContent(),/替换/);checked("real operation history is readable");

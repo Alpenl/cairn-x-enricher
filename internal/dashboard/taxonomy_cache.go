@@ -2,16 +2,16 @@ package dashboard
 
 import (
 	"context"
-	"sync"
 	"time"
 
+	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/taxonomy"
 )
 
 // taxonomyCacheTTL bounds how long a cached vocabulary may be served. The
-// vocabulary only changes on Worker deploy plus process restart, so a short
-// TTL is enough to stop every request from re-fetching it while still
-// recovering automatically if the Worker rotates it underneath us.
+// vocabulary definitions are versioned, while labels and display revisions may
+// be edited online. Local edits and explicit refreshes invalidate both catalogs;
+// the TTL also bounds externally initiated metadata changes.
 const taxonomyCacheTTL = 5 * time.Minute
 
 // taxonomySource is the upstream reader used by the cache.
@@ -24,55 +24,42 @@ type taxonomySource interface {
 // every request, so re-fetching it per edit doubled backend traffic for no
 // benefit.
 type taxonomyCache struct {
-	source taxonomySource
-	now    func() time.Time
-
-	mu       sync.Mutex
-	catalog  taxonomy.Catalog
-	rendered *taxonomy.Renderer
-	loadedAt time.Time
-	// fresh records whether loadedAt still authorises a cache hit. It is
-	// separate from loadedAt so Invalidate can force a refetch while
-	// keeping the last good catalog as an outage fallback.
-	fresh bool
+	source  taxonomySource
+	now     func() time.Time
+	workCtx context.Context
+	legacy  snapshotCache[taxonomy.Catalog]
+	modern  snapshotCache[cairn.V2Taxonomy]
 }
 
 func newTaxonomyCache(source taxonomySource) *taxonomyCache {
-	return &taxonomyCache{source: source, now: time.Now}
+	c := &taxonomyCache{source: source, workCtx: context.Background(), now: time.Now}
+	c.legacy.now = func() time.Time { return c.now() }
+	c.modern.now = func() time.Time { return c.now() }
+	return c
 }
 
 // Catalog returns a validated catalog, fetching it at most once per TTL.
 func (c *taxonomyCache) Catalog(ctx context.Context) (taxonomy.Catalog, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.fresh && c.now().Sub(c.loadedAt) < taxonomyCacheTTL {
-		return c.catalog, nil
-	}
-	catalog, err := c.source.GetTaxonomy(ctx)
-	if err != nil {
-		// Keep serving the last known good vocabulary: an upstream blip
-		// should not break curation edits that are already validated
-		// against a compatible catalog.
-		if c.hasCatalog() {
-			return c.catalog, nil
-		}
-		return taxonomy.Catalog{}, err
-	}
-	c.catalog = catalog
-	c.rendered = taxonomy.NewRenderer(catalog)
-	c.loadedAt = c.now()
-	c.fresh = true
-	return catalog, nil
+	value, _, err := c.legacy.read(ctx, c.workCtx, taxonomyCacheTTL, c.source.GetTaxonomy)
+	return value, err
 }
 
-func (c *taxonomyCache) hasCatalog() bool {
-	return !c.loadedAt.IsZero() || c.rendered != nil
+type modernTaxonomySource interface {
+	GetV2Taxonomy(context.Context) (cairn.V2Taxonomy, error)
+}
+
+// Modern returns the negotiated catalog, including current display revisions.
+func (c *taxonomyCache) Modern(ctx context.Context) (cairn.V2Taxonomy, bool, error) {
+	source, ok := c.source.(modernTaxonomySource)
+	if !ok {
+		return cairn.V2Taxonomy{}, false, cairn.ErrV2Unsupported
+	}
+	return c.modern.read(ctx, c.workCtx, taxonomyCacheTTL, source.GetV2Taxonomy)
 }
 
 // Invalidate forces the next read to refetch the vocabulary while keeping the
 // last known good copy available if that refetch fails.
 func (c *taxonomyCache) Invalidate() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.fresh = false
+	c.legacy.invalidate()
+	c.modern.invalidate()
 }

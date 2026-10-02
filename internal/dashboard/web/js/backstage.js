@@ -11,6 +11,7 @@ const REFRESH_INTERVAL = 15000;
 const els = {};
 let hooks = {};
 let timer = 0;
+let refreshFlight = null, refreshDue = 0, refreshDelay = REFRESH_INTERVAL, refreshSignature = "";
 let qualityLoaded = false;
 let qualityBusy = false;
 
@@ -129,11 +130,21 @@ function attentionRow(item) {
     form);
 }
 
-export async function refresh() {
+export function refresh() {
+  if (refreshFlight) return refreshFlight;
+  refreshFlight = loadSummary().finally(() => { refreshFlight = null; refreshDue = Date.now() + refreshDelay; });
+  return refreshFlight;
+}
+async function loadSummary() {
+  emit("backstage:loading");
   let summary;
   try {
     summary = await api.backstage();
+    const signature = JSON.stringify(summary);
+    refreshDelay = signature === refreshSignature ? Math.min(60_000, refreshDelay * 2) : REFRESH_INTERVAL;
+    refreshSignature = signature;
   } catch (error) {
+    refreshDelay = Math.min(60_000, refreshDelay * 2);
     clear(els.status, h("h2.status-title", "读取失败"),
       h("p.status-text", `无法读取 Cloudflare 后端（${errorLabel(error?.message)}），请检查网络和 CAIRN_ENRICHER_TOKEN。`));
     els.status.dataset.tone = "danger";
@@ -170,9 +181,10 @@ export async function refresh() {
 export function showBackstage(visible) {
   clearInterval(timer);
   if (!visible) return;
+  refreshDelay = REFRESH_INTERVAL; refreshDue = 0;
   refresh();
   timer = setInterval(() => {
-    if (!document.hidden && state.route.name === "backstage") refresh();
+    if (!document.hidden && state.route.name === "backstage" && Date.now() >= refreshDue) refresh();
   }, REFRESH_INTERVAL);
 }
 
@@ -184,6 +196,7 @@ export function initBackstage(options) {
     foot: byId("backstage-foot")
   });
   byId("backstage-refresh").addEventListener("click", refresh);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && state.route.name === "backstage") refresh(); });
   byId("tag-quality").addEventListener("toggle", (event) => { if (event.target.open && !qualityLoaded) loadQuality(); });
   byId("tag-quality-refresh").addEventListener("click", loadQuality);
 }

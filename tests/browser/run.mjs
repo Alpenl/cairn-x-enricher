@@ -49,7 +49,7 @@ async function waitFor(predicate, timeoutMs = 5000) {
 
 async function openCuration(page) {
   await page.locator("#curate > summary").waitFor();
-  if (!await page.locator("#curate").evaluate((node) => node.open)) await page.locator("#curate > summary").click();
+  if (!await page.locator("#curate").evaluate((node) => node.open)) await page.locator("#curate > summary .curate-summary-label").click();
 }
 
 // --- Part A: focused curation mock ------------------------------------------------
@@ -845,7 +845,7 @@ async function partD(browser) {
     check("local reason save is in flight", await waitFor(() => typeof state.releaseWhy === "function"));
     state.identityRevision++;
     state.remoteTitle = "第三次远端更新";
-    await page.clock.fastForward(16_000);
+    await page.clock.fastForward(31_000);
     check("remote update still refreshes a visible detail", await waitFor(async () =>
       (await page.textContent("#detail-title")) === state.remoteTitle));
     equal("remote refresh keeps the local reason draft", await page.inputValue("#curation-why"), "本地尚未确认的原因");
@@ -879,7 +879,7 @@ async function partE(browser) {
     await page.waitForFunction(() => document.querySelector("#detail-title")?.textContent === "测试标题");
     await openCuration(page);
     await page.waitForSelector("#v2-topics .chip.on");
-    await page.locator("#curate > summary").click();
+    await page.locator("#curate > summary .curate-summary-label").click();
     equal("late combined reading and panel toggle retain list tags", await page.locator('.row[data-id="12"] .row-meta .tag').allTextContents(), ["LLM", "软件与服务", "工具", "我的项目"]);
     check("late combined reading keeps all four tags visible", await page.locator('.row[data-id="12"] .tag-more').count() === 0);
     equal("combined snapshot keeps all three dimensions and personal tag", await page.evaluate(async () => {

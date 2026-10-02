@@ -310,10 +310,11 @@ function rememberAux(kind, id, identity, value) {
   compactAux();
 }
 
-function readAuxDirect(kind, id, identity, { fresh = false } = {}) {
+function readAuxDirect(kind, id, identity, { fresh = false, signal } = {}) {
+  if (signal?.aborted) return Promise.reject(new DOMException("Request aborted", "AbortError"));
   const path = `/api/bookmarks/${id}/${kind}`;
   const key = auxKey(kind, id, identity);
-  if (!key) return fetchJSON(path);
+  if (!key) return fetchJSON(path, { signal });
   if (fresh) forgetAux(key);
   else {
     const stored = auxCache.get(key);
@@ -326,10 +327,10 @@ function readAuxDirect(kind, id, identity, { fresh = false } = {}) {
   const epoch = auxEpochs.get(id) || 0;
   const current = auxFlights.get(key);
   if (fresh && current) current.invalidated = true;
-  if (!fresh && current?.epoch === epoch && !current.invalidated) return current.promise;
-  const flight = { epoch, invalidated: false, promise: null };
+  if (!fresh && current?.epoch === epoch && !current.invalidated && !current.controller.signal.aborted) return consumeDetail(current, signal);
+  const flight = { epoch, invalidated: false, promise: null, controller: new AbortController(), consumers: new Set() };
   auxActive.set(id, (auxActive.get(id) || 0) + 1);
-  flight.promise = fetchJSON(path).then((value) => {
+  flight.promise = fetchJSON(path, { signal: flight.controller.signal }).then((value) => {
     if (flight.invalidated || (auxEpochs.get(id) || 0) !== epoch) return null;
     rememberAux(kind, id, identity, value);
     return value;
@@ -340,7 +341,7 @@ function readAuxDirect(kind, id, identity, { fresh = false } = {}) {
     else { auxActive.delete(id); if (![...auxCache.values()].some((entry) => entry.id === id)) auxEpochs.delete(id); }
   });
   auxFlights.set(key, flight);
-  return flight.promise;
+  return consumeDetail(flight, signal);
 }
 
 function readAux(kind, id, identity, options = {}) {
@@ -353,11 +354,11 @@ function readAux(kind, id, identity, options = {}) {
   }
   // Opening a detail already needs the article. Let that single-snapshot read
   // supply tags and entities too; older Workers fall back to the old routes.
-  return readDetail(id).then((item) => readAuxDirect(kind, id, item?.cache_identity || identity, options));
+  return readDetail(id, { signal: options.signal }).then((item) => readAuxDirect(kind, id, item?.cache_identity || identity, options));
 }
 
-async function fetchReadingDetail(id, { prefetch = false } = {}) {
-  const options = { priority: prefetch ? "low" : "high" };
+async function fetchReadingDetail(id, { prefetch = false, signal } = {}) {
+  const options = { priority: prefetch ? "low" : "high", signal };
   if (readingSupported === false) return { detail: await fetchJSON(`/api/bookmarks/${id}`, options) };
   try {
     const current = getItem(id);
@@ -439,7 +440,24 @@ function assertCurrentScope(version) {
   if (version !== offlineScopeVersion()) throw new APIError("account_changed", 409);
 }
 
-function readDetail(id, { prefetch = false, fresh = false } = {}) {
+function consumeDetail(flight, signal) {
+  const consumer = {};
+  flight.consumers.add(consumer);
+  return new Promise((resolve, reject) => {
+    const release = () => { flight.consumers.delete(consumer); signal?.removeEventListener("abort", abort); };
+    const abort = () => {
+      release();
+      if (!flight.consumers.size) flight.controller.abort();
+      reject(new DOMException("Request aborted", "AbortError"));
+    };
+    if (signal?.aborted) { abort(); return; }
+    signal?.addEventListener("abort", abort, { once: true });
+    flight.promise.then(value => { release(); resolve(value); }, error => { release(); reject(error); });
+  });
+}
+
+function readDetail(id, { prefetch = false, fresh = false, signal } = {}) {
+  if (signal?.aborted) return Promise.reject(new DOMException("Request aborted", "AbortError"));
   let state = detailStates.get(id);
   if (!state) { state = { generation: 0, active: 0 }; detailStates.set(id, state); }
   if (fresh) {
@@ -454,15 +472,15 @@ function readDetail(id, { prefetch = false, fresh = false } = {}) {
     }
   }
   const current = detailFlights.get(id);
-  if (!fresh && current?.generation === state.generation) {
+  if (!fresh && current?.generation === state.generation && !current.controller.signal.aborted) {
     if (!prefetch) { current.used = true; forgetPrefetch(id); }
-    return current.promise;
+    return consumeDetail(current, signal);
   }
   const generation = state.generation;
-  const flight = { used: !prefetch, generation, promise: null };
+  const flight = { used: !prefetch, generation, promise: null, consumers: new Set(), controller: new AbortController() };
   detailStates.set(id, state);
   state.active++;
-  flight.promise = fetchReadingDetail(id, { prefetch }).then(({ detail: item, selection, entities }) => {
+  flight.promise = fetchReadingDetail(id, { prefetch, signal: flight.controller.signal }).then(({ detail: item, selection, entities }) => {
     if (state.generation !== generation) return null;
     if (selection && entities) {
       invalidateAux(id);
@@ -477,17 +495,17 @@ function readDetail(id, { prefetch = false, fresh = false } = {}) {
     if (state.active === 0 && !prefetchedDetails.has(id)) detailStates.delete(id);
   });
   detailFlights.set(id, flight);
-  return flight.promise;
+  return consumeDetail(flight, signal);
 }
 
 export const api = {
   cacheStats: () => ({ prefetch_items: prefetchedDetails.size, prefetch_bytes: prefetchBytes,
     auxiliary_items: auxCache.size, auxiliary_bytes: auxBytes, query_items: queryCache.size, query_bytes: queryBytes }),
   list: (params, signal, options) => queryRead("/api/bookmarks", params, signal, options),
-  detail: (id) => readDetail(id),
-  detailFresh: (id) => readDetail(id, { fresh: true }),
+  detail: (id, options) => readDetail(id, options),
+  detailFresh: (id, options) => readDetail(id, { ...options, fresh: true }),
   prefetchAvailable: () => readingSupported === true,
-  prefetchDetail: (id) => readDetail(id, { prefetch: true }),
+  prefetchDetail: (id, options) => readDetail(id, { ...options, prefetch: true }),
   identity: (id) => fetchJSON(`/api/bookmarks/${id}/identity`),
   overview: () => fetchJSON("/api/overview"),
   backstage: () => fetchJSON("/api/backstage"),
@@ -496,13 +514,13 @@ export const api = {
   curation: (id, body) => mutate(() => fetchJSON(`/api/bookmarks/${id}/curation`, jsonBody("PATCH", body)), id),
   v2Selection: (id, identity, options) => readAux("v2-selection", id, identity, options),
   v2Override: (id, body) => mutate(() => fetchJSON(`/api/bookmarks/${id}/v2-override`, jsonBody("POST", body)), id),
-  tags: (id) => fetchJSON(`/api/bookmarks/${id}/tags`),
+  tags: (id, options) => fetchJSON(`/api/bookmarks/${id}/tags`, options),
   editTags: (id, body) => mutate(() => fetchJSON(`/api/bookmarks/${id}/tags`, jsonBody("POST", body)), id),
   tagHistory: (id, beforeId) => fetchJSON(`/api/bookmarks/${id}/tag-history?limit=30${beforeId ? `&before_id=${beforeId}` : ""}`),
   customTags: () => fetchJSON("/api/custom-tags"),
-  createCustomTag: (body) => mutate(() => fetchJSON("/api/custom-tags", jsonBody("POST", body))),
-  renameCustomTag: (id, body) => mutate(() => fetchJSON(`/api/custom-tags/${encodeURIComponent(id)}`, jsonBody("PATCH", body))),
-  archiveCustomTag: (id, body) => mutate(() => fetchJSON(`/api/custom-tags/${encodeURIComponent(id)}`, jsonBody("DELETE", body))),
+  createCustomTag: (body) => mutate(() => fetchJSON("/api/custom-tags", jsonBody("POST", body))).then(customTagsChanged),
+  renameCustomTag: (id, body) => mutate(() => fetchJSON(`/api/custom-tags/${encodeURIComponent(id)}`, jsonBody("PATCH", body))).then(customTagsChanged),
+  archiveCustomTag: (id, body) => mutate(() => fetchJSON(`/api/custom-tags/${encodeURIComponent(id)}`, jsonBody("DELETE", body))).then(customTagsChanged),
   tagCounts: (params, signal) => queryRead("/api/tag-counts", params, signal, { reuse: true }),
   tagQuality: () => fetchJSON("/api/tag-quality"),
   evidence: (id) => fetchJSON(`/api/bookmarks/${id}/evidence`),
@@ -521,9 +539,11 @@ export const api = {
   }), id)
 };
 
-export function imagePath(key) {
+function customTagsChanged(value) { emit("custom-tags:changed"); return value; }
+
+export function imagePath(key, { size } = {}) {
   // A new URL namespace avoids reusing responses cached by older releases.
-  return "/api/images/" + String(key).split("/").map(encodeURIComponent).join("/") + "?privacy=1";
+  return "/api/images/" + String(key).split("/").map(encodeURIComponent).join("/") + "?privacy=1" + (size === 160 ? "&size=160" : "");
 }
 
 // newOperationKey gives every new logical action its own identity. Only a

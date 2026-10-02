@@ -76,6 +76,7 @@ function group(id, label, content, { selectedCount = 0, hint } = {}) {
     if (details.open) openGroups.add(id);
     else openGroups.delete(id);
     persistOpen();
+    syncFacetVisibility();
   };
   summary.addEventListener("click", (event) => {
     event.preventDefault();
@@ -270,8 +271,19 @@ function renderService() {
   link.setAttribute("aria-current", state.route.name === "backstage" ? "page" : "false");
 }
 
-export function renderSidebar() {
-  loadTopicPreferences();
+export function syncFacetVisibility() {
+  if (!els.root) return;
+  const visible = !document.hidden && state.route.name !== "backstage" &&
+    (state.layout === "wide" || byId("app").classList.contains("sidebar-open"));
+  const needed = ["topics", "resource_kinds", "content_functions", "custom_tags"].some(key => openGroups.has(key));
+  if (!visible || !needed) {
+    if (countsTimer || countsController) {
+      clearTimeout(countsTimer); countsTimer = 0;
+      countsController?.abort(); countsController = null;
+      countsEpoch++; countsSignature = "";
+    }
+    return;
+  }
   if (Array.isArray(vocab.v2?.resource_kinds)) {
     const signature = JSON.stringify([state.filters, state.search]);
     if (signature !== countsSignature) {
@@ -283,14 +295,20 @@ export function renderSidebar() {
       const params = apiParams(state.filters, state.search);
       countsTimer = setTimeout(() => {
         countsTimer = 0;
-        countsController = new AbortController();
-        api.tagCounts(params, countsController.signal).then((counts) => {
+        const controller = new AbortController(); countsController = controller;
+        api.tagCounts(params, controller.signal).then((counts) => {
           if (epoch !== countsEpoch || counts.available === false) return;
           tagCounts = counts; renderFacets();
-        }).catch(() => {});
+        }).catch(() => { if (epoch === countsEpoch) countsSignature = ""; })
+          .finally(() => { if (countsController === controller) countsController = null; });
       }, 160);
     }
   }
+}
+
+export function renderSidebar() {
+  loadTopicPreferences();
+  syncFacetVisibility();
   renderViews();
   renderFacets();
   els.clear.hidden = facetFilterCount(state.filters) === 0;
@@ -314,6 +332,7 @@ export function initSidebar(options) {
   on("library:changed", () => { countsSignature = ""; renderSidebar(); });
   loadTopicPreferences();
   on("account:changed", () => { preferenceKey = ""; pinnedTopics.clear(); });
+  document.addEventListener("visibilitychange", syncFacetVisibility);
 }
 
 function loadTopicPreferences() {

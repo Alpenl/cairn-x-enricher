@@ -175,7 +175,8 @@ async function main() {
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(String(error)));
     await page.goto(`http://127.0.0.1:${goPort}/bookmarks/${id}`, { waitUntil: "load" });
-    await page.waitForSelector('.tag-system-row[data-dimension="topics"] .tag-name', { state: "attached", timeout: 30000 });
+    await page.waitForSelector("#curate-summary-tags .tag", { state: "visible", timeout: 30000 });
+    check("collapsed editor has no editor rows before opening", await page.locator(".tag-system-row").count() === 0);
     check("the real tag editor starts collapsed", !await page.locator("#curate").evaluate(node => node.open));
     // The summary also contains independent tag-filter buttons. Its center
     // can hit one of those; click the disclosure label to open the editor.

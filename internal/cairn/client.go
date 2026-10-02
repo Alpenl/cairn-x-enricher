@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
@@ -264,6 +265,7 @@ func (e *APIError) Class() enrich.ErrorClass {
 
 // Client calls the Cairn Share Worker's internal enrichment endpoints.
 type Client struct {
+	imagePrivacyVerified atomic.Bool
 	baseURL              string
 	token                string
 	httpClient           *http.Client
@@ -808,7 +810,7 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, body an
 		reader = bytes.NewReader(payload)
 	}
 
-	request, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reader)
+	request, err := http.NewRequestWithContext(traceUpstream(ctx), method, c.baseURL+path, reader)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -855,8 +857,10 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, body an
 		return nil, fmt.Errorf("call cairn API: %w", err)
 	}
 	if timing != nil {
+		headerElapsed := time.Since(started)
+		timing.record(headerElapsed, response.Header.Get("Server-Timing"))
 		response.Body = &timedResponseBody{ReadCloser: response.Body, finish: func() {
-			timing.record(time.Since(started), response.Header.Get("Server-Timing"))
+			timing.recordTransfer(max(time.Since(started)-headerElapsed, 0))
 		}}
 	}
 	return response, nil

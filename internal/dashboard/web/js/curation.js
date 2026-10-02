@@ -97,7 +97,7 @@ function renderSummary() {
   if (!session || !els.summaryTags) return;
   const item = getItem(currentId);
   const modern = tagSystem.tagSystemOverview(currentId);
-  const selection = modern?.selection || (session.v2.status === "ready" ? session.v2.selection : session.v1.selection) || item?.classification || {};
+  const selection = modern?.selection || (session.v1.dirty ? session.v1.selection : null) || item?.effective_selection || (els.section.open && session.v2.status === "ready" ? session.v2.selection : null) || item?.classification || {};
   const tags = primaryTags(selection, modern?.custom_tags || item?.custom_tags, terms("topics"));
   els.summaryTags.replaceChildren(...tags.slice(0, 5).map((tag) => h("button.tag.curate-summary-tag.tag-filter", {
     type: "button", title: `筛选：${tag.label || termLabel(tag.field, tag.id)}`,
@@ -332,7 +332,7 @@ async function loadV2(session, { force = false } = {}) {
   const readEpoch = ++session.v2.readEpoch;
   session.v2.status = session.v2.status === "ready" ? "ready" : "loading";
   try {
-    const response = await api.v2Selection(session.id, getItem(session.id)?.cache_identity, { fresh: force });
+    const response = await api.v2Selection(session.id, getItem(session.id)?.cache_identity, { fresh: force, signal: force ? undefined : session.remoteController?.signal });
     if (readEpoch !== session.v2.readEpoch || session.v2.queue.length || session.v2.inFlight || session.v2.blocked) return;
     if (!response) {
       session.v2.status = "idle";
@@ -497,7 +497,7 @@ async function loadEntities(session, { force = false } = {}) {
   const readEpoch = ++session.entities.readEpoch;
   if (session.entities.status === "idle") session.entities.status = "loading";
   try {
-    const payload = await api.entities(session.id, getItem(session.id)?.cache_identity, { fresh: force });
+    const payload = await api.entities(session.id, getItem(session.id)?.cache_identity, { fresh: force, signal: force ? undefined : session.remoteController?.signal });
     if (readEpoch !== session.entities.readEpoch) return;
     if (!payload) {
       session.entities.status = "idle";
@@ -770,15 +770,16 @@ function renderWhy(session, item, { switched = false } = {}) {
 
 // show renders the curation card for a bookmark and starts its reads. A deep
 // link can arrive before the bookmark itself is loaded; the card then appears
-// on refresh(), but the tag and entity reads start right away.
+// on refresh(); editor reads wait until their disclosure is opened.
 export function show(id) {
   const switched = currentId !== id;
-  if (currentId && switched) flushPending(currentId);
+  if (currentId && switched) { flushPending(currentId); suspendRemote(); }
   currentId = id;
   if (switched) els.section.open = false;
   tagSystem.showTagSystem(id);
   pruneSessions();
   const session = sessionFor(id);
+  if (switched || !session.remoteController || session.remoteController.signal.aborted) session.remoteController = new AbortController();
   const item = getItem(id);
   els.section.hidden = !item;
   els.saveState.textContent = session.saveState;
@@ -795,6 +796,7 @@ export function show(id) {
   clearTimeout(remoteTimer);
   remoteTimer = setTimeout(() => {
     if (id !== currentId) return;
+    if (!els.section.open && !byId("diagnostics")?.open) return;
     if (vocab.v2Available !== false && (session.v2.status === "idle" || session.v2.status === "ready")) loadV2(session);
     if (vocab.v2Available !== false && session.entities.status !== "loading") loadEntities(session);
   }, session.v2.status === "idle" ? 60 : 120);
@@ -819,6 +821,7 @@ export function refresh(id) {
 }
 
 export function reloadRemote(id) {
+  if (!els.section.open && !byId("diagnostics")?.open) return;
   const session = sessions.get(id);
   if (!session) return;
   // A changed detail already filled the version-keyed caches from one Worker
@@ -826,6 +829,21 @@ export function reloadRemote(id) {
   // Workers whose detail route has no combined selection/entity response.
   loadV2(session);
   loadEntities(session);
+}
+
+export function suspendRemote() {
+  clearTimeout(remoteTimer);
+  tagSystem.suspendTagSystem();
+  const session = sessions.get(currentId);
+  if (!session) return;
+  session.remoteController?.abort();
+  for (const entry of [session.v2, session.entities]) { entry.readEpoch++; if (entry.status === "loading") entry.status = "idle"; }
+}
+export function resumeRemote() {
+  const session = sessions.get(currentId);
+  if (!session) return;
+  if (session.remoteController?.signal.aborted) session.remoteController = new AbortController();
+  tagSystem.showTagSystem(currentId); reloadRemote(currentId);
 }
 
 export function toggleEditingAll() {
@@ -859,7 +877,12 @@ export function initCuration() {
     reset: byId("reset-classification"), saveState: byId("save-state"), conflict: byId("v2-conflict"),
     summaryTags: byId("curate-summary-tags"), summaryWhy: byId("curate-summary-why"), summaryState: byId("curate-summary-state")
   });
-  els.section.addEventListener("toggle", () => { if (els.section.open) autoGrow(); });
+  els.section.addEventListener("toggle", () => {
+    if (els.section.open) { autoGrow(); resumeRemote(); }
+    else if (!byId("diagnostics")?.open) suspendRemote();
+    else tagSystem.suspendTagSystem();
+  });
+  on("detail:aux-needed", id => { if (id === currentId) resumeRemote(); });
 
   els.why.addEventListener("input", () => {
     const session = sessionFor(currentId);
