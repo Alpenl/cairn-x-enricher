@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { state, mergeItem, getItem, bodyCacheStats } from "./web/js/store.js";
 
 const make = (id, size = 100_000) => ({ id, url: `https://example.com/${id}`, status: "completed", enriched_at: "2026-10-01",
-  cache_identity: { body_revision: 1 }, content_loaded: true, original_text: "a".repeat(size), translated_text: "b".repeat(size),
+  cache_identity: { schema_version: 1, content_revision: 1, body_revision: 1 }, content_loaded: true, original_text: "a".repeat(size), translated_text: "b".repeat(size),
   classification: { topics: ["ai_coding"] }, summary: "summary", why: "human reason" });
 state.selectedId = 1;
 mergeItem(make(1));
@@ -18,10 +18,29 @@ console.log("ok   reading 200 articles bounds full bodies while preserving the o
 
 mergeItem({ ...make(1, 0), content_loaded: false, original_text: undefined, translated_text: undefined });
 assert.equal(getItem(1).original_text.length, 100_000);
-mergeItem({ ...make(1, 0), cache_identity: { body_revision: 2 }, content_loaded: false, original_text: undefined, translated_text: undefined });
+mergeItem({ ...make(1, 0), cache_identity: { schema_version: 1, content_revision: 1, body_revision: 2 }, content_loaded: false, original_text: undefined, translated_text: undefined });
 assert.equal(getItem(1).content_loaded, false);
 assert.equal(getItem(1).original_text, undefined);
 console.log("ok   matching summary preserves a loaded body; a changed body revision invalidates it");
+
+for (const identity of [undefined, { schema_version: 2, body_revision: 1 },
+  { schema_version: 1, content_revision: 1, body_revision: -1 },
+  { schema_version: 1, content_revision: 2, body_revision: 1 }]) {
+  mergeItem(make(1));
+  mergeItem({ ...make(1, 0), cache_identity: identity, content_loaded: false, original_text: undefined, translated_text: undefined });
+  assert.equal(getItem(1).content_loaded, false);
+  assert.equal(getItem(1).original_text, undefined);
+}
+console.log("ok   absent, invalid, unsupported and changed source versions cannot reuse an older body");
+
+for (const content_revision of [undefined, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+  const invalid = { ...make(1), cache_identity: { schema_version: 1, content_revision, body_revision: 1 } };
+  mergeItem(invalid);
+  mergeItem({ ...invalid, content_loaded: false, original_text: undefined, translated_text: undefined });
+  assert.equal(getItem(1).content_loaded, false);
+  assert.equal(getItem(1).original_text, undefined);
+}
+console.log("ok   matching but invalid source revisions do not establish body identity");
 
 state.selectedId = 500;
 mergeItem(make(500, 3_000_000));

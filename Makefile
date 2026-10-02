@@ -30,6 +30,7 @@ test-browser:
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/offline.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/diagnostics.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/performance.mjs
+	CAIRN_IMAGE_BROWSER=1 CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} go test ./internal/dashboard -run '^TestBrowserPerformanceFollowup$$' -count=1 -v
 
 # Real Chrome cache + actual Go proxy/client against a legacy HTTP fixture.
 # No route interception/cache disabling; no model or external source calls.

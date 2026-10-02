@@ -34,6 +34,8 @@ try {
   assert.deepEqual((await read()).items[0].classification.topics, ["llm"]);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].priority, "high");
+  assert.equal(new URL(calls[0].path, "https://example.test").searchParams.get("include_cache_identity"), "1");
+  assert.equal(params.has("include_cache_identity"), false);
   checked("exact queries reuse isolated response copies and list reads receive high priority");
 
   const reordered = new URLSearchParams([...params.entries()].reverse());

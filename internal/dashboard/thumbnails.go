@@ -28,6 +28,8 @@ const thumbnailSourceBytes = 12 << 20
 const thumbnailSourcePixels = 16_000_000
 const thumbnailCacheBytes = 8 << 20
 const thumbnailCacheItems = 128
+
+// A successful source revalidation renews this idle lifetime, never browser caching.
 const thumbnailCacheTTL = 10 * time.Minute
 
 type conditionalImageBackend interface {
@@ -40,6 +42,7 @@ type thumbnail struct {
 	content    []byte
 	sourceHash string
 	cachedAt   time.Time
+	generation uint64
 }
 
 // Only derived bytes live in memory. A hit never bypasses an upstream owner,
@@ -51,6 +54,8 @@ type thumbnailCache struct {
 	bytes   int
 	slots   chan struct{}
 	flights map[string]*thumbnailFlight
+	now     func() time.Time
+	serial  uint64
 }
 
 type thumbnailFlight struct {
@@ -94,12 +99,44 @@ func (c *thumbnailCache) get(key string) (thumbnail, bool) {
 		return thumbnail{}, false
 	}
 	value := entry.Value.(thumbnail)
-	if time.Since(value.cachedAt) >= thumbnailCacheTTL {
+	if c.currentTime().Sub(value.cachedAt) >= thumbnailCacheTTL {
 		c.remove(entry)
 		return thumbnail{}, false
 	}
 	c.order.MoveToFront(entry)
 	return value, true
+}
+
+func (c *thumbnailCache) currentTime() time.Time {
+	if c.now != nil {
+		return c.now()
+	}
+	return time.Now()
+}
+
+// renew only extends the exact entry whose source was just revalidated. A late
+// 304 cannot revive an evicted/deleted entry or extend a replacement version.
+func (c *thumbnailCache) renew(validated thumbnail) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry := c.entries[validated.key]
+	if entry == nil {
+		return false
+	}
+	current := entry.Value.(thumbnail)
+	if current.generation != validated.generation || current.etag != validated.etag ||
+		current.sourceHash != validated.sourceHash {
+		return false
+	}
+	now := c.currentTime()
+	if now.Sub(current.cachedAt) >= thumbnailCacheTTL {
+		c.remove(entry)
+		return false
+	}
+	current.cachedAt = now
+	entry.Value = current
+	c.order.MoveToFront(entry)
+	return true
 }
 
 func (c *thumbnailCache) put(value thumbnail) {
@@ -111,7 +148,9 @@ func (c *thumbnailCache) put(value thumbnail) {
 	if old := c.entries[value.key]; old != nil {
 		c.remove(old)
 	}
-	value.cachedAt = time.Now()
+	value.cachedAt = c.currentTime()
+	c.serial++
+	value.generation = c.serial
 	c.entries[value.key] = c.order.PushFront(value)
 	c.bytes += len(value.content)
 	for c.bytes > thumbnailCacheBytes || len(c.entries) > thumbnailCacheItems {
@@ -154,11 +193,15 @@ func (s *Server) getThumbnail(writer http.ResponseWriter, request *http.Request)
 		return
 	}
 	defer func() { _ = response.Body.Close() }()
+	if request.Context().Err() != nil {
+		return
+	}
 	if response.StatusCode == http.StatusNotModified {
 		if !hit || cached.etag == "" || response.Header.Get("ETag") != cached.etag {
 			writeError(writer, http.StatusBadGateway, "invalid_image_validator")
 			return
 		}
+		s.thumbnails.renew(cached)
 		writeThumbnail(writer, cached.content)
 		return
 	}

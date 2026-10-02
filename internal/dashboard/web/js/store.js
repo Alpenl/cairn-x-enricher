@@ -81,9 +81,16 @@ export function mergeItem(incoming) {
   if (!incoming || !incoming.id) return null;
   const previous = state.items.get(incoming.id);
   let merged = incoming;
-  const sameContent = previous && previous.enriched_at === incoming.enriched_at && previous.status === incoming.status &&
+  const beforeBody = previous?.cache_identity, nextBody = incoming.cache_identity;
+  // Missing/invalid versions from an older backend cannot establish that a
+  // stored private body still belongs to the returned summary.
+  const sameBody = beforeBody?.schema_version === 1 && nextBody?.schema_version === 1 &&
+    Number.isSafeInteger(beforeBody.body_revision) && beforeBody.body_revision >= 0 &&
+    beforeBody.body_revision === nextBody.body_revision;
+  const sameContent = previous && sameBody && previous.enriched_at === incoming.enriched_at && previous.status === incoming.status &&
     previous.url === incoming.url &&
-    (previous.cache_identity?.body_revision === incoming.cache_identity?.body_revision);
+    Number.isSafeInteger(beforeBody.content_revision) && beforeBody.content_revision >= 0 &&
+    beforeBody.content_revision === nextBody.content_revision;
   if (sameContent && incoming.content_loaded === false && previous.content_loaded !== false) {
     merged = {
       ...previous, ...incoming, content_loaded: previous.content_loaded,
