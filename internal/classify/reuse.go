@@ -159,6 +159,7 @@ func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *Raw
 			if !ok {
 				return RawJudgments{}, fmt.Errorf("%w: missing stored answer for %s", ErrReuseUnsafe, question.ID)
 			}
+			judgment.Granularity = question.Granularity
 			merged.Judgments[question.ID] = judgment
 			merged.ReusedFrom[question.ID] = previous.SourceRunID
 			hash, _ := QuestionHash(question)
@@ -174,6 +175,9 @@ func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *Raw
 				subset = append(subset, question)
 			}
 		}
+	}
+	if len(subset) > DefaultMaxQuestionsPerRequest {
+		return RawJudgments{}, fmt.Errorf("%w: changed questions require a bounded full evaluation", ErrReuseUnsafe)
 	}
 	fresh, err := c.evaluateQuestions(ctx, input, subset, evidenceHash, batchSemantics)
 	if err != nil {
@@ -194,6 +198,12 @@ func (c *Client) EvaluateReusing(ctx context.Context, input Input, previous *Raw
 			stored, ok := previous.Judgments[id]
 			if !ok {
 				return RawJudgments{}, fmt.Errorf("%w: missing stored answer for %s", ErrReuseUnsafe, id)
+			}
+			for _, question := range c.spec.Questions {
+				if question.ID == id {
+					stored.Granularity = question.Granularity
+					break
+				}
 			}
 			merged.Judgments[id] = stored
 			merged.ReusedFrom[id] = previous.SourceRunID
@@ -296,7 +306,7 @@ func (c *Client) evaluateQuestions(ctx context.Context, input Input, questions [
 		answer := response.Answers[question.ID]
 		judgment := RawJudgment{
 			QuestionID: question.ID, Kind: question.Kind, Dimension: question.Dimension,
-			TermID: question.TermID, Confidence: answer.Confidence,
+			TermID: question.TermID, Granularity: question.Granularity, Confidence: answer.Confidence,
 		}
 		switch question.Kind {
 		case QuestionNoul:

@@ -13,6 +13,10 @@ let mutations = 0;
 
 export function offlineScopeVersion() { return accountEpoch; }
 
+// Preference keys use the same authenticated, non-secret account scope as
+// offline copies. Never persist preferences under an anonymous shared key.
+export function preferenceScope() { return Promise.resolve(currentScope || null); }
+
 // Responses from a request predating an observed account switch cannot switch
 // the page back. A current response identifies the scope without another GET.
 export function observeOfflineScope(value, version = accountEpoch) {

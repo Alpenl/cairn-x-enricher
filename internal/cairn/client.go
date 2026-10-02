@@ -144,6 +144,7 @@ type BookmarkPage struct {
 type BookmarkQuery struct {
 	IncludeCacheIdentity    bool
 	Topics                  []string
+	TopicRefinements        []string
 	ResourceKinds           []string
 	CustomTags              []string
 	TopicMode               string
@@ -172,14 +173,14 @@ type BookmarkQuery struct {
 
 // NeedsFilterContract rejects old backends that silently ignore v2 conditions.
 func (q BookmarkQuery) NeedsFilterContract() bool {
-	return q.RequireEffectiveFilters || len(q.Topics)+len(q.ResourceKinds)+len(q.CustomTags)+len(q.ContentFunctions)+len(q.Carriers)+len(q.Affordances)+len(q.EntityStates) > 0 || q.TopicMode != "" || q.ResourceMode != "" || q.CustomMode != "" || q.FunctionsMode != ""
+	return q.RequireEffectiveFilters || len(q.Topics)+len(q.TopicRefinements)+len(q.ResourceKinds)+len(q.CustomTags)+len(q.ContentFunctions)+len(q.Carriers)+len(q.Affordances)+len(q.EntityStates) > 0 || q.TopicMode != "" || q.ResourceMode != "" || q.CustomMode != "" || q.FunctionsMode != ""
 }
 
 // NeedsTagFilterContract detects fields that an older effective-filter backend
 // could silently ignore. Capability acknowledgement is required before using
 // its result as a filtered page.
 func (q BookmarkQuery) NeedsTagFilterContract() bool {
-	return len(q.ResourceKinds)+len(q.CustomTags) > 0 || q.TopicMode != "" || q.ResourceMode != "" || q.CustomMode != "" || q.FunctionsMode != ""
+	return len(q.TopicRefinements)+len(q.ResourceKinds)+len(q.CustomTags) > 0 || q.TopicMode != "" || q.ResourceMode != "" || q.CustomMode != "" || q.FunctionsMode != ""
 }
 
 // CurationUpdate applies explicit human edits; a null classification restores AI suggestions.
@@ -508,7 +509,7 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 		}
 	}
 	for key, terms := range map[string][]string{
-		"topics": query.Topics, "content_functions": query.ContentFunctions, "carriers": query.Carriers,
+		"topics": query.Topics, "topic_refinements": query.TopicRefinements, "content_functions": query.ContentFunctions, "carriers": query.Carriers,
 		"affordances": query.Affordances, "entity_state": query.EntityStates,
 		"resource_kinds": query.ResourceKinds, "custom_tags": query.CustomTags,
 	} {
@@ -539,6 +540,9 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 	}
 	if query.NeedsTagFilterContract() && response.Header.Get("X-Cairn-Tag-System") != "1" {
 		return BookmarkPage{}, &APIError{StatusCode: http.StatusConflict, Code: "unsupported_tag_filter_contract"}
+	}
+	if len(query.TopicRefinements) > 0 && response.Header.Get("X-Cairn-Topic-Granularity") != "1" {
+		return BookmarkPage{}, &APIError{StatusCode: http.StatusConflict, Code: "unsupported_topic_refinement_contract"}
 	}
 	if query.FunctionsMode != "" && response.Header.Get("X-Cairn-Content-Functions") != "1" {
 		return BookmarkPage{}, &APIError{StatusCode: http.StatusConflict, Code: "unsupported_tag_filter_contract"}
@@ -813,6 +817,8 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, body an
 	// omit the header, allowing the Worker to keep strict legacy responses legal.
 	request.Header.Set("X-Cairn-Tag-System", "1")
 	request.Header.Set("X-Cairn-Content-Functions", "1")
+	request.Header.Set("X-Cairn-Topic-Granularity", "1")
+	request.Header.Set("X-Cairn-Candidate-Manifest", "2")
 	request.Header.Set("X-Cairn-Search-Summary", "1")
 	if path == "/api/enrichment/jobs/claim" ||
 		(strings.HasPrefix(path, "/api/enrichment/jobs/") && strings.HasSuffix(path, "/claim")) {

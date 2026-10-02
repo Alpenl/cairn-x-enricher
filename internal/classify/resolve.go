@@ -412,7 +412,7 @@ func DecodeStoredJudgments(spec QuestionSpec, requestedModel, resolvedModel stri
 		}
 		judgment := RawJudgment{
 			QuestionID: id, Kind: question.Kind, Dimension: question.Dimension,
-			TermID: question.TermID, Confidence: answer.Confidence,
+			TermID: question.TermID, Granularity: question.Granularity, Confidence: answer.Confidence,
 		}
 		switch answer.Type {
 		case TypeNoul:

@@ -108,7 +108,7 @@ func TestClassifyUsesIndependentTopicsAndControlledChoices(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(r.Classification.Topics) != 2 || r.Classification.Uncertainty || r.Classification.Form != "method" ||
-		r.PolicyVersion != "jev-policy-v4" || r.Model != "jev-pinned" {
+		r.PolicyVersion != "jev-policy-v5" || r.Model != "jev-pinned" {
 		t.Fatalf("wrong result: %+v", r)
 	}
 	if len(r.RawJudgments.Judgments) != 6 {

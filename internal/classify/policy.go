@@ -19,6 +19,7 @@ type RawJudgment struct {
 	Kind          QuestionKind       `json:"kind"`
 	Dimension     string             `json:"dimension"`
 	TermID        string             `json:"term_id,omitempty"`
+	Granularity   string             `json:"granularity,omitempty"`
 	Noul          *float64           `json:"noul,omitempty"`
 	Choice        string             `json:"choice,omitempty"`
 	Probabilities map[string]float64 `json:"probabilities,omitempty"`
@@ -36,10 +37,11 @@ type RawJudgment struct {
 type RawJudgments struct {
 	// Version 1 binds persisted answers to the actual bounded provider state,
 	// calls made by this run and the stored runs supplying reused questions.
-	MetadataVersion int              `json:"metadata_version,omitempty"`
-	WireState       string           `json:"wire_state,omitempty"`
-	Calls           []ProviderCall   `json:"calls,omitempty"`
-	ReusedFrom      map[string]int64 `json:"reused_from,omitempty"`
+	MetadataVersion   int                `json:"metadata_version,omitempty"`
+	CandidateManifest *CandidateManifest `json:"candidate_manifest,omitempty"`
+	WireState         string             `json:"wire_state,omitempty"`
+	Calls             []ProviderCall     `json:"calls,omitempty"`
+	ReusedFrom        map[string]int64   `json:"reused_from,omitempty"`
 	// Assigned by the store reader, never trusted from serialized metadata.
 	SourceRunID     int64  `json:"-"`
 	SpecID          string `json:"spec_id"`
@@ -117,6 +119,9 @@ type Policy struct {
 	// FunctionSupportAccept is the weaker, explicit support bound used only to
 	// fill a sparse automatic result with existing content-function judgments.
 	FunctionSupportAccept float64 `json:"function_support_accept,omitempty"`
+	// PreferSpecificTopics reserves a supported specific subject before applying
+	// the automatic label limit. It never changes acceptance probabilities.
+	PreferSpecificTopics bool `json:"prefer_specific_topics,omitempty"`
 }
 
 // DefaultPolicy is the conservative, explicitly uncalibrated objective policy.
@@ -126,13 +131,13 @@ func DefaultPolicy() Policy {
 		TopicAccept: 0.8, TopicReject: 0.2,
 		ChoiceAccept: 0.65, ChoiceMargin: 0.15,
 		MaxDisplayTopics: 3, MaxEffectiveTopics: 64,
-		MinPrimaryTags: 2, MaxPrimaryTags: 5, FunctionSupportAccept: 0.65,
+		MinPrimaryTags: 2, MaxPrimaryTags: 5, FunctionSupportAccept: 0.65, PreferSpecificTopics: true,
 	}
 }
 
 // Validate rejects a policy whose bounds cannot describe a decision.
 func (p Policy) Validate() error {
-	if (p.Version == "jev-policy-v3" || p.Version == "jev-policy-v4") && !p.BlockPersonalUse {
+	if (p.Version == "jev-policy-v3" || p.Version == "jev-policy-v4" || p.Version == "jev-policy-v5") && !p.BlockPersonalUse {
 		return errors.New("current objective policies require the personal use guard")
 	}
 	if p.Version == "jev-policy-v2" && p.BlockPersonalUse {
@@ -142,7 +147,13 @@ func (p Policy) Validate() error {
 	if (p.Version == "jev-policy-v2" || p.Version == "jev-policy-v3") && hasDensity {
 		return errors.New("primary tag density changes historical policy semantics; use a new policy identity")
 	}
-	if p.Version == "jev-policy-v4" || hasDensity {
+	if (p.Version == "jev-policy-v2" || p.Version == "jev-policy-v3" || p.Version == "jev-policy-v4") && p.PreferSpecificTopics {
+		return errors.New("specific topic preference changes historical policy semantics; use a new policy identity")
+	}
+	if p.Version == "jev-policy-v5" && !p.PreferSpecificTopics {
+		return errors.New("jev-policy-v5 requires specific topic preference")
+	}
+	if p.Version == "jev-policy-v4" || p.Version == "jev-policy-v5" || hasDensity {
 		if p.MinPrimaryTags < 1 || p.MaxPrimaryTags < 2 || p.MinPrimaryTags > p.MaxPrimaryTags || p.MaxPrimaryTags > 64 {
 			return errors.New("primary tag density limits are inconsistent")
 		}
@@ -194,6 +205,20 @@ type FieldDecision struct {
 	Reason string `json:"reason"`
 	// Probability is retained for audit only.
 	Probability float64 `json:"probability"`
+}
+
+// MarshalJSON omits probability for unjudged candidates. A genuine zero Noul
+// remains an explicit zero; missing recall evidence never becomes p=false.
+func (d FieldDecision) MarshalJSON() ([]byte, error) {
+	type plain FieldDecision
+	p := &d.Probability
+	if d.Reason == "not_recalled" || d.Reason == "candidate_limit" {
+		p = nil
+	}
+	return json.Marshal(struct {
+		plain
+		Probability *float64 `json:"probability,omitempty"`
+	}{plain: plain(d), Probability: p})
 }
 
 // Proposals is the pure output of Decide. The multidimensional fields are the
@@ -320,6 +345,20 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 			})
 		}
 	}
+	if raw.CandidateManifest != nil {
+		for _, omitted := range raw.CandidateManifest.Omitted {
+			if omitted.Reason != "not_recalled" && omitted.Reason != "candidate_limit" {
+				return Proposals{}, errors.New("invalid candidate omission reason")
+			}
+			if _, judged := raw.Judgments[omitted.QuestionID]; judged {
+				return Proposals{}, errors.New("an omitted candidate also has a judgment")
+			}
+			proposals.Decisions = append(proposals.Decisions, FieldDecision{
+				Dimension: normalizeDimension(omitted.Dimension), TermID: omitted.TermID,
+				Verdict: VerdictAbstained, Reason: omitted.Reason,
+			})
+		}
+	}
 	// Rank each dimension by probability with a deterministic tie-break so the
 	// same judgments always produce the same order.
 	rank := func(values []candidate) []candidate {
@@ -368,6 +407,17 @@ func Decide(raw RawJudgments, policy Policy) (Proposals, error) {
 	}
 	if policy.MaxPrimaryTags > 0 {
 		applyPrimaryTagDensity(&proposals, raw, policy)
+	}
+	if policy.PreferSpecificTopics {
+		specific := map[string]bool{}
+		for _, judgment := range raw.Judgments {
+			if normalizeDimension(judgment.Dimension) == "topics" && judgment.Granularity == "specific" {
+				specific[judgment.TermID] = true
+			}
+		}
+		sort.SliceStable(proposals.Topics, func(i, j int) bool {
+			return specific[proposals.Topics[i]] && !specific[proposals.Topics[j]]
+		})
 	}
 	// Legacy dimensions that keep the v1 projection alive.
 	for _, decision := range proposals.Decisions {
@@ -476,17 +526,28 @@ func applyPrimaryTagDensity(proposals *Proposals, raw RawJudgments, policy Polic
 	sort.Slice(accepted, func(i, j int) bool { return less(proposals.Decisions[accepted[i]], proposals.Decisions[accepted[j]]) })
 	key := func(decision FieldDecision) string { return decision.Dimension + "/" + decision.TermID }
 	kept := map[string]bool{}
-	// Preserve a substantive subject and reusable resource whenever either was
-	// accepted, even if higher-probability functions compete for the same slots.
-	for _, dimension := range []string{"topics", "resource_kinds"} {
+	specific := map[string]bool{}
+	for _, judgment := range raw.Judgments {
+		if normalizeDimension(judgment.Dimension) == "topics" && judgment.Granularity == "specific" {
+			specific[judgment.TermID] = true
+		}
+	}
+	reserve := func(dimension string, predicate func(FieldDecision) bool) {
 		for _, index := range accepted {
 			decision := proposals.Decisions[index]
-			if decision.Dimension == dimension {
+			if decision.Dimension == dimension && predicate(decision) && len(kept) < policy.MaxPrimaryTags {
 				kept[key(decision)] = true
-				break
+				return
 			}
 		}
 	}
+	if policy.PreferSpecificTopics {
+		reserve("topics", func(d FieldDecision) bool { return specific[d.TermID] })
+		reserve("topics", func(d FieldDecision) bool { return !specific[d.TermID] })
+	} else {
+		reserve("topics", func(FieldDecision) bool { return true })
+	}
+	reserve("resource_kinds", func(FieldDecision) bool { return true })
 	for _, index := range accepted {
 		decision := &proposals.Decisions[index]
 		if !kept[key(*decision)] && len(kept) < policy.MaxPrimaryTags {

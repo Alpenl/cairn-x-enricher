@@ -19,17 +19,30 @@ var idPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 // aliases. Includes/Excludes are boundary examples that carry semantics: they
 // are part of the compiled question and its hash, unlike the display label.
 type Term struct {
-	DefinitionVersion int      `json:"definition_version,omitempty"`
-	DisplayRevision   int      `json:"display_revision,omitempty"`
-	Status            string   `json:"status,omitempty"`
-	Description       string   `json:"description,omitempty"`
-	ID                string   `json:"id"`
-	Label             string   `json:"label"`
-	Aliases           []string `json:"aliases"`
-	Active            bool     `json:"active"`
-	Includes          []string `json:"includes,omitempty"`
-	Excludes          []string `json:"excludes,omitempty"`
+	DefinitionVersion int            `json:"definition_version,omitempty"`
+	DisplayRevision   int            `json:"display_revision,omitempty"`
+	Status            string         `json:"status,omitempty"`
+	Description       string         `json:"description,omitempty"`
+	ID                string         `json:"id"`
+	Label             string         `json:"label"`
+	Aliases           []string       `json:"aliases"`
+	Active            bool           `json:"active"`
+	Includes          []string       `json:"includes,omitempty"`
+	Excludes          []string       `json:"excludes,omitempty"`
+	Granularity       string         `json:"granularity,omitempty"`
+	Navigation        bool           `json:"navigation,omitempty"`
+	RecallTerms       []string       `json:"recall_terms,omitempty"`
+	Relations         []TermRelation `json:"relations,omitempty"`
 }
+
+// TermRelation supplies candidate context without inheriting membership.
+type TermRelation struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+}
+
+// Specific reports a deliberately scoped topic; legacy metadata means broad.
+func (t Term) Specific() bool { return t.Granularity == "specific" }
 
 // PersonalUse reports the reserved legacy use that expresses the user's own
 // opposition. It remains available for explicit human curation and historical
@@ -109,8 +122,8 @@ func (c Catalog) Validate() error {
 		}
 	}
 	for name, terms := range dimensions {
-		if len(terms) == 0 || len(terms) > 40 {
-			return fmt.Errorf("taxonomy %s must contain 1 to 40 terms", name)
+		if len(terms) == 0 || len(terms) > 128 {
+			return fmt.Errorf("taxonomy %s must contain 1 to 128 terms", name)
 		}
 		ids, aliases := map[string]bool{}, map[string]string{}
 		active := 0
@@ -124,6 +137,30 @@ func (c Catalog) Validate() error {
 			if !idPattern.MatchString(term.ID) || ids[term.ID] || strings.TrimSpace(term.Label) == "" || utf8.RuneCountInString(term.Label) > 80 || len(term.Aliases) > 20 || utf8.RuneCountInString(term.Description) > 1000 {
 				return fmt.Errorf("taxonomy %s contains an invalid or duplicate term", name)
 			}
+			if term.Granularity != "" && term.Granularity != "broad" && term.Granularity != "specific" {
+				return fmt.Errorf("taxonomy %s contains invalid granularity", name)
+			}
+			if term.Active && term.Specific() && (strings.TrimSpace(term.Description) == "" || len(term.Includes) == 0 || len(term.Excludes) == 0 || len(term.RecallTerms) == 0) {
+				return fmt.Errorf("taxonomy %s specific term %s needs a definition, positive and negative boundaries, and recall terms", name, term.ID)
+			}
+			if len(term.RecallTerms) > 40 || len(term.Relations) > 16 {
+				return fmt.Errorf("taxonomy %s contains excessive retrieval metadata", name)
+			}
+			recall := map[string]bool{}
+			for _, value := range term.RecallTerms {
+				key := strings.Join(strings.Fields(strings.ToLower(value)), " ")
+				if key == "" || utf8.RuneCountInString(value) > 80 || recall[key] {
+					return fmt.Errorf("taxonomy %s contains invalid or duplicate recall terms", name)
+				}
+				recall[key] = true
+			}
+			relations := map[string]bool{}
+			for _, relation := range term.Relations {
+				if !idPattern.MatchString(relation.ID) || relation.ID == term.ID || relation.Kind != "related" || relations[relation.ID] {
+					return fmt.Errorf("taxonomy %s contains invalid related context", name)
+				}
+				relations[relation.ID] = true
+			}
 			ids[term.ID] = true
 			if !term.Active {
 				continue
@@ -135,6 +172,13 @@ func (c Catalog) Validate() error {
 					return fmt.Errorf("taxonomy %s contains an invalid or ambiguous alias", name)
 				}
 				aliases[key] = term.ID
+			}
+		}
+		for _, term := range terms {
+			for _, relation := range term.Relations {
+				if !ids[relation.ID] {
+					return fmt.Errorf("taxonomy %s contains unknown related term %s", name, relation.ID)
+				}
 			}
 		}
 		if active == 0 {

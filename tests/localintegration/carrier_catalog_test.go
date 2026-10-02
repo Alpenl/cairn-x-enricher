@@ -24,7 +24,7 @@ func TestLocalWorkerCarrierDefinitionUpgrade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if vocabulary.DefinitionVersion != 4 || vocabulary.Version != "2026-09-30.2" {
+	if vocabulary.DefinitionVersion != 5 || vocabulary.Version != "2026-10-02.1" {
 		t.Fatalf("wrong current taxonomy identity: %s definition v%d", vocabulary.Version, vocabulary.DefinitionVersion)
 	}
 	catalog, err := queue.GetV2Catalog(ctx)
@@ -48,12 +48,13 @@ func TestLocalWorkerCarrierDefinitionUpgrade(t *testing.T) {
 	historical := mustSpec(t, frozen)
 	current := mustSpec(t, catalog)
 	if catalog.DefinitionVersion != vocabulary.DefinitionVersion || catalog.Version != vocabulary.Version ||
-		current.TaxonomyVersion != vocabulary.Version || len(current.Questions) != 31 {
-		t.Fatal("current Worker v4 catalog did not compile its 31-question spec")
+		current.TaxonomyVersion != vocabulary.Version || len(current.Questions) != 55 {
+		t.Fatal("current Worker granular catalog did not compile its 55-question spec")
 	}
 	for dimension, expected := range map[string][]string{
 		"topics": {"ai_coding", "agent_workflow", "image_creation", "video_creation", "writing_creation", "ui_design",
-			"knowledge_workflow", "information_sources", "model_practice", "creator_business", "finance_resources", "document_layout", "clothing_style"},
+			"knowledge_workflow", "information_sources", "model_practice", "creator_business", "finance_resources", "document_layout", "clothing_style",
+			"portrait_photography", "character_consistency", "whiteboard_animation", "code_refactoring", "writing_style_imitation", "natural_writing", "fiction_writing", "wechat_records", "wechat_publishing", "agent_memory", "agent_instructions", "ui_motion", "design_systems", "web_archiving", "broll", "screen_recording", "local_inference", "model_finetuning", "model_quantization", "browser_automation", "market_data", "english_learning", "reverse_engineering", "footer_design"},
 		"resource_kinds": {"skill", "prompt", "software", "component", "model", "reference"},
 	} {
 		terms := catalog.Topics

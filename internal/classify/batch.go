@@ -126,6 +126,9 @@ const DefaultMaxQuestionsPerRequest = 32
 // is reported as partial coverage; a component-level fault still aborts, and a
 // run is never reported complete while a question has no answer (B04-T06).
 func (c *Client) EvaluateBatched(ctx context.Context, input Input, maxPerRequest int) (RawJudgments, error) {
+	if c.candidatePolicy != nil {
+		return c.evaluateCandidates(ctx, input, nil, "")
+	}
 	if maxPerRequest <= 0 {
 		maxPerRequest = DefaultMaxQuestionsPerRequest
 	}

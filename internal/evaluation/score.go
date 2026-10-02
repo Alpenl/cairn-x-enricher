@@ -30,6 +30,7 @@ type DimensionMetric struct {
 
 // Report is the machine-readable evaluation result.
 type Report struct {
+	CandidateRecall       *CandidateRecallMetric    `json:"candidate_recall,omitempty"`
 	KnownReferenceSamples int                       `json:"known_reference_samples"`
 	IndependentGroups     int                       `json:"independent_groups"`
 	ReferenceHash         string                    `json:"reference_hash"`
@@ -114,6 +115,12 @@ func Score(dataset Dataset) (Report, error) {
 		if !present {
 			report.MissingGoldCount++
 		}
+		if prediction.Evaluation != nil && prediction.Evaluation.CandidateManifest != nil {
+			if report.CandidateRecall == nil {
+				report.CandidateRecall = &CandidateRecallMetric{}
+			}
+			scoreCandidateRecall(report.CandidateRecall, sample.Gold.Topics, prediction)
+		}
 		beforeKnown := report.KnownFields
 		references := referenceLabels(*sample.Gold)
 		predicted := map[string][]string{"topics": prediction.Topics, "resource_kinds": prediction.ResourceKinds, "content_functions": prediction.ContentFunctions, "carriers": prediction.Carriers, "affordances": prediction.Affordances, "form": nonEmpty(prediction.Form), "use": nonEmpty(prediction.Use)}
@@ -132,6 +139,9 @@ func Score(dataset Dataset) (Report, error) {
 			report.KnownFields++
 			values.known++
 			actual := predicted[name]
+			if metric.MultiLabel {
+				actual = reviewedPredictions(label, name, actual)
+			}
 			abstained := dimensionAbstained(prediction, name)
 			if !present || abstained {
 				reviewFields++
@@ -202,6 +212,9 @@ func Score(dataset Dataset) (Report, error) {
 			}
 			sort.Strings(keys)
 			for _, label := range keys {
+				if !reviewedTerm(sample.Gold.Topics, "topics", label) {
+					continue
+				}
 				probability := prediction.TopicProbabilities[label]
 				correct := contains(sample.Gold.Topics.Values, label)
 				brierSum += math.Pow(probability-boolToFloat(correct), 2)

@@ -72,7 +72,10 @@ type Config struct {
 	// PartialReuse opts in to reusing unchanged stored answers for a new
 	// classification. It is off by default; the conservative full evaluation is
 	// the production default (R2-13).
-	PartialReuse                        bool
+	PartialReuse bool
+	// Zero evaluates the full catalog. A positive limit enables versioned
+	// objective candidate recall after Worker capability acknowledgement.
+	ClassificationCandidateMaxQuestions int
 	ClassificationMaxCalls              int
 	ClassificationMaxCallsPerItem       int
 	ClassificationMaxInputTokens        int
@@ -172,6 +175,9 @@ func splitCSV(value string) []string {
 
 func (c *Config) readNumbers() error {
 	var err error
+	if c.ClassificationCandidateMaxQuestions, err = intValue("CAIRN_CLASSIFICATION_CANDIDATE_MAX_QUESTIONS", 0, 0, 128); err != nil {
+		return err
+	}
 	if c.ClassificationMaxCalls, err = intValue("CAIRN_CLASSIFICATION_MAX_CALLS", 20, 1, 200); err != nil {
 		return err
 	}

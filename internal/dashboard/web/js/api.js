@@ -59,6 +59,10 @@ export class APIError extends Error {
 
 export async function fetchJSON(path, options = {}) {
   let response;
+  const taxonomyRequest = /^\/api\/(?:v2-)?taxonomy$/.test(path);
+  const refinementRequest = new URLSearchParams(path.split("?")[1] || "").has("topic_refinements");
+  if (taxonomyRequest || refinementRequest) options = { ...options, headers: { ...options.headers,
+    "X-Cairn-Tag-System": "1", "X-Cairn-Topic-Granularity": "1" } };
   const scopeVersion = offlineScopeVersion();
   try {
     response = await fetch(path, { cache: "no-store", ...options });
@@ -78,6 +82,11 @@ export async function fetchJSON(path, options = {}) {
     throw error;
   });
   assertCurrentScope(acceptedScopeVersion);
+  const granularity = response.headers?.get("X-Cairn-Topic-Granularity") === "1" && response.headers?.get("X-Cairn-Tag-System") === "1";
+  if (refinementRequest && !granularity) throw new APIError("unsupported_filter_contract", 409);
+  if (taxonomyRequest && !granularity && Array.isArray(payload.topics)) {
+    payload.topics = payload.topics.map(({ granularity, navigation, ...term }) => term);
+  }
   return payload;
 }
 

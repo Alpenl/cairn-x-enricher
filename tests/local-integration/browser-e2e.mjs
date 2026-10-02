@@ -13,7 +13,7 @@ const goBin = process.env.GO_BIN;
 const enricherToken = process.env.CAIRN_ENRICHER_TOKEN || "internal";
 const appToken = process.env.CAIRN_APP_TOKEN || "app";
 // Match the current production policy; a stale target must not be consumed.
-const policyVersion = "jev-policy-v4";
+const policyVersion = "jev-policy-v5";
 if (!workerURL || !goBin) {
   process.stderr.write("CAIRN_WORKER_URL and GO_BIN are required\n");
   process.exit(1);
@@ -118,7 +118,14 @@ async function main() {
       return result.status === 200 && result.payload.runs?.length ? result.payload.runs[0] : null;
     }, 180000);
     check("the scheduler produced a v2 run with the mock model", run.resolved_model === "jev-1.13.0", JSON.stringify(run).slice(0, 300));
-    check("the provider usage was preserved", run.usage?.input_tokens === 111, JSON.stringify(run.usage));
+    const classificationRequests = mock.requests.filter(request => request.path === "/v1/systemone" &&
+      !Object.hasOwn(request.body.questions || {}, "entity_0"));
+    const expectedQuestions = (spec.spec || spec.payload).questions.map(question => question.id).sort();
+    const askedQuestions = classificationRequests.flatMap(request => Object.keys(request.body.questions)).sort();
+    check("bounded provider batches cover the entire compiled catalog exactly once",
+      classificationRequests.every(request => Object.keys(request.body.questions).length <= 32) &&
+      JSON.stringify(askedQuestions) === JSON.stringify(expectedQuestions));
+    check("the provider usage was preserved", run.usage?.input_tokens === 111 * classificationRequests.length, JSON.stringify(run.usage));
     const job = await jsonFetch(`${workerURL}/api/enrichment/classifications/${id}`, { headers: auth(enricherToken) });
     check("the classification job completed against the target", job.payload.status === "completed", JSON.stringify(job.payload).slice(0, 200));
 
@@ -170,7 +177,10 @@ async function main() {
     await page.goto(`http://127.0.0.1:${goPort}/bookmarks/${id}`, { waitUntil: "load" });
     await page.waitForSelector('.tag-system-row[data-dimension="topics"] .tag-name', { state: "attached", timeout: 30000 });
     check("the real tag editor starts collapsed", !await page.locator("#curate").evaluate(node => node.open));
-    await page.locator("#curate > summary").click();
+    // The summary also contains independent tag-filter buttons. Its center
+    // can hit one of those; click the disclosure label to open the editor.
+    await page.locator("#curate > summary .curate-summary-label").click();
+    await page.locator('.tag-system-row[data-dimension="topics"]').waitFor({ state: "visible" });
     check("the modern editor loads through the real proxy", await page.isVisible('.tag-system-row[data-dimension="topics"]'));
     const effectiveTopics = async () => (await page.locator('.tag-system-row[data-dimension="topics"] .tag-name').allTextContents()).map(label => catalog.topics.find(term => term.label === label)?.id || label);
     const checked = await effectiveTopics();
@@ -254,7 +264,7 @@ async function main() {
 
     // 6. Re-selecting an earlier single-valued option must use action order,
     // including after the next request reconstructs the view from D1 rows.
-    if (!await page.locator("#curate").evaluate(node => node.open)) await page.locator("#curate > summary").click();
+    if (!await page.locator("#curate").evaluate(node => node.open)) await page.locator("#curate > summary .curate-summary-label").click();
     if (!await page.locator(".tag-secondary").evaluate(node => node.open)) await page.locator(".tag-secondary > summary").click();
     await page.click("#v2-carriers [data-edit='carriers']");
     const carrierOptions = await page.$$eval("#v2-carriers [data-field='carriers'][data-term]:not([data-term=''])", (nodes) => nodes.map((node) => ({ value: node.dataset.term, checked: node.classList.contains("on") })));
@@ -275,13 +285,22 @@ async function main() {
     await page.waitForSelector("#v2-carriers .chip.on", { state: "attached", timeout: 30000 });
     check("carrier A survives refresh after A-B-A", await page.$eval("#v2-carriers .chip.on", (node) => node.dataset.term) === firstCarrier);
     const otherPage = await browser.newPage();
+    otherPage.on("pageerror", error => pageErrors.push(String(error)));
     await otherPage.goto(`http://127.0.0.1:${goPort}/bookmarks/${id}`, { waitUntil: "load" });
-    await otherPage.waitForSelector("#v2-carriers .chip.on", { state: "attached", timeout: 30000 });
+    await otherPage.waitForSelector("#v2-carriers .chip.on", { state: "attached", timeout: 30000 }).catch(async error => {
+      process.stdout.write(`second page carrier diagnostic: ${JSON.stringify({ errors: pageErrors,
+        url: otherPage.url(), tags: await otherPage.locator("#tag-rows").innerHTML(),
+        detail: await otherPage.locator("#detail-pane").innerText(),
+        selection: await jsonFetch(`http://127.0.0.1:${goPort}/api/bookmarks/${id}/v2-selection`),
+        reading: (await jsonFetch(`http://127.0.0.1:${goPort}/api/bookmarks/${id}/reading`)).payload.selection
+      })}\n`);
+      throw error;
+    });
     check("a second browser page reads the final carrier A", await otherPage.$eval("#v2-carriers .chip.on", (node) => node.dataset.term) === firstCarrier);
     await otherPage.close();
 
     // Entity processing uses the actual opt-in extension and model client.
-    if (!await page.locator("#curate").evaluate(node => node.open)) await page.locator("#curate > summary").click();
+    if (!await page.locator("#curate").evaluate(node => node.open)) await page.locator("#curate > summary .curate-summary-label").click();
     if (!await page.locator(".tag-secondary").evaluate(node => node.open)) await page.locator(".tag-secondary > summary").click();
     await page.waitForFunction(() => document.querySelector("#v2-entity-list")?.textContent.includes("BrowserEntity"));
     check("the entity row shows the production entity", (await page.textContent("#v2-entity-list")).includes("BrowserEntity"));

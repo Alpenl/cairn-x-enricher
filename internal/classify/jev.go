@@ -20,7 +20,7 @@ import (
 // PolicyVersion changes whenever selection policy changes. Question semantics
 // have their own spec identity, so policy-only changes can replay stored runs. It is
 // the version announced in the Worker handshake.
-const PolicyVersion = "jev-policy-v4"
+const PolicyVersion = "jev-policy-v5"
 
 // Input separates source evidence, secondary context, and the user's note.
 //
@@ -113,6 +113,7 @@ type Client struct {
 	budget               Budget
 	callBudgetStore      CallBudgetStore
 	callBudgetLimits     CallBudgetLimits
+	candidatePolicy      *CandidatePolicy
 }
 
 // NewClient validates the catalog and compiles the question set once.
@@ -282,6 +283,9 @@ func contextBlocks(contextText string) []EvidenceBlock {
 // raw judgments. It is the only network-touching step; Decide and Resolve are
 // pure and never call it.
 func (c *Client) Evaluate(ctx context.Context, input Input) (RawJudgments, error) {
+	if c.candidatePolicy != nil {
+		return c.evaluateCandidates(ctx, input, nil, "")
+	}
 	if err := c.policy.Validate(); err != nil {
 		return RawJudgments{}, err
 	}
@@ -319,7 +323,7 @@ func (c *Client) Evaluate(ctx context.Context, input Input) (RawJudgments, error
 		answer := wire.Answers[question.ID]
 		judgment := RawJudgment{
 			QuestionID: question.ID, Kind: question.Kind, Dimension: question.Dimension,
-			TermID: question.TermID, Confidence: answer.Confidence,
+			TermID: question.TermID, Granularity: question.Granularity, Confidence: answer.Confidence,
 		}
 		switch question.Kind {
 		case QuestionNoul:
@@ -563,6 +567,13 @@ func (c *Client) Judge(ctx context.Context, state any, questions map[string]Prov
 // for the production path; Decide and Resolve remain independently callable
 // for replay.
 func (c *Client) Classify(ctx context.Context, input Input) (Result, error) {
+	if c.candidatePolicy != nil {
+		raw, err := c.evaluateCandidates(ctx, input, nil, "")
+		if err != nil {
+			return Result{RawJudgments: raw}, err
+		}
+		return c.resultFromRaw(raw)
+	}
 	// A large question set is evaluated in deterministic bounded requests; the
 	// common single-request path stays exactly as before (R2-13).
 	var raw RawJudgments
@@ -583,10 +594,32 @@ func (c *Client) Classify(ctx context.Context, input Input) (Result, error) {
 // infers the rest (R2-13). The caller owns the opt-in; the default production
 // path is a full evaluation.
 func (c *Client) ClassifyReusing(ctx context.Context, input Input, previous *RawJudgments, batchSemantics string) (Result, error) {
+	if c.candidatePolicy != nil {
+		raw, err := c.evaluateCandidates(ctx, input, previous, batchSemantics)
+		if err != nil {
+			return Result{RawJudgments: raw}, err
+		}
+		return c.resultFromRaw(raw)
+	}
 	// This preflight happens before any provider call. Unknown historical state,
 	// incomplete batches and aliases get exactly one bounded full evaluation.
 	// An error AFTER EvaluateReusing is never retried as a full request.
-	if previous == nil || previous.MetadataVersion != 1 || previous.EvidenceHash == "" || previous.WireState == "" || previous.Coverage != "complete" || previous.BatchSemantics != batchSemantics || previous.ResolvedModel != c.model || c.model == "jev-latest" || c.model == "jev-preview" || len(c.spec.Questions) > DefaultMaxQuestionsPerRequest {
+	if previous == nil || (previous.MetadataVersion != 1 && previous.MetadataVersion != 2) || previous.EvidenceHash == "" || previous.WireState == "" || previous.Coverage != "complete" || previous.BatchSemantics != batchSemantics || previous.ResolvedModel != c.model || c.model == "jev-latest" || c.model == "jev-preview" {
+		return c.Classify(ctx, input)
+	}
+	evidence, err := c.evidenceFor(input)
+	if err != nil {
+		return Result{}, err
+	}
+	evidenceHash, err := hashEvidence(evidence)
+	if err != nil {
+		return Result{}, err
+	}
+	plan, err := PlanReuse(previous, c.spec, evidenceHash, c.model, batchSemantics)
+	if err != nil {
+		return Result{}, err
+	}
+	if len(plan.ToInfer) > DefaultMaxQuestionsPerRequest {
 		return c.Classify(ctx, input)
 	}
 	raw, err := c.EvaluateReusing(ctx, input, previous, batchSemantics)

@@ -18,6 +18,7 @@ import { emit, getItem, mergeItem, on } from "./store.js";
 import { terms, termActive, termLabel, V1_DIMENSIONS, V2_DIMENSIONS, visibleDimensions, vocab } from "./taxonomy.js";
 import { toast } from "./ui.js";
 import * as tagSystem from "./tag-system.js";
+import { primaryTags } from "./topic-presentation.js";
 
 const WHY_SAVE_DELAY = 1200;
 const V1_SAVE_DELAY = 700;
@@ -97,11 +98,11 @@ function renderSummary() {
   const item = getItem(currentId);
   const modern = tagSystem.tagSystemOverview(currentId);
   const selection = modern?.selection || (session.v2.status === "ready" ? session.v2.selection : session.v1.selection) || item?.classification || {};
-  const tags = (selection.topics || []).map((term) => termLabel("topics", term))
-    .concat((selection.resource_kinds || []).map((term) => termLabel("resource_kinds", term)))
-    .concat((selection.content_functions || []).map((term) => termLabel("content_functions", term)))
-    .concat((modern?.custom_tags || item?.custom_tags || []).map((tag) => tag.label));
-  els.summaryTags.replaceChildren(...tags.slice(0, 5).map((label) => h("span.tag.curate-summary-tag", label)),
+  const tags = primaryTags(selection, modern?.custom_tags || item?.custom_tags, terms("topics"));
+  els.summaryTags.replaceChildren(...tags.slice(0, 5).map((tag) => h("button.tag.curate-summary-tag.tag-filter", {
+    type: "button", title: `筛选：${tag.label || termLabel(tag.field, tag.id)}`,
+    onclick: (event) => { event.preventDefault(); event.stopPropagation(); emit("tag-filter-request", { field: tag.field, term: tag.id }); }
+  }, tag.label || termLabel(tag.field, tag.id))),
     ...(tags.length > 5 ? [h("span.tag.curate-summary-more", `+${tags.length - 5}`)] : []));
   els.summaryTags.hidden = !tags.length;
   const why = (session.why.dirty || session.why.saving ? session.why.draft : item?.why || "") || "";

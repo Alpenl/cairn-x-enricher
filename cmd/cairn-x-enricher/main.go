@@ -557,6 +557,10 @@ func newProcessor(
 	if err != nil {
 		return nil, nil, err
 	}
+	classifier, err = configureClassificationCandidates(ctx, cfg, queue, classifier)
+	if err != nil {
+		return nil, nil, err
+	}
 	if err := configureClassificationBudget(cfg, queue, classifier); err != nil {
 		return nil, nil, err
 	}
@@ -755,6 +759,24 @@ func logLevel(level string) slog.Level {
 		"error": slog.LevelError,
 	}
 	return levels[level]
+}
+
+// configureClassificationCandidates leaves full coverage as the default.
+// Explicit candidate mode is validated and negotiated before any model call.
+func configureClassificationCandidates(ctx context.Context, cfg config.Config, queue *cairn.Client, client *classify.Client) (*classify.Client, error) {
+	if cfg.ClassificationCandidateMaxQuestions == 0 {
+		return client, nil
+	}
+	candidate, err := client.WithCandidatePolicy(classify.CandidatePolicy{
+		Version: classify.CandidatePolicyVersion, MaxQuestions: cfg.ClassificationCandidateMaxQuestions,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("configure classification candidates: %w", err)
+	}
+	if err := queue.ProbeCandidateManifestCapability(ctx); err != nil {
+		return nil, fmt.Errorf("candidate manifest capability: %w", err)
+	}
+	return candidate, nil
 }
 
 // configureClassificationBudget wires persistent admission before workers run.

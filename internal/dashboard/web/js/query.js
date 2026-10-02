@@ -2,7 +2,7 @@
 // what the list shows, so every view, filter and search is linkable and the
 // browser history restores it. Pure module: no DOM access.
 
-export const MULTI_KEYS = Object.freeze(["topics", "resource_kinds", "custom_tags", "content_functions", "carriers", "affordances", "entity_state"]);
+export const MULTI_KEYS = Object.freeze(["topics", "topic_refinements", "resource_kinds", "custom_tags", "content_functions", "carriers", "affordances", "entity_state"]);
 export const SINGLE_KEYS = Object.freeze(["topics_mode", "resource_mode", "custom_mode", "functions_mode", "curation_status", "form", "use", "source", "since", "uncertain"]);
 export const FILTER_KEYS = Object.freeze([...SINGLE_KEYS, ...MULTI_KEYS]);
 

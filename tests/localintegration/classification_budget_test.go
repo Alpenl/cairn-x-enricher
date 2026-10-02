@@ -59,8 +59,11 @@ func TestClassificationBudgetProcessHelper(t *testing.T) {
 		t.Fatal(err)
 	}
 	limits := classify.DefaultCallBudgetLimits()
-	limits.MaxCallsTotal = 3
-	limits.MaxCallsPerItem = 2
+	batches := (len(client.Spec().Questions) + classify.DefaultMaxQuestionsPerRequest - 1) / classify.DefaultMaxQuestionsPerRequest
+	limits.MaxCallsTotal = 2*batches + 1
+	limits.MaxCallsPerItem = 2 * batches
+	limits.MaxTokens = limits.MaxCallsTotal * 65536
+	limits.MaxTokensPerItem = limits.MaxCallsPerItem * 65536
 	if err := queue.SetClassificationBudgetLimits(limits); err != nil {
 		t.Fatal(err)
 	}
@@ -223,8 +226,9 @@ func TestLocalWorkerClassificationBudgetAcrossProcesses(t *testing.T) {
 		t.Fatalf("exhaustion burned attempt: status=%d state=%+v error=%v", statusResponse.StatusCode, pending, decodeErr)
 	}
 
-	if calls.Load() != 2 {
-		t.Fatalf("actual provider calls=%d want2", calls.Load())
+	wantCalls := int32(2 * ((len(client.Spec().Questions) + classify.DefaultMaxQuestionsPerRequest - 1) / classify.DefaultMaxQuestionsPerRequest)) // #nosec G115 -- compiled catalog is bounded to 128 questions.
+	if calls.Load() != wantCalls {
+		t.Fatalf("actual provider calls=%d want%d", calls.Load(), wantCalls)
 	}
-	t.Log("PASS: five fresh Go processors; two actual local provider HTTP calls; persisted per-item retry limit; committed grant response lost with zero inference; deletion does not refund global usage; new process/global exhaustion stops before claim; zero paid calls")
+	t.Logf("PASS: five fresh Go processors; %d bounded local provider HTTP calls; persisted per-item retry limit; committed grant response lost with zero inference; deletion does not refund global usage; new process/global exhaustion stops before claim; zero paid calls", calls.Load())
 }

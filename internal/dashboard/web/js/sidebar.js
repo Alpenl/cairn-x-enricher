@@ -8,6 +8,8 @@ import {
 } from "./query.js";
 import { on, state } from "./store.js";
 import { ENTITY_STATES, V2_DIMENSIONS, vocab } from "./taxonomy.js";
+import { offlineScopeVersion, preferenceScope } from "./offline.js";
+import { topicSections } from "./topic-presentation.js";
 
 const OPEN_KEY = "cairn.facets.open.v2";
 const els = {};
@@ -18,6 +20,10 @@ let tagCounts = {};
 let countsEpoch = 0;
 let countsTimer = 0;
 let countsController = null;
+let pinnedTopics = new Set();
+let preferenceKey = "";
+let topicSearch = "";
+let allTopics = false;
 
 try {
   const saved = JSON.parse(localStorage.getItem(OPEN_KEY) || "null");
@@ -107,6 +113,56 @@ function vocabularyGroup(key, label, terms) {
   return group(key, label, chips, { selectedCount: selected.size });
 }
 
+function topicsGroup(terms) {
+  const selected = new Set(splitList(state.filters.topics));
+  const refinements = new Set(splitList(state.filters.topic_refinements));
+  const current = new Set([...selected, ...refinements]);
+  const counts = new Map((tagCounts.topics || []).map((entry) => [entry.id, entry.count]));
+  const choices = h("div.topic-choices");
+  const search = h("input.facet-search#topic-search", { type: "search", placeholder: "查找全部主题", "aria-label": "查找全部主题", value: topicSearch });
+  function renderChoices() {
+    const sections = topicSections(terms, current, pinnedTopics, counts, topicSearch, allTopics);
+    choices.replaceChildren(...sections.map((section) => {
+      const body = h("div.facet-chips");
+      for (const term of section.terms) {
+        const refine = refinements.has(term.id) || (current.size > 0 && term.granularity === "specific" && !selected.has(term.id));
+        const key = refine ? "topic_refinements" : "topics";
+        const chosen = refine ? refinements.has(term.id) : selected.has(term.id);
+        const chip = facetChip(key, term.id, term.label || term.id, chosen, { count: counts.get(term.id),
+          title: refine ? `进一步筛选：${term.label}（同时满足原有条件）` : term.label });
+        const pin = h("button.facet-pin", { type: "button", "aria-pressed": String(pinnedTopics.has(term.id)),
+          "aria-label": `${pinnedTopics.has(term.id) ? "取消固定" : "固定"}${term.label}`, title: "仅固定此设备的常用入口", disabled: !preferenceKey,
+          onclick: () => {
+            if (!preferenceKey) return;
+            if (pinnedTopics.has(term.id)) pinnedTopics.delete(term.id); else pinnedTopics.add(term.id);
+            try { localStorage.setItem(preferenceKey, JSON.stringify([...pinnedTopics])); } catch { /* in-memory preference still works */ }
+            renderChoices();
+          } }, icon("star", 12));
+        body.append(h("div.facet-topic-row", chip, pin));
+      }
+      return h("section.topic-section", { dataset: { topicSection: section.id } },
+        h("p.facet-section-label", section.id === "specific" ? "进一步筛选" : section.label), body);
+    }));
+    if (!sections.some((section) => section.terms.length)) choices.append(h("p.facet-hint", "没有匹配的主题"));
+    for (const id of current) if (!terms.some((term) => term.id === id)) choices.append(
+      facetChip(refinements.has(id) ? "topic_refinements" : "topics", id, `${id}（词表不可用）`, true));
+  }
+  search.addEventListener("input", () => { topicSearch = search.value; renderChoices(); });
+  const showAll = h("button.link-btn.topic-show-all", { type: "button", onclick: () => {
+    allTopics = !allTopics; showAll.textContent = allTopics ? "收起全部主题" : "浏览全部主题"; renderChoices();
+  } }, allTopics ? "收起全部主题" : "浏览全部主题");
+  renderChoices();
+  const body = h("div", search, choices, showAll);
+  if (selected.size >= 2 && vocab.tagSystemAvailable !== false) {
+    const mode = h("select.facet-mode", { "aria-label": "主题匹配方式" },
+      h("option", { value: "any" }, "匹配任一"), h("option", { value: "all" }, "全部匹配"));
+    mode.value = state.filters.topics_mode || "any";
+    mode.addEventListener("change", () => hooks.setFilter("topics_mode", mode.value === "all" ? "all" : ""));
+    body.append(mode);
+  }
+  return group("topics", "主题", body, { selectedCount: current.size });
+}
+
 function singleGroup(key, label, options) {
   const chips = h("div.facet-chips");
   for (const [value, text] of options) chips.append(facetChip(key, value, text, state.filters[key] === value));
@@ -144,12 +200,14 @@ function uncertainToggle() {
 }
 
 export function renderFacets() {
+  const focused = document.activeElement?.id === "topic-search";
+  const selection = focused ? document.activeElement.selectionStart : null;
   const groups = [];
   const more = [];
   let moreSelected = 0;
   if (vocab.v2Available && vocab.v2) {
     for (const dimension of V2_DIMENSIONS.filter((entry) => ["topics", "resource_kinds", "content_functions"].includes(entry.key))) {
-      if (Array.isArray(vocab.v2[dimension.key])) groups.push(vocabularyGroup(dimension.key, dimension.label, vocab.v2[dimension.key]));
+      if (Array.isArray(vocab.v2[dimension.key])) groups.push(dimension.key === "topics" ? topicsGroup(vocab.v2.topics) : vocabularyGroup(dimension.key, dimension.label, vocab.v2[dimension.key]));
     }
     if (vocab.custom.length || state.filters.custom_tags) groups.push(vocabularyGroup("custom_tags", "自定义标记", vocab.custom));
     const secondary = V2_DIMENSIONS.filter((entry) => !["topics", "resource_kinds", "content_functions"].includes(entry.key));
@@ -180,6 +238,7 @@ export function renderFacets() {
     notices.push(h("p.facet-notice#filter-capability", icon("alert", 14), "多维词表暂不可用：服务端未启用多维分类，只能按状态、来源和时间筛选。"));
   }
   clear(els.facets, ...notices, ...groups);
+  if (focused) { const input = byId("topic-search"); input?.focus(); if (selection !== null) input?.setSelectionRange(selection, selection); }
 }
 
 // --- Service status ---------------------------------------------------------------------
@@ -212,6 +271,7 @@ function renderService() {
 }
 
 export function renderSidebar() {
+  loadTopicPreferences();
   if (Array.isArray(vocab.v2?.resource_kinds)) {
     const signature = JSON.stringify([state.filters, state.search]);
     if (signature !== countsSignature) {
@@ -252,4 +312,20 @@ export function initSidebar(options) {
   on("taxonomy", renderSidebar);
   on("tags:changed", () => { countsSignature = ""; renderSidebar(); });
   on("library:changed", () => { countsSignature = ""; renderSidebar(); });
+  loadTopicPreferences();
+  on("account:changed", () => { preferenceKey = ""; pinnedTopics.clear(); });
+}
+
+function loadTopicPreferences() {
+  const version = offlineScopeVersion();
+  preferenceScope().then((scope) => {
+    // Reuse authenticated response headers. Do not add a request to the
+    // critical first load or guess an account on an older server.
+    if (!scope || offlineScopeVersion() !== version || preferenceKey === `cairn.topic-pins.v1:${scope}`) return;
+    preferenceKey = `cairn.topic-pins.v1:${scope}`;
+    try { const saved = JSON.parse(localStorage.getItem(preferenceKey) || "[]");
+      pinnedTopics = new Set(Array.isArray(saved) ? saved.filter((id) => typeof id === "string").slice(0, 64) : []);
+    } catch { pinnedTopics = new Set(); }
+    renderFacets();
+  });
 }

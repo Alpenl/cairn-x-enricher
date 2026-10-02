@@ -33,6 +33,7 @@ func TestLocalWorkerClassifyCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := mustSpec(t, catalog)
+	batchCount := int64((len(spec.Questions) + classify.DefaultMaxQuestionsPerRequest - 1) / classify.DefaultMaxQuestionsPerRequest)
 	var calls atomic.Int64
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/systemone" {
@@ -49,17 +50,29 @@ func TestLocalWorkerClassifyCLI(t *testing.T) {
 			w.WriteHeader(400)
 			return
 		}
-		if len(request.Questions) != len(spec.Questions) {
-			t.Errorf("actual CLI omitted multidimensional questions: got%d want%d", len(request.Questions), len(spec.Questions))
+		if len(request.Questions) == 0 || len(request.Questions) > classify.DefaultMaxQuestionsPerRequest {
+			t.Errorf("actual CLI exceeded bounded batch size: %d", len(request.Questions))
 			w.WriteHeader(422)
 			return
+		}
+		for id := range request.Questions {
+			found := false
+			for _, q := range spec.Questions {
+				if q.ID == id {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("actual CLI sent unknown question %s", id)
+				w.WriteHeader(422)
+				return
+			}
 		}
 		answers := map[string]any{}
 		for _, q := range spec.Questions {
 			if _, ok := request.Questions[q.ID]; !ok {
-				t.Errorf("actual CLI missing %s", q.ID)
-				w.WriteHeader(422)
-				return
+				continue
 			}
 			if q.Kind == classify.QuestionNoul {
 				p := .01
@@ -168,16 +181,16 @@ func TestLocalWorkerClassifyCLI(t *testing.T) {
 			count++
 		}
 	}
-	if count != 1 || calls.Load() != 1 {
+	if count != 1 || calls.Load() != batchCount {
 		t.Fatalf("--max-jobs 1 exceeded: stored=%d calls=%d", count, calls.Load())
 	}
 	execute(1, 0)
 	execute(0, 0)
-	if calls.Load() != 2 {
+	if calls.Load() != 2*batchCount {
 		t.Fatalf("empty drain repeated model: %d", calls.Load())
 	}
 	execute(1, ids[0])
-	if calls.Load() != 3 {
+	if calls.Load() != 3*batchCount {
 		t.Fatalf("explicit retry call count=%d", calls.Load())
 	}
 	for _, id := range ids {
@@ -217,5 +230,5 @@ func TestLocalWorkerClassifyCLI(t *testing.T) {
 	if err := json.Unmarshal(effective, &view); err != nil || view.Effective.Use != "contra" {
 		t.Fatalf("CLI overwrote explicit human value: %v", err)
 	}
-	t.Log("actual compiled classify CLI: same service v2 spec; two bounded one-job drains, empty drain zero calls, explicit --id retry; full dimensional raw/decisions persisted; saved source and human choice unchanged; 3 local model fixture calls, no source retrieval")
+	t.Logf("actual compiled classify CLI: same service v2 spec; two bounded one-job drains, empty drain zero calls, explicit --id retry; full dimensional raw/decisions persisted; saved source and human choice unchanged; %d bounded local model fixture calls, no source retrieval", calls.Load())
 }

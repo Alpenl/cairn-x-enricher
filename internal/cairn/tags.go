@@ -53,6 +53,10 @@ func (c *Client) tagSystemJSON(ctx context.Context, method, path string, body an
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return nil, apiError(response)
 	}
+	if method == http.MethodGet && parsed.Query().Get("topic_refinements") != "" &&
+		(response.Header.Get("X-Cairn-Topic-Granularity") != "1" || response.Header.Get("X-Cairn-Tag-System") != "1") {
+		return nil, &APIError{StatusCode: http.StatusConflict, Code: "unsupported_topic_refinement_contract"}
+	}
 	if response.StatusCode == http.StatusNoContent {
 		return json.RawMessage(`{}`), nil
 	}

@@ -135,7 +135,9 @@ func TestLocalWorkerCanonicalEntitiesCLI(t *testing.T) {
 	writeCatalog("fixture-1")
 	run := func(retry bool) {
 		t.Helper()
-		command := exec.CommandContext(ctx, "./cairn-x-enricher", "classify", "--max-jobs", "1")
+		// Keep this repeated entity-catalog experiment within the unchanged
+		// per-item classification budget; full 55-question batching has its own case.
+		command := exec.CommandContext(ctx, "./cairn-x-enricher", "classify", "--max-jobs", "1", "--candidate-max-questions", "32")
 		if retry {
 			command.Args = append(command.Args, "--id", strconv.FormatInt(id, 10))
 		}

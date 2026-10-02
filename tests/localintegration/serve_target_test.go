@@ -179,7 +179,8 @@ func TestLocalWorkerServeTargetSwitchWithManualSource(t *testing.T) {
 			break
 		}
 	}
-	if run == nil || run.SpecID != spec.SpecID || run.SpecHash != spec.SemanticHash || modelCalls.Load() != 1 || grokCalls.Load() != 1 {
+	batchCount := int64((len(spec.Questions) + classify.DefaultMaxQuestionsPerRequest - 1) / classify.DefaultMaxQuestionsPerRequest)
+	if run == nil || run.SpecID != spec.SpecID || run.SpecHash != spec.SemanticHash || modelCalls.Load() != batchCount || grokCalls.Load() != 1 {
 		logBytes, _ := os.ReadFile(logFile.Name())
 		t.Fatalf("serve did not resume exact manual source: run=%+v model_calls=%d grok_calls=%d logs=%s", run, modelCalls.Load(), grokCalls.Load(), logBytes)
 	}
