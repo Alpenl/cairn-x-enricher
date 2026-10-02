@@ -47,8 +47,23 @@ function scope() {
 function openDatabase() {
   if (!globalThis.indexedDB) return Promise.resolve(null);
   if (!database) database = new Promise((resolve) => {
-    const request = indexedDB.open("cairn-offline-v1", 1);
-    request.onupgradeneeded = () => request.result.createObjectStore("articles", { keyPath: "id" });
+    const request = indexedDB.open("cairn-offline-v1", 2);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      const articles = db.objectStoreNames.contains("articles")
+        ? request.transaction.objectStore("articles") : db.createObjectStore("articles", { keyPath: "id" });
+      const metadata = db.createObjectStore("metadata", { keyPath: "id" });
+      // Existing copies are inspected once during migration. Subsequent reads
+      // and capacity checks only scan these small records, never every body.
+      const cursor = articles.openCursor();
+      cursor.onsuccess = () => {
+        const row = cursor.result;
+        if (!row) return;
+        const { id, scope, bytes, savedAt } = row.value;
+        metadata.put({ id, scope, bytes, savedAt });
+        row.continue();
+      };
+    };
     request.onsuccess = () => {
       request.result.onversionchange = () => { request.result.close(); database = null; };
       resolve(request.result);
@@ -58,33 +73,63 @@ function openDatabase() {
   return database;
 }
 
-// Each operation validates and prunes the whole bounded store in one IDB
-// transaction, so parallel tabs cannot exceed limits or mix account scopes.
-async function transact(change) {
+function validMetadata(row, account, now) {
+  return row.scope === account && Number.isSafeInteger(row.id) && row.id > 0 &&
+    Number.isFinite(row.savedAt) && row.savedAt <= now && now - row.savedAt < MAX_AGE &&
+    Number.isSafeInteger(row.bytes) && row.bytes > 0 && row.bytes <= MAX_BYTES;
+}
+
+// Bodies and their lightweight eviction metadata share an atomic transaction.
+// Reading one article never rewrites other bodies; only expired/evicted records
+// are deleted. The readwrite lock also keeps simultaneous tabs within limits.
+async function transact(kind, id, copy, bytes, generation = epoch) {
   if (!globalThis.indexedDB) return [];
   const [db, account] = await Promise.all([openDatabase(), scope()]);
   if (!db || !account || account !== currentScope) return [];
   const version = accountEpoch;
   return new Promise((resolve) => {
     let result = [];
-    const transaction = db.transaction("articles", "readwrite");
-    const store = transaction.objectStore("articles");
-    const request = store.getAll();
+    const transaction = db.transaction(["articles", "metadata"], "readwrite");
+    const articles = transaction.objectStore("articles");
+    const metadata = transaction.objectStore("metadata");
+    const request = metadata.getAll();
     request.onsuccess = () => {
       if (version !== accountEpoch) { transaction.abort(); return; }
       const now = Date.now();
-      let rows = request.result.filter((row) => row.scope === account &&
-        Number.isSafeInteger(row.id) && row.id > 0 && row.savedAt <= now &&
-        now - row.savedAt < MAX_AGE && row.bytes > 0 && row.bytes <= MAX_BYTES);
-      rows = change(rows, account, now).sort((a, b) => b.savedAt - a.savedAt);
-      let bytes = 0;
-      rows = rows.filter((row, index) => index < MAX_ITEMS && (bytes += row.bytes) <= MAX_BYTES);
+      let rows = request.result.filter((row) => validMetadata(row, account, now));
+      let inserted;
+      if (kind === "forget") rows = id ? rows.filter((row) => row.id !== id) : [];
+      if (kind === "remember" && generation === epoch && !mutations) {
+        rows = rows.filter((row) => row.id !== id);
+        if (bytes <= MAX_BYTES) {
+          inserted = { id, scope: account, bytes, savedAt: now };
+          rows.push(inserted);
+        }
+      }
+      rows.sort((a, b) => b.savedAt - a.savedAt || b.id - a.id);
+      let totalBytes = 0;
+      rows = rows.filter((row, index) => index < MAX_ITEMS && (totalBytes += row.bytes) <= MAX_BYTES);
       const keep = new Set(rows.map((row) => row.id));
-      for (const old of request.result) if (!keep.has(old.id)) store.delete(old.id);
-      for (const row of rows) store.put(row);
-      result = rows;
+      const remove = (key) => { articles.delete(key); metadata.delete(key); };
+      for (const old of request.result) if (!keep.has(old.id)) remove(old.id);
+      if (inserted && keep.has(id)) {
+        articles.put({ ...inserted, item: copy });
+        metadata.put(inserted);
+      }
+      if (kind !== "get" && kind !== "recent") return;
+      if (generation !== epoch || mutations) return;
+      for (const meta of rows) {
+        if (kind === "get" && meta.id !== id) continue;
+        const body = articles.get(meta.id);
+        body.onsuccess = () => {
+          const row = body.result;
+          if (row?.item && validMetadata(row, account, now) && row.savedAt === meta.savedAt && row.bytes === meta.bytes) result.push(row);
+          else remove(meta.id);
+        };
+      }
     };
-    transaction.oncomplete = () => resolve(version === accountEpoch ? result : []);
+    transaction.oncomplete = () => resolve(version === accountEpoch && generation === epoch && !mutations
+      ? result.sort((a, b) => b.savedAt - a.savedAt || b.id - a.id) : []);
     transaction.onerror = transaction.onabort = () => resolve([]);
   }).catch(() => []);
 }
@@ -97,21 +142,18 @@ export async function rememberOffline(item) {
   // Images remain governed by the online proxy. No remote image cache is kept.
   copy.images = [];
   const bytes = JSON.stringify(copy).length * 2;
-  await transact((rows, account, now) => generation !== epoch || mutations ? rows : [
-    ...rows.filter((row) => row.id !== copy.id),
-    ...(bytes <= MAX_BYTES ? [{ id: copy.id, item: copy, scope: account, bytes, savedAt: now }] : [])
-  ]);
+  await transact("remember", copy.id, copy, bytes, generation);
 }
 
 export async function offlineItem(id) {
-  const rows = await transact((current) => current);
-  const row = rows.find((entry) => entry.id === id);
+  if (!Number.isSafeInteger(id) || id <= 0 || mutations) return null;
+  const [row] = await transact("get", id);
   return row ? { ...row.item, offline_cached_at: row.savedAt, content_loaded: true } : null;
 }
 
 export async function forgetOffline(id) {
   epoch++;
-  await transact((rows) => id ? rows.filter((row) => row.id !== id) : []);
+  await transact("forget", id);
 }
 
 // Mutations keep writes paused until a second invalidation completes. Reads
@@ -129,7 +171,7 @@ export function beginOfflineMutation(id) {
 }
 
 export async function recentOffline() {
-  return (await transact((rows) => rows)).map((row) => ({ ...row.item, offline_cached_at: row.savedAt }));
+  return (await transact("recent")).map((row) => ({ ...row.item, offline_cached_at: row.savedAt }));
 }
 
 export function offlineHTML(items) {

@@ -39,8 +39,29 @@ const server = createServer(async (request, response) => {
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome", headless: true, args: ["--no-sandbox"] });
 try {
-  const page = await browser.newPage();
+  const context = await browser.newContext();
+  const page = await context.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.evaluate(async () => {
+    await new Promise((resolve, reject) => {
+      const open = indexedDB.open("cairn-offline-v1", 1);
+      open.onupgradeneeded = () => open.result.createObjectStore("articles", { keyPath: "id" });
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        const transaction = db.transaction("articles", "readwrite");
+        for (const [id, account, age] of [[90, "a", 0], [91, "a", 8 * 86400000], [92, "b", 0]]) {
+          transaction.objectStore("articles").put({ id, scope: account.repeat(64), bytes: 100,
+            savedAt: Date.now() - age, item: { id, original_text: "legacy copy" } });
+        }
+        transaction.oncomplete = () => { db.close(); resolve(); };
+      };
+    });
+    window.cache = await import("/offline.js");
+  });
+  assert.deepEqual(await page.evaluate(async () => (await cache.recentOffline()).map((item) => item.id)), [90]);
+  await page.evaluate(() => cache.forgetOffline());
+  console.log("ok   metadata migration preserves valid legacy copies and prunes expired/other-account records");
   await page.evaluate(async () => {
     window.cache = await import("/offline.js");
     for (let id = 1; id <= 25; id++) await cache.rememberOffline({ id, url: `https://example.com/${id}`, original_text: "正文".repeat(1000), cache_identity: { body_revision: 1 } });
@@ -64,19 +85,73 @@ try {
   await page.evaluate(async () => {
     await cache.rememberOffline({ id: 1, original_text: "expired" });
     await new Promise((resolve) => {
-      const open = indexedDB.open("cairn-offline-v1", 1);
+      const open = indexedDB.open("cairn-offline-v1", 2);
       open.onsuccess = () => {
         const db = open.result;
-        const transaction = db.transaction("articles", "readwrite");
-        const store = transaction.objectStore("articles");
-        const request = store.get(1);
-        request.onsuccess = () => store.put({ ...request.result, savedAt: Date.now() - 8 * 86400000 });
+        const transaction = db.transaction(["articles", "metadata"], "readwrite");
+        for (const name of ["articles", "metadata"]) {
+          const store = transaction.objectStore(name);
+          const request = store.get(1);
+          request.onsuccess = () => store.put({ ...request.result, savedAt: Date.now() - 8 * 86400000 });
+        }
         transaction.oncomplete = () => { db.close(); resolve(); };
       };
     });
   });
   assert.equal(await page.evaluate(async () => await cache.offlineItem(1)), null);
   console.log("ok   expired copies are removed when the store is read");
+  const storage = await page.evaluate(async () => {
+    await cache.forgetOffline();
+    for (let id = 100; id < 120; id++) await cache.rememberOffline({ id, original_text: "文".repeat(180000) });
+    const counts = { get: 0, getAll: 0, put: 0, delete: 0 };
+    const originals = {};
+    for (const method of Object.keys(counts)) {
+      originals[method] = IDBObjectStore.prototype[method];
+      IDBObjectStore.prototype[method] = function (...args) {
+        if (this.name === "articles") counts[method]++;
+        return originals[method].apply(this, args);
+      };
+    }
+    try {
+      const before = performance.now();
+      const item = await cache.offlineItem(110);
+      const read = { ...counts, ms: performance.now() - before, length: item?.original_text.length };
+      for (const key of Object.keys(counts)) counts[key] = 0;
+      await cache.rememberOffline({ id: 110, original_text: "新".repeat(180000) });
+      const write = { ...counts };
+      for (const key of Object.keys(counts)) counts[key] = 0;
+      await cache.forgetOffline(110);
+      return { read, write, remove: { ...counts } };
+    } finally {
+      for (const [method, original] of Object.entries(originals)) IDBObjectStore.prototype[method] = original;
+    }
+  });
+  assert.equal(storage.read.length, 180000);
+  assert.deepEqual(Object.fromEntries(Object.entries(storage.read).filter(([key]) => !["ms", "length"].includes(key))), { get: 1, getAll: 0, put: 0, delete: 0 });
+  assert.deepEqual(storage.write, { get: 0, getAll: 0, put: 1, delete: 0 });
+  assert.deepEqual(storage.remove, { get: 0, getAll: 0, put: 0, delete: 1 });
+  assert.equal(await page.evaluate(async () => (await cache.recentOffline()).length), 19);
+  console.log(`ok   near-capacity cache reads only one body (${storage.read.ms.toFixed(1)}ms), writes one body, and deletes one body`);
+  await page.evaluate(() => cache.forgetOffline());
+  const otherTab = await page.context().newPage();
+  await otherTab.goto(`http://127.0.0.1:${server.address().port}/`);
+  await otherTab.evaluate(async () => { window.cache = await import("/offline.js"); });
+  await Promise.all([page, otherTab].map((tab, index) => tab.evaluate(async (offset) => {
+    await Promise.all(Array.from({ length: 15 }, (_, index) => cache.rememberOffline({
+      id: offset + index, original_text: "parallel ".repeat(22000)
+    })));
+  }, 200 + index * 15)));
+  assert.equal(await page.evaluate(async () => (await cache.recentOffline()).length), 20);
+  await page.evaluate(() => cache.forgetOffline());
+  await Promise.all([page, otherTab].map((tab, index) => tab.evaluate(async (offset) => {
+    await Promise.all(Array.from({ length: 2 }, (_, index) => cache.rememberOffline({
+      id: offset + index, original_text: "文".repeat(1500000)
+    })));
+  }, 300 + index * 2)));
+  assert.equal(await page.evaluate(async () => (await cache.recentOffline()).length), 2);
+  await otherTab.close();
+  await page.evaluate(() => cache.forgetOffline());
+  console.log("ok   concurrent tabs preserve both article and byte limits with atomic metadata updates");
   await page.evaluate(async () => {
     window.apicache = (await import("/api.js")).api;
     await cache.rememberOffline({ id: 7, original_text: "old personal snapshot" });
