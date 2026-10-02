@@ -126,7 +126,28 @@ function rowElement(id) {
   return els.rows.querySelector(`li.row[data-id="${id}"]`);
 }
 
+function rowFocus(container) {
+  const control = document.activeElement;
+  if (!container.contains(control)) return null;
+  const row = control.closest("li.row[data-id]");
+  if (!row) return null;
+  if (control.matches(".tag-filter")) return { id: Number(row.dataset.id), field: control.dataset.tagField, term: control.dataset.tagId };
+  const selector = control.matches(".row-main") ? ".row-main" : control.matches(".row-check") ? ".row-check" : "";
+  return selector ? { id: Number(row.dataset.id), selector } : null;
+}
+
+function restoreRowFocus(focus) {
+  if (!focus) return;
+  const row = rowElement(focus.id);
+  const control = focus.selector ? row?.querySelector(focus.selector) : [...(row?.querySelectorAll(".tag-filter") || [])]
+    .find(node => node.dataset.tagField === focus.field && node.dataset.tagId === focus.term);
+  // Replacement is synchronous: only restore the control focused immediately
+  // before it. A removed row/tag must not focus a different item or field.
+  control?.focus({ preventScroll: true });
+}
+
 function renderRows(ids, { append = false, reuseImages = true } = {}) {
+  const focus = append ? null : rowFocus(els.rows);
   const fragment = document.createDocumentFragment();
   const thumbnails = new Map();
   if (!append && reuseImages) for (const row of els.rows.querySelectorAll("li.row[data-id]")) {
@@ -152,13 +173,16 @@ function renderRows(ids, { append = false, reuseImages = true } = {}) {
   // forces style and layout work per row during scroll-triggered loads.
   if (append) els.rows.append(fragment);
   else els.rows.replaceChildren(fragment);
+  restoreRowFocus(focus);
 }
 
 export function updateRow(id) {
   const current = rowElement(id);
   const item = getItem(id);
   if (!current || !item) return;
+  const focus = rowFocus(current);
   current.replaceWith(renderRow(item, { thumbnail: current.querySelector(".row-thumb") }));
+  restoreRowFocus(focus);
 }
 
 function pruneBuckets() {

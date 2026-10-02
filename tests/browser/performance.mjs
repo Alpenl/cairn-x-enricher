@@ -113,10 +113,25 @@ try{
   ok("late backstage overview cannot replace counts after a local mutation has finished");
   holdBackstage=false;backstageCombined=false;
   await page.evaluate(async()=>(await import('/assets/js/backstage.js')).refresh());
-  const trailingBefore=overviewReads;await page.clock.fastForward(6_000);await wait(()=>overviewReads>trailingBefore);
-  const legacyBefore=overviewReads;await page.clock.fastForward(121_000);await wait(()=>overviewReads>legacyBefore);
-  ok("old backstage responses without combined overview retain periodic count refresh");
+  await page.evaluate(async()=>{window.trailingOverviewApplied=false;(await import('/assets/js/store.js')).on('overview',()=>{window.trailingOverviewApplied=true;});});
+  const trailingBefore=overviewReads;await page.clock.fastForward(6_000);
+  await page.waitForFunction(()=>window.trailingOverviewApplied);assert.ok(overviewReads>trailingBefore);
   await page.close();
+  // A new page isolates periodic fallback from the prior mutation's trailing
+  // read and its in-flight async interval. A request-start counter alone cannot
+  // establish completion before advancing the clock by another two minutes.
+  const legacy=await context.newPage();legacy.on('pageerror',error=>errors.push(error.message));
+  await legacy.clock.install();
+  const initialReads=['/status','/api/overview'].map(path=>legacy.waitForResponse(response=>new URL(response.url()).pathname===path));
+  await legacy.goto(url+'/backstage');
+  for(const response of await Promise.all(initialReads))await response.finished();
+  await legacy.locator('#back-title').waitFor();
+  await legacy.waitForFunction(async()=>Boolean((await import('/assets/js/store.js')).state.overview));
+  const periodic=legacy.waitForResponse(response=>new URL(response.url()).pathname==='/api/overview');
+  await legacy.clock.fastForward(31_000);
+  const periodicResponse=await periodic;await periodicResponse.finished();assert.equal(periodicResponse.status(),200);
+  await legacy.close();
+  ok("old backstage responses without combined overview retain periodic count refresh");
   // Isolated module harness: shared ownership and image scheduler without app traffic.
   const isolated=await context.newPage();
   await isolated.route('**/performance-harness',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><body><main id="images"></main></body>'}));
