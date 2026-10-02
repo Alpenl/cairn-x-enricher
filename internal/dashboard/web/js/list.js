@@ -9,7 +9,8 @@ import {
 import { icon } from "./icons.js";
 import { activeView, apiParams, facetFilterCount, needsFilterContract, splitList, VIEWS } from "./query.js";
 import { emit, getItem, mergeItem, on, state } from "./store.js";
-import { termLabel } from "./taxonomy.js";
+import { termLabel, terms } from "./taxonomy.js";
+import { primaryTags } from "./topic-presentation.js";
 
 export const PAGE_SIZE = 40;
 const POLL_INTERVAL = 10000;
@@ -67,22 +68,18 @@ function processBadge(item) {
 }
 
 function rowMeta(item) {
-  const topics = item.classification?.topics || [];
-  const resources = item.classification?.resource_kinds || [];
-  const functions = item.classification?.content_functions || [];
-  const custom = Array.isArray(item.custom_tags) ? item.custom_tags : [];
-  const labels = [
-    ...topics.map((id) => ({ label: termLabel("topics", id), kind: "topic" })),
-    ...resources.map((id) => ({ label: termLabel("resource_kinds", id), kind: "resource" })),
-    ...functions.map((id) => ({ label: termLabel("content_functions", id), kind: "function" })),
-    ...custom.map((tag) => ({ label: tag.label || tag.id, kind: "custom" }))
-  ];
-  const visible = topics.length && resources.length ? [labels[0], labels[topics.length]] : labels.slice(0, 2);
-  const hidden = labels.filter((label) => !visible.includes(label));
+  const labels = primaryTags(item.classification, item.custom_tags, terms("topics"))
+    .map((tag) => ({ ...tag, label: tag.label || termLabel(tag.field, tag.id) }));
+  const visible = labels.slice(0, 5);
+  const hidden = labels.slice(5);
   return h("div.row-meta",
     statusBadge(item),
     processBadge(item),
-    ...visible.map((tag) => h("span.tag", { class: tag.kind === "resource" ? "tag-resource" : tag.kind === "custom" ? "tag-custom" : "" }, tag.label)),
+    ...visible.map((tag) => h("button.tag.tag-filter", {
+      type: "button", class: tag.field === "resource_kinds" ? "tag-resource" : tag.field === "custom_tags" ? "tag-custom" : "",
+      title: `筛选：${tag.label}`, dataset: { tagField: tag.field, tagId: tag.id },
+      onclick: () => emit("tag-filter-request", { field: tag.field, term: tag.id })
+    }, tag.label)),
     hidden.length ? h("span.tag-more", { title: hidden.map((tag) => tag.label).join(" / "), "aria-label": `另有 ${hidden.length} 个标签` }, `+${hidden.length}`) : null,
     // Most bookmarks come from X, so only a different source is worth a label.
     item.source && item.source !== "x" ? h("span.row-source", sourceLabels[item.source] || item.source) : null
@@ -113,8 +110,8 @@ export function renderRow(item, { thumbnail } = {}) {
   const personalNode = personal
     ? h("p.row-why", { class: item.why ? "" : "note" }, icon(item.why ? "quote" : "pencil", 12), textWithHighlights("span", personal, terms))
     : null;
-  append(link, [h("div.row-body", top, summaryNode, personalNode, rowMeta(item)), imageThumb(item, thumbnail)]);
-  row.append(check, link);
+  append(link, [h("div.row-body", top, summaryNode, personalNode), imageThumb(item, thumbnail)]);
+  row.append(check, link, rowMeta(item));
   return row;
 }
 
@@ -229,8 +226,8 @@ function renderActiveFilters() {
   holder.replaceChildren();
   const filters = state.filters;
   const chips = [];
-  const labels = { topics: "主题", resource_kinds: "资源类型", custom_tags: "自定义", content_functions: "内容功能", carriers: "载体", affordances: "潜在用途", entity_state: "实体" };
-  for (const key of ["topics", "resource_kinds", "custom_tags", "content_functions", "carriers", "affordances", "entity_state"]) {
+  const labels = { topics: "主题", topic_refinements: "进一步筛选", resource_kinds: "资源类型", custom_tags: "自定义", content_functions: "内容功能", carriers: "载体", affordances: "潜在用途", entity_state: "实体" };
+  for (const key of ["topics", "topic_refinements", "resource_kinds", "custom_tags", "content_functions", "carriers", "affordances", "entity_state"]) {
     for (const value of splitList(filters[key])) {
       const label = key === "entity_state" ? (hooks.entityStateLabel?.(value) || value) : termLabel(key, value);
       chips.push(filterChip(`${labels[key]}：${label}`, () => hooks.toggleFilter(key, value)));

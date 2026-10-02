@@ -25,6 +25,7 @@ test:
 # system Chrome and a bundled mock Worker, so it makes no paid or network call.
 # Enable with CHROME_PATH when Chrome is not on the default path.
 test-browser:
+	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node internal/dashboard/topic-navigation-browser-test.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/run.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/offline.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/diagnostics.mjs

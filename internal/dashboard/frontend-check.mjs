@@ -20,6 +20,8 @@ const jsDir = join(webDir, "js");
 const read = (name) => readFileSync(join(webDir, name), "utf8");
 const load = (name) => import(pathToFileURL(join(jsDir, name)).href);
 
+await import("./topic-presentation-test.mjs");
+
 let failures = 0;
 let checks = 0;
 

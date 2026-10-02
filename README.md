@@ -4,7 +4,7 @@
 
 配套 Cairn Share App 可读取 AI 标题、双语正文、归档图片和人工整理结果。旧客户端默认的六字段响应仍兼容；新版 App 通过 `include=enrichment` 显式读取增强信息，继续使用独立的 App Token。
 
-收藏管理支持固定词表分类、人工收藏原因、收件箱/精选/笔记/搁置状态、组合筛选及 Markdown 导出。实现依据的 [Grok 完整讨论与原始手册](docs/bookmark-management.md#讨论归档) 已保存到仓库，具体行为、词表维护和配套升级见 [收藏管理说明](docs/bookmark-management.md)。
+收藏管理支持固定词表分类、人工收藏原因、收件箱/精选/笔记/搁置状态、组合筛选及 Markdown 导出。主题按宽细粒度共库，卡片突出具体内容，侧栏提供稳定导航、当前结果细分与常用入口，见 [标签粒度与导航](docs/tag-granularity.md)。实现依据的 [Grok 完整讨论与原始手册](docs/bookmark-management.md#讨论归档) 已保存到仓库，具体行为、词表维护和配套升级见 [收藏管理说明](docs/bookmark-management.md)。
 
 ## 数据流
 
@@ -54,6 +54,8 @@ chmod 600 .env
 | `GROK_MODELS_BASE_URL` | Responses-compatible API 根地址，包含 `/v1` |
 | `XAI_API_KEY` | 模型端点密钥 |
 | `TYPESAFE_API_KEY` | Jev 分类密钥，仅服务端使用 |
+
+主题宽细共库，具体主题独立判断，例如“写真”与“图像生成”可同时成立；关联关系只供候选上下文，不继承归属。当前目录默认全量判断；启用 `CAIRN_CLASSIFICATION_CANDIDATE_MAX_QUESTIONS=32`（或 `classify --candidate-max-questions 32`）后，按受控检索词召回具体主题，Jev 只判断有界候选。启用前必须通过 Worker manifest v2 能力探测，且限额必须容纳全部宽主题与其他核心问题。未召回或被候选限额省略的主题保存为未知，无虚构负概率；默认 `0` 和既有持久预算保持不变。
 
 普通分类固定 `TYPESAFE_MODEL=jev-1.13.0`，与 Worker 受控目标匹配；默认 UTC 日限全局 20 次、逐条 5 次实际 Jev 请求。可通过四项 `CAIRN_CLASSIFICATION_*` 变量收紧，跨进程持久化，详见[预算与升级边界](docs/jev-classification.md#持久调用预算)。
 

@@ -401,6 +401,10 @@ func (s *Server) listBookmarks(writer http.ResponseWriter, request *http.Request
 		s.writeBackendError(writer, "list bookmarks", 0, err)
 		return
 	}
+	if len(query.TopicRefinements) > 0 {
+		writer.Header().Set("X-Cairn-Topic-Granularity", "1")
+		writer.Header().Set("X-Cairn-Tag-System", "1")
+	}
 	if query.SkipCounts {
 		writeJSON(writer, http.StatusOK, struct {
 			Items                 []cairn.Bookmark `json:"items"`
@@ -487,7 +491,7 @@ func (s *Server) getTaxonomy(writer http.ResponseWriter, request *http.Request) 
 		s.writeBackendError(writer, "get taxonomy", 0, err)
 		return
 	}
-	writeJSON(writer, http.StatusOK, catalog)
+	writeTopicTaxonomy(writer, request, catalog)
 }
 
 func (s *Server) updateCuration(writer http.ResponseWriter, request *http.Request) {
@@ -660,7 +664,7 @@ func (s *Server) getV2Taxonomy(writer http.ResponseWriter, request *http.Request
 		s.writeBackendError(writer, "get v2 taxonomy", 0, err)
 		return
 	}
-	writeJSON(writer, http.StatusOK, vocabulary)
+	writeTopicTaxonomy(writer, request, vocabulary)
 }
 
 func (s *Server) applyV2Override(writer http.ResponseWriter, request *http.Request) {
@@ -1208,7 +1212,7 @@ func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 		key    string
 		target *[]string
 	}{
-		{"topics", &query.Topics}, {"resource_kinds", &query.ResourceKinds}, {"custom_tags", &query.CustomTags}, {"content_functions", &query.ContentFunctions}, {"carriers", &query.Carriers},
+		{"topics", &query.Topics}, {"topic_refinements", &query.TopicRefinements}, {"resource_kinds", &query.ResourceKinds}, {"custom_tags", &query.CustomTags}, {"content_functions", &query.ContentFunctions}, {"carriers", &query.Carriers},
 		{"affordances", &query.Affordances}, {"entity_state", &query.EntityStates},
 	} {
 		entries, present := values[filter.key]

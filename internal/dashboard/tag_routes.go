@@ -97,6 +97,10 @@ func (s *Server) tagSystemProxy(writer http.ResponseWriter, request *http.Reques
 	if request.Method != http.MethodGet {
 		s.invalidateOverview()
 	}
+	if request.URL.Query().Get("topic_refinements") != "" {
+		writer.Header().Set("X-Cairn-Topic-Granularity", "1")
+		writer.Header().Set("X-Cairn-Tag-System", "1")
+	}
 	writeJSON(writer, http.StatusOK, payload)
 }
 

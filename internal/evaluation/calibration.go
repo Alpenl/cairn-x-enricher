@@ -240,6 +240,14 @@ func (v *VerifiedReplay) Calibration(config CalibrationConfig) (CalibrationArtif
 						found = true
 					}
 				}
+				if !found && raw.CandidateManifest != nil {
+					for _, omitted := range raw.CandidateManifest.Omitted {
+						if calibrationDimension(omitted.Dimension) == dimension && omitted.TermID == term {
+							found = true
+							break
+						}
+					}
+				}
 				if !found {
 					return CalibrationArtifact{}, fmt.Errorf("reference term in %s is absent from the question set", dimension)
 				}
@@ -262,7 +270,7 @@ func (v *VerifiedReplay) Calibration(config CalibrationConfig) (CalibrationArtif
 			}
 			q, d := get(questions, id, j.Kind), get(dimensions, j.Dimension, j.Kind)
 			label := labels[j.Dimension]
-			if !knownLabel(label) {
+			if !knownLabel(label) || (j.Kind == classify.QuestionNoul && !reviewedTerm(label, j.Dimension, j.TermID)) {
 				q.metric.UnknownReference++
 				d.metric.UnknownReference++
 				continue

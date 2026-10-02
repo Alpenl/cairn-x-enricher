@@ -236,6 +236,8 @@ run_case servetarget TestLocalWorkerServeTargetSwitchWithManualSource
 
 run_case carrier TestLocalWorkerCarrierDefinitionUpgrade
 
+run_case granularity TestLocalWorkerTopicGranularity
+
 run_case imageprivacy TestLocalWorkerPrivateImageLifecycle
 
 run_case extensionbudget TestLocalWorkerExtensionBudgetAcrossProcesses

@@ -68,7 +68,7 @@ export async function loadV2() {
 // termLabel resolves a controlled ID to its display name, degrading to the raw
 // ID before the vocabulary loads or for a retired term.
 export function termLabel(dimension, id) {
-  const key = dimension === "form" ? "forms" : dimension === "use" ? "uses" : dimension;
+  const key = dimension === "topic_refinements" ? "topics" : dimension === "form" ? "forms" : dimension === "use" ? "uses" : dimension;
   const term = vocab.labels.get(`${key}:${id}`);
   return term?.label || id;
 }

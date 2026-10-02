@@ -112,8 +112,8 @@ try {
       source: row.querySelector(".row-source")?.textContent, waitingSummary: row.querySelector(".row-summary") !== null,
       inboxBadge: row.querySelector(".status-badge") !== null, link: row.querySelector(".row-main")?.getAttribute("href") };
   });
-  assert.deepEqual(card.tags, ["图像生成", "Skill"]);
-  assert.equal(card.more, "+4");
+  assert.deepEqual(card.tags, ["图像生成", "AI编程", "Skill", "提示词", "参考资料"]);
+  assert.equal(card.more, "+1");
   assert.match(card.moreTitle, /我的项目/);
   assert.equal(card.failed, "读取失败");
   assert.equal(card.source, "公众号");
@@ -121,7 +121,7 @@ try {
   assert.equal(card.inboxBadge, false);
   assert.match(card.link, /^\/bookmarks\/99/);
   assert.deepEqual(errors, []);
-  checked("list keeps two semantic labels and overflow count while preserving failures and source navigation");
+  checked("list previews five labels and overflow count while preserving failures and source navigation");
   process.stdout.write(`${checks} sidebar/list browser checks passed\n`);
 } finally {
   await context.close(); await browser.close(); await new Promise((resolve) => server.close(resolve));

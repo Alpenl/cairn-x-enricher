@@ -18,7 +18,7 @@ func metricFor(t *testing.T, r Report, name string) DimensionMetric {
 	return DimensionMetric{}
 }
 func TestAcceptedErrorsIncludeEveryDimension(t *testing.T) {
-	labels := Label{Values: []string{"correct"}}
+	labels := Label{Values: []string{"correct"}, ReviewedTerms: []string{"correct", "wrong"}}
 	g := &Gold{Topics: labels, ResourceKinds: &labels, ContentFunctions: labels, Carriers: labels, Affordances: labels, Form: labels, Use: labels}
 	p := Prediction{SampleID: "a", Topics: []string{"wrong"}, ResourceKinds: []string{"wrong"}, ContentFunctions: []string{"wrong"}, Carriers: []string{"wrong"}, Affordances: []string{"wrong"}, Form: "wrong", Use: "wrong"}
 	r, err := Score(Dataset{Name: "wrong", Samples: []Sample{sample("a", g)}, Prediction: []Prediction{p}})

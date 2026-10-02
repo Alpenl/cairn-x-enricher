@@ -43,8 +43,11 @@ type Question struct {
 	Criteria json.RawMessage `json:"criteria,omitempty"`
 	// Dimension records which taxonomy dimension the question feeds, so the
 	// policy can aggregate without parsing the question ID.
-	Dimension string `json:"dimension"`
-	TermID    string `json:"term_id,omitempty"`
+	Dimension          string   `json:"dimension"`
+	TermID             string   `json:"term_id,omitempty"`
+	Granularity        string   `json:"granularity,omitempty"`
+	RecallTerms        []string `json:"recall_terms,omitempty"`
+	RelatedQuestionIDs []string `json:"related_question_ids,omitempty"`
 	// DependsOn lists question IDs whose material must be present. A question
 	// with dependencies is never batched with a state that lacks them.
 	DependsOn []string `json:"depends_on,omitempty"`
@@ -158,7 +161,19 @@ func CompileSpec(catalog taxonomy.Catalog, scoreEnabled bool) (QuestionSpec, err
 		if !term.Active {
 			continue
 		}
+		granularity := ""
+		if term.Specific() {
+			granularity = "specific"
+		}
+		var related []string
+		for _, relation := range term.Relations {
+			if relation.Kind == "related" && slicesContainsActiveTopic(catalog.Topics, relation.ID) {
+				related = append(related, "topic_"+relation.ID)
+			}
+		}
+		sort.Strings(related)
 		questions = append(questions, Question{
+			Granularity: granularity, RecallTerms: append([]string(nil), term.RecallTerms...), RelatedQuestionIDs: related,
 			ID: "topic_" + term.ID, Kind: QuestionNoul, Dimension: "topic", TermID: term.ID,
 			Instructions: mustJSON(materialRule + "原帖是否实质讨论以下主题：" + semanticDescription(term) +
 				"？不要仅根据收藏备注或偶然提及来打主题标签。"),
@@ -279,10 +294,13 @@ func CompileSpec(catalog taxonomy.Catalog, scoreEnabled bool) (QuestionSpec, err
 // projection as HashSpec minus the id.
 func hashSpecIdentity(spec QuestionSpec) (string, error) {
 	type hashQuestion struct {
-		ID           string          `json:"id"`
-		Kind         QuestionKind    `json:"kind"`
-		Instructions json.RawMessage `json:"instructions"`
-		Criteria     json.RawMessage `json:"criteria,omitempty"`
+		ID                 string          `json:"id"`
+		Kind               QuestionKind    `json:"kind"`
+		Instructions       json.RawMessage `json:"instructions"`
+		Criteria           json.RawMessage `json:"criteria,omitempty"`
+		Granularity        string          `json:"granularity,omitempty"`
+		RecallTerms        []string        `json:"recall_terms,omitempty"`
+		RelatedQuestionIDs []string        `json:"related_question_ids,omitempty"`
 	}
 	payload := struct {
 		SpecVersion  int            `json:"spec_version"`
@@ -292,6 +310,7 @@ func hashSpecIdentity(spec QuestionSpec) (string, error) {
 	for _, question := range spec.Questions {
 		payload.Questions = append(payload.Questions, hashQuestion{
 			ID: question.ID, Kind: question.Kind, Instructions: question.Instructions, Criteria: question.Criteria,
+			Granularity: question.Granularity, RecallTerms: question.RecallTerms, RelatedQuestionIDs: question.RelatedQuestionIDs,
 		})
 	}
 	encoded, err := canonicalJSONBytes(payload)
@@ -320,6 +339,15 @@ func semanticDescription(term taxonomy.Term) string {
 	return strings.Join(parts, "；")
 }
 
+func slicesContainsActiveTopic(terms []taxonomy.Term, id string) bool {
+	for _, term := range terms {
+		if term.ID == id && term.Active {
+			return true
+		}
+	}
+	return false
+}
+
 func mustJSON(value any) json.RawMessage {
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -334,10 +362,13 @@ func mustJSON(value any) json.RawMessage {
 // that never enters a request.
 func HashSpec(spec QuestionSpec) (string, error) {
 	type hashQuestion struct {
-		ID           string          `json:"id"`
-		Kind         QuestionKind    `json:"kind"`
-		Instructions json.RawMessage `json:"instructions"`
-		Criteria     json.RawMessage `json:"criteria,omitempty"`
+		ID                 string          `json:"id"`
+		Kind               QuestionKind    `json:"kind"`
+		Instructions       json.RawMessage `json:"instructions"`
+		Criteria           json.RawMessage `json:"criteria,omitempty"`
+		Granularity        string          `json:"granularity,omitempty"`
+		RecallTerms        []string        `json:"recall_terms,omitempty"`
+		RelatedQuestionIDs []string        `json:"related_question_ids,omitempty"`
 	}
 	payload := struct {
 		SpecID       string         `json:"spec_id"`
@@ -348,6 +379,7 @@ func HashSpec(spec QuestionSpec) (string, error) {
 	for _, question := range spec.Questions {
 		payload.Questions = append(payload.Questions, hashQuestion{
 			ID: question.ID, Kind: question.Kind, Instructions: question.Instructions, Criteria: question.Criteria,
+			Granularity: question.Granularity, RecallTerms: question.RecallTerms, RelatedQuestionIDs: question.RelatedQuestionIDs,
 		})
 	}
 	encoded, err := canonicalJSONBytes(payload)
@@ -361,6 +393,15 @@ func HashSpec(spec QuestionSpec) (string, error) {
 func (q Question) Validate() error {
 	if strings.TrimSpace(q.ID) == "" || len(q.ID) > 64 {
 		return errors.New("question ID must contain 1 to 64 bytes")
+	}
+	if q.Granularity != "" && q.Granularity != "specific" {
+		return errors.New("question granularity must be specific or omitted for broad")
+	}
+	if (q.Granularity != "" || len(q.RecallTerms) > 0 || len(q.RelatedQuestionIDs) > 0) && (q.Kind != QuestionNoul || normalizeDimension(q.Dimension) != "topics") {
+		return errors.New("question retrieval metadata is restricted to topic Nouls")
+	}
+	if len(q.RecallTerms) > 40 || len(q.RelatedQuestionIDs) > 16 {
+		return errors.New("question retrieval metadata exceeds bounds")
 	}
 	if err := validateStructured(q.Instructions, "instructions"); err != nil {
 		return fmt.Errorf("question %s: %w", q.ID, err)

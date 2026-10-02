@@ -61,7 +61,7 @@ func providerContractServer(t *testing.T, spec classify.QuestionSpec, resolvedMo
 		var questions map[string]struct {
 			Type string `json:"type"`
 		}
-		if err := json.Unmarshal(raw["questions"], &questions); err != nil || len(questions) == 0 {
+		if err := json.Unmarshal(raw["questions"], &questions); err != nil || len(questions) == 0 || len(questions) > classify.DefaultMaxQuestionsPerRequest {
 			t.Errorf("questions is not the official map shape: %s", raw["questions"])
 			w.WriteHeader(http.StatusUnprocessableEntity)
 			return
@@ -75,6 +75,9 @@ func providerContractServer(t *testing.T, spec classify.QuestionSpec, resolvedMo
 		}
 		answers := map[string]any{}
 		for _, question := range spec.Questions {
+			if _, requested := questions[question.ID]; !requested {
+				continue
+			}
 			switch question.Kind {
 			case classify.QuestionNoul:
 				answers[question.ID] = map[string]any{"type": "noul", "noul": 0.93}
@@ -92,6 +95,11 @@ func providerContractServer(t *testing.T, spec classify.QuestionSpec, resolvedMo
 					"type": "choice", "choice": options[0], "probabilities": distribution, "confidence": 0.8,
 				}
 			}
+		}
+		if len(answers) != len(questions) {
+			t.Error("provider received a question outside the compiled spec")
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{

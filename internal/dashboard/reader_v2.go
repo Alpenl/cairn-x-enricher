@@ -509,6 +509,10 @@ func (s *Server) exportMarkdown(writer http.ResponseWriter, request *http.Reques
 	fmt.Fprintf(&builder, "---\n\n部分/过期结果：%d 条（共 %d 条）。\n", partial, len(items))
 	writer.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	writer.Header().Set("Content-Disposition", `attachment; filename="cairn-export.md"`)
+	if len(query.TopicRefinements) > 0 {
+		writer.Header().Set("X-Cairn-Topic-Granularity", "1")
+		writer.Header().Set("X-Cairn-Tag-System", "1")
+	}
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(writer, builder.String())

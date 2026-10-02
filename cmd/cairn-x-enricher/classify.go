@@ -17,13 +17,20 @@ import (
 func newClassifyCommand() *cobra.Command {
 	var id int64
 	var maxJobs int
+	var candidateMaxQuestions int
 	command := &cobra.Command{Use: "classify", Short: "Process saved sources with Jev, without X Search or reading generation", RunE: func(cmd *cobra.Command, _ []string) error {
+		if candidateMaxQuestions < 0 || candidateMaxQuestions > 128 {
+			return fmt.Errorf("--candidate-max-questions must be 0..128")
+		}
 		if maxJobs < 1 || maxJobs > 1000 || id < 0 {
 			return fmt.Errorf("--max-jobs must be 1..1000 and --id must be nonnegative")
 		}
 		cfg, err := config.LoadFor(config.RoleClassify)
 		if err != nil {
 			return err
+		}
+		if cmd.Flags().Changed("candidate-max-questions") {
+			cfg.ClassificationCandidateMaxQuestions = candidateMaxQuestions
 		}
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
@@ -37,6 +44,10 @@ func newClassifyCommand() *cobra.Command {
 		}
 		client, err := classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel,
 			upstreamHTTPClient(cfg.TypesafeRequestTimeout), catalog)
+		if err != nil {
+			return err
+		}
+		client, err = configureClassificationCandidates(ctx, cfg, queue, client)
 		if err != nil {
 			return err
 		}
@@ -86,6 +97,7 @@ func newClassifyCommand() *cobra.Command {
 		}
 		return nil
 	}}
+	command.Flags().IntVar(&candidateMaxQuestions, "candidate-max-questions", 0, "Bound objective topic recall (0 evaluates every registered question; requires manifest v2 and preserves core questions)")
 	command.Flags().Int64Var(&id, "id", 0, "enqueue a saved bookmark for reclassification before draining the queue")
 	command.Flags().IntVar(&maxJobs, "max-jobs", 100, "maximum classification jobs to claim")
 	return command

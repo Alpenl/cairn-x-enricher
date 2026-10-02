@@ -165,6 +165,8 @@ func (c *Client) GetV2Catalog(ctx context.Context) (taxonomy.Catalog, error) {
 				Aliases: term.Aliases, Active: term.Active && !term.Deprecated,
 				Includes: term.Includes, Excludes: term.Excludes,
 				DefinitionVersion: term.DefinitionVersion, DisplayRevision: term.DisplayRevision, Status: term.Status,
+				Granularity: term.Granularity, Navigation: term.Navigation, RecallTerms: term.RecallTerms,
+				Relations: convertTermRelations(term.Relations),
 			})
 		}
 		return out
@@ -182,6 +184,17 @@ func (c *Client) GetV2Catalog(ctx context.Context) (taxonomy.Catalog, error) {
 		return taxonomy.Catalog{}, fmt.Errorf("v2 taxonomy is not a usable catalog: %w", err)
 	}
 	return catalog, nil
+}
+
+func convertTermRelations(relations []TaxonomyTermRelation) []taxonomy.TermRelation {
+	if len(relations) == 0 {
+		return nil
+	}
+	out := make([]taxonomy.TermRelation, 0, len(relations))
+	for _, relation := range relations {
+		out = append(out, taxonomy.TermRelation{ID: relation.ID, Kind: relation.Kind})
+	}
+	return out
 }
 
 // V2Taxonomy is the multidimensional vocabulary. Dimensions not present in an
@@ -213,6 +226,9 @@ type TaxonomyTerm struct {
 	Excludes          []string               `json:"excludes,omitempty"`
 	Relations         []TaxonomyTermRelation `json:"relations,omitempty"`
 	Facet             bool                   `json:"facet,omitempty"`
+	Granularity       string                 `json:"granularity,omitempty"`
+	Navigation        bool                   `json:"navigation,omitempty"`
+	RecallTerms       []string               `json:"recall_terms,omitempty"`
 	// DisplayOverridden marks a label that was changed by an approved
 	// display-only proposal. It is display metadata: it must never influence the
 	// semantic question or the spec hash (R2-10).
@@ -242,6 +258,12 @@ func (c *Client) GetV2Taxonomy(ctx context.Context) (V2Taxonomy, error) {
 	var vocabulary V2Taxonomy
 	if err := decodeJSON(response.Body, &vocabulary); err != nil {
 		return V2Taxonomy{}, fmt.Errorf("decode v2 taxonomy: %w", err)
+	}
+	for _, term := range vocabulary.Topics {
+		if (term.Granularity != "" || term.Navigation || len(term.RecallTerms) > 0) &&
+			(response.Header.Get("X-Cairn-Topic-Granularity") != "1" || response.Header.Get("X-Cairn-Tag-System") != "1") {
+			return V2Taxonomy{}, &APIError{StatusCode: http.StatusConflict, Code: "unsupported_topic_granularity_contract"}
+		}
 	}
 	return vocabulary, nil
 }

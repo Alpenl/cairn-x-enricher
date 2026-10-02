@@ -872,16 +872,16 @@ async function partE(browser) {
     await page.clock.install();
     await page.goto(`${base}/bookmarks/12`, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => document.querySelector('.row[data-id="12"] .row-meta .tag-resource')?.textContent === "软件与服务");
-    equal("list shows both topic and resource before the delayed reading", await page.locator('.row[data-id="12"] .row-meta .tag').allTextContents(), ["LLM", "软件与服务"]);
-    check("list retains function and custom labels before reading", await page.locator('.row[data-id="12"] .tag-more').getAttribute("title") === "工具 / 我的项目");
+    equal("list previews topic resource function and custom tags before delayed reading", await page.locator('.row[data-id="12"] .row-meta .tag').allTextContents(), ["LLM", "软件与服务", "工具", "我的项目"]);
+    check("four visible tags need no overflow before reading", await page.locator('.row[data-id="12"] .tag-more').count() === 0);
     check("reading waits until the complete list has rendered", await waitFor(() => Boolean(state.releaseReading)));
     state.releaseReading?.();
     await page.waitForFunction(() => document.querySelector("#detail-title")?.textContent === "测试标题");
     await openCuration(page);
     await page.waitForSelector("#v2-topics .chip.on");
     await page.locator("#curate > summary").click();
-    equal("late combined reading and panel toggle retain list tags", await page.locator('.row[data-id="12"] .row-meta .tag').allTextContents(), ["LLM", "软件与服务"]);
-    check("late combined reading retains function and custom labels", await page.locator('.row[data-id="12"] .tag-more').getAttribute("title") === "工具 / 我的项目");
+    equal("late combined reading and panel toggle retain list tags", await page.locator('.row[data-id="12"] .row-meta .tag').allTextContents(), ["LLM", "软件与服务", "工具", "我的项目"]);
+    check("late combined reading keeps all four tags visible", await page.locator('.row[data-id="12"] .tag-more').count() === 0);
     equal("combined snapshot keeps all three dimensions and personal tag", await page.evaluate(async () => {
       const { getItem } = await import("/assets/js/store.js");
       const item = getItem(12);

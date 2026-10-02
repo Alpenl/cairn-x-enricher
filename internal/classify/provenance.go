@@ -29,7 +29,7 @@ type ProviderCall struct {
 // same immutable-spec, typed-answer and provenance checks as the store reader.
 // It makes no inference and rejects legacy records without actual wire state.
 func ValidateReplayMetadata(spec QuestionSpec, raw RawJudgments) error {
-	if raw.MetadataVersion != 1 || raw.Coverage != "complete" {
+	if (raw.MetadataVersion != 1 && raw.MetadataVersion != 2) || raw.Coverage != "complete" {
 		return errors.New("offline replay requires complete versioned evaluation metadata")
 	}
 	for _, judgment := range raw.Judgments {
@@ -72,24 +72,33 @@ func callIdentity(body []byte) (ProviderCall, string, error) {
 // separately stored typed answers. Legacy absence stays unknown; it does not
 // fabricate the old wire state, question hashes or batching identity.
 func RestoreStoredJudgments(spec QuestionSpec, requestedModel, resolvedModel string, answersJSON []byte, coverage string, metadata []byte) (RawJudgments, error) {
-	base, err := DecodeStoredJudgments(spec, requestedModel, resolvedModel, answersJSON, coverage)
-	if err != nil {
-		return RawJudgments{}, err
-	}
-	if len(metadata) == 0 || string(metadata) == "null" {
-		return base, nil
-	}
 	var raw RawJudgments
-	if err := rejectDuplicateKeys(metadata); err != nil {
-		return RawJudgments{}, err
+	if len(metadata) > 0 && string(metadata) != "null" {
+		if err := rejectDuplicateKeys(metadata); err != nil {
+			return RawJudgments{}, err
+		}
+		if err := strictDecode(metadata, &raw); err != nil {
+			return RawJudgments{}, err
+		}
 	}
-	if err := strictDecode(metadata, &raw); err != nil {
+	answerSpec := spec
+	if raw.MetadataVersion == 2 {
+		var err error
+		answerSpec, err = validateCandidateManifest(spec, raw)
+		if err != nil {
+			return RawJudgments{}, err
+		}
+	} else if raw.CandidateManifest != nil {
+		return RawJudgments{}, errors.New("candidate manifest requires version-2 evaluation metadata")
+	}
+	base, err := DecodeStoredJudgments(answerSpec, requestedModel, resolvedModel, answersJSON, coverage)
+	if err != nil {
 		return RawJudgments{}, err
 	}
 	if raw.MetadataVersion == 0 {
 		return base, nil
 	}
-	if raw.MetadataVersion != 1 || raw.SpecID != base.SpecID || raw.SpecHash != base.SpecHash || raw.RequestedModel != requestedModel || raw.ResolvedModel != resolvedModel || raw.Coverage != coverage || raw.BatchSemantics == "" || raw.WireState == "" || sha256Hex([]byte(raw.WireState)) != raw.EvidenceHash {
+	if (raw.MetadataVersion != 1 && raw.MetadataVersion != 2) || raw.SpecID != base.SpecID || raw.SpecHash != base.SpecHash || raw.RequestedModel != requestedModel || raw.ResolvedModel != resolvedModel || raw.Coverage != coverage || raw.BatchSemantics == "" || raw.WireState == "" || sha256Hex([]byte(raw.WireState)) != raw.EvidenceHash {
 		return RawJudgments{}, errors.New("stored evaluation identity mismatch")
 	}
 	// A complete stored run may be replayed only if both representations agree.
@@ -99,7 +108,7 @@ func RestoreStoredJudgments(spec QuestionSpec, requestedModel, resolvedModel str
 	if len(raw.QuestionHashes) != len(raw.Judgments) {
 		return RawJudgments{}, errors.New("stored question identities missing")
 	}
-	for _, question := range spec.Questions {
+	for _, question := range answerSpec.Questions {
 		hash, err := QuestionHash(question)
 		if err != nil {
 			return RawJudgments{}, err

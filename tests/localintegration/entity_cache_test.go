@@ -152,7 +152,10 @@ func TestLocalWorkerEntityCacheCLI(t *testing.T) {
 	}
 	run := func(retry bool, limit int) {
 		t.Helper()
-		command := exec.CommandContext(ctx, "./cairn-x-enricher", "classify", "--max-jobs", "1")
+		// This case exercises five entity-cache lifecycles under the unchanged
+		// five-call per-item cap. Use the negotiated single-batch candidate mode;
+		// the separate CLI case verifies full-catalog, multiple-batch coverage.
+		command := exec.CommandContext(ctx, "./cairn-x-enricher", "classify", "--max-jobs", "1", "--candidate-max-questions", "32")
 		if retry {
 			command.Args = append(command.Args, "--id", strconv.FormatInt(id, 10))
 		}

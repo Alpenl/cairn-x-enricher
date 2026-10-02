@@ -59,6 +59,7 @@ func TestPersonalUsePolicyPreservesHistoricalReplayAndRaw(t *testing.T) {
 	before, _ := json.Marshal(raw)
 	legacy := DefaultPolicy()
 	legacy.Version = "jev-policy-v2"
+	legacy.PreferSpecificTopics = false
 	legacy.BlockPersonalUse = false
 	legacy.MinPrimaryTags, legacy.MaxPrimaryTags, legacy.FunctionSupportAccept = 0, 0, 0
 	saved, err := json.Marshal(legacy)

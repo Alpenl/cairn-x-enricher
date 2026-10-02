@@ -69,6 +69,7 @@ func replayContractFixture(t *testing.T) *replayContractBackend {
 	policy := classify.DefaultPolicy()
 	policy.Version = "jev-policy-v2"
 	policy.BlockPersonalUse = false
+	policy.PreferSpecificTopics = false
 	policy.MinPrimaryTags, policy.MaxPrimaryTags, policy.FunctionSupportAccept = 0, 0, 0
 	policyJSON, _ := json.Marshal(policy)
 	payload, err := classify.MarshalSpec(spec)

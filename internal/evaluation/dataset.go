@@ -39,9 +39,25 @@ const (
 type Label struct {
 	// Values is the required set for a multi-label dimension, or the set of
 	// acceptable alternatives for a single choice. NotApplicable means none.
-	Values        []string `json:"values"`
+	Values []string `json:"values"`
+	// ReviewedTerms scopes explicit negatives. nil uses the frozen legacy
+	// vocabulary; a non-nil empty slice records positive-only annotation.
+	ReviewedTerms []string `json:"reviewed_terms,omitempty"`
 	NotApplicable bool     `json:"not_applicable,omitempty"`
 	Unknown       bool     `json:"unknown,omitempty"`
+}
+
+// MarshalJSON retains an explicit empty reviewed scope across export/replay.
+func (l Label) MarshalJSON() ([]byte, error) {
+	type plain Label
+	var reviewed *[]string
+	if l.ReviewedTerms != nil {
+		reviewed = &l.ReviewedTerms
+	}
+	return json.Marshal(struct {
+		plain
+		ReviewedTerms *[]string `json:"reviewed_terms,omitempty"`
+	}{plain: plain(l), ReviewedTerms: reviewed})
 }
 
 // Gold is the reference answer, whose origin is explicitly recorded in Sample.
@@ -164,6 +180,12 @@ func (d Dataset) Validate() error {
 			for name, label := range referenceLabels(*sample.Gold) {
 				if (label.Unknown && label.NotApplicable) || ((label.Unknown || label.NotApplicable) && len(label.Values) > 0) {
 					return fmt.Errorf("sample %s has contradictory %s reference", sample.SampleID, name)
+				}
+				if err := uniqueValues(label.ReviewedTerms); err != nil {
+					return fmt.Errorf("sample %s %s reviewed scope: %w", sample.SampleID, name, err)
+				}
+				if label.Unknown && label.ReviewedTerms != nil {
+					return fmt.Errorf("sample %s has reviewed scope for unknown %s", sample.SampleID, name)
 				}
 				if err := uniqueValues(label.Values); err != nil {
 					return fmt.Errorf("sample %s %s: %w", sample.SampleID, name, err)

@@ -98,8 +98,14 @@ export async function exportItems(items, options = {}) {
 // A backend without the endpoint reports export_unsupported so the caller can
 // fall back to the local builder.
 export async function exportServer(params) {
-  const response = await fetch(`/api/export?${params}`, { cache: "no-store" });
+  const refined = new URLSearchParams(params).has("topic_refinements");
+  const response = await fetch(`/api/export?${params}`, { cache: "no-store", ...(refined ? {
+    headers: { "X-Cairn-Tag-System": "1", "X-Cairn-Topic-Granularity": "1" }
+  } : {}) });
   if (response.status === 404 || response.status === 405) throw new Error("export_unsupported");
   if (!response.ok) throw new Error("export_failed");
+  if (refined && (response.headers.get("X-Cairn-Tag-System") !== "1" || response.headers.get("X-Cairn-Topic-Granularity") !== "1")) {
+    throw new Error("unsupported_filter_contract");
+  }
   download(await response.blob(), `cairn-${today()}.md`);
 }
