@@ -48,6 +48,19 @@ async function waitFor(description, predicate, timeoutMs = 120000) {
   throw new Error(`timeout waiting for ${description}: ${last instanceof Error ? last.message : JSON.stringify(last)}`);
 }
 
+async function openTagEditor(page, { secondary = false } = {}) {
+  // Reading supplies the compact summary first; the editor fetches only when
+  // its disclosure opens. Click its label, clear of the tag-filter buttons.
+  await page.locator("#curate-summary-tags .tag").first().waitFor({ state: "visible", timeout: 30000 });
+  if (!await page.locator("#curate").evaluate(node => node.open)) {
+    await page.locator("#curate > summary .curate-summary-label").click();
+  }
+  await page.locator('.tag-system-row[data-dimension="topics"]').waitFor({ state: "visible", timeout: 30000 });
+  if (secondary && !await page.locator(".tag-secondary").evaluate(node => node.open)) {
+    await page.locator(".tag-secondary > summary").click();
+  }
+}
+
 async function main() {
   const mock = await startMockModel();
   let browser;
@@ -252,7 +265,8 @@ async function main() {
     const afterReject = await jsonFetch(`${workerURL}/api/v2/links/${id}/selection`, { headers: auth(enricherToken) });
     check("the effective view no longer contains the rejected topic", !(afterReject.payload.selection.topics || []).includes(rejected), JSON.stringify(afterReject.payload.selection.topics));
     await page.reload({ waitUntil: "load" });
-    await page.waitForSelector('.tag-system-row[data-dimension="topics"] .tag-name', { state: "attached", timeout: 30000 });
+    await openTagEditor(page);
+    await page.waitForSelector('.tag-system-row[data-dimension="topics"] .tag-name', { state: "visible", timeout: 30000 });
     check("the refreshed UI shows the human decision", !(await effectiveTopics()).includes(rejected));
     await library.reload({ waitUntil: "load" });
     await library.waitForSelector("#empty:not([hidden])");
@@ -283,12 +297,14 @@ async function main() {
       check(`carrier choice ${index + 1} is the last selected value`, true);
     }
     await page.reload({ waitUntil: "load" });
-    await page.waitForSelector("#v2-carriers .chip.on", { state: "attached", timeout: 30000 });
+    await openTagEditor(page, { secondary: true });
+    await page.waitForSelector("#v2-carriers .chip.on", { state: "visible", timeout: 30000 });
     check("carrier A survives refresh after A-B-A", await page.$eval("#v2-carriers .chip.on", (node) => node.dataset.term) === firstCarrier);
     const otherPage = await browser.newPage();
     otherPage.on("pageerror", error => pageErrors.push(String(error)));
     await otherPage.goto(`http://127.0.0.1:${goPort}/bookmarks/${id}`, { waitUntil: "load" });
-    await otherPage.waitForSelector("#v2-carriers .chip.on", { state: "attached", timeout: 30000 }).catch(async error => {
+    await openTagEditor(otherPage, { secondary: true });
+    await otherPage.waitForSelector("#v2-carriers .chip.on", { state: "visible", timeout: 30000 }).catch(async error => {
       process.stdout.write(`second page carrier diagnostic: ${JSON.stringify({ errors: pageErrors,
         url: otherPage.url(), tags: await otherPage.locator("#tag-rows").innerHTML(),
         detail: await otherPage.locator("#detail-pane").innerText(),
@@ -329,6 +345,7 @@ async function main() {
     });
     check("entity reset reaches the real Worker through Go", restoredEntities.status === 200 && restoredEntities.payload.entities?.includes("BrowserEntity"));
     await page.reload({ waitUntil: "load" });
+    await openTagEditor(page, { secondary: true });
     await page.waitForFunction(() => document.querySelector("#v2-entity-list")?.textContent.includes("BrowserEntity"));
     check("a page reload restores the automatic entity after reset", (await page.textContent("#v2-entity-list")).includes("BrowserEntity"));
     const restoredExport = await fetch(`http://127.0.0.1:${goPort}/api/export`).then(response => response.text());
