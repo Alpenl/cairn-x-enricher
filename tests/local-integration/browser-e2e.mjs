@@ -191,6 +191,25 @@ async function main() {
     await page.waitForSelector("#curate-summary-tags .tag", { state: "visible", timeout: 30000 });
     check("collapsed editor has no editor rows before opening", await page.locator(".tag-system-row").count() === 0);
     check("the real tag editor starts collapsed", !await page.locator("#curate").evaluate(node => node.open));
+    // Exercise actual Worker projections through NAS and the real list merge.
+    // A synthetic summary that retained identity unconditionally hid this bug.
+    const bodyReuse = await page.evaluate(async id => {
+      const { getItem } = await import("/assets/js/store.js");
+      const { api, fetchJSON } = await import("/assets/js/api.js");
+      const before = getItem(id);
+      const legacy = await fetchJSON("/api/bookmarks?view=summary");
+      const modern = await api.list(new URLSearchParams("view=summary"));
+      await (await import("/assets/js/list.js")).reload();
+      const merged = getItem(id);
+      const refreshed = await api.detailFresh(id);
+      return { legacyIdentity: Boolean(legacy.items.find(item => item.id === id)?.cache_identity),
+        modernIdentity: modern.items.find(item => item.id === id)?.cache_identity,
+        preserved: Boolean(before.original_text) && merged.content_loaded !== false && merged.original_text === before.original_text,
+        refreshed: refreshed.original_text === before.original_text && refreshed.translated_text === before.translated_text };
+    }, id);
+    check("default summaries preserve the previous strict contract", !bodyReuse.legacyIdentity);
+    check("Web summaries explicitly receive valid body identity", bodyReuse.modernIdentity?.schema_version === 1 && Number.isSafeInteger(bodyReuse.modernIdentity.body_revision));
+    check("a real list reload preserves the loaded body and its versioned refresh", bodyReuse.preserved && bodyReuse.refreshed);
     // The summary also contains independent tag-filter buttons. Its center
     // can hit one of those; click the disclosure label to open the editor.
     await page.locator("#curate > summary .curate-summary-label").click();

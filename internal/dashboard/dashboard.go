@@ -490,7 +490,9 @@ func (s *Server) getReading(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (s *Server) getTaxonomy(writer http.ResponseWriter, request *http.Request) {
-	if request.URL.Query().Get("refresh") == "1" || request.Header.Get("Cache-Control") == "no-cache" {
+	// Browser fetch(cache: "no-store") sends Cache-Control: no-cache even for
+	// ordinary reads. Only the application refresh intent bypasses this cache.
+	if request.URL.Query().Get("refresh") == "1" {
 		s.catalog.Invalidate()
 	}
 	catalog, err := s.catalog.Catalog(request.Context())
@@ -662,7 +664,7 @@ func (s *Server) getV2Taxonomy(writer http.ResponseWriter, request *http.Request
 	if !ok {
 		return
 	}
-	if request.URL.Query().Get("refresh") == "1" || request.Header.Get("Cache-Control") == "no-cache" {
+	if request.URL.Query().Get("refresh") == "1" {
 		s.catalog.Invalidate()
 	}
 	vocabulary, stale, err := s.catalog.Modern(request.Context())
@@ -1244,6 +1246,11 @@ func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 		CurationStatus: values.Get("curation_status"), Topic: values.Get("topic"),
 		Form: values.Get("form"), Use: values.Get("use"), Source: values.Get("source"), Since: values.Get("since"),
 		SummaryOnly: values.Get("view") == "summary",
+	}
+	if options := values["include_cache_identity"]; len(options) > 1 || len(options) == 1 && options[0] != "0" && options[0] != "1" {
+		return cairn.BookmarkQuery{}, errors.New("invalid cache identity option")
+	} else if len(options) == 1 && options[0] == "1" {
+		query.IncludeCacheIdentity = true
 	}
 	if options := values["counts"]; len(options) > 1 || len(options) == 1 && options[0] != "0" && options[0] != "1" {
 		return cairn.BookmarkQuery{}, errors.New("invalid counts option")

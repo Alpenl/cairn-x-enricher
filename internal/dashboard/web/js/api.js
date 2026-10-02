@@ -213,6 +213,8 @@ function forgetQuery(key) {
 
 function queryRead(path, params, signal, { reuse = false } = {}) {
   const stable = new URLSearchParams(params);
+  // Opt in without changing the response shape for older NAS consumers.
+  if (path === "/api/bookmarks" && stable.get("view") === "summary") stable.set("include_cache_identity", "1");
   stable.sort();
   const key = `${path}?${stable}`;
   if (signal?.aborted) return Promise.reject(new DOMException("Request aborted", "AbortError"));

@@ -26,9 +26,9 @@ const TYPES = {
 const CURATION = new Set(["inbox", "kept", "compiled", "drop"]);
 const SINGLE = new Set(["carriers", "form", "use"]);
 
-function summaryOf(item) {
-  const { v2, entities, classificationJob, original_text, translated_text, related_links, images, ...rest } = item;
-  return { ...rest, related_links: [], images, content_loaded: false };
+function summaryOf(item, includeIdentity = false) {
+  const { v2, entities, classificationJob, original_text, translated_text, related_links, images, cache_identity, ...rest } = item;
+  return { ...rest, related_links: [], images, content_loaded: false, ...(includeIdentity && cache_identity ? { cache_identity } : {}) };
 }
 
 function publicDetail(item) {
@@ -183,7 +183,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
       const items = page.slice(0, limit);
       const summary = url.searchParams.get("view") === "summary";
       return send(200, {
-        items: items.map((item) => (summary ? summaryOf(item) : publicDetail(item))),
+        items: items.map((item) => (summary ? summaryOf(item, url.searchParams.get("include_cache_identity") === "1") : publicDetail(item))),
         next_before_id: page.length > limit ? items.at(-1).id : null,
         ...(counts ? { counts } : {}),
         ...(url.searchParams.get("filter_contract_version") === "1" ? { filter_contract_version: 1 } : {})
@@ -201,7 +201,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
 
     if (route === "/api/backstage") {
       const counts = countsOf(state.items);
-      const attention = state.items.filter((item) => item.status === "failed" || item.status === "exhausted").map(summaryOf);
+      const attention = state.items.filter((item) => item.status === "failed" || item.status === "exhausted").map(item => summaryOf(item));
       const queued = counts.pending + counts.processing;
       return send(200, {
         title: attention.length ? `需要处理 ${attention.length} 条` : "一切正常",
