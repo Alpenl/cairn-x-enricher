@@ -6,7 +6,7 @@ import { api, errorLabel } from "./api.js";
 import { byId, clear, h } from "./dom.js";
 import { formatDateTime } from "./format.js";
 import { entityPayload } from "./curation.js";
-import { emit, on } from "./store.js";
+import { emit, on, state } from "./store.js";
 import { confirmAction, toast } from "./ui.js";
 
 const ROLE_LABELS = Object.freeze({
@@ -28,6 +28,12 @@ let statusPolls = 0;
 let historyId = 0;
 let historyCursor = null;
 let historyBusy = false;
+const statusFlights = new Map();
+function visible() { return !document.hidden && els.root?.open && state.route.name !== "backstage" && (state.layout !== "narrow" || state.route.name === "bookmark"); }
+export function syncVisibility() {
+  if (!visible()) { clearTimeout(statusTimer); statusTimer = 0; }
+  else if (["pending", "processing"].includes(els.status?.dataset.status)) scheduleStatusPoll(currentId);
+}
 
 async function loadRunHistory(id, append = false) {
   if (historyBusy) return;
@@ -111,7 +117,12 @@ function renderStatus(id, payload) {
   if ((status === "pending" || status === "processing") && id === currentId) scheduleStatusPoll(id);
 }
 
-async function loadStatus(id) {
+function loadStatus(id) {
+  if (statusFlights.has(id)) return statusFlights.get(id);
+  const flight = fetchStatus(id).finally(() => statusFlights.delete(id));
+  statusFlights.set(id, flight); return flight;
+}
+async function fetchStatus(id) {
   try {
     const payload = await api.classificationStatus(id);
     if (id !== currentId) return;
@@ -129,10 +140,10 @@ async function loadStatus(id) {
 }
 
 function scheduleStatusPoll(id) {
-  if (statusTimer || statusPolls++ >= 20) return;
+  if (!visible() || statusTimer || statusPolls++ >= 20) return;
   statusTimer = setTimeout(() => {
     statusTimer = 0;
-    if (id === currentId) loadStatus(id);
+    if (id === currentId && visible()) loadStatus(id);
   }, 4000);
 }
 
@@ -164,6 +175,7 @@ function renderObservations(id) {
 }
 
 function load(id) {
+  emit("detail:aux-needed", id);
   loadedId = id;
   statusPolls = 0;
   clearTimeout(statusTimer);
@@ -265,7 +277,9 @@ export function initDiagnostics() {
   els.historyMore.addEventListener("click", () => { if (currentId && historyCursor) loadRunHistory(currentId, true); });
   els.root.addEventListener("toggle", () => {
     if (els.root.open && currentId && loadedId !== currentId) load(currentId);
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   els.retry.addEventListener("click", () => retryClassification(currentId));
   els.refresh.addEventListener("click", () => refreshSource(currentId));
   els.replayButton.addEventListener("click", () => replayPolicy(currentId, false));

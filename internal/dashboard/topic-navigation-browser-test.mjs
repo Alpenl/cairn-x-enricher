@@ -27,6 +27,7 @@ const context = await browser.newContext({ viewport: { width: 1204, height: 900 
 const page = await context.newPage();
 const errors = [], requests = [];
 let scope = "b".repeat(64), acknowledge = true, tagAcknowledged = true;
+let heldList = null;
 page.on("pageerror", (error) => errors.push(error.message));
 page.on("request", (request) => requests.push({ url: request.url(), method: request.method() }));
 const send = (route, body, extra = {}) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body),
@@ -58,6 +59,9 @@ await page.route("**/api/bookmarks?*", async (route) => {
   const refine = (params.get("topic_refinements") || "").split(",").filter(Boolean);
   body.items = body.items.filter((item) => refine.every((id) => item.classification?.topics.includes(id)));
   if (body.counts) body.counts.total = body.items.length;
+  if (heldList && params.get("topics") === "portrait") {
+    await heldList.released;
+  }
   return send(route, body);
 });
 const topics = () => page.locator('details[data-group="topics"]');
@@ -99,12 +103,54 @@ try {
   await page.goto(`${url}/?curation_status=all`);
   await page.waitForFunction(() => document.querySelector('.row.selected'));
   const previousPath = new URL(page.url()).pathname;
+  let release;
+  const listRequested = page.waitForRequest(request => {
+    const value = new URL(request.url());
+    return value.pathname === "/api/bookmarks" && value.searchParams.get("topics") === "portrait";
+  });
+  heldList = { released: new Promise(resolve => { release = resolve; }), release: () => release() };
   await page.locator('.row-meta [data-tag-id="portrait"]').first().click();
   await page.waitForURL((value) => value.searchParams.get("topics") === "portrait");
   assert.equal(new URL(page.url()).pathname, previousPath);
+  await listRequested;
+  // URL updates before the filtered rows arrive. Keep this response pending
+  // until focus is on an old row, so the former CI race happens every time.
   await page.locator('.row-meta [data-tag-id="portrait"]').first().focus();
+  const focusedRow = await page.evaluate(() => {
+    window.focusedBeforeListRefresh = document.activeElement;
+    return Number(document.activeElement.closest('.row').dataset.id);
+  });
+  heldList.release();
+  await page.waitForFunction(() => document.querySelector('#list-pane')?.dataset.loading === "false");
+  assert.equal(await page.evaluate(() => window.focusedBeforeListRefresh.isConnected), false, "filter response must replace the old row");
+  assert.deepEqual(await page.evaluate(() => ({ row: Number(document.activeElement.closest('.row')?.dataset.id),
+    field: document.activeElement.dataset.tagField, term: document.activeElement.dataset.tagId })),
+  { row: focusedRow, field: "topics", term: "portrait" }, "filter refresh must retain the focused tag");
+  heldList = null;
   await page.keyboard.press("Enter");
   await page.waitForURL((value) => !value.searchParams.has("topics"));
+  await page.waitForFunction(() => document.querySelector('#list-pane')?.dataset.loading === "false");
+
+  const focusUpdates = await page.evaluate(async () => {
+    const { emit } = await import("/assets/js/store.js");
+    const results = [];
+    for (const selector of ['.tag-filter[data-tag-id="portrait"]', '.row-main', '.row-check']) {
+      const control = document.querySelector(`.row ${selector}`);
+      const id = Number(control.closest('.row').dataset.id);
+      control.focus();
+      for (const event of ['item', 'taxonomy']) {
+        emit(event, id);
+        results.push(document.activeElement === document.querySelector(`.row[data-id="${id}"] ${selector}`));
+      }
+    }
+    const search = document.querySelector('#search');
+    search.focus();
+    emit('item', Number(document.querySelector('.row').dataset.id));
+    emit('taxonomy');
+    results.push(document.activeElement === search);
+    return results;
+  });
+  assert.deepEqual(focusUpdates, Array(7).fill(true), "background row updates preserve controls without taking focus from search");
 
   await openTopics(); await page.locator('#topic-search').fill("写真");
   await topics().getByRole("button", { name: "固定写真", exact: true }).click();
@@ -151,8 +197,9 @@ try {
   if (artifacts) writeFileSync(join(artifacts, "topic-navigation-proof.json"), JSON.stringify({ viewport: [1204, 375],
     independent_any_refinement: true, account_scoped_pins: true, mouse_and_keyboard: true, mobile_tag_does_not_open_reader: true,
     requests: requests.length, writes: 0, page_errors: errors, old_backend_fails_closed: true }, null, 2), { mode: 0o600 });
-  console.log("Topic navigation browser checks passed: specificity, alias, pin/reload/account isolation, independent ANY refinement/history, tag mouse/keyboard, old backend, zero writes");
+  console.log("Topic navigation browser checks passed: specificity, alias, pin/reload/account isolation, independent ANY refinement/history, tag mouse/keyboard, delayed list/background focus preservation, old backend, zero writes");
 } finally {
+  heldList?.release();
   await page.unrouteAll({ behavior: "wait" });
   await context.close(); await browser.close(); await new Promise((resolve) => server.close(resolve));
 }

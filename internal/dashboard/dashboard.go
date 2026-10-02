@@ -128,8 +128,9 @@ type Server struct {
 	// queued counts jobs admitted but not yet finished. It is updated under
 	// enqueueMu at admission and atomically by workers, because workers
 	// receive from the channel without holding that lock.
-	queued  atomic.Int64
-	catalog *taxonomyCache
+	queued     atomic.Int64
+	catalog    *taxonomyCache
+	thumbnails thumbnailCache
 
 	// extensionFlags reports which bounded extensions are enabled. They are
 	// independent of each other and default to off.
@@ -161,6 +162,7 @@ type backstageSummary struct {
 	AttentionTotal int                  `json:"attention_total"`
 	Counts         cairn.BookmarkCounts `json:"counts"`
 	Build          buildinfo.Info       `json:"build"`
+	Overview       *overviewSummary     `json:"overview,omitempty"`
 }
 
 // New creates a dashboard and starts bounded manual processing workers.
@@ -191,7 +193,9 @@ func New(
 		logger:      logger,
 		jobs:        make(chan manualJob, manualQueueDepth),
 		catalog:     newTaxonomyCache(backend),
+		thumbnails:  thumbnailCache{slots: make(chan struct{}, 2)},
 	}
+	server.catalog.workCtx = ctx
 	for range workerCount {
 		server.workers.Add(1)
 		go server.runWorker()
@@ -381,7 +385,7 @@ func servePage(writer http.ResponseWriter, request *http.Request, content []byte
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	writer.Header().Set("Content-Length", strconv.Itoa(len(content)))
 	writer.Header().Set("Cache-Control", "no-store")
-	writer.Header().Set("Content-Security-Policy", "default-src 'none'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+	writer.Header().Set("Content-Security-Policy", "default-src 'none'; connect-src 'self'; img-src 'self' blob:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 	writer.Header().Set("Referrer-Policy", "no-referrer")
 	writer.Header().Set("X-Content-Type-Options", "nosniff")
 	writer.WriteHeader(http.StatusOK)
@@ -486,6 +490,9 @@ func (s *Server) getReading(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (s *Server) getTaxonomy(writer http.ResponseWriter, request *http.Request) {
+	if request.URL.Query().Get("refresh") == "1" || request.Header.Get("Cache-Control") == "no-cache" {
+		s.catalog.Invalidate()
+	}
 	catalog, err := s.catalog.Catalog(request.Context())
 	if err != nil {
 		s.writeBackendError(writer, "get taxonomy", 0, err)
@@ -651,11 +658,14 @@ func (s *Server) updateV2Selection(writer http.ResponseWriter, request *http.Req
 }
 
 func (s *Server) getV2Taxonomy(writer http.ResponseWriter, request *http.Request) {
-	v2, ok := s.v2Backend(writer)
+	_, ok := s.v2Backend(writer)
 	if !ok {
 		return
 	}
-	vocabulary, err := v2.GetV2Taxonomy(request.Context())
+	if request.URL.Query().Get("refresh") == "1" || request.Header.Get("Cache-Control") == "no-cache" {
+		s.catalog.Invalidate()
+	}
+	vocabulary, stale, err := s.catalog.Modern(request.Context())
 	if errors.Is(err, cairn.ErrV2Unsupported) {
 		writeJSON(writer, http.StatusOK, map[string]any{"available": false, "reason": "v2_unsupported"})
 		return
@@ -663,6 +673,9 @@ func (s *Server) getV2Taxonomy(writer http.ResponseWriter, request *http.Request
 	if err != nil {
 		s.writeBackendError(writer, "get v2 taxonomy", 0, err)
 		return
+	}
+	if stale {
+		writer.Header().Set("Warning", `110 - "Response is stale"`)
 	}
 	writeTopicTaxonomy(writer, request, vocabulary)
 }
@@ -738,7 +751,21 @@ func (s *Server) getV2Effective(writer http.ResponseWriter, request *http.Reques
 func (s *Server) getImage(writer http.ResponseWriter, request *http.Request) {
 	// Apply on successes and errors, independent of old backend cache policy.
 	writer.Header().Set("Cache-Control", "private, no-store")
-	response, err := s.backend.GetImage(request.Context(), request.PathValue("key"))
+	if sizes, present := request.URL.Query()["size"]; present {
+		if len(sizes) != 1 || sizes[0] != "160" {
+			writeError(writer, http.StatusBadRequest, "invalid_image_size")
+			return
+		}
+		s.getThumbnail(writer, request)
+		return
+	}
+	var response *http.Response
+	var err error
+	if backend, ok := s.backend.(conditionalImageBackend); ok {
+		response, err = backend.GetImageConditional(request.Context(), request.PathValue("key"), "")
+	} else {
+		response, err = s.backend.GetImage(request.Context(), request.PathValue("key"))
+	}
 	if err != nil {
 		s.writeBackendError(writer, "get image", 0, err)
 		return
@@ -796,6 +823,21 @@ func (s *Server) buildBackstageSummary(ctx context.Context) (backstageSummary, e
 
 func (s *Server) computeBackstageSummary(ctx context.Context) (backstageSummary, error) {
 	status := s.tracker.Snapshot()
+	if backend, ok := s.backend.(interface {
+		GetBackstage(context.Context) (cairn.BookmarkBackstage, error)
+	}); ok {
+		aggregate, err := backend.GetBackstage(ctx)
+		if err == nil {
+			overview := overviewSummary{Views: aggregate.Overview.Views, Counts: aggregate.Counts,
+				Attention: aggregate.Overview.Attention, Queued: aggregate.Overview.Queued}
+			return backstageSummary{Title: backstageTitle(status, aggregate.AttentionTotal), State: backstageState(status, aggregate.Counts, aggregate.AttentionTotal),
+				LastError: status.LastError, Attention: aggregate.Attention, AttentionTotal: aggregate.AttentionTotal,
+				Counts: aggregate.Counts, Build: status.Build, Overview: &overview}, nil
+		}
+		if !errors.Is(err, cairn.ErrBackstageUnsupported) {
+			return backstageSummary{}, fmt.Errorf("read aggregate backstage: %w", err)
+		}
+	}
 	// A filtered list already carries queue-wide counts, so one request per
 	// attention status replaces the previous extra unfiltered counts call.
 	type result struct {
@@ -808,7 +850,7 @@ func (s *Server) computeBackstageSummary(ctx context.Context) (backstageSummary,
 		group.Add(1)
 		go func() {
 			defer group.Done()
-			results[index].page, results[index].err = s.backend.ListBookmarks(ctx, cairn.BookmarkQuery{Limit: 20, Status: name})
+			results[index].page, results[index].err = s.backend.ListBookmarks(ctx, cairn.BookmarkQuery{Limit: 20, Status: name, SummaryOnly: true})
 		}()
 	}
 	group.Wait()
@@ -1381,7 +1423,9 @@ func writeError(writer http.ResponseWriter, status int, code string) {
 
 func writeJSON(writer http.ResponseWriter, status int, value any) {
 	writer.Header().Set("Content-Type", "application/json; charset=utf-8")
-	writer.Header().Set("Cache-Control", "no-store")
+	if writer.Header().Get("Cache-Control") != "private, no-store" {
+		writer.Header().Set("Cache-Control", "no-store")
+	}
 	writer.Header().Set("X-Content-Type-Options", "nosniff")
 	writer.WriteHeader(status)
 	_ = json.NewEncoder(writer).Encode(value)

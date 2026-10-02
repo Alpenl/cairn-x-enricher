@@ -33,6 +33,10 @@ let healthState = "ok";
 let overviewState = "ok";
 let prefetchTimer = 0;
 let prefetchIdle = 0;
+let prefetchController = null, prefetchTarget = 0;
+let overviewFlight = null, statusFlight = null, backstageOverviewGeneration = 0;
+let backstageOverviewAvailable = false;
+let backgroundDue = 0, backgroundDelay = OVERVIEW_INTERVAL, backgroundSignature = "";
 
 // --- URLs & routing ----------------------------------------------------------------
 
@@ -67,6 +71,8 @@ function applyRouteClasses() {
   app.classList.toggle("route-backstage", state.route.name === "backstage");
   app.classList.toggle("detail-open", state.route.name === "bookmark");
   byId("backstage-view").hidden = state.route.name !== "backstage";
+  detail.syncReaderVisibility(); sidebar.syncFacetVisibility();
+  if (state.route.name === "backstage" || (state.layout === "narrow" && state.route.name !== "bookmark")) cancelPrefetch();
 }
 
 // --- Layout --------------------------------------------------------------------------
@@ -79,10 +85,12 @@ function updateLayout() {
   state.layout = wideQuery.matches ? "wide" : mediumQuery.matches ? "medium" : "narrow";
   app.dataset.layout = state.layout;
   setSidebarOpen(state.layout !== "wide" && app.classList.contains("sidebar-open"));
+  detail.syncReaderVisibility();
 }
 
 function setSidebarOpen(open) {
   setSidebarModal(open, { compact: state.layout !== "wide" });
+  sidebar.syncFacetVisibility();
 }
 
 function isFocusMode() {
@@ -96,7 +104,8 @@ function toggleFocus() {
 
 // --- Selection -------------------------------------------------------------------------
 
-function cancelPrefetch() {
+function cancelPrefetch(keepID = 0) {
+  if (prefetchTarget !== keepID) { prefetchController?.abort(); prefetchController = null; prefetchTarget = 0; }
   clearTimeout(prefetchTimer);
   if (prefetchIdle && window.cancelIdleCallback) window.cancelIdleCallback(prefetchIdle);
   prefetchTimer = 0;
@@ -110,8 +119,12 @@ function prefetch(id) {
   const query = querySuffix();
   const load = () => {
     prefetchIdle = 0;
-    if (state.loading || selected !== state.selectedId || query !== querySuffix() || !state.order.includes(id) || !api.prefetchAvailable()) return;
-    api.prefetchDetail(id).then(mergeItem).catch(() => {});
+    if (document.hidden || state.route.name === "backstage" || (state.layout === "narrow" && state.route.name !== "bookmark") || state.loading || selected !== state.selectedId || query !== querySuffix() || !state.order.includes(id) || !api.prefetchAvailable()) return;
+    prefetchController?.abort();
+    const controller = new AbortController(); prefetchController = controller; prefetchTarget = id;
+    api.prefetchDetail(id, { signal: controller.signal }).then(mergeItem).catch(() => {}).finally(() => {
+      if (prefetchController === controller) { prefetchController = null; prefetchTarget = 0; }
+    });
   };
   prefetchTimer = setTimeout(() => {
     prefetchTimer = 0;
@@ -122,7 +135,7 @@ function prefetch(id) {
 
 function select(id, { fromList = false, scroll = true, prefetchNext = true } = {}) {
   if (!id) return;
-  cancelPrefetch();
+  cancelPrefetch(id);
   const narrow = state.layout === "narrow";
   state.selectedId = id;
   list.markSelected(id, { scroll });
@@ -241,7 +254,12 @@ function renderServiceState() {
   sidebar.setServiceState(overviewState === "ok" ? healthState : overviewState);
 }
 
-async function refreshStatus() {
+function refreshStatus() {
+  if (statusFlight) return statusFlight;
+  statusFlight = loadStatus().finally(() => { statusFlight = null; });
+  return statusFlight;
+}
+async function loadStatus() {
   try {
     const response = await fetch("/status", { cache: "no-store" });
     if (!response.ok) throw new Error("status_unavailable");
@@ -253,8 +271,17 @@ async function refreshStatus() {
   renderServiceState();
 }
 
-async function refreshOverview() {
+function refreshOverview() {
   if (pendingCuration) return;
+  if (overviewFlight) return overviewFlight;
+  const generation = overviewGeneration;
+  overviewFlight = loadOverview().finally(() => {
+    overviewFlight = null;
+    if (generation !== overviewGeneration && !pendingCuration && !overviewTimer && !document.hidden) refreshOverview();
+  });
+  return overviewFlight;
+}
+async function loadOverview() {
   const generation = overviewGeneration;
   try {
     const overview = await api.overview();
@@ -668,7 +695,15 @@ async function boot() {
       }
     }
   });
-  on("backstage", () => scheduleOverview(0));
+  on("backstage:loading", () => { backstageOverviewGeneration = overviewGeneration; });
+  on("backstage", (summary) => {
+    backstageOverviewAvailable = Boolean(summary.overview);
+    if (summary.overview && !pendingCuration && backstageOverviewGeneration === overviewGeneration) {
+      overviewGeneration++; state.overview = summary.overview;
+      overviewState = summary.overview.stale ? "backend" : "ok";
+      renderServiceState(); emit("overview", summary.overview);
+    }
+  });
   on("overview", (overview) => {
     // A plain view whose server count grew has new bookmarks to offer.
     const view = state.filters.uncertain === "true" ? "uncertain" : state.filters.curation_status || "all";
@@ -725,13 +760,16 @@ async function boot() {
   list.reload();
   refreshOverview();
   refreshStatus();
-  setInterval(() => {
-    if (document.hidden) return;
-    if (!overviewTimer) refreshOverview();
-    refreshStatus();
+  setInterval(async () => {
+    if (document.hidden || Date.now() < backgroundDue) return;
+    await Promise.all([!overviewTimer && (state.route.name !== "backstage" || !backstageOverviewAvailable) ? refreshOverview() : null, refreshStatus()]);
+    const signature = JSON.stringify([state.overview, healthState, overviewState]);
+    backgroundDelay = signature === backgroundSignature ? Math.min(120_000, backgroundDelay * 2) : OVERVIEW_INTERVAL;
+    backgroundSignature = signature; backgroundDue = Date.now() + backgroundDelay;
   }, OVERVIEW_INTERVAL);
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) { scheduleOverview(0); refreshStatus(); }
+    if (!document.hidden) { backgroundDue = 0; backgroundDelay = OVERVIEW_INTERVAL; scheduleOverview(0); refreshStatus(); }
+    else cancelPrefetch();
   });
 
   Promise.allSettled([loadV1(), loadV2()]).then(([v1]) => {

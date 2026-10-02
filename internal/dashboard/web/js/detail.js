@@ -1,6 +1,7 @@
 // The reading pane: one bookmark with its status control, curation card,
 // images, translation, lazily rendered original text and diagnostics.
 import { api, errorLabel, imagePath, prepareSourceSubmission } from "./api.js";
+import { queueImage, prioritizeReading } from "./image-loader.js";
 import * as curation from "./curation.js";
 import * as diagnostics from "./diagnostics.js";
 import { byId, clear, h } from "./dom.js";
@@ -24,6 +25,10 @@ let polls = 0;
 let loadToken = 0;
 let fetchTimer = 0;
 let identityBusy = false;
+let detailController = null;
+let fetchBusy = false;
+let identityDue = 0, identityDelay = IDENTITY_INTERVAL;
+let wasVisible = false;
 const renderedText = new WeakMap();
 let renderedImages = "";
 let renderedLinks = "";
@@ -62,9 +67,10 @@ function renderFigures(item) {
   els.figures.replaceChildren();
   els.figures.dataset.count = String(images.length);
   images.forEach((ref, index) => {
-    const image = h("img", { alt: "", loading: index === 0 ? "eager" : "lazy", decoding: "async", src: imagePath(ref.key) });
+    const image = h("img", { alt: "", decoding: "async" });
+    queueImage(image, imagePath(ref.key), { priority: 0 });
     const figure = h("button.figure", { type: "button", "aria-label": `查看第 ${index + 1} 张图片` }, image);
-    if (image.complete) image.classList.add("ready");
+    if (image.complete && image.naturalWidth) image.classList.add("ready");
     image.addEventListener("load", () => image.classList.add("ready"));
     image.addEventListener("error", () => figure.remove());
     figure.addEventListener("click", () => openLightbox(images, index));
@@ -187,9 +193,14 @@ function render(item) {
 // --- Loading ---------------------------------------------------------------------
 
 async function fetchDetail(id, { silent = false } = {}) {
+  if (silent && fetchBusy) return false;
+  detailController?.abort();
+  const controller = new AbortController(); detailController = controller;
+  fetchBusy = true;
+  if (!silent && readerVisible()) prioritizeReading(true);
   const token = ++loadToken;
   try {
-    const item = await (silent ? api.detailFresh(id) : api.detail(id));
+    const item = await (silent ? api.detailFresh(id, { signal: controller.signal }) : api.detail(id, { signal: controller.signal }));
     if (!item) return false;
     if (token !== loadToken || id !== currentId) {
       return false;
@@ -205,6 +216,7 @@ async function fetchDetail(id, { silent = false } = {}) {
     emit("item", id);
     return true;
   } catch (error) {
+    if (error.name === "AbortError") return false;
     if (token !== loadToken || id !== currentId) return false;
     if ([401, 403, 404].includes(error?.status)) void forgetOffline(id);
     if (!error?.status || error.status >= 500) {
@@ -231,16 +243,40 @@ async function fetchDetail(id, { silent = false } = {}) {
       toast(`读取全文失败：${errorLabel(error?.message)}`, { tone: "error" });
     }
     return false;
+  } finally {
+    if (detailController === controller) { detailController = null; fetchBusy = false; prioritizeReading(false); }
   }
 }
 
+function readerVisible() {
+  return !document.hidden && currentId > 0 && state.route.name !== "backstage" &&
+    (state.layout !== "narrow" || state.route.name === "bookmark");
+}
+export function syncReaderVisibility() {
+  if (!els.article) return;
+  const visible = readerVisible();
+  diagnostics.syncVisibility();
+  if (!visible) {
+    clearTimeout(fetchTimer); fetchTimer = 0;
+    detailController?.abort(); detailController = null; fetchBusy = false; loadToken++;
+    curation.suspendRemote(); prioritizeReading(false);
+  } else if (!wasVisible) {
+    identityDue = 0; identityDelay = IDENTITY_INTERVAL;
+    if (getItem(currentId)?.content_loaded === false && !fetchBusy && !fetchTimer) fetchDetail(currentId);
+    curation.resumeRemote();
+  }
+  wasVisible = visible;
+}
+
 export function showItem(id) {
+  if (id !== currentId) { detailController?.abort(); detailController = null; clearTimeout(fetchTimer); fetchTimer = 0; fetchBusy = false; loadToken++; identityDue = 0; identityDelay = IDENTITY_INTERVAL; }
   if (!id) {
     currentId = 0;
     els.empty.hidden = false;
     els.article.hidden = true;
     els.error.hidden = true;
     document.title = "Cairn 收藏";
+    prioritizeReading(false);
     return;
   }
   const changed = id !== currentId;
@@ -266,6 +302,7 @@ export function showItem(id) {
     els.scroll.scrollTop = 0;
   }
   const cached = getItem(id);
+  prioritizeReading(cached?.content_loaded === false || !cached);
   if (cached) {
     els.article.hidden = false;
     render(cached);
@@ -281,7 +318,7 @@ export function showItem(id) {
   // While skimming with J/K the cached summary renders at once; the full read
   // waits a beat so passing over a row does not cost a request.
   clearTimeout(fetchTimer);
-  fetchTimer = setTimeout(() => { if (id === currentId) fetchDetail(id); }, cached ? 90 : 0);
+  fetchTimer = setTimeout(() => { fetchTimer = 0; if (id === currentId && readerVisible()) fetchDetail(id); }, cached ? 90 : 0);
 }
 
 export function refreshCurrent() {
@@ -376,7 +413,7 @@ function openLightbox(images, start) {
   const image = h("img.lightbox-img", { alt: "" });
   const counter = h("span.lightbox-count");
   const show = () => {
-    image.src = imagePath(images[index].key);
+    queueImage(image, imagePath(images[index].key), { priority: -1 });
     counter.textContent = images.length > 1 ? `${index + 1} / ${images.length}` : "";
   };
   const step = (delta) => { index = (index + delta + images.length) % images.length; show(); };
@@ -483,13 +520,13 @@ export function initDetail(options) {
   on("list:loaded", () => { if (currentId) renderPosition(); });
   on("list:more", () => { if (currentId) renderPosition(); });
   on("classification:changed", async (id) => {
-    if (id === currentId && await fetchDetail(id, { silent: true }) && id === currentId) {
+    if (id === currentId && readerVisible() && await fetchDetail(id, { silent: true }) && id === currentId && readerVisible()) {
       curation.reloadRemote(id);
     }
   });
 
   setInterval(() => {
-    if (document.hidden || !currentId) return;
+    if (!readerVisible()) return;
     const item = getItem(currentId);
     if (!isWorking(item)) { polls = 0; return; }
     if (polls++ >= MAX_POLLS) return;
@@ -499,28 +536,31 @@ export function initDetail(options) {
   // A visible, idle detail can change in another client without any queue
   // activity. Only fetch the full article after its small identity changes.
   setInterval(async () => {
-    if (document.hidden || !currentId || identityBusy) return;
+    if (!readerVisible() || identityBusy || Date.now() < identityDue) return;
     const id = currentId;
     const before = getItem(id);
     if (!before?.cache_identity || (isWorking(before) && polls < MAX_POLLS)) return;
     identityBusy = true;
     try {
       const remote = await api.identity(id);
-      if (id !== currentId) return;
+      if (id !== currentId || !readerVisible()) return;
       const current = getItem(id);
       if (!current) return;
       const versionChanged = JSON.stringify(remote.cache_identity) !== JSON.stringify(current.cache_identity);
       const statusChanged = current.processable !== false && remote.status !== current.status;
       if (!versionChanged && !statusChanged && remote.updated_at === current.updated_at &&
-          remote.paid_call_unresolved === current.paid_call_unresolved) return;
-      if (await fetchDetail(id, { silent: true }) && id === currentId && versionChanged) {
+          remote.paid_call_unresolved === current.paid_call_unresolved) { identityDelay = Math.min(60_000, identityDelay * 2); return; }
+      identityDelay = IDENTITY_INTERVAL;
+      if (await fetchDetail(id, { silent: true }) && id === currentId && readerVisible() && versionChanged) {
         curation.reloadRemote(id);
       }
     } catch {
       // Identity checks are best effort; the next visible tick retries.
     } finally {
       identityBusy = false;
+      identityDue = Date.now() + identityDelay;
     }
   }, IDENTITY_INTERVAL);
+  document.addEventListener("visibilitychange", syncReaderVisibility);
 
 }

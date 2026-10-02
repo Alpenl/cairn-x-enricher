@@ -21,8 +21,8 @@ func TestLocalWorkerPrivateImageLifecycle(t *testing.T) {
 	base := workerURL(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	// The harness seeds only an R2 object. All link lifecycle operations use
-	// authenticated HTTP and the actual Worker and D1.
+	// The harness seeds only an R2 object. Creation, current image registration
+	// and deletion use authenticated HTTP and the actual Worker and D1.
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/links", strings.NewReader(`{"url":"https://x.com/image/status/1"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -66,6 +66,21 @@ func TestLocalWorkerPrivateImageLifecycle(t *testing.T) {
 			t.Fatalf("image status=%d cache=%q", resp.StatusCode, resp.Header.Get("Cache-Control"))
 		}
 		return body
+	}
+	// A live owner alone does not authorize an unreferenced historical object.
+	// Register the fixture through the real completion route, which verifies
+	// the R2 object and commits its current image membership atomically.
+	get(404)
+	job, err := client.ClaimByID(ctx, created.ID)
+	if err != nil || job == nil {
+		t.Fatalf("claim image fixture: job=%v err=%v", job, err)
+	}
+	completion := cairn.Completion{LeaseToken: job.LeaseToken, AITitle: "Image privacy fixture",
+		OriginalLanguage: "en", OriginalText: "Synthetic image source", TranslatedText: "图片隐私测试",
+		Summary: "Synthetic image reading aid", Model: "fixture", RelatedLinks: []string{},
+		Images: []cairn.ImageRef{{Key: "enrichment/1/" + strings.Repeat("a", 64) + ".png", ContentType: "image/png"}}}
+	if err := client.Complete(ctx, created.ID, completion); err != nil {
+		t.Fatalf("register current image: %v", err)
 	}
 	body := get(200)
 	if !bytes.HasPrefix(body, []byte{137, 80, 78, 71, 13, 10, 26, 10}) {

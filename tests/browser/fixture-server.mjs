@@ -112,7 +112,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
       response.writeHead(200, {
         "Content-Type": TYPES[path.extname(file)] || "application/octet-stream",
         "Cache-Control": "no-cache",
-        "Content-Security-Policy": "default-src 'none'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        "Content-Security-Policy": "default-src 'none'; connect-src 'self'; img-src 'self' blob:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
       });
       response.end(body);
     } catch {

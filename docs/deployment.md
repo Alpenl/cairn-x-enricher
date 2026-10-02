@@ -6,7 +6,7 @@
 
 `deploy/stack-contract.json` 固定配套 Share 仓库的完整提交和最后迁移。CI 对这个精确版本运行真实 Go + Worker + 本地 D1/R2 集成、Chrome 阅读器场景以及零付费模型夹具；通过后才能构建镜像。
 
-当前候选需要 Worker 迁移至 `0050_classification_audit_archive.sql`，包括 `0049_effective_tag_memberships.sql` 的有效标签索引与历史回填。先在私有数据库副本演练全部待执行迁移，比较收藏、原文、人工事实和重放引用；不能凭“只新增字段”推断安全。
+当前候选需要 Worker 迁移至 `0051_search_read_model.sql`，包括有效实体与全文检索候选的事务化索引及历史回填。先在私有数据库副本演练全部待执行迁移，比较收藏、原文、人工事实和重放引用；不能凭“只新增字段”推断安全。索引使用普通 SQLite 表，必须验证 SQL 导出仍可恢复。
 
 Share 的 `deploy-worker` 工作流要求：
 
@@ -28,6 +28,8 @@ Share 的 `deploy-worker` 工作流要求：
 Momax NAS 为 `192.168.110.200:8088`，部署目录 `/vol1/1000/Docker/cairn-x-enricher`。SSH、私有恢复材料与当前镜像记录以运维仓库 `~/alpen` 为准。
 
 普通升级不重跑全库、不切换分类目标、不放宽预算、不抹去未知调用。Android 使用独立签名发布流程；升级网页不代表手机已安装新版。
+
+本轮[阅读性能优化](performance.md)同时更新浏览器、NAS 与 Worker。先发布带图片隐私能力确认和后台聚合接口的 Worker，再启动匹配 NAS；旧版后端继续使用兼容读取。缩略图保持私有响应，每次复用都重新校验删除和源版本。上线后比较同一组 GET 的标签及阅读结果，并分别记录首次操作与缓存命中的耗时。
 
 本次 [粒度升级](tag-granularity.md) 沿用 0050 迁移边界，使用词表 `2026-10-02.1` 与 `jev-policy-v5`。现代客户端需要确认 `X-Cairn-Tag-System: 1` 和 `X-Cairn-Topic-Granularity: 1`；发布脚本对非空库执行十一项只读合同，包括宽主题任一与具体主题交集、计数及旧响应字段剥离。
 

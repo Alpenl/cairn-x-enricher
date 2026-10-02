@@ -12,7 +12,7 @@ import (
 // measured by its resource timing API. No response buffering is introduced.
 func measureAPIRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if !strings.HasPrefix(request.URL.Path, "/api/") || strings.HasPrefix(request.URL.Path, "/api/images/") {
+		if !strings.HasPrefix(request.URL.Path, "/api/") {
 			next.ServeHTTP(writer, request)
 			return
 		}

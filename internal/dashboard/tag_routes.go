@@ -96,6 +96,9 @@ func (s *Server) tagSystemProxy(writer http.ResponseWriter, request *http.Reques
 	}
 	if request.Method != http.MethodGet {
 		s.invalidateOverview()
+		if strings.HasPrefix(request.URL.Path, "/api/custom-tags") {
+			s.catalog.Invalidate()
+		}
 	}
 	if request.URL.Query().Get("topic_refinements") != "" {
 		writer.Header().Set("X-Cairn-Topic-Granularity", "1")

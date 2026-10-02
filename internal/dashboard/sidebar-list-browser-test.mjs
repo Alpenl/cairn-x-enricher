@@ -48,7 +48,6 @@ async function open(id) {
 }
 try {
   await page.goto(url);
-  await page.locator(".facet-chip-count").first().waitFor({ state: "attached" });
   await group("custom_tags").waitFor({ state: "attached" });
   assert.equal(await page.locator("details.facet-group[open]").count(), 0);
   assert.deepEqual(await page.locator("#facets > details").evaluateAll((nodes) => nodes.map((node) => node.dataset.group)), ["topics", "resource_kinds", "content_functions", "custom_tags", "more"]);
@@ -56,6 +55,7 @@ try {
   checked("all groups start collapsed and low-frequency filters share one More group");
 
   await open("topics");
+  await page.locator(".facet-chip-count").first().waitFor({ state: "attached" });
   const first = page.locator('.facet-chip[data-facet="topics"][data-value="image_creation"]');
   assert.equal(await first.locator(".facet-chip-label").textContent(), "图像生成");
   assert.equal(await first.locator(".facet-chip-count").textContent(), "7");
