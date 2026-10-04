@@ -214,12 +214,45 @@ func TestLocalWorkerOnceSkipsEmptySourceCanary(t *testing.T) {
 	if _, err := run(); err == nil || grokCalls.Load() != 0 {
 		t.Fatalf("source queue accepted a missing Grok credential: err=%v calls=%d", err, grokCalls.Load())
 	}
+	if _, err := run("GROK_MODELS_BASE_URL="+grok.URL, "XAI_API_KEY=fixture", "GROK_MODEL=grok-test"); err == nil || grokCalls.Load() != 0 {
+		t.Fatalf("restart ignored durable check cooldown: err=%v calls=%d", err, grokCalls.Load())
+	}
+	scope := enrich.NewResponsesClient(grok.URL, "fixture", "grok-test", 8192, "fixture", grok.Client(), catalog).ReadingCheckScope()
+	check, err := queue.ProviderCheck(ctx, scope, "status", nil)
+	if err != nil || check.State != "waiting" || check.Failures != 1 || check.NextCheckAt <= time.Now().UnixMilli() {
+		t.Fatalf("missing persisted check: %+v %v", check, err)
+	}
+	recovery, err := queue.ProviderCheck(ctx, scope, "recover", nil)
+	if err != nil || recovery.Accepted {
+		t.Fatalf("manual recovery ignored cooldown: %+v %v", recovery, err)
+	}
+	// Only this isolated fixture database advances the safety clock. Real
+	// deployment verification never clears budgets or forces a paid probe.
+	shareRoot, configPath := os.Getenv("CAIRN_SHARE_ROOT"), os.Getenv("CAIRN_WRANGLER_CONFIG")
+	if shareRoot == "" || configPath == "" {
+		t.Fatal("missing isolated D1 configuration")
+	}
+	//nolint:gosec // Harness-owned local executable/config and constant synthetic SQL.
+	advance := exec.CommandContext(ctx, filepath.Join(shareRoot, "worker/node_modules/.bin/wrangler"), "d1", "execute", "cairn-share-onceempty", "--local", "--config", configPath, "--command",
+		"UPDATE provider_checks SET manual_after=0; UPDATE enrichment_provider_attempts SET created_at='2000-01-01T00:00:00.000Z' WHERE stage='canary';")
+	advance.Dir = filepath.Join(shareRoot, "worker")
+	if output, err := advance.CombinedOutput(); err != nil {
+		t.Fatalf("advance isolated safety clock: %v %s", err, output)
+	}
+	recovery, err = queue.ProviderCheck(ctx, scope, "recover", nil)
+	if err != nil || !recovery.Accepted || recovery.State != "pending" {
+		t.Fatalf("manual recovery not queued: %+v %v", recovery, err)
+	}
 	if _, err := run("GROK_MODELS_BASE_URL="+grok.URL, "XAI_API_KEY=fixture", "GROK_MODEL=grok-test"); err == nil || grokCalls.Load() != 1 {
-		t.Fatalf("source queue skipped or repeated failing canary: err=%v calls=%d", err, grokCalls.Load())
+		t.Fatalf("manual recovery did not make exactly one fixture check: %v calls=%d", err, grokCalls.Load())
+	}
+	check, err = queue.ProviderCheck(ctx, scope, "status", nil)
+	if err != nil || check.State != "waiting" || check.Failures != 2 || check.NextCheckAt < time.Now().Add(9*time.Minute).UnixMilli() {
+		t.Fatalf("failed recovery lost increasing backoff: %+v %v", check, err)
 	}
 	detail, err := queue.GetBookmark(ctx, id)
 	if err != nil || detail.Attempts != 0 || detail.Status != "pending" {
 		t.Fatalf("canary failure consumed source lease: detail=%+v error=%v", detail, err)
 	}
-	t.Log("empty source queue: zero Grok calls and classification succeeds; pending source: missing key fails and one failing canary stops before lease")
+	t.Log("empty source queue/classification need no Grok; restart preserves cooldown; admitted manual recovery makes one failed fixture check, increases backoff, and never consumes source leases")
 }

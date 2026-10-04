@@ -29,12 +29,13 @@ func (c *Client) ProviderCheck(ctx context.Context, scope, action string, result
 	for k, v := range result {
 		body[k] = v
 	}
+	var requestBody any = body
 	if action == "status" {
 		method = http.MethodGet
 		path += "?scope=" + scope
-		body = nil
+		requestBody = nil
 	}
-	response, err := c.do(ctx, method, path, body)
+	response, err := c.do(ctx, method, path, requestBody)
 	if err != nil {
 		return ProviderCheckStatus{}, err
 	}
