@@ -58,17 +58,19 @@ export function openSource() {
 
 function paragraphs(container, text) {
   const key = JSON.stringify([text, getItem(currentId)?.images?.map(image => image.key)]);
-  if (renderedText.get(container) === key) return;
-  renderedText.set(container, key);
-  renderReading(container,text,{image:(index,alt)=>{
+  const previous = renderedText.get(container);
+  if (previous?.key === key) return previous.images;
+  const images = renderReading(container,text,{image:(index,alt)=>{
     const ref=getItem(currentId)?.images?.[index];if(!ref)return h("p","图片未归档");
     const img=h("img",{alt,loading:"lazy",decoding:"async"});queueImage(img,imagePath(ref.key),{priority:0});
     const a=h("a",img);a.href=imagePath(ref.key);a.target="_blank";a.rel="noopener";
     return h("figure.reading-figure",a,...(alt?[h("figcaption",alt)]:[]));
   }});
+  renderedText.set(container, { key, images });
+  return images;
 }
 
-function renderFigures(item, body) {
+function renderFigures(item, body, inlineImages) {
   const images = Array.isArray(item.images) ? item.images : [];
   const key = JSON.stringify([images.map((image) => image.key),body]);
   if (key === renderedImages) return;
@@ -76,7 +78,7 @@ function renderFigures(item, body) {
   els.figures.replaceChildren();
   els.figures.dataset.count = String(images.length);
   images.forEach((ref, index) => {
-    if (body.includes(`(cairn-image:${index})`)) return;
+    if (inlineImages.has(index)) return;
     const image = h("img", { alt: "", decoding: "async" });
     queueImage(image, imagePath(ref.key), { priority: 0 });
     const figure = h("button.figure", { type: "button", "aria-label": `查看第 ${index + 1} 张图片` }, image);
@@ -192,8 +194,8 @@ function render(item) {
   if (full) {
     if (formattedItemId !== item.id) { showUnformatted=false;formattedItemId=item.id; }
     const { body, label } = readingVersions(item, showUnformatted);
-    renderFigures(item, body);
-    paragraphs(els.body, body);
+    const inlineImages = paragraphs(els.body, body);
+    renderFigures(item, body, inlineImages);
     void renderMedia(byId('detail-media'),item);
     byId("reading-version").textContent=label;
     byId("toggle-formatted").hidden=!item.formatted_content;
