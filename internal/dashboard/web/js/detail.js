@@ -1,3 +1,4 @@
+import { failureReason } from "./process-status.js";
 // The reading pane: one bookmark with its status control, curation card,
 // images, translation, lazily rendered original text and diagnostics.
 import { relatedReadingLinks } from "./reading-links.js";
@@ -128,17 +129,17 @@ function renderProcessBanner(item) {
     text = `离线副本 · ${formatFull(new Date(item.offline_cached_at).toISOString())} · 内容可能已更新，编辑需要联网。`;
   } else if (item.paid_call_unresolved) {
     tone = "danger";
-    text = "上次模型调用结果尚未核对，已暂停自动重试。可以粘贴新的原文或更换来源。";
+    text = failureReason(item);
     actions.push(h("button.btn.btn-sm", { type: "button", onclick: () => pasteSource(item.id) }, icon("clipboard", 14), "粘贴原文"));
   } else if (item.status === "processing") text = item.original_text ? "正在根据已存正文生成标题、译文与摘要…" : "正在读取原帖并生成中文标题、译文与摘要…";
-  else if (item.status === "pending") text = item.original_text ? "正文已归档，阅读增强已排队。" : "已排队，稍后会自动读取原帖。";
+  else if (item.status === "pending") text = item.original_text ? "正文已保存，可直接阅读；标题、译文和摘要等待 AI 增强。" : "已排队，等待后台读取原帖。";
   else if (item.status === "failed") {
     tone = "warn";
-    text = `上次读取失败${item.error ? `：${item.error}` : ""}。${item.next_retry_at ? "稍后会自动重试。" : ""}`;
+    text = failureReason(item);
     actions.push(h("button.btn.btn-sm", { type: "button", onclick: () => processItem(item.id) }, icon("refresh", 14), "立即重试"));
   } else if (item.status === "exhausted") {
     tone = "danger";
-    text = `多次读取失败${item.error ? `：${item.error}` : ""}。可以再试一次，或直接粘贴原帖正文。`;
+    text = failureReason(item);
     actions.push(h("button.btn.btn-sm", { type: "button", onclick: () => processItem(item.id) }, icon("refresh", 14), "再试一次"));
     actions.push(h("button.btn.btn-sm", { type: "button", onclick: () => pasteSource(item.id) }, icon("clipboard", 14), "粘贴原文"));
   } else if (item.status === "completed" && !item.translated_text && item.content_loaded !== false && item.processable !== false) {
@@ -148,7 +149,7 @@ function renderProcessBanner(item) {
   banner.hidden = !text;
   if (!text) return;
   banner.className = `banner banner-${tone}`;
-  clear(banner, isWorking(item) && !item.paid_call_unresolved ? icon("loader", 16, "spin") : icon(tone === "info" ? "clock" : "alert", 16),
+  clear(banner, item.status === "processing" && !item.paid_call_unresolved ? icon("loader", 16, "spin") : icon(tone === "info" ? "clock" : "alert", 16),
     h("p", text), actions.length ? h("div.banner-actions", actions) : null);
 }
 

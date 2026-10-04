@@ -46,6 +46,7 @@ test-image-browser:
 	CAIRN_IMAGE_BROWSER=1 CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} go test ./internal/dashboard -run TestBrowserPrivateImageCache -count=1 -v
 
 test-frontend:
+	node internal/dashboard/process-status-test.mjs
 	node internal/dashboard/frontend-check.mjs internal/dashboard
 	node internal/dashboard/query-cache-test.mjs
 	node internal/dashboard/local-filters-test.mjs
