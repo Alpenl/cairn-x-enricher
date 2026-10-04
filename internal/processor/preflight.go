@@ -84,11 +84,13 @@ func (p *Processor) checkSourcePreflight(ctx context.Context) error {
 	finish := trackProgress(ctx, p.stages.paidStageTimeout+30*time.Second)
 	defer finish()
 	if err := g.check(probeCtx); err != nil {
-		g.gate.finishStageProbe(epoch, false, "source provider contract check failed")
+		if !g.gate.finishStageProbe(epoch, false, "source provider contract check failed") {
+			return ErrSourcePreflightPaused
+		}
 		var retry *PreflightRetry
 		if errors.As(err, &retry) {
 			g.gate.mu.Lock()
-			if retry.At.After(g.gate.until) {
+			if g.gate.epoch == epoch+1 && retry.At.After(g.gate.until) {
 				g.gate.until = retry.At
 			}
 			g.gate.mu.Unlock()
@@ -160,11 +162,12 @@ func (p *Processor) RecoverSource(ctx context.Context) (cairn.ProviderCheckStatu
 	g.mu.Lock()
 	g.ready = false
 	g.gate.mu.Lock()
-	// A running local probe owns its epoch and must finish normally.
-	if !g.gate.probing {
-		g.gate.until = g.gate.now()
-		g.gate.reason = "source provider contract check pending"
-	}
+	// The durable gate admitted recovery, so any older local callback must
+	// not overwrite it after its remote settlement has already completed.
+	g.gate.epoch++
+	g.gate.probing = false
+	g.gate.until = g.gate.now()
+	g.gate.reason = "source provider contract check pending"
 	g.gate.mu.Unlock()
 	g.mu.Unlock()
 	return status, nil

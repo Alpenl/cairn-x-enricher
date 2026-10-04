@@ -106,3 +106,33 @@ func TestRemotePreflightDeadlineSurvivesLocalBackoff(t *testing.T) {
 		t.Fatalf("lost authoritative retry delay: %v", remaining)
 	}
 }
+
+func TestManualRecoveryFencesAnOlderCheckCallback(t *testing.T) {
+	for _, fails := range []bool{false, true} {
+		q := &stageQueue{fakeQueue: newFakeQueue()}
+		p := NewStaged(q, &stageReader{q: q}, nil, "", "", discardLogger(), 1)
+		entered, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+		p.SetSourcePreflight(func(context.Context) error {
+			close(entered)
+			<-release
+			if fails {
+				return &PreflightRetry{At: time.Now().Add(time.Hour)}
+			}
+			return nil
+		}, ErrSourcePreflightUnverified)
+		p.SetSourceRecovery(nil, func(context.Context) (cairn.ProviderCheckStatus, error) {
+			return cairn.ProviderCheckStatus{Accepted: true, State: "pending"}, nil
+		})
+		go func() { done <- p.checkSourcePreflight(context.Background()) }()
+		<-entered
+		_, _ = p.RecoverSource(context.Background())
+		close(release)
+		if err := <-done; !errors.Is(err, ErrSourcePreflightPaused) {
+			t.Fatalf("stale callback accepted: %v", err)
+		}
+		paused, _, remaining := p.SourceStagePaused("source")
+		if !paused || remaining > time.Second {
+			t.Fatalf("manual recovery overwritten: paused=%v delay=%v", paused, remaining)
+		}
+	}
+}
