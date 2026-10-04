@@ -33,7 +33,7 @@ var gzipWriters = sync.Pool{New: func() any {
 func compressAPIResponses(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if !strings.HasPrefix(request.URL.Path, "/api/") ||
-			strings.HasPrefix(request.URL.Path, "/api/images/") {
+			strings.HasPrefix(request.URL.Path, "/api/images/") || strings.HasPrefix(request.URL.Path, "/api/media/") {
 			next.ServeHTTP(writer, request)
 			return
 		}

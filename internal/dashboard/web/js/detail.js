@@ -1,6 +1,7 @@
 // The reading pane: one bookmark with its status control, curation card,
 // images, translation, lazily rendered original text and diagnostics.
 import { renderReading } from "./reading.js";
+import { renderMedia, resetMedia } from './media.js';
 import { fetchJSON } from "./api.js";
 import { api, errorLabel, imagePath, prepareSourceSubmission } from "./api.js";
 import { queueImage, prioritizeReading } from "./image-loader.js";
@@ -195,6 +196,7 @@ function render(item) {
     const body=formatted ? item.formatted_content : item.translated_text || item.original_text || "";
     renderFigures(item);
     paragraphs(els.body, body);
+    void renderMedia(byId('detail-media'),item);
     byId("reading-version").textContent=formatted ? "整理版" : "原内容";
     byId("toggle-formatted").hidden=!item.formatted_content;
     byId("toggle-formatted").textContent=showUnformatted ? "查看整理版" : "查看原内容";
@@ -315,6 +317,7 @@ export function showItem(id) {
     els.toggle.classList.remove("open");
     els.toggleLabel.textContent = "展开原文";
     els.body.replaceChildren();
+    resetMedia();byId('detail-media').replaceChildren();byId('detail-media').hidden=true;
     renderedText.delete(els.body);
     els.figures.replaceChildren();
     els.links.replaceChildren();

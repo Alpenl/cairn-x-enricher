@@ -140,6 +140,12 @@ try{
   assert.deepEqual(shared,['AbortError',901,0]);assert.equal(readingCalls.filter(id=>id===901).length,1);
   const abandoned=await isolated.evaluate(async()=>{const {api}=await import('/assets/js/api.js');const a=new AbortController();const read=api.detail(902,{signal:a.signal}).catch(error=>error.name);a.abort();return [await read,window.fetchAborts.some(path=>path.includes('/902/reading'))];});
   assert.deepEqual(abandoned,['AbortError',true]);ok("shared reading survives one consumer leaving; last consumer cancels transport");
+  await isolated.evaluate(async()=>{const {api}=await import('/assets/js/api.js');const {mergeItem}=await import('/assets/js/store.js');mergeItem(await api.detail(903));});
+  const readBefore=readingCalls.length;
+  await isolated.evaluate(async()=>{const {api}=await import('/assets/js/api.js');await api.detail(903);await api.detail(903);});
+  assert.equal(readingCalls.length,readBefore);
+  await isolated.evaluate(async()=>{const {api}=await import('/assets/js/api.js');const {getItem}=await import('/assets/js/store.js');getItem(903).cache_identity.body_revision++;await api.detail(903);await api.detailFresh(903);});
+  assert.equal(readingCalls.length,readBefore+2);ok('reopening reuses the full body without HTTP; changed revision and explicit refresh fetch again');
   let imageStarts=0;
   await isolated.route('**/api/images/**',async route=>{imageStarts++;await pause(250);return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30"><rect width="30" height="30" fill="blue"/></svg>'}).catch(()=>{});});
   await isolated.evaluate(async()=>{const loader=await import('/assets/js/image-loader.js');loader.prioritizeReading(true);for(let i=0;i<6;i++){const img=document.createElement('img');img.width=30;img.height=30;document.querySelector('#images').append(img);loader.queueImage(img,'/api/images/'+i+'?privacy=1&size=160');}const off=document.createElement('img');off.style.cssText='position:absolute;top:10000px';document.body.append(off);loader.queueImage(off,'/api/images/offscreen');});
@@ -153,6 +159,11 @@ try{
   await isolated.waitForFunction(()=>document.querySelector('#images img')?.naturalWidth>0);
   await isolated.evaluate(()=>document.querySelector('#images').replaceChildren());await pause(50);assert.equal(await isolated.evaluate(()=>window.objectRevokes),1);
   ok("loaded image object URL is revoked when its DOM consumer is removed");
+  const imageBefore=imageStarts;
+  await isolated.evaluate(async()=>{const img=document.createElement('img');img.width=30;img.height=30;document.querySelector('#images').append(img);(await import('/assets/js/image-loader.js')).queueImage(img,'/api/images/finish');});
+  await isolated.waitForFunction(()=>document.querySelector('#images img')?.naturalWidth>0);assert.equal(imageStarts,imageBefore);
+  await isolated.evaluate(async()=>{(await import('/assets/js/store.js')).emit('account:changed');document.querySelector('#images').replaceChildren();const img=document.createElement('img');img.width=30;img.height=30;document.querySelector('#images').append(img);(await import('/assets/js/image-loader.js')).queueImage(img,'/api/images/finish');});
+  await isolated.waitForFunction(()=>document.querySelector('#images img')?.naturalWidth>0);assert.equal(imageStarts,imageBefore+1);ok('reopening reuses image bytes without HTTP; account change clears private media');
   assert.deepEqual(errors,[]);ok("frontend scheduling produces no page exceptions");
   console.log(`${checks}/${checks} performance browser checks passed`);
 }finally{await context.close();await browser.close();server.close();}

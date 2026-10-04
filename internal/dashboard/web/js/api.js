@@ -410,6 +410,7 @@ function rememberPrefetch(id, item) {
 }
 
 function invalidateDetail(id) {
+  recentReads.delete(id);
   invalidateAux(id);
   const state = detailStates.get(id) || { generation: 0, active: 0 };
   state.generation++;
@@ -460,8 +461,17 @@ function consumeDetail(flight, signal) {
   });
 }
 
+const recentReads = new Map();
+const RECENT_READ_MS = 5 * 60_000;
+on('account:changed',()=>recentReads.clear());
+on('library:changed',()=>recentReads.clear());
 function readDetail(id, { prefetch = false, fresh = false, signal } = {}) {
   if (signal?.aborted) return Promise.reject(new DOMException("Request aborted", "AbortError"));
+  const known = getItem(id), recent = recentReads.get(id);
+  if (!fresh && known?.content_loaded !== false && known?.cache_identity && recent &&
+      recent.until > Date.now() && recent.identity === JSON.stringify(known.cache_identity)) {
+    return Promise.resolve(structuredClone(known));
+  }
   let state = detailStates.get(id);
   if (!state) { state = { generation: 0, active: 0 }; detailStates.set(id, state); }
   if (fresh) {
@@ -492,6 +502,11 @@ function readDetail(id, { prefetch = false, fresh = false, signal } = {}) {
       rememberAux("entities", id, item.cache_identity, entities);
     }
     if (!flight.used) rememberPrefetch(id, item);
+    if (item.cache_identity) {
+      recentReads.delete(id);
+      recentReads.set(id, { until: Date.now() + RECENT_READ_MS, identity: JSON.stringify(item.cache_identity) });
+      while (recentReads.size > 40) recentReads.delete(recentReads.keys().next().value);
+    }
     return item;
   }).finally(() => {
     if (detailFlights.get(id) === flight) detailFlights.delete(id);
