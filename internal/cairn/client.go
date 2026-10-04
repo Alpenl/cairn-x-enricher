@@ -137,6 +137,7 @@ type BookmarkCounts struct {
 
 // BookmarkPage is one newest-first page of bookmarks.
 type BookmarkPage struct {
+	LocalFilterVersion    int            `json:"local_filter_version,omitempty"`
 	FilterContractVersion *int           `json:"filter_contract_version,omitempty"`
 	Items                 []Bookmark     `json:"items"`
 	NextBeforeID          *int64         `json:"next_before_id"`
@@ -575,6 +576,13 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 		if item.ID < 1 || item.URL == "" || !validBookmarkStatus(item.Status) || !validBookmarkImages(*item) {
 			return BookmarkPage{}, errors.New("bookmark list contains an invalid item")
 		}
+	}
+	// Only negotiated effective summaries can safely answer local tag queries.
+	page.LocalFilterVersion = 0
+	if query.SummaryOnly && response.Header.Get("X-Cairn-Tag-System") == "1" &&
+		response.Header.Get("X-Cairn-Topic-Granularity") == "1" &&
+		response.Header.Get("X-Cairn-Content-Functions") == "1" {
+		page.LocalFilterVersion = 1
 	}
 	return page, nil
 }

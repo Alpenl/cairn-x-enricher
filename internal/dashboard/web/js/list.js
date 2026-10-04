@@ -13,7 +13,7 @@ import { termLabel, terms } from "./taxonomy.js";
 import { primaryTags } from "./topic-presentation.js";
 import { queueImage } from "./image-loader.js";
 
-export const PAGE_SIZE = 40;
+export const PAGE_SIZE = 60;
 const POLL_INTERVAL = 10000;
 
 let controller = null;
@@ -334,6 +334,7 @@ export function showNewItems(count) {
 // --- Loading ----------------------------------------------------------------
 
 export async function reload({ keepSelection = true, silent = false, reuse = false } = {}) {
+  if (!reuse) invalidateQueryReads();
   controller?.abort();
   controller = new AbortController();
   const version = ++requestVersion;
@@ -372,6 +373,7 @@ export async function reload({ keepSelection = true, silent = false, reuse = fal
     if (!silent) els.scroll.scrollTop = 0;
     updateHeader();
     emit("list:loaded", { silent, keepSelection });
+    if (!silent) void api.primeFilters(params, controller.signal);
   } catch (error) {
     if (version !== requestVersion || error.name === "AbortError") return;
     if (!silent) {

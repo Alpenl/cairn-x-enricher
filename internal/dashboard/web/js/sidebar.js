@@ -24,6 +24,28 @@ let pinnedTopics = new Set();
 let preferenceKey = "";
 let topicSearch = "";
 let allTopics = false;
+let refreshTopicCounts = null;
+
+function updateChipCount(chip, count) {
+  const existing = chip.querySelector(".facet-chip-count");
+  if (!Number.isFinite(count)) { existing?.remove(); return; }
+  if (existing) existing.textContent = String(count);
+  else chip.append(h("span.facet-chip-count", String(count)));
+}
+
+// A count response must not replace the button under the pointer or keyboard
+// focus, reset open groups, or rebuild unrelated filter controls.
+function renderCounts() {
+  const counts = Object.fromEntries(Object.entries(tagCounts).filter(([, value]) => Array.isArray(value))
+    .map(([key, values]) => [key, new Map(values.map(entry => [entry.id, entry.count]))]));
+  for (const chip of els.facets.querySelectorAll("button[data-facet]")) {
+    const field = chip.dataset.facet === "topic_refinements" ? "topics" : chip.dataset.facet;
+    if (["topics", "resource_kinds", "content_functions", "custom_tags"].includes(field)) {
+      updateChipCount(chip, counts[field]?.get(chip.dataset.value));
+    }
+  }
+  refreshTopicCounts?.();
+}
 
 try {
   const saved = JSON.parse(localStorage.getItem(OPEN_KEY) || "null");
@@ -118,11 +140,13 @@ function topicsGroup(terms) {
   const selected = new Set(splitList(state.filters.topics));
   const refinements = new Set(splitList(state.filters.topic_refinements));
   const current = new Set([...selected, ...refinements]);
-  const counts = new Map((tagCounts.topics || []).map((entry) => [entry.id, entry.count]));
+  let counts = new Map((tagCounts.topics || []).map((entry) => [entry.id, entry.count]));
+  let sectionSignature = "";
   const choices = h("div.topic-choices");
   const search = h("input.facet-search#topic-search", { type: "search", placeholder: "查找全部主题", "aria-label": "查找全部主题", value: topicSearch });
   function renderChoices() {
     const sections = topicSections(terms, current, pinnedTopics, counts, topicSearch, allTopics);
+    sectionSignature = JSON.stringify(sections.map(section => [section.id, section.terms.map(term => term.id)]));
     choices.replaceChildren(...sections.map((section) => {
       const body = h("div.facet-chips");
       for (const term of section.terms) {
@@ -153,6 +177,22 @@ function topicsGroup(terms) {
     allTopics = !allTopics; showAll.textContent = allTopics ? "收起全部主题" : "浏览全部主题"; renderChoices();
   } }, allTopics ? "收起全部主题" : "浏览全部主题");
   renderChoices();
+  refreshTopicCounts = () => {
+    counts = new Map((tagCounts.topics || []).map((entry) => [entry.id, entry.count]));
+    const sections = topicSections(terms, current, pinnedTopics, counts, topicSearch, allTopics);
+    if (JSON.stringify(sections.map(section => [section.id, section.terms.map(term => term.id)])) === sectionSignature) return;
+    // Reconcile sections individually: newly discovered refinements should not
+    // disturb the navigation and pinned buttons the user is still operating.
+    const previous = new Map([...choices.children].filter(node => node.dataset.topicSection)
+      .map(node => [node.dataset.topicSection, node]));
+    const focused = document.activeElement;
+    renderChoices();
+    for (const section of [...choices.children]) {
+      const old = previous.get(section.dataset.topicSection);
+      if (old?.isEqualNode(section)) section.replaceWith(old);
+    }
+    if (focused?.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
+  };
   const body = h("div", search, choices, showAll);
   if (selected.size >= 2 && vocab.tagSystemAvailable !== false) {
     const mode = h("select.facet-mode", { "aria-label": "主题匹配方式" },
@@ -201,8 +241,11 @@ function uncertainToggle() {
 }
 
 export function renderFacets() {
-  const focused = document.activeElement?.id === "topic-search";
-  const selection = focused ? document.activeElement.selectionStart : null;
+  const active = document.activeElement;
+  const focused = active?.id === "topic-search";
+  const facet = active?.dataset.facet, value = active?.dataset.value;
+  const selection = focused ? active.selectionStart : null;
+  refreshTopicCounts = null;
   const groups = [];
   const more = [];
   let moreSelected = 0;
@@ -240,6 +283,8 @@ export function renderFacets() {
   }
   clear(els.facets, ...notices, ...groups);
   if (focused) { const input = byId("topic-search"); input?.focus(); if (selection !== null) input?.setSelectionRange(selection, selection); }
+  else if (facet) [...els.facets.querySelectorAll("button[data-facet]")]
+    .find(node => node.dataset.facet === facet && node.dataset.value === value)?.focus({ preventScroll: true });
 }
 
 // --- Service status ---------------------------------------------------------------------
@@ -298,7 +343,7 @@ export function syncFacetVisibility() {
         const controller = new AbortController(); countsController = controller;
         api.tagCounts(params, controller.signal).then((counts) => {
           if (epoch !== countsEpoch || counts.available === false) return;
-          tagCounts = counts; renderFacets();
+          tagCounts = counts; renderCounts();
         }).catch(() => { if (epoch === countsEpoch) countsSignature = ""; })
           .finally(() => { if (countsController === controller) countsController = null; });
       }, 160);

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test-browser": "node internal/dashboard/topic-navigation-browser-test.mjs && node tests/browser/run.mjs && node tests/browser/offline.mjs && node tests/browser/diagnostics.mjs && node tests/browser/performance.mjs && CAIRN_IMAGE_BROWSER=1 go test ./internal/dashboard -run '^TestBrowserPerformanceFollowup$' -count=1 -v"
+    "test-browser": "node internal/dashboard/filter-performance-browser-test.mjs && node internal/dashboard/local-filter-browser-test.mjs && node internal/dashboard/topic-navigation-browser-test.mjs && node tests/browser/run.mjs && node tests/browser/offline.mjs && node tests/browser/diagnostics.mjs && node tests/browser/performance.mjs && CAIRN_IMAGE_BROWSER=1 go test ./internal/dashboard -run '^TestBrowserPerformanceFollowup$' -count=1 -v"
   },
   "devDependencies": {
     "playwright": "1.63.0"

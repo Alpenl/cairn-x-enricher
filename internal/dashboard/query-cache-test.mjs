@@ -1,6 +1,6 @@
 // API cache safety checks with controlled responses and clock, no live backend.
 import assert from "node:assert/strict";
-import { api, invalidateQueryReads } from "./web/js/api.js";
+import { api, fetchJSON, invalidateQueryReads } from "./web/js/api.js";
 import { emit, mergeItem, state } from "./web/js/store.js";
 
 const realFetch = globalThis.fetch;
@@ -113,7 +113,46 @@ try {
   await read(); emit("tags:changed", 501);
   assert.equal(api.cacheStats().query_items, 0);
   checked("reads started before a write cannot refill cache; tag events invalidate snapshots too");
-  process.stdout.write("8 query-cache safety checks passed\n");
+  invalidateQueryReads();
+  let reads = 0;
+  globalThis.fetch = async path => {
+    if (path === "/api/v2-taxonomy") return new Response(JSON.stringify({ topics: [{ id: "llm" }, { id: "design" }] }),
+      { headers: { "X-Cairn-Tag-System": "1", "X-Cairn-Topic-Granularity": "1" } });
+    reads++;
+    return new Response(JSON.stringify({ local_filter_version: 1, items: [
+      { id: 501, status: "completed", curation_status: "inbox", classification: { topics: ["llm"] } },
+      { id: 500, status: "unsupported", curation_status: "kept", classification: { topics: ["design"] } }
+    ], counts: { total: 2 }, next_before_id: null }));
+  };
+  await fetchJSON("/api/v2-taxonomy");
+  const complete = new URLSearchParams({ view: "summary", limit: "60" });
+  await read(complete);
+  const derived = await read(params);
+  assert.deepEqual(derived.items.map(item => item.id), [501]);
+  const counts = await api.tagCounts(params);
+  assert.equal(counts.total, 1);
+  assert.equal(reads, 1, "new tag queries and counts reuse complete data");
+  now += 9_900;
+  await read(params); assert.equal(reads, 1);
+  now += 101;
+  await read(params); assert.equal(reads, 2, "derived reads never extend the source expiry");
+  invalidateQueryReads(); await read(complete); emit("library:changed");
+  await read(params); assert.equal(reads, 4, "mutation clears the broad snapshot too");
+  checked("complete negotiated snapshots answer new filters and counts without renewing TTL; mutations invalidate them");
+  invalidateQueryReads(); state.overview = { views: { all: 2 } };
+  const beforePrime = reads;
+  await api.primeFilters(params);
+  await read(params);
+  assert.equal(reads, beforePrime + 1, "deep links warm one complete view and new filters reuse it");
+  invalidateQueryReads(); state.overview.views.all = 61;
+  await api.primeFilters(params);
+  assert.equal(reads, beforePrime + 1, "large libraries never start an implicit crawl");
+  state.overview.views.all = 2;
+  const cancelled = new AbortController(); cancelled.abort();
+  await api.primeFilters(params, cancelled.signal);
+  assert.equal(reads, beforePrime + 1);
+  state.overview = null;
+  process.stdout.write("9 query-cache safety checks passed\n");
 } finally {
   globalThis.fetch = realFetch; Date.now = realNow; invalidateQueryReads(); state.items.clear();
 }

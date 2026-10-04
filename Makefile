@@ -25,6 +25,8 @@ test:
 # system Chrome and a bundled mock Worker, so it makes no paid or network call.
 # Enable with CHROME_PATH when Chrome is not on the default path.
 test-browser:
+	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node internal/dashboard/filter-performance-browser-test.mjs
+	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node internal/dashboard/local-filter-browser-test.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/reading.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node internal/dashboard/topic-navigation-browser-test.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/run.mjs
@@ -41,6 +43,7 @@ test-image-browser:
 test-frontend:
 	node internal/dashboard/frontend-check.mjs internal/dashboard
 	node internal/dashboard/query-cache-test.mjs
+	node internal/dashboard/local-filters-test.mjs
 	node internal/dashboard/body-cache-test.mjs
 
 # Fast local check. CI runs the full golangci-lint suite; use `make lint-ci` to

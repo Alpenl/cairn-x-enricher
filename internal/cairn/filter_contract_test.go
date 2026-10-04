@@ -86,3 +86,33 @@ func TestClientFunctionsIntersectionRequiresBothCapabilities(t *testing.T) {
 		})
 	}
 }
+
+func TestLocalFiltersRequireNegotiatedSummary(t *testing.T) {
+	headers := []string{"X-Cairn-Tag-System", "X-Cairn-Topic-Granularity", "X-Cairn-Content-Functions"}
+	for mask := 0; mask < 8; mask++ {
+		for _, summary := range []bool{false, true} {
+			t.Run(fmt.Sprintf("headers=%d/summary=%v", mask, summary), func(t *testing.T) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					for bit, name := range headers {
+						if mask&(1<<bit) != 0 {
+							w.Header().Set(name, "1")
+						}
+					}
+					_, _ = fmt.Fprint(w, `{"items":[],"next_before_id":null,"counts":{}}`)
+				}))
+				defer server.Close()
+				page, err := NewClient(server.URL, "token", server.Client()).ListBookmarks(context.Background(), BookmarkQuery{SummaryOnly: summary})
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := 0
+				if mask == 7 && summary {
+					want = 1
+				}
+				if page.LocalFilterVersion != want {
+					t.Fatalf("local_filter_version=%d, want %d", page.LocalFilterVersion, want)
+				}
+			})
+		}
+	}
+}

@@ -2,6 +2,9 @@
 // every call goes to the Go service, which forwards it with its own credentials.
 import { emit, getItem, on, state } from "./store.js";
 import { beginOfflineMutation, forgetOffline, observeOfflineScope, offlineScopeVersion } from "./offline.js";
+import { localFilterResult } from "./local-filters.js";
+
+let filterCatalog = null;
 
 const ERROR_LABELS = Object.freeze({
   job_busy: "这条正在处理中",
@@ -87,6 +90,7 @@ export async function fetchJSON(path, options = {}) {
   if (taxonomyRequest && !granularity && Array.isArray(payload.topics)) {
     payload.topics = payload.topics.map(({ granularity, navigation, ...term }) => term);
   }
+  if (path === "/api/v2-taxonomy") filterCatalog = granularity ? payload : null;
   return payload;
 }
 
@@ -197,21 +201,24 @@ const QUERY_MAX_ITEMS = 10;
 const QUERY_MAX_BYTES = 4 * 1024 * 1024;
 let queryBytes = 0;
 let queryGeneration = 0;
+let primeUntil = 0;
 
 export function invalidateQueryReads() {
   queryGeneration++;
   queryCache.clear();
   queryBytes = 0;
+  primeUntil = 0;
 }
 on("tags:changed", invalidateQueryReads);
 on("library:changed", invalidateQueryReads);
+on("account:changed", () => { filterCatalog = null; });
 
 function forgetQuery(key) {
   queryBytes -= queryCache.get(key)?.bytes || 0;
   queryCache.delete(key);
 }
 
-function queryRead(path, params, signal, { reuse = false } = {}) {
+function queryRead(path, params, signal, { reuse = false, priority } = {}) {
   const stable = new URLSearchParams(params);
   // Opt in without changing the response shape for older NAS consumers.
   if (path === "/api/bookmarks" && stable.get("view") === "summary") stable.set("include_cache_identity", "1");
@@ -225,8 +232,18 @@ function queryRead(path, params, signal, { reuse = false } = {}) {
     queryCache.set(key, stored);
     return Promise.resolve(structuredClone(stored.value));
   }
+  if (reuse) {
+    for (const [sourceKey, source] of queryCache) {
+      if (source.until <= Date.now()) { forgetQuery(sourceKey); continue; }
+      if (!sourceKey.startsWith("/api/bookmarks?")) continue;
+      const local = localFilterResult(path, stable, new URLSearchParams(sourceKey.split("?")[1]), source.value, filterCatalog);
+      // Derived reads share the source's original expiry; they never renew it
+      // or evict the complete snapshot by filling the exact-query LRU.
+      if (local) return Promise.resolve(local);
+    }
+  }
   const generation = queryGeneration;
-  return fetchJSON(key, { signal, priority: path === "/api/bookmarks" ? "high" : "low" }).then((value) => {
+  return fetchJSON(key, { signal, priority: priority || (path === "/api/bookmarks" ? "high" : "low") }).then((value) => {
     if (generation !== queryGeneration || signal?.aborted) return value;
     const bytes = JSON.stringify(value).length * 2;
     if (bytes <= QUERY_MAX_BYTES) {
@@ -237,6 +254,23 @@ function queryRead(path, params, signal, { reuse = false } = {}) {
     }
     return value;
   });
+}
+
+// A deep link initially reads only a filtered subset. After that foreground
+// read, warm one bounded page of its view when the overview says it can fit.
+// Larger libraries, search and rapid navigation do not launch a library crawl.
+async function primeFilters(params, signal) {
+  const view = params.get("curation_status") || "all";
+  const size = state.overview?.views?.[view];
+  if (!filterCatalog || !Number.isInteger(size) || size > 60 || params.has("q") || signal?.aborted || primeUntil > Date.now()) return;
+  const base = new URLSearchParams({ limit: "60", view: "summary" });
+  if (view !== "all") base.set("curation_status", view);
+  // An unfiltered foreground page has already populated this exact query.
+  const filters = [...params.keys()].filter(key => !["limit", "view", "include_cache_identity", "filter_contract_version", "curation_status"].includes(key));
+  if (!filters.length) return;
+  primeUntil = Date.now() + QUERY_TTL_MS;
+  try { await queryRead("/api/bookmarks", base, signal, { reuse: true, priority: "low" }); }
+  catch { /* Optional prefetch never changes the displayed result or error. */ }
 }
 
 async function mutate(load, id) {
@@ -521,6 +555,7 @@ export const api = {
   cacheStats: () => ({ prefetch_items: prefetchedDetails.size, prefetch_bytes: prefetchBytes,
     auxiliary_items: auxCache.size, auxiliary_bytes: auxBytes, query_items: queryCache.size, query_bytes: queryBytes }),
   list: (params, signal, options) => queryRead("/api/bookmarks", params, signal, options),
+  primeFilters,
   detail: (id, options) => readDetail(id, options),
   detailFresh: (id, options) => readDetail(id, { ...options, fresh: true }),
   prefetchAvailable: () => readingSupported === true,

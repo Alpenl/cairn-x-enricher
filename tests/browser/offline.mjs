@@ -6,7 +6,7 @@ import { chromium } from "playwright";
 let scope = "a".repeat(64);
 const code = await readFile(new URL("../../internal/dashboard/web/js/offline.js", import.meta.url));
 const modules = new Map([["/offline.js", code]]);
-for (const name of ["api", "store"]) modules.set(`/${name}.js`, await readFile(new URL(`../../internal/dashboard/web/js/${name}.js`, import.meta.url)));
+for (const name of ["api", "store", "local-filters"]) modules.set(`/${name}.js`, await readFile(new URL(`../../internal/dashboard/web/js/${name}.js`, import.meta.url)));
 const gate = () => {
   let release; const promise = new Promise((resolve) => { release = resolve; });
   return { promise, release };
