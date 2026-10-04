@@ -721,11 +721,18 @@ async function partB(browser) {
   for await (const chunk of await (await download).createReadStream()) exported += chunk;
   check("E exports the open bookmark as Markdown", exported.startsWith("# Cairn 收藏摘录") && exported.includes("收藏 ID："));
 
+  // Backstage recovery submits exactly once and then shows the in-progress state.
+  state.recovery = { state: "waiting", can_recover: true, reason: "timeout", next_check_at: Date.now()+300000 };
   // Backstage is a view in the same shell.
   await page.click("#service-link");
   await page.waitForSelector("#backstage-view:not([hidden]) .attention-item");
   check("the service view lists bookmarks that need a retry", (await page.$$eval(".attention-item", (nodes) => nodes.length)) >= 1);
   check("the service view lives at /backstage", new URL(page.url()).pathname === "/backstage");
+  await page.locator("#service-recover").click();
+  await page.waitForFunction(() => document.querySelector("#service-recover")?.textContent.includes("正在检查"));
+  check("manual recovery disables repeat requests while checking", await page.locator("#service-recover").isDisabled());
+  check("manual recovery is one JSON mutation", state.requests.filter(r => r.path === "/api/service/recover" && r.method === "POST").length === 1);
+  delete state.recovery;
   await page.goBack();
   await page.waitForSelector("#backstage-view", { state: "hidden" });
   check("back returns to the library", !new URL(page.url()).pathname.startsWith("/backstage"));

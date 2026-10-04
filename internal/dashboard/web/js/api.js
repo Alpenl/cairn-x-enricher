@@ -594,6 +594,7 @@ export const api = {
   identity: (id) => fetchJSON(`/api/bookmarks/${id}/identity`),
   overview: () => fetchJSON("/api/overview"),
   backstage: () => fetchJSON("/api/backstage"),
+  recoverService: () => fetchJSON("/api/service/recover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) }),
   taxonomy: () => cached("taxonomy", () => fetchJSON("/api/taxonomy")),
   taxonomyV2: () => cached("taxonomy-v2", () => fetchJSON("/api/v2-taxonomy")),
   curation: (id, body) => mutate(() => fetchJSON(`/api/bookmarks/${id}/curation`, jsonBody("PATCH", body)), id),

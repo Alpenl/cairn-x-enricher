@@ -199,6 +199,10 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
       return;
     }
 
+    if (route === "/api/service/recover" && request.method === "POST") {
+      state.recovery = { state: "checking", can_recover: false, accepted: true };
+      return send(202, state.recovery);
+    }
     if (route === "/api/backstage") {
       const counts = countsOf(state.items);
       const attention = state.items.filter((item) => item.status === "failed" || item.status === "exhausted").map(item => summaryOf(item));
@@ -206,7 +210,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
       return send(200, {
         title: attention.length ? `需要处理 ${attention.length} 条` : "一切正常",
         state: `最近一次实际处理领取 3 条，完成 2 条，失败 1 条。${queued ? `队列里还有 ${queued} 条在等待处理。` : ""}${attention.length ? `还有 ${attention.length} 条需要人工处理。` : ""}新收藏一般在几分钟内出现在列表里，平时不需要打开这一页。`,
-        last_error: "", attention, attention_total: attention.length, counts, build: { version: "fixture", commit: "0000000" }
+        recovery: state.recovery, processing_paused: Boolean(state.recovery), last_error: "", attention, attention_total: attention.length, counts, build: { version: "fixture", commit: "0000000" }
       });
     }
 
