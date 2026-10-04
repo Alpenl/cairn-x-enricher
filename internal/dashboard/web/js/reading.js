@@ -17,7 +17,16 @@ function inline(parent,text) {
  }
  parent.append(document.createTextNode(text.slice(last)));
 }
+function archivedImage(line) {
+ // Older X article captures used [!alt(cairn-image:N)](source-link).
+ // Resolve only the local archive marker; never embed the outer remote URL.
+ const match = line.trim().match(/^!\[([^\]]*)\]\(cairn-image:(\d+)\)$/)
+  || line.trim().match(/^\[!\[([^\]]*)\]\(cairn-image:(\d+)\)\]\([^\n]*\)$/)
+  || line.trim().match(/^\[!([^\[\]\n]*)\(cairn-image:(\d+)\)\]\([^\n]*\)$/);
+ return match ? { index: Number(match[2]), alt: match[1] } : null;
+}
 export function renderReading(container,text,{image}={}) {
+ const renderedImages = new Set();
  const fragment=document.createDocumentFragment();
  const lines=(text||"").replace(/\r/g,"").split("\n");
  let paragraph=[],list=null,code=null;
@@ -27,8 +36,8 @@ export function renderReading(container,text,{image}={}) {
   if(/^\s*```/.test(line)){flush();if(code){fragment.append(h("pre",h("code",code.join("\n"))));code=null;}else code=[];continue;}
   if(code){code.push(line);continue;}
   if(!line.trim()){flush();continue;}
-  const asset=line.trim().match(/^!\[([^\]]*)\]\(cairn-image:(\d+)\)$/);
-  if(asset&&image){flush();const node=image(Number(asset[2]),asset[1]);if(node)fragment.append(node);continue;}
+  const asset=archivedImage(line);
+  if(asset&&image){flush();const node=image(asset.index,asset.alt);if(node){fragment.append(node);renderedImages.add(asset.index);}continue;}
   const heading=line.match(/^(#{1,6})\s+(.+)$/);
   if(heading){flush();const node=h(`h${Math.min(4,heading[1].length+1)}`);inline(node,heading[2]);fragment.append(node);continue;}
   const bullet=line.match(/^\s*(?:([-*+•])|([0-9]+)[.)])\s+(.+)$/);
@@ -43,4 +52,15 @@ export function renderReading(container,text,{image}={}) {
   list=null;paragraph.push(line);
  }
  flush();if(code)fragment.append(h("pre",h("code",code.join("\n"))));container.replaceChildren(fragment);
+ return renderedImages;
+}
+
+// A Chinese source is already readable. A generated Chinese rewrite must not
+// replace its archived structure, links or inline image positions.
+export function readingVersions(item, unformatted = false) {
+ const original = item.original_text || "", translated = item.translated_text || "";
+ const chinese = /^(zh(?:[-_].*)?|chinese|中文|简体中文|繁体中文)$/i.test((item.original_language || "").trim());
+ const base = chinese && original ? original : translated || original;
+ const formatted = !unformatted && item.formatted_content;
+ return { body: formatted || base, label: formatted ? "整理版" : chinese && original ? "原文" : translated && translated !== original ? "译文" : "原内容" };
 }

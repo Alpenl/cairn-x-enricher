@@ -4,7 +4,7 @@ import { on } from "./store.js";
 import { cachedBlob, blobCacheStats } from './blob-cache.js';
 
 const jobs = new Map();
-let active = 0, reading = false, sequence = 0;
+let active = 0, reading = false, searching = false, sequence = 0;
 const observer = typeof IntersectionObserver === "function" ? new IntersectionObserver(entries => {
   for (const entry of entries) {
     const job = jobs.get(entry.target);
@@ -21,7 +21,7 @@ function dispose(job) {
 function prune() { for (const job of jobs.values()) if (!job.image.isConnected) dispose(job); }
 function pump() {
   prune();
-  if (reading || document.hidden) return;
+  if (reading || searching || document.hidden) return;
   const ready = [...jobs.values()].filter(job => job.visible && !job.done && !job.controller)
     .sort((a, b) => a.priority - b.priority || a.order - b.order);
   for (const job of ready) {
@@ -49,6 +49,11 @@ export function queueImage(image, source, { priority = 1 } = {}) {
 export function prioritizeReading(value) {
   reading = value;
   if (reading) for (const job of jobs.values()) job.controller?.abort();
+  else pump();
+}
+export function prioritizeSearch(value) {
+  searching = value;
+  if (searching) for (const job of jobs.values()) job.controller?.abort();
   else pump();
 }
 export function clearImages(root) { for (const job of jobs.values()) if (root.contains(job.image)) dispose(job); }

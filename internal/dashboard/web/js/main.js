@@ -209,22 +209,28 @@ let searchTimer = 0;
 function wireSearch() {
   const input = byId("search");
   input.value = state.search;
-  input.addEventListener("input", () => {
+  let composing = false;
+  const schedule = () => {
     clearTimeout(searchTimer);
+    if (composing) return;
     searchTimer = setTimeout(() => {
       const next = input.value.trim();
       if (next !== state.search) setFilters(state.filters, next);
-    }, 260);
-  });
+    }, 180);
+  };
+  input.addEventListener("compositionstart", () => { composing = true; clearTimeout(searchTimer); });
+  input.addEventListener("compositionend", () => { composing = false; schedule(); });
+  input.addEventListener("input", event => { if (!event.isComposing) schedule(); });
   byId("search-form").addEventListener("submit", (event) => {
     event.preventDefault();
+    if (composing) return;
     clearTimeout(searchTimer);
     const next = input.value.trim();
     if (next !== state.search) setFilters(state.filters, next);
     else if (state.order[0] && state.layout !== "narrow") select(state.order[0]);
-    input.blur();
   });
   input.addEventListener("keydown", (event) => {
+    if (composing || event.isComposing) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
       input.blur();

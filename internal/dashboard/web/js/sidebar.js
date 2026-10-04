@@ -25,12 +25,57 @@ let preferenceKey = "";
 let topicSearch = "";
 let allTopics = false;
 let refreshTopicCounts = null;
+let topicView = null;
+let moreView = null;
+const vocabularyViews = new Map();
 
+// Keep the count slot even while the next query is pending. Removing it
+// changes the available label width and makes wrapped labels jump twice.
 function updateChipCount(chip, count) {
-  const existing = chip.querySelector(".facet-chip-count");
-  if (!Number.isFinite(count)) { existing?.remove(); return; }
-  if (existing) existing.textContent = String(count);
-  else chip.append(h("span.facet-chip-count", String(count)));
+  let slot = chip.querySelector(".facet-chip-count");
+  if (!slot) { slot = h("span.facet-chip-count"); chip.append(slot); }
+  const text = Number.isFinite(count) ? String(count) : "";
+  if (slot.textContent !== text) slot.textContent = text;
+}
+
+function reconcileChildren(parent, children) {
+  const keep = new Set(children);
+  for (const child of [...parent.children]) if (!keep.has(child)) child.remove();
+  let cursor = parent.firstChild;
+  for (const child of children) {
+    if (child !== cursor) parent.insertBefore(child, cursor);
+    cursor = child.nextSibling;
+  }
+}
+
+// isEqualNode compares markup, not live input values/checked properties.
+function sameControls(left, right) {
+  if (!left?.isEqualNode(right)) return false;
+  const a = [...left.querySelectorAll("input, select, textarea")];
+  const b = [...right.querySelectorAll("input, select, textarea")];
+  return a.length === b.length && a.every((node, i) => node.value === b[i].value && node.checked === b[i].checked);
+}
+
+function updateGroup(details, label, count) {
+  const summary = details.querySelector(":scope > summary");
+  let badge = summary.querySelector(".facet-badge");
+  if (!count) { badge?.remove(); return; }
+  if (!badge) { badge = h("span.facet-badge"); summary.append(badge); }
+  badge.title = `${label}已有 ${count} 项筛选`;
+  const text = `${count} 已选`;
+  if (badge.textContent !== text) badge.textContent = text;
+}
+
+function updateMode(body, key, label, count) {
+  let mode = body.querySelector(":scope > .facet-mode");
+  if (count < 2 || vocab.tagSystemAvailable === false) { mode?.remove(); return; }
+  if (!mode) {
+    mode = h("select.facet-mode", { "aria-label": `${label}匹配方式` },
+      h("option", { value: "any" }, "匹配任一"), h("option", { value: "all" }, "全部匹配"));
+    mode.addEventListener("change", () => hooks.setFilter(key, mode.value === "all" ? "all" : ""));
+    body.append(mode);
+  }
+  mode.value = state.filters[key] || "any";
 }
 
 // A count response must not replace the button under the pointer or keyboard
@@ -63,7 +108,8 @@ function persistOpen() {
 function renderViews() {
   const current = state.route.name === "backstage" ? "" : activeView(state.filters);
   const counts = state.overview?.views || {};
-  els.views.replaceChildren(...VIEWS.map((view) => {
+  const previous = new Map([...els.views.children].map(node => [node.dataset.view, node]));
+  const links = VIEWS.map((view) => {
     const count = counts[view.id];
     const link = h("a.nav-item", {
       href: hooks.viewHref(view.id), dataset: { view: view.id }, "aria-current": view.id === current ? "page" : null,
@@ -75,8 +121,10 @@ function renderViews() {
       event.preventDefault();
       hooks.setView(view.id);
     });
-    return link;
-  }));
+    const old = previous.get(view.id);
+    return old?.isEqualNode(link) ? old : link;
+  });
+  reconcileChildren(els.views, links);
 }
 
 // --- Facets -------------------------------------------------------------------------
@@ -84,8 +132,8 @@ function renderViews() {
 function facetChip(key, value, label, selected, { title, count } = {}) {
   return h("button.facet-chip", {
     type: "button", dataset: { facet: key, value }, "aria-pressed": String(selected), title: title || label,
-    onclick: () => hooks.toggleFilter(key, value)
-  }, h("span.facet-chip-label", label), Number.isFinite(count) ? h("span.facet-chip-count", String(count)) : null);
+    onclick: (event) => hooks.toggleFilter(event.currentTarget.dataset.facet, value)
+  }, h("span.facet-chip-label", label), h("span.facet-chip-count", Number.isFinite(count) ? String(count) : ""));
 }
 
 function group(id, label, content, { selectedCount = 0, hint } = {}) {
@@ -114,94 +162,106 @@ function group(id, label, content, { selectedCount = 0, hint } = {}) {
 }
 
 function vocabularyGroup(key, label, terms) {
+  const signature = JSON.stringify(terms);
+  let view = vocabularyViews.get(key);
+  if (!view || view.signature !== signature) {
+    const chips = h("div.facet-chips"), body = h("div", chips);
+    view = { signature, chips, body, rows: new Map(), node: group(key, label, body) };
+    vocabularyViews.set(key, view);
+  }
   const selected = new Set(splitList(state.filters[key]));
-  const chips = h("div.facet-chips");
-  const known = new Set();
-  for (const term of terms) {
-    known.add(term.id);
-    if ((term.active === false || term.deprecated) && !selected.has(term.id)) continue;
-    const count = (tagCounts[key] || []).find((entry) => entry.id === term.id)?.count;
-    chips.append(facetChip(key, term.id, `${term.label || term.id}${term.active === false || term.deprecated ? "（已停用）" : ""}`, selected.has(term.id), { count }));
-  }
-  // A saved URL never silently loses an unknown requested ID.
-  for (const id of selected) if (!known.has(id)) chips.append(facetChip(key, id, `${id}（词表不可用）`, true));
+  const choices = terms.filter(term => (term.active !== false && !term.deprecated) || selected.has(term.id));
+  for (const id of selected) if (!terms.some(term => term.id === id)) choices.push({ id, label: `${id}（词表不可用）` });
+  const rows = choices.map(term => {
+    let chip = view.rows.get(term.id);
+    if (!chip) {
+      chip = facetChip(key, term.id, `${term.label || term.id}${term.active === false || term.deprecated ? "（已停用）" : ""}`, false);
+      view.rows.set(term.id, chip);
+    }
+    chip.setAttribute("aria-pressed", String(selected.has(term.id)));
+    updateChipCount(chip, (tagCounts[key] || []).find(entry => entry.id === term.id)?.count);
+    return chip;
+  });
+  reconcileChildren(view.chips, rows);
+  for (const [id, chip] of view.rows) if (!rows.includes(chip)) view.rows.delete(id);
   const modeKey = ({ topics: "topics_mode", resource_kinds: "resource_mode", custom_tags: "custom_mode", content_functions: "functions_mode" })[key];
-  if (modeKey && selected.size >= 2 && vocab.tagSystemAvailable !== false) {
-    const mode = h("select.facet-mode", { "aria-label": `${label}匹配方式`, value: state.filters[modeKey] || "any" },
-      h("option", { value: "any" }, "匹配任一"), h("option", { value: "all" }, "全部匹配"));
-    mode.value = state.filters[modeKey] || "any";
-    mode.addEventListener("change", () => hooks.setFilter(modeKey, mode.value === "all" ? "all" : ""));
-    return group(key, label, h("div", chips, mode), { selectedCount: selected.size });
-  }
-  return group(key, label, chips, { selectedCount: selected.size });
+  if (modeKey) updateMode(view.body, modeKey, label, selected.size);
+  updateGroup(view.node, label, selected.size);
+  return view.node;
 }
 
 function topicsGroup(terms) {
-  const selected = new Set(splitList(state.filters.topics));
-  const refinements = new Set(splitList(state.filters.topic_refinements));
-  const current = new Set([...selected, ...refinements]);
-  let counts = new Map((tagCounts.topics || []).map((entry) => [entry.id, entry.count]));
-  let sectionSignature = "";
+  if (topicView?.terms !== terms) topicView = createTopicView(terms);
+  topicView.update();
+  refreshTopicCounts = topicView.update;
+  return topicView.node;
+}
+
+function createTopicView(terms) {
   const choices = h("div.topic-choices");
+  const rows = new Map(), sectionsById = new Map(), unknown = new Map();
   const search = h("input.facet-search#topic-search", { type: "search", placeholder: "查找全部主题", "aria-label": "查找全部主题", value: topicSearch });
-  function renderChoices() {
+  const empty = h("p.facet-hint", "没有匹配的主题");
+  const showAll = h("button.link-btn.topic-show-all", { type: "button", onclick: () => {
+    allTopics = !allTopics; showAll.textContent = allTopics ? "收起全部主题" : "浏览全部主题"; update();
+  } }, allTopics ? "收起全部主题" : "浏览全部主题");
+  const body = h("div", search, choices, showAll);
+  const node = group("topics", "主题", body);
+  search.addEventListener("input", () => { topicSearch = search.value; update(); });
+  function update() {
+    // Read current state, not the selection captured when a button was made.
+    const selected = new Set(splitList(state.filters.topics));
+    const refinements = new Set(splitList(state.filters.topic_refinements));
+    const current = new Set([...selected, ...refinements]);
+    const counts = new Map((tagCounts.topics || []).map(entry => [entry.id, entry.count]));
     const sections = topicSections(terms, current, pinnedTopics, counts, topicSearch, allTopics);
-    sectionSignature = JSON.stringify(sections.map(section => [section.id, section.terms.map(term => term.id)]));
-    choices.replaceChildren(...sections.map((section) => {
-      const body = h("div.facet-chips");
-      for (const term of section.terms) {
-        const refine = refinements.has(term.id) || (current.size > 0 && term.granularity === "specific" && !selected.has(term.id));
-        const key = refine ? "topic_refinements" : "topics";
-        const chosen = refine ? refinements.has(term.id) : selected.has(term.id);
-        const chip = facetChip(key, term.id, term.label || term.id, chosen, { count: counts.get(term.id),
-          title: refine ? `进一步筛选：${term.label}（同时满足原有条件）` : term.label });
-        const pin = h("button.facet-pin", { type: "button", "aria-pressed": String(pinnedTopics.has(term.id)),
-          "aria-label": `${pinnedTopics.has(term.id) ? "取消固定" : "固定"}${term.label}`, title: "仅固定此设备的常用入口", disabled: !preferenceKey,
-          onclick: () => {
+    const next = sections.map(section => {
+      let element = sectionsById.get(section.id);
+      if (!element) {
+        element = h("section.topic-section", { dataset: { topicSection: section.id } },
+          h("p.facet-section-label", section.id === "specific" ? "进一步筛选" : section.label), h("div.facet-chips"));
+        sectionsById.set(section.id, element);
+      }
+      const children = section.terms.map(term => {
+        let row = rows.get(term.id);
+        if (!row) {
+          const chip = facetChip("topics", term.id, term.label || term.id, false);
+          const pin = h("button.facet-pin", { type: "button", title: "仅固定此设备的常用入口", onclick: () => {
             if (!preferenceKey) return;
             if (pinnedTopics.has(term.id)) pinnedTopics.delete(term.id); else pinnedTopics.add(term.id);
-            try { localStorage.setItem(preferenceKey, JSON.stringify([...pinnedTopics])); } catch { /* in-memory preference still works */ }
-            renderChoices();
+            try { localStorage.setItem(preferenceKey, JSON.stringify([...pinnedTopics])); } catch { /* optional */ }
+            update();
           } }, icon("star", 12));
-        body.append(h("div.facet-topic-row", chip, pin));
-      }
-      return h("section.topic-section", { dataset: { topicSection: section.id } },
-        h("p.facet-section-label", section.id === "specific" ? "进一步筛选" : section.label), body);
-    }));
-    if (!sections.some((section) => section.terms.length)) choices.append(h("p.facet-hint", "没有匹配的主题"));
-    for (const id of current) if (!terms.some((term) => term.id === id)) choices.append(
-      facetChip(refinements.has(id) ? "topic_refinements" : "topics", id, `${id}（词表不可用）`, true));
-  }
-  search.addEventListener("input", () => { topicSearch = search.value; renderChoices(); });
-  const showAll = h("button.link-btn.topic-show-all", { type: "button", onclick: () => {
-    allTopics = !allTopics; showAll.textContent = allTopics ? "收起全部主题" : "浏览全部主题"; renderChoices();
-  } }, allTopics ? "收起全部主题" : "浏览全部主题");
-  renderChoices();
-  refreshTopicCounts = () => {
-    counts = new Map((tagCounts.topics || []).map((entry) => [entry.id, entry.count]));
-    const sections = topicSections(terms, current, pinnedTopics, counts, topicSearch, allTopics);
-    if (JSON.stringify(sections.map(section => [section.id, section.terms.map(term => term.id)])) === sectionSignature) return;
-    // Reconcile sections individually: newly discovered refinements should not
-    // disturb the navigation and pinned buttons the user is still operating.
-    const previous = new Map([...choices.children].filter(node => node.dataset.topicSection)
-      .map(node => [node.dataset.topicSection, node]));
-    const focused = document.activeElement;
-    renderChoices();
-    for (const section of [...choices.children]) {
-      const old = previous.get(section.dataset.topicSection);
-      if (old?.isEqualNode(section)) section.replaceWith(old);
+          row = h("div.facet-topic-row", chip, pin);
+          rows.set(term.id, row);
+        }
+        const chip = row.firstElementChild, pin = row.lastElementChild;
+        const refine = refinements.has(term.id) || (current.size > 0 && term.granularity === "specific" && !selected.has(term.id));
+        chip.dataset.facet = refine ? "topic_refinements" : "topics";
+        chip.setAttribute("aria-pressed", String(refine ? refinements.has(term.id) : selected.has(term.id)));
+        chip.title = refine ? `进一步筛选：${term.label}（同时满足原有条件）` : (term.label || term.id);
+        updateChipCount(chip, counts.get(term.id));
+        pin.setAttribute("aria-pressed", String(pinnedTopics.has(term.id)));
+        pin.setAttribute("aria-label", `${pinnedTopics.has(term.id) ? "取消固定" : "固定"}${term.label}`);
+        pin.disabled = !preferenceKey;
+        return row;
+      });
+      reconcileChildren(element.lastElementChild, children);
+      return element;
+    });
+    if (!sections.some(section => section.terms.length)) next.push(empty);
+    for (const id of current) if (!terms.some(term => term.id === id)) {
+      let chip = unknown.get(id);
+      if (!chip) { chip = facetChip("topics", id, `${id}（词表不可用）`, true); unknown.set(id, chip); }
+      chip.dataset.facet = refinements.has(id) ? "topic_refinements" : "topics";
+      next.push(chip);
     }
-    if (focused?.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
-  };
-  const body = h("div", search, choices, showAll);
-  if (selected.size >= 2 && vocab.tagSystemAvailable !== false) {
-    const mode = h("select.facet-mode", { "aria-label": "主题匹配方式" },
-      h("option", { value: "any" }, "匹配任一"), h("option", { value: "all" }, "全部匹配"));
-    mode.value = state.filters.topics_mode || "any";
-    mode.addEventListener("change", () => hooks.setFilter("topics_mode", mode.value === "all" ? "all" : ""));
-    body.append(mode);
+    for (const [id, chip] of unknown) if (!next.includes(chip)) unknown.delete(id);
+    reconcileChildren(choices, next);
+    updateGroup(node, "主题", current.size);
+    updateMode(body, "topics_mode", "主题", selected.size);
   }
-  return group("topics", "主题", body, { selectedCount: current.size });
+  return { terms, node, update };
 }
 
 function singleGroup(key, label, options) {
@@ -276,12 +336,29 @@ export function renderFacets() {
   const uncertain = uncertainToggle();
   if (uncertain) more.push(uncertain);
   if (state.filters.uncertain === "true" && activeView(state.filters) !== "uncertain") moreSelected++;
-  groups.push(group("more", "更多筛选", h("div.facet-secondary", more), { selectedCount: moreSelected }));
+  if (!moreView) {
+    const body = h("div.facet-secondary");
+    moreView = { body, node: group("more", "更多筛选", body) };
+  }
+  const previousMore = new Map([...moreView.body.children].map(node => [node.dataset.group || node.className, node]));
+  reconcileChildren(moreView.body, more.map(node => {
+    const old = previousMore.get(node.dataset.group || node.className);
+    return old && old !== node && sameControls(old, node) ? old : node;
+  }));
+  updateGroup(moreView.node, "更多筛选", moreSelected);
+  groups.push(moreView.node);
   const notices = [];
   if (vocab.v2Available === false) {
     notices.push(h("p.facet-notice#filter-capability", icon("alert", 14), "多维词表暂不可用：服务端未启用多维分类，只能按状态、来源和时间筛选。"));
   }
-  clear(els.facets, ...notices, ...groups);
+  // Keep mounted groups in place. Unchanged secondary controls retain their
+  // own event handlers; vocabulary/topic controls update their state in place.
+  const previous = new Map([...els.facets.children].map(node => [node.dataset.group || node.id, node]));
+  const children = [...notices, ...groups].map(node => {
+    const old = previous.get(node.dataset.group || node.id);
+    return old && old !== node && sameControls(old, node) ? old : node;
+  });
+  reconcileChildren(els.facets, children);
   if (focused) { const input = byId("topic-search"); input?.focus(); if (selection !== null) input?.setSelectionRange(selection, selection); }
   else if (facet) [...els.facets.querySelectorAll("button[data-facet]")]
     .find(node => node.dataset.facet === facet && node.dataset.value === value)?.focus({ preventScroll: true });
@@ -333,13 +410,13 @@ export function syncFacetVisibility() {
     const signature = JSON.stringify([state.filters, state.search]);
     if (signature !== countsSignature) {
       countsSignature = signature;
-      tagCounts = {};
       const epoch = ++countsEpoch;
       clearTimeout(countsTimer);
       countsController?.abort();
       const params = apiParams(state.filters, state.search);
       countsTimer = setTimeout(() => {
         countsTimer = 0;
+        if (state.search && state.loading) { countsSignature = ""; return; }
         const controller = new AbortController(); countsController = controller;
         api.tagCounts(params, controller.signal).then((counts) => {
           if (epoch !== countsEpoch || counts.available === false) return;
@@ -372,11 +449,15 @@ export function initSidebar(options) {
     hooks.openBackstage();
   });
   on("overview", () => { renderViews(); renderService(); });
+  on("list:loaded", () => { if (state.search) syncFacetVisibility(); });
   on("taxonomy", renderSidebar);
   on("tags:changed", () => { countsSignature = ""; renderSidebar(); });
   on("library:changed", () => { countsSignature = ""; renderSidebar(); });
   loadTopicPreferences();
-  on("account:changed", () => { preferenceKey = ""; pinnedTopics.clear(); });
+  on("account:changed", () => {
+    preferenceKey = ""; pinnedTopics.clear(); tagCounts = {};
+    topicView = null; moreView = null; vocabularyViews.clear();
+  });
   document.addEventListener("visibilitychange", syncFacetVisibility);
 }
 

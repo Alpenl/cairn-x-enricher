@@ -419,6 +419,7 @@ kbd {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+  scrollbar-gutter: stable;
 }
 
 .sidebar-head {
@@ -473,6 +474,7 @@ kbd {
   font-weight: 600;
   letter-spacing: .04em;
 }
+.facets-head, .facets-head .link-btn { line-height: 20px; }
 .facets { flex: 1; padding: 0 12px 20px; }
 
 .facet-switch {
@@ -548,6 +550,8 @@ kbd {
   background: transparent;
   color: var(--text-2);
   font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.5;
   transition: background-color .12s, border-color .12s, color .12s;
 }
 .facet-chip:hover { background: var(--hover); color: var(--text); }
@@ -555,8 +559,8 @@ kbd {
   border-color: transparent;
   background: var(--accent-soft);
   color: var(--accent-text);
-  font-weight: 500;
 }
+.facet-chip-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .facet-date-row {
   display: flex;
   align-items: center;
@@ -1859,7 +1863,7 @@ button.chip:hover .chip-x, button.chip:focus-visible .chip-x { width: 11px; opac
 .tag-suggestions { margin-top:12px; font-size:13px; }
 .tag-suggestions summary { cursor:pointer; color:var(--text-2); font-size:12px; }
 .facet-mode { margin-top:8px; width:100%; max-width:100%; padding:4px 6px; background:var(--panel); color:var(--text-2); border:1px solid var(--border); border-radius:6px; font-size:11.5px; }
-.facet-chip-count { margin-left:auto; flex:none; color:var(--text-3); font-size:11px; font-variant-numeric:tabular-nums; }
+.facet-chip-count { margin-left:auto; flex:0 0 3ch; text-align:right; color:var(--text-3); font-size:11px; font-variant-numeric:tabular-nums; }
 .facet-chip[aria-pressed="true"] .facet-chip-count { color:var(--accent-text); }
 .facet-body .facet-body { padding-left:12px; }
 .tag-more { color:var(--text-3); font-size:11px; }

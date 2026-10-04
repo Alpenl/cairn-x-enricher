@@ -1,6 +1,6 @@
 // The library list: one dense, keyboard-navigable column of bookmarks grouped
 // by day, with search highlighting, infinite scroll and multi-select.
-import { api, errorLabel, imagePath, invalidateQueryReads } from "./api.js";
+import { api, errorLabel, imagePath, invalidateQueryReads, previewSearch } from "./api.js";
 import { append, byId, clear, h, highlightInto } from "./dom.js";
 import {
   bucketLabel, curationShort, displaySummary, displayTitle, formatFull, highlightRanges, isWorking,
@@ -11,7 +11,7 @@ import { activeView, apiParams, facetFilterCount, needsFilterContract, splitList
 import { emit, getItem, mergeItem, on, state } from "./store.js";
 import { termLabel, terms } from "./taxonomy.js";
 import { primaryTags } from "./topic-presentation.js";
-import { queueImage } from "./image-loader.js";
+import { queueImage, prioritizeSearch } from "./image-loader.js";
 
 export const PAGE_SIZE = 60;
 const POLL_INTERVAL = 10000;
@@ -21,6 +21,7 @@ let requestVersion = 0;
 let firstPageSnapshot = "";
 let displayedQuery = "";
 let refreshing = false;
+let searchPreview = false;
 let pollBusy = false;
 let anchorId = 0; // shift-click range anchor
 let hooks = {};
@@ -237,7 +238,7 @@ function viewLabel() {
 export function updateHeader() {
   els.title.textContent = viewLabel();
   const stale = displayedQuery && displayedQuery !== apiParams(state.filters, state.search, { limit: PAGE_SIZE }).toString();
-  els.count.textContent = refreshing ? "正在筛选…" : stale && state.listError ? "上次结果" : state.total === null ? "" : `${state.total} 条`;
+  els.count.textContent = refreshing ? (state.search ? searchPreview ? `已找到 ${state.order.length} 条 · 全文搜索中…` : "正在搜索全文…" : "正在筛选…") : searchPreview ? `已找到 ${state.order.length} 条 · 全文搜索未完成` : stale && state.listError ? "上次结果" : state.total === null ? "" : `${state.total} 条`;
   els.count.hidden = !refreshing && state.total === null;
   els.search.placeholder = `在「${viewLabel()}」中搜索`;
   renderActiveFilters();
@@ -338,9 +339,11 @@ export async function reload({ keepSelection = true, silent = false, reuse = fal
   controller?.abort();
   controller = new AbortController();
   const version = ++requestVersion;
+  prioritizeSearch(Boolean(state.search));
   const params = apiParams(state.filters, state.search, { limit: PAGE_SIZE });
   const filters = { ...state.filters };
   refreshing = !silent;
+  searchPreview = false;
   state.loading = true;
   els.pane.dataset.loading = "true";
   els.pane.setAttribute("aria-busy", "true");
@@ -350,6 +353,17 @@ export async function reload({ keepSelection = true, silent = false, reuse = fal
   if (!silent) {
     if (!state.order.length) els.rows.replaceChildren(...skeleton());
     syncChecks();
+  }
+  if (!silent && reuse && state.search) {
+    const preview = previewSearch(params, { params: displayedQuery, items: state.order.map(getItem) });
+    if (preview?.length) {
+      for (const item of preview) mergeItem(item);
+      state.order = preview.map(item => item.id);
+      state.nextBeforeID = null;
+      searchPreview = true;
+      renderRows(state.order);
+      els.scroll.scrollTop = 0;
+    }
   }
   updateHeader();
   updateFooter();
@@ -363,6 +377,7 @@ export async function reload({ keepSelection = true, silent = false, reuse = fal
     if (silent && snapshot === firstPageSnapshot) return;
     firstPageSnapshot = snapshot;
     displayedQuery = params.toString();
+    searchPreview = false;
     const items = Array.isArray(page.items) ? page.items : [];
     for (const item of items) mergeItem(item);
     state.order = items.map((item) => item.id);
@@ -382,6 +397,7 @@ export async function reload({ keepSelection = true, silent = false, reuse = fal
     }
   } finally {
     if (version === requestVersion) {
+      prioritizeSearch(false);
       state.loading = false;
       refreshing = false;
       els.pane.dataset.loading = "false";
