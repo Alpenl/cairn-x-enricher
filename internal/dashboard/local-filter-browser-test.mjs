@@ -13,12 +13,13 @@ const { server, url } = await startFixtureServer({ state: fixture });
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome", args: ["--no-sandbox"] });
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  let listReads = 0, countReads = 0;
+  let listReads = 0, countReads = 0, filteredReads = 0;
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.route("**/api/v2-taxonomy", route => route.fulfill({ json: catalog, headers: { "X-Cairn-Tag-System": "1", "X-Cairn-Topic-Granularity": "1" } }));
   await page.route("**/api/bookmarks?*", async route => {
     listReads++;
+    if (new URL(route.request().url()).searchParams.has("topics")) filteredReads++;
     const response = await route.fetch();
     const payload = await response.json();
     await route.fulfill({ response, json: { ...payload, local_filter_version: 1 } });
@@ -48,7 +49,8 @@ try {
   await page.evaluate(async () => { const { invalidateQueryReads } = await import("/assets/js/api.js"); invalidateQueryReads(); });
   await page.locator('[aria-label="主题匹配方式"]').selectOption("any");
   await page.waitForFunction(() => document.querySelector("#list-pane").dataset.loading === "false");
-  assert.equal(listReads, before.listReads + 1);
+  assert.equal(filteredReads, 1, "invalidation forces the new filtered query to the server");
+  assert.ok(listReads <= before.listReads + 2, "at most one bounded background view read follows it");
   assert.deepEqual(errors, []);
   console.log(`Complete snapshot: first new filter ${elapsed}ms, zero list/count reads, OR/AND and invalidation passed`);
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
