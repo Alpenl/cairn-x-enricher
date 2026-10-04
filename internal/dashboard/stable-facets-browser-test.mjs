@@ -6,7 +6,7 @@ import { taxonomyV2 } from "../../tests/browser/fixture-data.mjs";
 const catalog = taxonomyV2();
 catalog.topics = [
   { id: "ai_coding", label: "AI编程", navigation: true },
-  { id: "agent_workflow", label: "Agent配置与自动化", navigation: true },
+  { id: "agent_workflow", label: "Agent配置与自动化（Workflow automation）", navigation: true },
   { id: "knowledge", label: "信息采集与知识库", navigation: true },
   { id: "portrait", label: "AI写真", granularity: "specific", navigation: false }
 ].map(term => ({ ...term, active: true }));
@@ -30,7 +30,8 @@ try {
   await page.locator('[data-group="topics"] > summary').click();
   await page.locator('[data-group="resource_kinds"] > summary').click();
   await page.waitForFunction(() => document.querySelector('[data-value="agent_workflow"] .facet-chip-count')?.textContent === "3");
-  // Real multiline labels at a narrow sidebar width, also with larger text.
+  // Mixed CJK/Latin wording remains multiline even on runners without CJK fonts.
+  // Keep the explicit wrapping assertion before sampling either font size.
   for (const fontSize of [12.5, 17]) {
     await page.evaluate(size => { document.querySelector("#facets").style.width = "210px";
       for (const node of document.querySelectorAll(".facet-chip")) node.style.fontSize = `${size}px`;
