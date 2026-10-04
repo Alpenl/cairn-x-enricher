@@ -416,6 +416,7 @@ export function syncFacetVisibility() {
       const params = apiParams(state.filters, state.search);
       countsTimer = setTimeout(() => {
         countsTimer = 0;
+        if (state.search && state.loading) { countsSignature = ""; return; }
         const controller = new AbortController(); countsController = controller;
         api.tagCounts(params, controller.signal).then((counts) => {
           if (epoch !== countsEpoch || counts.available === false) return;
@@ -448,6 +449,7 @@ export function initSidebar(options) {
     hooks.openBackstage();
   });
   on("overview", () => { renderViews(); renderService(); });
+  on("list:loaded", () => { if (state.search) syncFacetVisibility(); });
   on("taxonomy", renderSidebar);
   on("tags:changed", () => { countsSignature = ""; renderSidebar(); });
   on("library:changed", () => { countsSignature = ""; renderSidebar(); });

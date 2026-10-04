@@ -10,8 +10,9 @@ const { server, url } = await startFixtureServer({ state: fixture });
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome", args: ["--no-sandbox"] });
 try {
  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
- const errors = [], searches = []; page.on('pageerror', e=>errors.push(e.message));
+ const errors = [], searches = [], countSearches = []; page.on('pageerror', e=>errors.push(e.message));
  await page.route('**/api/v2-taxonomy', r=>r.fulfill({ json: taxonomyV2(), headers:{'X-Cairn-Tag-System':'1','X-Cairn-Topic-Granularity':'1'} }));
+ await page.route('**/api/tag-counts?*', async route=>{const q=new URL(route.request().url()).searchParams.get('q');if(q)countSearches.push(q);return route.fulfill({json:{topics:[],resource_kinds:[],content_functions:[],custom_tags:[]}});});
  let release; const gate = new Promise(resolve=>release=resolve);
  await page.route('**/api/bookmarks?*', async route=>{
   const q=new URL(route.request().url()).searchParams.get('q');
@@ -21,6 +22,7 @@ try {
  });
  await page.goto(`${url}/?curation_status=all`);
  await page.waitForFunction(()=>document.querySelector('#list-pane')?.dataset.loading==='false');
+ await page.locator('[data-group="topics"] > summary').click();
  const input=page.locator('#search');
  await input.focus();
  await input.evaluate(node=>{
@@ -36,6 +38,7 @@ try {
  assert.deepEqual(await page.locator('#rows li.row[data-id]').evaluateAll(nodes=>nodes.map(n=>Number(n.dataset.id))),[fixture.items[0].id]);
  assert.equal(await input.evaluate(node=>node===document.activeElement),true);
  assert.equal(await page.locator('#list-pane').getAttribute('aria-busy'),'true');
+ await page.waitForTimeout(300);assert.deepEqual(countSearches,[], 'facet counts wait for foreground search');
  release();await page.waitForFunction(()=>document.querySelector('#list-pane').dataset.loading==='false');
  assert.deepEqual(await page.locator('#rows li.row[data-id]').evaluateAll(nodes=>nodes.map(n=>Number(n.dataset.id))),[fixture.items[0].id,fixture.items[1].id]);
  assert.deepEqual(searches,['布局']);

@@ -11,7 +11,7 @@ import { activeView, apiParams, facetFilterCount, needsFilterContract, splitList
 import { emit, getItem, mergeItem, on, state } from "./store.js";
 import { termLabel, terms } from "./taxonomy.js";
 import { primaryTags } from "./topic-presentation.js";
-import { queueImage } from "./image-loader.js";
+import { queueImage, prioritizeSearch } from "./image-loader.js";
 
 export const PAGE_SIZE = 60;
 const POLL_INTERVAL = 10000;
@@ -339,6 +339,7 @@ export async function reload({ keepSelection = true, silent = false, reuse = fal
   controller?.abort();
   controller = new AbortController();
   const version = ++requestVersion;
+  prioritizeSearch(Boolean(state.search));
   const params = apiParams(state.filters, state.search, { limit: PAGE_SIZE });
   const filters = { ...state.filters };
   refreshing = !silent;
@@ -396,6 +397,7 @@ export async function reload({ keepSelection = true, silent = false, reuse = fal
     }
   } finally {
     if (version === requestVersion) {
+      prioritizeSearch(false);
       state.loading = false;
       refreshing = false;
       els.pane.dataset.loading = "false";
