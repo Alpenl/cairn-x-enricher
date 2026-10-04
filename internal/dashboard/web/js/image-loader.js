@@ -1,6 +1,7 @@
 // Two visible images at a time leave HTTP/1.1 connections for reading and filters.
 // Blobs stay in this document only; private images never enter persistent caches.
 import { on } from "./store.js";
+import { cachedBlob, blobCacheStats } from './blob-cache.js';
 
 const jobs = new Map();
 let active = 0, reading = false, sequence = 0;
@@ -26,8 +27,7 @@ function pump() {
   for (const job of ready) {
     if (active >= 2) break;
     const controller = new AbortController(); job.controller = controller; active++;
-    fetch(job.source, { signal: controller.signal, cache: "no-store", priority: job.priority <= 0 ? "high" : "low" })
-      .then(response => { if (!response.ok) throw new Error("image_unavailable"); return response.blob(); })
+    cachedBlob(job.source, controller.signal)
       .then(blob => {
         if (controller.signal.aborted || !jobs.has(job.image)) return;
         job.objectURL = URL.createObjectURL(blob); job.done = true; job.image.src = job.objectURL;
@@ -52,7 +52,7 @@ export function prioritizeReading(value) {
   else pump();
 }
 export function clearImages(root) { for (const job of jobs.values()) if (root.contains(job.image)) dispose(job); }
-export function imageQueueStats() { return { active, queued: [...jobs.values()].filter(job => !job.done).length, retained: jobs.size, reading }; }
+export function imageQueueStats() { return { active, queued: [...jobs.values()].filter(job => !job.done).length, retained: jobs.size, reading, cache:blobCacheStats() }; }
 if (typeof document !== "undefined") {
   new MutationObserver(() => { prune(); pump(); }).observe(document.documentElement, { childList: true, subtree: true });
   document.addEventListener("visibilitychange", () => {
