@@ -134,7 +134,8 @@ type Server struct {
 
 	// extensionFlags reports which bounded extensions are enabled. They are
 	// independent of each other and default to off.
-	extensionFlags extension.Flags
+	extensionFlags    extension.Flags
+	formattingEnabled bool
 	// extensions is the same service the pipeline uses, so a rerank action
 	// shares its flags and budget.
 	extensions *extension.Service
@@ -202,6 +203,9 @@ func New(
 	}
 	return server
 }
+
+// SetFormattingEnabled reports whether the optional formatter is configured.
+func (s *Server) SetFormattingEnabled(enabled bool) { s.formattingEnabled = enabled }
 
 // SetWakeup connects durable manual submissions to the shared scheduler.
 // It is configured once before the HTTP server starts accepting requests.
@@ -367,6 +371,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/media/{id}", s.mediaFile)
 	mux.HandleFunc("GET /api/backstage", s.getBackstage)
 	mux.HandleFunc("GET /api/overview", s.getOverview)
+	mux.HandleFunc("GET /api/reading-capabilities", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, map[string]bool{"ai_formatting": s.formattingEnabled})
+	})
 	mux.HandleFunc("POST /api/bookmarks/process", s.processBookmarks)
 	mux.HandleFunc("POST /api/bookmarks/{id}/source", s.processBookmarkSource)
 	return measureAPIRequests(compressAPIResponses(s.withOfflineScope(mux)))

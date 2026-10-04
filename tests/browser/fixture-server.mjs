@@ -112,7 +112,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
       response.writeHead(200, {
         "Content-Type": TYPES[path.extname(file)] || "application/octet-stream",
         "Cache-Control": "no-cache",
-        "Content-Security-Policy": "default-src 'none'; connect-src 'self'; img-src 'self' blob:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        "Content-Security-Policy": "default-src 'none'; connect-src 'self'; img-src 'self' blob:; media-src 'self' blob:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
       });
       response.end(body);
     } catch {
@@ -125,7 +125,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
     const url = new URL(request.url, "http://fixture.local");
     const route = url.pathname;
     const send = (code, body) => {
-      response.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+      response.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Cairn-Offline-Scope": "b".repeat(64) });
       response.end(JSON.stringify(body));
     };
     const body = ["POST", "PATCH", "PUT"].includes(request.method) ? await readBody(request) : {};

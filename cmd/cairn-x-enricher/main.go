@@ -236,6 +236,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 		return err
 	}
 	management := dashboard.New(ctx, tracker, queue, worker, logger, cfg.MaxConcurrency)
+	management.SetFormattingEnabled(cfg.FormatModel != "" && cfg.FormatBaseURL != "" && cfg.FormatAPIKey != "")
 	management.SetExtensions(worker.Extensions())
 	if observer != nil {
 		management.SetObservabilityStatus(observer.Snapshot)

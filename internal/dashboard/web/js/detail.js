@@ -1,5 +1,6 @@
 // The reading pane: one bookmark with its status control, curation card,
 // images, translation, lazily rendered original text and diagnostics.
+import { relatedReadingLinks } from "./reading-links.js";
 import { renderReading, readingVersions } from "./reading.js";
 import { renderMedia, resetMedia } from './media.js';
 import { fetchJSON } from "./api.js";
@@ -23,6 +24,7 @@ const MAX_POLLS = 30;
 
 const els = {};
 let hooks = {};
+let aiFormatting = false;
 let currentId = 0;
 let polls = 0;
 let loadToken = 0;
@@ -56,18 +58,18 @@ export function openSource() {
 
 // --- Rendering -------------------------------------------------------------------
 
-function paragraphs(container, text) {
-  const key = JSON.stringify([text, getItem(currentId)?.images?.map(image => image.key)]);
+function paragraphs(container, text, clean = true) {
+  const key = JSON.stringify([text, clean, getItem(currentId)?.images?.map(image => image.key)]);
   const previous = renderedText.get(container);
-  if (previous?.key === key) return previous.images;
-  const images = renderReading(container,text,{image:(index,alt)=>{
+  if (previous?.key === key) return previous.result;
+  const result = renderReading(container,text,{url:getItem(currentId)?.url,clean,image:(index,alt)=>{
     const ref=getItem(currentId)?.images?.[index];if(!ref)return h("p","图片未归档");
     const img=h("img",{alt,loading:"lazy",decoding:"async"});queueImage(img,imagePath(ref.key),{priority:0});
     const a=h("a",img);a.href=imagePath(ref.key);a.target="_blank";a.rel="noopener";
     return h("figure.reading-figure",a,...(alt?[h("figcaption",alt)]:[]));
   }});
-  renderedText.set(container, { key, images });
-  return images;
+  renderedText.set(container, { key, result });
+  return result;
 }
 
 function renderFigures(item, body, inlineImages) {
@@ -91,8 +93,8 @@ function renderFigures(item, body, inlineImages) {
   els.figures.hidden = els.figures.childElementCount === 0;
 }
 
-function renderLinks(item) {
-  const links = Array.isArray(item.related_links) ? item.related_links : [];
+function renderLinks(item, extracted = []) {
+  const links = relatedReadingLinks(item, extracted);
   const key = JSON.stringify(links);
   if (key === renderedLinks) return;
   renderedLinks = key;
@@ -101,7 +103,7 @@ function renderLinks(item) {
   if (!links.length) return;
   els.links.append(h("h3.section-label", "相关链接"));
   for (const value of links) {
-    els.links.append(h("a.related-link", { href: value, target: "_blank", rel: "noopener noreferrer" }, icon("link", 14), h("span", value)));
+    els.links.append(h("a.related-link", { href: value.url, target: "_blank", rel: "noopener noreferrer" }, icon("link", 14), h("span", value.title || value.url)));
   }
 }
 
@@ -194,18 +196,20 @@ function render(item) {
   if (full) {
     if (formattedItemId !== item.id) { showUnformatted=false;formattedItemId=item.id; }
     const { body, label } = readingVersions(item, showUnformatted);
-    const inlineImages = paragraphs(els.body, body);
-    renderFigures(item, body, inlineImages);
-    void renderMedia(byId('detail-media'),item);
-    byId("reading-version").textContent=label;
-    byId("toggle-formatted").hidden=!item.formatted_content;
-    byId("toggle-formatted").textContent=showUnformatted ? "查看整理版" : "查看原内容";
+    const reading = paragraphs(els.body, body, !showUnformatted);
+    renderFigures(item, body, reading.images);
+    void renderMedia(byId('detail-media'),item,els.body);
+    const cleaned = !showUnformatted && els.body.dataset.cleaned === "true";
+    byId("reading-version").textContent=cleaned ? "净读版" : label;
+    byId("toggle-formatted").hidden=!item.formatted_content && !cleaned && !showUnformatted;
+    byId("toggle-formatted").textContent=showUnformatted ? "查看净读版" : "查看原内容";
     const waiting=["pending","processing"].includes(item.formatting_status);
+    byId("format-body").hidden=!aiFormatting;
     byId("format-body").disabled=waiting || !body;
-    byId("format-body").textContent=waiting ? "等待正文整理" : item.formatting_status === "failed" ? "重试正文整理" : item.formatted_content ? "重新整理正文" : "整理正文";
+    byId("format-body").textContent=waiting ? "AI 精排中" : item.formatting_status === "failed" ? "重试 AI 精排" : item.formatted_content ? "重新 AI 精排" : "AI 精排";
     els.originalBlock.hidden = !item.original_text || item.original_text === body;
-    if (!els.original.hidden) paragraphs(els.original, item.original_text || "");
-    renderLinks(item);
+    if (!els.original.hidden) paragraphs(els.original, item.original_text || "", false);
+    renderLinks(item, reading.links);
   }
   renderPosition();
   els.exportButton.disabled = false;
@@ -488,6 +492,8 @@ function openDetailMenu(anchor) {
 
 export function initDetail(options) {
   hooks = options;
+  byId("format-body").hidden=true;
+  fetchJSON("/api/reading-capabilities").then(result=>{aiFormatting=result.ai_formatting===true;if(currentId&&getItem(currentId))render(getItem(currentId));}).catch(()=>{});
   byId("toggle-formatted").addEventListener("click",()=>{showUnformatted=!showUnformatted;render(getItem(currentId));});
   byId("format-body").addEventListener("click",async()=>{
     const id=currentId;const button=byId("format-body");button.disabled=true;
@@ -536,7 +542,7 @@ export function initDetail(options) {
   });
   els.toggle.addEventListener("click", () => {
     const open = els.original.hidden;
-    if (open) paragraphs(els.original, getItem(currentId)?.original_text || "");
+    if (open) paragraphs(els.original, getItem(currentId)?.original_text || "", false);
     els.original.hidden = !open;
     els.toggle.classList.toggle("open", open);
     els.toggle.setAttribute("aria-expanded", String(open));

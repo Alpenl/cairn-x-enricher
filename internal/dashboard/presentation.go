@@ -11,6 +11,10 @@ type presentationBackend interface {
 }
 
 func (s *Server) presentation(writer http.ResponseWriter, request *http.Request) {
+	if request.Method == http.MethodPost && !s.formattingEnabled {
+		writeError(writer, 409, "formatting_unavailable")
+		return
+	}
 	id, err := positiveID(request.PathValue("id"))
 	if err != nil {
 		writeError(writer, 400, "invalid_id")
