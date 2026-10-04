@@ -125,7 +125,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
     const url = new URL(request.url, "http://fixture.local");
     const route = url.pathname;
     const send = (code, body) => {
-      response.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Cairn-Offline-Scope": "b".repeat(64) });
+      response.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...(state.offlineScopeHeaders ? { "X-Cairn-Offline-Scope": "b".repeat(64) } : {}) });
       response.end(JSON.stringify(body));
     };
     const body = ["POST", "PATCH", "PUT"].includes(request.method) ? await readBody(request) : {};

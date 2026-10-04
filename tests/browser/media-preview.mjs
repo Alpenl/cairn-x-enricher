@@ -3,6 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {chromium} from 'playwright';
 import {createFixtureState,startFixtureServer} from './fixture-server.mjs';
 const state=createFixtureState(),item=state.items[0];
+state.offlineScopeHeaders=true;
 item.url='https://x.com/Reader/status/123';item.original_language='zh';item.images=[];item.status='completed';
 item.original_text='第一段演示：\n\nGIF\n\n视频之后的完整正文。';item.related_links=[];
 const {server,url}=await startFixtureServer({state});
