@@ -918,7 +918,22 @@ func mergeBookmarkCounts(left, right cairn.BookmarkCounts) cairn.BookmarkCounts 
 	}
 }
 
+func processingPaused(status health.Snapshot) bool {
+	if status.Ready || len(status.DegradedComponents) == 0 {
+		return false
+	}
+	for component := range status.DegradedComponents {
+		if component != "source" && component != "reading" {
+			return false
+		}
+	}
+	return true
+}
+
 func backstageTitle(status health.Snapshot, attentionTotal int) string {
+	if processingPaused(status) {
+		return "自动处理暂时暂停"
+	}
 	if !status.Ready {
 		return "服务未就绪"
 	}
@@ -955,7 +970,11 @@ func backstageState(status health.Snapshot, counts cairn.BookmarkCounts, attenti
 	if attentionTotal > 0 {
 		parts = append(parts, fmt.Sprintf("还有 %d 条需要人工处理。", attentionTotal))
 	}
-	parts = append(parts, "新收藏一般在几分钟内出现在列表里，平时不需要打开这一页。")
+	if processingPaused(status) {
+		parts = append(parts, "收藏和已归档正文仍可查看。后台恢复后会继续处理排队任务，无需重复采集。")
+	} else if status.Ready {
+		parts = append(parts, "新收藏一般在几分钟内出现在列表里，平时不需要打开这一页。")
+	}
 	return strings.Join(parts, "")
 }
 

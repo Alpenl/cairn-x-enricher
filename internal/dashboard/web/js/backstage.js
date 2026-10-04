@@ -2,10 +2,11 @@
 // the same shell, reached from the status line at the bottom of the sidebar.
 import { api, errorLabel, prepareSourceSubmission } from "./api.js";
 import { byId, clear, h } from "./dom.js";
-import { displayTitle, formatRelative, shortURL } from "./format.js";
+import { displayTitle, shortURL } from "./format.js";
 import { icon } from "./icons.js";
 import { emit, mergeItem, state } from "./store.js";
 import { toast } from "./ui.js";
+import { failureReason } from "./process-status.js";
 
 const REFRESH_INTERVAL = 15000;
 const els = {};
@@ -47,9 +48,7 @@ async function loadQuality() {
 }
 
 function reasonFor(item) {
-  if (item.status === "exhausted") return `已经试过 ${item.attempts} 次仍然失败${item.error ? `：${item.error}` : ""}`;
-  if (item.next_retry_at) return `上次读取失败，${formatRelative(item.next_retry_at)}会自动重试${item.error ? `（${item.error}）` : ""}`;
-  return item.error || "上次读取失败，稍后会自动重试";
+  return failureReason(item);
 }
 
 function stat(label, value, tone = "") {
@@ -59,6 +58,8 @@ function stat(label, value, tone = "") {
 function attentionRow(item) {
   const title = displayTitle(item);
   const retry = h("button.btn.btn-sm", { type: "button" }, icon("refresh", 14), "再试一次");
+  retry.disabled = Boolean(item.paid_call_unresolved);
+  if (retry.disabled) retry.title = "先核对上次模型调用，避免重复计费";
   const paste = h("button.btn.btn-sm", { type: "button" }, icon("clipboard", 14), "粘贴原文");
   const form = h("form.source-form", { hidden: true });
   const textarea = h("textarea.source-input", { name: "original_text", maxLength: 100000, rows: 7, placeholder: "粘贴原帖正文，会直接根据这段文字生成标题、译文和摘要" });
@@ -153,12 +154,12 @@ async function loadSummary() {
   const counts = summary.counts || {};
   const attention = Array.isArray(summary.attention) ? summary.attention : [];
   const total = Number.isFinite(summary.attention_total) ? summary.attention_total : attention.length;
-  const tone = /未就绪|错误/.test(summary.title || "") ? "danger" : total > 0 ? "warn" : "ok";
+  const tone = /未就绪|错误/.test(summary.title || "") ? "danger" : /暂停/.test(summary.title || "") || total > 0 ? "warn" : "ok";
   els.status.dataset.tone = tone;
   clear(els.status,
     h("div.status-head", h("span.status-dot", { dataset: { tone } }), h("h2.status-title#back-title", summary.title || "一切正常")),
     h("p.status-text#back-state", summary.state || ""),
-    summary.last_error ? h("p.status-error", icon("alert", 14), summary.last_error) : null);
+    summary.last_error ? h("details.status-error", h("summary", "处理状态详情"), h("p", summary.last_error)) : null);
   clear(els.stats,
     stat("全部收藏", counts.total),
     stat("已完成", counts.completed, "ok"),

@@ -1,3 +1,4 @@
+import { processingPaused } from "./process-status.js";
 // Application controller: routing, layout, selection and the curation actions
 // that span several components (status changes with auto-advance and undo,
 // batch operations, export).
@@ -270,7 +271,7 @@ async function loadStatus() {
     const response = await fetch("/status", { cache: "no-store" });
     if (!response.ok) throw new Error("status_unavailable");
     const health = await response.json();
-    healthState = health.ready === false ? "not-ready" : "ok";
+    healthState = processingPaused(health) ? "processing-paused" : health.ready === false ? "not-ready" : "ok";
   } catch {
     healthState = "offline";
   }

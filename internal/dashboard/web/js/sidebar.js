@@ -384,6 +384,7 @@ function renderService() {
   let text;
   let tone = "ok";
   if (status === "offline") { text = "无法连接服务"; tone = "danger"; }
+  else if (status === "processing-paused") { text = "自动处理暂停"; tone = "warn"; }
   else if (status === "not-ready") { text = "服务未就绪"; tone = "danger"; }
   else if (status === "backend") { text = "后端暂时不可用"; tone = "danger"; }
   else if (attention > 0) { text = `${attention} 条需要处理`; tone = "warn"; }
