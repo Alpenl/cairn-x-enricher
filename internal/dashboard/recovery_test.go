@@ -63,3 +63,27 @@ func TestRecoveryEndpointProtectsAdmissionAndWakesOnlyAcceptedRequests(t *testin
 		t.Fatal("denied recovery woke scheduler")
 	}
 }
+
+func TestRecoverySupportsBrowserSameOriginThroughRewrittenProxyHost(t *testing.T) {
+	p := &recoveryProcessor{accepted: true}
+	s := New(context.Background(), startedTracker(), &fakeBackend{}, p, testLogger(), 1)
+	defer s.Drain(time.Second)
+	for _, site := range []string{"same-origin", "cross-site"} {
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://internal.example/api/service/recover", strings.NewReader("{}"))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Origin", "https://reader.example")
+		request.Header.Set("Sec-Fetch-Site", site)
+		response := httptest.NewRecorder()
+		s.Handler().ServeHTTP(response, request)
+		expected := http.StatusAccepted
+		if site == "cross-site" {
+			expected = http.StatusForbidden
+		}
+		if response.Code != expected {
+			t.Fatalf("%s returned %d", site, response.Code)
+		}
+	}
+	if p.calls != 1 {
+		t.Fatalf("cross-site request admitted: %d", p.calls)
+	}
+}

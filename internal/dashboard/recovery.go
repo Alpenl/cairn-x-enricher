@@ -27,7 +27,9 @@ func (s *Server) recoverService(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_content_type")
 		return
 	}
-	if origin := r.Header.Get("Origin"); origin != "" {
+	// Fetch Metadata is set by browsers, not page JavaScript. It preserves
+	// same-origin proof when a trusted reverse proxy rewrites the Host header.
+	if origin := r.Header.Get("Origin"); origin != "" && r.Header.Get("Sec-Fetch-Site") != "same-origin" {
 		u, err := url.Parse(origin)
 		if err != nil || u.Host != r.Host || (u.Scheme != "http" && u.Scheme != "https") {
 			writeError(w, 403, "cross_origin")
