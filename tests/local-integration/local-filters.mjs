@@ -8,7 +8,7 @@ export async function verifyLocalFilters(baseURL) {
     assert.equal(response.status, 200, path);
     return response.json();
   };
-  const origin = new URLSearchParams({ view: "summary", limit: "60", include_cache_identity: "1" });
+  const origin = new URLSearchParams({ view: "summary", limit: "60", include_cache_identity: "1", local_filter: "1" });
   const snapshot = await read(`/api/bookmarks?${origin}`);
   assert.equal(snapshot.local_filter_version, 1);
   assert.equal(snapshot.next_before_id, null, "this small-fixture comparison requires a complete page");

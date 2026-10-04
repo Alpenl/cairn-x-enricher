@@ -194,24 +194,30 @@ async function main() {
     check("the real tag editor starts collapsed", !await page.locator("#curate").evaluate(node => node.open));
     // Exercise actual Worker projections through NAS and the real list merge.
     // A synthetic summary that retained identity unconditionally hid this bug.
-    await page.waitForFunction(async id => {
-      const { getItem } = await import("/assets/js/store.js");
-      return Boolean(getItem(id)?.original_text) && getItem(id)?.content_loaded !== false;
+    await page.evaluate(async () => { window.cairnTestStore = await import("/assets/js/store.js"); });
+    const loadedBody = await page.waitForFunction(id => {
+      const item = window.cairnTestStore.getItem(id);
+      return document.querySelector("#list-pane")?.dataset.loading === "false" &&
+        document.querySelector("#body-loading")?.hidden && Boolean(item?.original_text) &&
+        item.content_loaded !== false ? structuredClone(item) : false;
     }, id);
-    const bodyReuse = await page.evaluate(async id => {
+    const beforeBody = await loadedBody.jsonValue();
+    await loadedBody.dispose();
+    const bodyReuse = await page.evaluate(async ({ id, before }) => {
       const { getItem } = await import("/assets/js/store.js");
       const { api, fetchJSON } = await import("/assets/js/api.js");
-      const before = getItem(id);
       const legacy = await fetchJSON("/api/bookmarks?view=summary");
       const modern = await api.list(new URLSearchParams("view=summary"));
       await (await import("/assets/js/list.js")).reload();
       const merged = getItem(id);
       const refreshed = await api.detailFresh(id);
       return { legacyIdentity: Boolean(legacy.items.find(item => item.id === id)?.cache_identity),
+        beforeIdentity: before.cache_identity, mergedIdentity: merged.cache_identity, refreshedIdentity: refreshed.cache_identity,
+        bodyLengths: [before, merged, refreshed].map(item => [item.original_text?.length, item.translated_text?.length, item.content_loaded, item.enriched_at, item.status]),
         modernIdentity: modern.items.find(item => item.id === id)?.cache_identity,
         preserved: Boolean(before.original_text) && merged.content_loaded !== false && merged.original_text === before.original_text,
         refreshed: refreshed.original_text === before.original_text && refreshed.translated_text === before.translated_text };
-    }, id);
+    }, { id, before: beforeBody });
     check("default summaries preserve the previous strict contract", !bodyReuse.legacyIdentity);
     check("Web summaries explicitly receive valid body identity", bodyReuse.modernIdentity?.schema_version === 1 && Number.isSafeInteger(bodyReuse.modernIdentity.body_revision));
     check("a real list reload preserves the loaded body and its versioned refresh", bodyReuse.preserved && bodyReuse.refreshed, JSON.stringify(bodyReuse));

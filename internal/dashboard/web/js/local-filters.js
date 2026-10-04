@@ -1,7 +1,7 @@
 // Reuse only a complete, negotiated server snapshot. Search, legacy dimensions,
 // entity state, partial pages and unknown query syntax always go to the server.
 const modes = { topics: "topics_mode", resource_kinds: "resource_mode", content_functions: "functions_mode", custom_tags: "custom_mode" };
-const baseKeys = new Set(["limit", "view", "include_cache_identity", "filter_contract_version", "curation_status"]);
+const baseKeys = new Set(["limit", "view", "include_cache_identity", "filter_contract_version", "curation_status", "local_filter"]);
 const allowed = new Set([...baseKeys, ...Object.keys(modes), ...Object.values(modes), "topic_refinements"]);
 const statuses = ["pending", "processing", "completed", "failed", "exhausted", "unsupported"];
 const curations = ["all", "inbox", "kept", "compiled", "drop"];
@@ -16,6 +16,7 @@ export function localFilterResult(path, params, sourceParams, page, catalog) {
   if (!curations.includes(targetView) || (sourceView !== "all" && sourceView !== targetView) ||
       params.get("view") !== "summary" || (params.has("filter_contract_version") && params.get("filter_contract_version") !== "1")) return null;
   if (params.has("include_cache_identity") && !["0", "1"].includes(params.get("include_cache_identity"))) return null;
+  if (params.has("local_filter") && !["0", "1"].includes(params.get("local_filter"))) return null;
   const limit = Number(params.get("limit"));
   if (!/^[0-9]+$/.test(params.get("limit")) || !Number.isInteger(limit) || limit < 1 || limit > 60) return null;
   const groups = [];

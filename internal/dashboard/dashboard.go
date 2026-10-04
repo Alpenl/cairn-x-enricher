@@ -399,6 +399,11 @@ func servePage(writer http.ResponseWriter, request *http.Request, content []byte
 }
 
 func (s *Server) listBookmarks(writer http.ResponseWriter, request *http.Request) {
+	localFilters := request.URL.Query()["local_filter"]
+	if len(localFilters) > 1 || len(localFilters) == 1 && localFilters[0] != "0" && localFilters[0] != "1" {
+		writeError(writer, http.StatusBadRequest, "invalid_query")
+		return
+	}
 	query, err := bookmarkQuery(request)
 	if err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid_query")
@@ -412,6 +417,9 @@ func (s *Server) listBookmarks(writer http.ResponseWriter, request *http.Request
 	if len(query.TopicRefinements) > 0 {
 		writer.Header().Set("X-Cairn-Topic-Granularity", "1")
 		writer.Header().Set("X-Cairn-Tag-System", "1")
+	}
+	if request.URL.Query().Get("local_filter") != "1" {
+		page.LocalFilterVersion = 0
 	}
 	if query.SkipCounts {
 		writeJSON(writer, http.StatusOK, struct {

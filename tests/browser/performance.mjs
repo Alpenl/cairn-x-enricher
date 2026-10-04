@@ -5,7 +5,8 @@ import { createFixtureState, startFixtureServer } from "./fixture-server.mjs";
 import { taxonomyV2 } from "./fixture-data.mjs";
 const fixture = createFixtureState({ count: 30 });
 const item = fixture.items.find(item => item.curation_status === "inbox");
-const identity = {content_revision:1,body_revision:1,personal_revision:1,latest_decision_id:1,latest_entity_revision:1};
+const identity = {schema_version:1,content_revision:1,body_revision:1,personal_revision:1,latest_decision_id:1,latest_entity_revision:1};
+item.cache_identity = identity;
 const selection = {topics:["llm"],resource_kinds:["reference"],content_functions:["method"],carriers:[],affordances:[]};
 item.classification = {...item.classification,...selection}; item.status="completed";
 const catalog = {...taxonomyV2(),resource_kinds:[{id:"reference",label:"参考资料",active:true}]};
@@ -46,6 +47,7 @@ try{
   await page.clock.install();
   await page.goto(`${url}/bookmarks/${item.id}`);
   await page.waitForFunction(()=>document.querySelector("#body-loading")?.hidden);
+  await page.waitForFunction(()=>document.querySelector("#list-pane")?.dataset.loading === "false");
   await pause(500);
   assert.equal(tags,0);assert.equal(customReads,1);assert.equal(counts,0);
   assert.equal(await page.locator(".tag-system-row").count(),0);assert.match(await page.locator("#curate-summary-tags").textContent(),/参考资料/);
