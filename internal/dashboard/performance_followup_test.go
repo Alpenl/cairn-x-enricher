@@ -169,3 +169,32 @@ func TestBrowserPerformanceFollowup(t *testing.T) {
 		t.Fatalf("browser: %v", err)
 	}
 }
+
+func TestLocalFilterCapabilityIsExplicit(t *testing.T) {
+	for _, option := range []string{"", "0", "1", "bad", "1&local_filter=1"} {
+		t.Run(option, func(t *testing.T) {
+			backend := &fakeBackend{page: cairn.BookmarkPage{LocalFilterVersion: 1, Items: []cairn.Bookmark{}}}
+			server := New(t.Context(), startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+			defer server.Drain(time.Second)
+			path := "/api/bookmarks?view=summary"
+			if option != "" {
+				path += "&local_filter=" + option
+			}
+			response := httptest.NewRecorder()
+			server.Handler().ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
+			if option == "bad" || strings.Contains(option, "&") {
+				if response.Code != http.StatusBadRequest || backend.listCalls != 0 {
+					t.Fatal("invalid capability reached backend")
+				}
+				return
+			}
+			var payload map[string]json.RawMessage
+			if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &payload) != nil {
+				t.Fatal("invalid list response")
+			}
+			if (payload["local_filter_version"] != nil) != (option == "1") {
+				t.Fatal("local capability was not explicitly negotiated")
+			}
+		})
+	}
+}

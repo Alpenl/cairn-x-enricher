@@ -88,6 +88,10 @@ try {
     assert.equal(stats.repeat_list_requests, 0, "repeated complete query uses a short-lived snapshot");
     checked("previous rows and immediate busy feedback remain visible; exact repeat avoids a list request");
 
+    const countControl = await page.locator('[data-facet="topics"][data-value="llm"]').elementHandle();
+    await countControl.focus();
+    await delay(600);
+    assert.equal(await countControl.evaluate(node => node.isConnected && node === document.activeElement), true);
     const rapidCounts = counts.length;
     await toggle("eng"); await toggle("design"); await toggle("eng"); await ready();
     await delay(750);

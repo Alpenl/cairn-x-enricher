@@ -4,6 +4,7 @@
 // Expects CAIRN_WORKER_URL and GO_BIN; the shell wrapper starts the Worker and
 // builds the binary. It creates a normal bookmark, lets the real scheduler
 // retrieve, read and classify it, then drives the actual dashboard page.
+import { verifyLocalFilters } from "./local-filters.mjs";
 import { spawn } from "node:child_process";
 import { chromium } from "playwright";
 import { startMockModel } from "./mock-model.mjs";
@@ -193,23 +194,33 @@ async function main() {
     check("the real tag editor starts collapsed", !await page.locator("#curate").evaluate(node => node.open));
     // Exercise actual Worker projections through NAS and the real list merge.
     // A synthetic summary that retained identity unconditionally hid this bug.
-    const bodyReuse = await page.evaluate(async id => {
+    await page.evaluate(async () => { window.cairnTestStore = await import("/assets/js/store.js"); });
+    const loadedBody = await page.waitForFunction(id => {
+      const item = window.cairnTestStore.getItem(id);
+      return document.querySelector("#list-pane")?.dataset.loading === "false" &&
+        document.querySelector("#body-loading")?.hidden && Boolean(item?.original_text) &&
+        item.content_loaded !== false ? structuredClone(item) : false;
+    }, id);
+    const beforeBody = await loadedBody.jsonValue();
+    await loadedBody.dispose();
+    const bodyReuse = await page.evaluate(async ({ id, before }) => {
       const { getItem } = await import("/assets/js/store.js");
       const { api, fetchJSON } = await import("/assets/js/api.js");
-      const before = getItem(id);
       const legacy = await fetchJSON("/api/bookmarks?view=summary");
       const modern = await api.list(new URLSearchParams("view=summary"));
       await (await import("/assets/js/list.js")).reload();
       const merged = getItem(id);
       const refreshed = await api.detailFresh(id);
       return { legacyIdentity: Boolean(legacy.items.find(item => item.id === id)?.cache_identity),
+        beforeIdentity: before.cache_identity, mergedIdentity: merged.cache_identity, refreshedIdentity: refreshed.cache_identity,
+        bodyLengths: [before, merged, refreshed].map(item => [item.original_text?.length, item.translated_text?.length, item.content_loaded, item.enriched_at, item.status]),
         modernIdentity: modern.items.find(item => item.id === id)?.cache_identity,
         preserved: Boolean(before.original_text) && merged.content_loaded !== false && merged.original_text === before.original_text,
         refreshed: refreshed.original_text === before.original_text && refreshed.translated_text === before.translated_text };
-    }, id);
+    }, { id, before: beforeBody });
     check("default summaries preserve the previous strict contract", !bodyReuse.legacyIdentity);
     check("Web summaries explicitly receive valid body identity", bodyReuse.modernIdentity?.schema_version === 1 && Number.isSafeInteger(bodyReuse.modernIdentity.body_revision));
-    check("a real list reload preserves the loaded body and its versioned refresh", bodyReuse.preserved && bodyReuse.refreshed);
+    check("a real list reload preserves the loaded body and its versioned refresh", bodyReuse.preserved && bodyReuse.refreshed, JSON.stringify(bodyReuse));
     // The summary also contains independent tag-filter buttons. Its center
     // can hit one of those; click the disclosure label to open the editor.
     await page.locator("#curate > summary .curate-summary-label").click();
@@ -374,6 +385,8 @@ async function main() {
     const overview = await jsonFetch(`http://127.0.0.1:${goPort}/api/overview`);
     check("the real overview reports every navigation view", overview.status === 200 && ["all", "inbox", "kept", "compiled", "drop", "uncertain"].every((view) => Number.isInteger(overview.payload.views?.[view])), JSON.stringify(overview.payload));
     check("the new bookmark is counted in the inbox", overview.payload.views?.inbox >= 1 && overview.payload.views?.all >= 1);
+
+    await verifyLocalFilters(`http://127.0.0.1:${goPort}`);
 
     check("no page errors during the real browser session", pageErrors.length === 0, pageErrors.join("; "));
   } finally {
