@@ -155,15 +155,17 @@ type Server struct {
 const backstageSummaryTTL = 5 * time.Second
 
 type backstageSummary struct {
-	Title          string               `json:"title"`
-	State          string               `json:"state"`
-	Stale          bool                 `json:"stale,omitempty"`
-	LastError      string               `json:"last_error,omitempty"`
-	Attention      []cairn.Bookmark     `json:"attention"`
-	AttentionTotal int                  `json:"attention_total"`
-	Counts         cairn.BookmarkCounts `json:"counts"`
-	Build          buildinfo.Info       `json:"build"`
-	Overview       *overviewSummary     `json:"overview,omitempty"`
+	Title            string                     `json:"title"`
+	Recovery         *cairn.ProviderCheckStatus `json:"recovery,omitempty"`
+	ProcessingPaused bool                       `json:"processing_paused"`
+	State            string                     `json:"state"`
+	Stale            bool                       `json:"stale,omitempty"`
+	LastError        string                     `json:"last_error,omitempty"`
+	Attention        []cairn.Bookmark           `json:"attention"`
+	AttentionTotal   int                        `json:"attention_total"`
+	Counts           cairn.BookmarkCounts       `json:"counts"`
+	Build            buildinfo.Info             `json:"build"`
+	Overview         *overviewSummary           `json:"overview,omitempty"`
 }
 
 // New creates a dashboard and starts bounded manual processing workers.
@@ -370,6 +372,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/bookmarks/{id}/media", s.mediaList)
 	mux.HandleFunc("GET /api/media/{id}", s.mediaFile)
 	mux.HandleFunc("GET /api/backstage", s.getBackstage)
+	mux.HandleFunc("POST /api/service/recover", s.recoverService)
 	mux.HandleFunc("GET /api/overview", s.getOverview)
 	mux.HandleFunc("GET /api/reading-capabilities", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, 200, map[string]bool{"ai_formatting": s.formattingEnabled})
@@ -833,6 +836,13 @@ func (s *Server) getBackstage(writer http.ResponseWriter, request *http.Request)
 	if stale {
 		summary.Stale = true
 		writer.Header().Set("Warning", `110 - "Response is stale"`)
+	}
+	summary.ProcessingPaused = processingPaused(s.tracker.Snapshot())
+	if recovery, ok := s.processor.(sourceRecovery); ok {
+		if check, err := recovery.SourceRecoveryStatus(request.Context()); err == nil {
+			check.LeaseToken = ""
+			summary.Recovery = &check
+		}
 	}
 	writeJSON(writer, http.StatusOK, summary)
 }

@@ -15,6 +15,7 @@ let timer = 0;
 let refreshFlight = null, refreshDue = 0, refreshDelay = REFRESH_INTERVAL, refreshSignature = "";
 let qualityLoaded = false;
 let qualityBusy = false;
+let recoveryBusy = false;
 
 async function loadQuality() {
   if (qualityBusy) return;
@@ -131,6 +132,28 @@ function attentionRow(item) {
     form);
 }
 
+function recoveryPanel(summary) {
+  const check = summary.recovery;
+  if (!check || (!summary.processing_paused && check.state === "healthy")) return null;
+  const labels = { unavailable: "模型接口暂时无法连接", timeout: "模型检查超时", unauthorized: "模型接口认证失败", rate_limited: "模型接口暂时限流", budget_exhausted: "当天模型调用保护额度已用完", invalid_response: "模型返回内容未通过检查" };
+  const date = (ms) => new Date(ms).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const description = check.state === "checking" ? "正在检查模型接口，通过后继续处理排队任务。" : check.state === "healthy" ? "自检已通过，正在恢复自动处理。" : `${labels[check.reason] || "等待检查模型接口"}。${check.next_check_at > Date.now() ? `下次自动检查：${date(check.next_check_at)}。` : "即将自动检查。"}`;
+  const button = h("button.btn.btn-sm#service-recover", { type: "button" }, icon("refresh", 14), check.state === "checking" ? "正在检查…" : "手动恢复");
+  button.disabled = recoveryBusy || !check.can_recover;
+  const hint = h("p.muted", check.manual_after > Date.now() && check.state !== "checking" ? `可再次操作时间：${date(check.manual_after)}` : "会提前检查一次模型接口；不会重跑已完成收藏或清空调用记录。");
+  button.addEventListener("click", async () => {
+    if (recoveryBusy) return;
+    recoveryBusy = true; button.disabled = true;
+    try {
+      const result = await api.recoverService();
+      toast((result.accepted || result.state === "pending") ? "已提交恢复检查，通过后自动继续处理" : result.state === "checking" ? "检查正在进行，无需重复提交" : "请稍候再试", { tone: result.accepted ? "ok" : "info" });
+      refreshSignature = ""; refreshDelay = REFRESH_INTERVAL;
+    } catch (error) { toast(`恢复请求失败：${errorLabel(error?.message)}`, { tone: "error" }); }
+    finally { recoveryBusy = false; await refresh(); }
+  });
+  return h("div.service-recovery", h("p.status-text", description), button, hint);
+}
+
 export function refresh() {
   if (refreshFlight) return refreshFlight;
   refreshFlight = loadSummary().finally(() => { refreshFlight = null; refreshDue = Date.now() + refreshDelay; });
@@ -159,6 +182,7 @@ async function loadSummary() {
   clear(els.status,
     h("div.status-head", h("span.status-dot", { dataset: { tone } }), h("h2.status-title#back-title", summary.title || "一切正常")),
     h("p.status-text#back-state", summary.state || ""),
+    recoveryPanel(summary),
     summary.last_error ? h("details.status-error", h("summary", "处理状态详情"), h("p", summary.last_error)) : null);
   clear(els.stats,
     stat("全部收藏", counts.total),

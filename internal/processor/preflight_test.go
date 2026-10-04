@@ -69,3 +69,70 @@ func TestEvidenceWakeupOnlyAfterDurableSuccessAndCoalesces(t *testing.T) {
 		t.Fatalf("durable notifications did not coalesce: %d", len(wakeup))
 	}
 }
+
+func TestManualRecoveryRequiresAdmissionAndCoalescesWithActiveCheck(t *testing.T) {
+	q := &stageQueue{fakeQueue: newFakeQueue()}
+	p := NewStaged(q, &stageReader{q: q}, nil, "", "", discardLogger(), 1)
+	checks := 0
+	p.SetSourcePreflight(func(context.Context) error { checks++; return nil }, errors.New("down"))
+	accepted := false
+	p.SetSourceRecovery(func(context.Context) (cairn.ProviderCheckStatus, error) {
+		return cairn.ProviderCheckStatus{State: "waiting"}, nil
+	},
+		func(context.Context) (cairn.ProviderCheckStatus, error) {
+			return cairn.ProviderCheckStatus{Accepted: accepted}, nil
+		})
+	_, _ = p.RecoverSource(context.Background())
+	if err := p.checkSourcePreflight(context.Background()); !errors.Is(err, ErrSourcePreflightPaused) || checks != 0 {
+		t.Fatalf("unadmitted recovery started check: %d %v", checks, err)
+	}
+	accepted = true
+	_, _ = p.RecoverSource(context.Background())
+	if err := p.checkSourcePreflight(context.Background()); err != nil || checks != 1 {
+		t.Fatalf("admitted recovery: %d %v", checks, err)
+	}
+	if err := p.checkSourcePreflight(context.Background()); err != nil || checks != 1 {
+		t.Fatalf("success was not reused: %d %v", checks, err)
+	}
+}
+func TestRemotePreflightDeadlineSurvivesLocalBackoff(t *testing.T) {
+	q := &stageQueue{fakeQueue: newFakeQueue()}
+	p := NewStaged(q, &stageReader{q: q}, nil, "", "", discardLogger(), 1)
+	deadline := time.Now().Add(time.Hour)
+	p.SetSourcePreflight(func(context.Context) error { return &PreflightRetry{At: deadline} }, ErrSourcePreflightUnverified)
+	_ = p.checkSourcePreflight(context.Background())
+	_, _, remaining := p.SourceStagePaused("source")
+	if remaining < 59*time.Minute {
+		t.Fatalf("lost authoritative retry delay: %v", remaining)
+	}
+}
+
+func TestManualRecoveryFencesAnOlderCheckCallback(t *testing.T) {
+	for _, fails := range []bool{false, true} {
+		q := &stageQueue{fakeQueue: newFakeQueue()}
+		p := NewStaged(q, &stageReader{q: q}, nil, "", "", discardLogger(), 1)
+		entered, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+		p.SetSourcePreflight(func(context.Context) error {
+			close(entered)
+			<-release
+			if fails {
+				return &PreflightRetry{At: time.Now().Add(time.Hour)}
+			}
+			return nil
+		}, ErrSourcePreflightUnverified)
+		p.SetSourceRecovery(nil, func(context.Context) (cairn.ProviderCheckStatus, error) {
+			return cairn.ProviderCheckStatus{Accepted: true, State: "pending"}, nil
+		})
+		go func() { done <- p.checkSourcePreflight(context.Background()) }()
+		<-entered
+		_, _ = p.RecoverSource(context.Background())
+		close(release)
+		if err := <-done; !errors.Is(err, ErrSourcePreflightPaused) {
+			t.Fatalf("stale callback accepted: %v", err)
+		}
+		paused, _, remaining := p.SourceStagePaused("source")
+		if !paused || remaining > time.Second {
+			t.Fatalf("manual recovery overwritten: paused=%v delay=%v", paused, remaining)
+		}
+	}
+}

@@ -718,3 +718,12 @@ type responseOutputContent struct {
 	Type string `json:"type"`
 	Text string `json:"text"`
 }
+
+// ReadingCheckScope invalidates cached checks when credentials, endpoint, model,
+// output budget, prompt or schema changes. Only its digest leaves this process.
+func (c *ResponsesClient) ReadingCheckScope() string {
+	schema, _ := json.Marshal(readingSchema())
+	data, _ := json.Marshal([]any{c.endpoint, c.apiKey, c.model, c.maxTokens, readingPrompt, string(schema), "reading-check-v1"})
+	digest := sha256.Sum256(data)
+	return hex.EncodeToString(digest[:])
+}

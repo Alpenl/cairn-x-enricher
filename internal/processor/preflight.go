@@ -5,6 +5,8 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 )
 
 // ErrSourcePreflightPaused keeps an unavailable source provider from consuming
@@ -16,10 +18,12 @@ var ErrSourcePreflightPaused = errors.New("source provider contract check is pau
 var ErrSourcePreflightUnverified = errors.New("source provider contract check is pending")
 
 type sourcePreflight struct {
-	mu    sync.Mutex
-	ready bool
-	check func(context.Context) error
-	gate  *componentPause
+	mu      sync.Mutex
+	ready   bool
+	check   func(context.Context) error
+	gate    *componentPause
+	status  func(context.Context) (cairn.ProviderCheckStatus, error)
+	recover func(context.Context) (cairn.ProviderCheckStatus, error)
 }
 
 // SetSourcePreflight is configured once before schedulers start. An initial
@@ -80,7 +84,17 @@ func (p *Processor) checkSourcePreflight(ctx context.Context) error {
 	finish := trackProgress(ctx, p.stages.paidStageTimeout+30*time.Second)
 	defer finish()
 	if err := g.check(probeCtx); err != nil {
-		g.gate.finishStageProbe(epoch, false, "source provider contract check failed")
+		if !g.gate.finishStageProbe(epoch, false, "source provider contract check failed") {
+			return ErrSourcePreflightPaused
+		}
+		var retry *PreflightRetry
+		if errors.As(err, &retry) {
+			g.gate.mu.Lock()
+			if g.gate.epoch == epoch+1 && retry.At.After(g.gate.until) {
+				g.gate.until = retry.At
+			}
+			g.gate.mu.Unlock()
+		}
 		return ErrSourcePreflightPaused
 	}
 	g.mu.Lock()
@@ -89,6 +103,15 @@ func (p *Processor) checkSourcePreflight(ctx context.Context) error {
 		return ErrSourcePreflightPaused
 	}
 	g.ready = true
+	for _, pause := range []*componentPause{p.stages.sourcePause, p.stages.readingPause} {
+		if pause != nil {
+			pause.mu.Lock()
+			if !pause.until.IsZero() && !pause.probing {
+				pause.until = pause.now()
+			}
+			pause.mu.Unlock()
+		}
+	}
 	return nil
 }
 
@@ -109,3 +132,48 @@ func (p *Processor) notifyClassification() {
 	default:
 	}
 }
+
+// SetSourceRecovery connects persistent status and manual admission before serving.
+func (p *Processor) SetSourceRecovery(status, requestRecovery func(context.Context) (cairn.ProviderCheckStatus, error)) {
+	if p.stages != nil && p.stages.preflight != nil {
+		p.stages.preflight.status = status
+		p.stages.preflight.recover = requestRecovery
+	}
+}
+
+// SourceRecoveryStatus reads the shared check result without starting a model call.
+func (p *Processor) SourceRecoveryStatus(ctx context.Context) (cairn.ProviderCheckStatus, error) {
+	if p.stages == nil || p.stages.preflight == nil || p.stages.preflight.status == nil {
+		return cairn.ProviderCheckStatus{}, errors.New("source recovery unavailable")
+	}
+	return p.stages.preflight.status(ctx)
+}
+
+// RecoverSource only advances a probe; no business leases or paid history are reset.
+func (p *Processor) RecoverSource(ctx context.Context) (cairn.ProviderCheckStatus, error) {
+	if p.stages == nil || p.stages.preflight == nil || p.stages.preflight.recover == nil {
+		return cairn.ProviderCheckStatus{}, errors.New("source recovery unavailable")
+	}
+	g := p.stages.preflight
+	status, err := g.recover(ctx)
+	if err != nil || (!status.Accepted && status.State != "pending") {
+		return status, err
+	}
+	g.mu.Lock()
+	g.ready = false
+	g.gate.mu.Lock()
+	// The durable gate admitted recovery, so any older local callback must
+	// not overwrite it after its remote settlement has already completed.
+	g.gate.epoch++
+	g.gate.probing = false
+	g.gate.until = g.gate.now()
+	g.gate.reason = "source provider contract check pending"
+	g.gate.mu.Unlock()
+	g.mu.Unlock()
+	return status, nil
+}
+
+// PreflightRetry carries a remote retry deadline without disclosing provider text.
+type PreflightRetry struct{ At time.Time }
+
+func (e *PreflightRetry) Error() string { return "source provider check waiting for retry" }

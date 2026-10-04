@@ -539,6 +539,7 @@ func newProcessor(
 	var reader processor.SourceReader
 	var preflight func(context.Context) error
 	var preflightErr error
+	var checkScope string
 	if withSource {
 		model := enrich.NewResponsesClient(
 			cfg.GrokBaseURL, cfg.GrokAPIKey, cfg.GrokModel, cfg.GrokMaxTokens,
@@ -547,13 +548,37 @@ func newProcessor(
 		model.SetReadingHTTPClient(upstreamHTTPClient(cfg.GrokReadingTimeout))
 		model.SetPaidAttemptLedger(queue)
 		model.SetLogger(logger)
+		// Key changes invalidate cached success, but the secret itself is never stored.
+		checkScope = model.ReadingCheckScope()
 		preflight = func(ctx context.Context) error {
 			if err := queue.VerifySourceLeaseCapability(ctx); err != nil {
 				return err
 			}
-			_, err := model.Transform(ctx, enrich.Input{URL: "https://x.com/canary/status/0", Attempt: 1,
+			check, err := queue.ProviderCheck(ctx, checkScope, "claim", nil)
+			if err != nil {
+				return err
+			}
+			if check.State == "healthy" {
+				return nil
+			}
+			if !check.Granted {
+				return &processor.PreflightRetry{At: time.UnixMilli(check.NextCheckAt)}
+			}
+			_, err = model.Transform(ctx, enrich.Input{URL: "https://x.com/canary/status/0", Attempt: 1,
 				SourceText: "Canary check: validate structured reading aids.", Canary: true})
-			return err
+			reason := providerCheckReason(err)
+			// Settlement is bounded separately so a timed-out provider doesn't strand its check.
+			finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.WorkerRequestTimeout)
+			defer cancel()
+			final, finishErr := queue.ProviderCheck(finishCtx, checkScope, "finish", map[string]any{
+				"lease_token": check.LeaseToken, "success": err == nil, "reason": reason})
+			if finishErr != nil {
+				return finishErr
+			}
+			if err != nil {
+				return &processor.PreflightRetry{At: time.UnixMilli(final.NextCheckAt)}
+			}
+			return nil
 		}
 		preflightErr = processor.ErrSourcePreflightUnverified
 		reader = model
@@ -583,6 +608,14 @@ func newProcessor(
 	tracker.MarkStarted()
 	worker := processor.NewStaged(queue, reader, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
 	worker.SetSourcePreflight(preflight, preflightErr)
+	if withSource {
+		worker.SetSourceRecovery(func(ctx context.Context) (cairn.ProviderCheckStatus, error) {
+			return queue.ProviderCheck(ctx, checkScope, "status", nil)
+		},
+			func(ctx context.Context) (cairn.ProviderCheckStatus, error) {
+				return queue.ProviderCheck(ctx, checkScope, "recover", nil)
+			})
+	}
 	if preflightErr != nil {
 		tracker.MarkComponentDegraded("source", "source provider contract check pending")
 		tracker.MarkComponentDegraded("reading", "source provider contract check pending")
