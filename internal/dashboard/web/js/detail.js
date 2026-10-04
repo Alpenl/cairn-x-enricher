@@ -1,5 +1,7 @@
 // The reading pane: one bookmark with its status control, curation card,
 // images, translation, lazily rendered original text and diagnostics.
+import { renderReading } from "./reading.js";
+import { fetchJSON } from "./api.js";
 import { api, errorLabel, imagePath, prepareSourceSubmission } from "./api.js";
 import { queueImage, prioritizeReading } from "./image-loader.js";
 import * as curation from "./curation.js";
@@ -31,6 +33,8 @@ let identityDue = 0, identityDelay = IDENTITY_INTERVAL;
 let wasVisible = false;
 const renderedText = new WeakMap();
 let renderedImages = "";
+let showUnformatted = false;
+let formattedItemId = 0;
 let renderedLinks = "";
 
 export function currentItemId() {
@@ -52,21 +56,27 @@ export function openSource() {
 // --- Rendering -------------------------------------------------------------------
 
 function paragraphs(container, text) {
-  if (renderedText.get(container) === text) return;
-  renderedText.set(container, text);
-  const fragment = document.createDocumentFragment();
-  for (const line of paragraphsOf(text)) fragment.append(h("p", line));
-  container.replaceChildren(fragment);
+  const key = JSON.stringify([text, getItem(currentId)?.images?.map(image => image.key)]);
+  if (renderedText.get(container) === key) return;
+  renderedText.set(container, key);
+  renderReading(container,text,{image:(index,alt)=>{
+    const ref=getItem(currentId)?.images?.[index];if(!ref)return h("p","图片未归档");
+    const img=h("img",{alt,loading:"lazy",decoding:"async"});queueImage(img,imagePath(ref.key),{priority:0});
+    const a=h("a",img);a.href=imagePath(ref.key);a.target="_blank";a.rel="noopener";
+    return h("figure.reading-figure",a,...(alt?[h("figcaption",alt)]:[]));
+  }});
 }
 
 function renderFigures(item) {
   const images = Array.isArray(item.images) ? item.images : [];
-  const key = JSON.stringify(images.map((image) => image.key));
+  const key = JSON.stringify([images.map((image) => image.key),item.formatted_content,item.translated_text,item.original_text,showUnformatted]);
   if (key === renderedImages) return;
   renderedImages = key;
   els.figures.replaceChildren();
   els.figures.dataset.count = String(images.length);
   images.forEach((ref, index) => {
+    const body = (!showUnformatted && item.formatted_content) || item.translated_text || item.original_text || "";
+    if (body.includes(`(cairn-image:${index})`)) return;
     const image = h("img", { alt: "", decoding: "async" });
     queueImage(image, imagePath(ref.key), { priority: 0 });
     const figure = h("button.figure", { type: "button", "aria-label": `查看第 ${index + 1} 张图片` }, image);
@@ -116,8 +126,8 @@ function renderProcessBanner(item) {
     tone = "danger";
     text = "上次模型调用结果尚未核对，已暂停自动重试。可以粘贴新的原文或更换来源。";
     actions.push(h("button.btn.btn-sm", { type: "button", onclick: () => pasteSource(item.id) }, icon("clipboard", 14), "粘贴原文"));
-  } else if (item.status === "processing") text = "正在读取原帖并生成中文标题、译文与摘要…";
-  else if (item.status === "pending") text = "已排队，稍后会自动读取原帖。";
+  } else if (item.status === "processing") text = item.original_text ? "正在根据已存正文生成标题、译文与摘要…" : "正在读取原帖并生成中文标题、译文与摘要…";
+  else if (item.status === "pending") text = item.original_text ? "正文已归档，阅读增强已排队。" : "已排队，稍后会自动读取原帖。";
   else if (item.status === "failed") {
     tone = "warn";
     text = `上次读取失败${item.error ? `：${item.error}` : ""}。${item.next_retry_at ? "稍后会自动重试。" : ""}`;
@@ -180,9 +190,18 @@ function render(item) {
   const full = item.content_loaded !== false;
   els.bodyLoading.hidden = full;
   if (full) {
+    if (formattedItemId !== item.id) { showUnformatted=false;formattedItemId=item.id; }
+    const formatted=item.formatted_content && !showUnformatted;
+    const body=formatted ? item.formatted_content : item.translated_text || item.original_text || "";
     renderFigures(item);
-    paragraphs(els.body, item.translated_text || "");
-    els.originalBlock.hidden = !item.original_text;
+    paragraphs(els.body, body);
+    byId("reading-version").textContent=formatted ? "整理版" : "原内容";
+    byId("toggle-formatted").hidden=!item.formatted_content;
+    byId("toggle-formatted").textContent=showUnformatted ? "查看整理版" : "查看原内容";
+    const waiting=["pending","processing"].includes(item.formatting_status);
+    byId("format-body").disabled=waiting || !body;
+    byId("format-body").textContent=waiting ? "等待正文整理" : item.formatting_status === "failed" ? "重试正文整理" : item.formatted_content ? "重新整理正文" : "整理正文";
+    els.originalBlock.hidden = !item.original_text || item.original_text === (item.translated_text || item.original_text);
     if (!els.original.hidden) paragraphs(els.original, item.original_text || "");
     renderLinks(item);
   }
@@ -466,6 +485,16 @@ function openDetailMenu(anchor) {
 
 export function initDetail(options) {
   hooks = options;
+  byId("toggle-formatted").addEventListener("click",()=>{showUnformatted=!showUnformatted;render(getItem(currentId));});
+  byId("format-body").addEventListener("click",async()=>{
+    const id=currentId;const button=byId("format-body");button.disabled=true;
+    try {
+      await fetchJSON(`/api/bookmarks/${id}/presentation`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({force:Boolean(getItem(id)?.formatted_content)})});
+      toast("已加入正文整理队列；完成前仍可阅读原内容。");
+      if(currentId===id) await fetchDetail(id);
+    }catch(error){toast(errorLabel(error.message));}
+    finally {if(currentId===id)button.disabled=false;}
+  });
   Object.assign(els, {
     pane: byId("detail-pane"), empty: byId("detail-empty"), article: byId("detail"), error: byId("detail-error"),
     errorText: byId("detail-error-text"), scroll: byId("detail-scroll"), back: byId("detail-back"),

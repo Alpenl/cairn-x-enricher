@@ -7,7 +7,7 @@ const BODY_MAX_ITEMS = 40;
 const BODY_MAX_BYTES = 8 * 1024 * 1024;
 
 function bodySize(item) {
-  return ((item.original_text?.length || 0) + (item.translated_text?.length || 0) +
+  return ((item.original_text?.length || 0) + (item.translated_text?.length || 0) + (item.formatted_content?.length || 0) +
     JSON.stringify(item.related_links || []).length) * 2;
 }
 
@@ -23,7 +23,7 @@ function retainBody(id, item) {
     if (key === state.selectedId) continue;
     const saved = state.items.get(key);
     if (saved) state.items.set(key, { ...saved, content_loaded: false,
-      original_text: undefined, translated_text: undefined, related_links: undefined });
+      original_text: undefined, translated_text: undefined, formatted_content: undefined, related_links: undefined });
     bodyEntries.delete(key);
     bytes -= size;
   }
@@ -94,7 +94,7 @@ export function mergeItem(incoming) {
   if (sameContent && incoming.content_loaded === false && previous.content_loaded !== false) {
     merged = {
       ...previous, ...incoming, content_loaded: previous.content_loaded,
-      original_text: previous.original_text, translated_text: previous.translated_text,
+      original_text: previous.original_text, translated_text: previous.translated_text, formatted_content:previous.formatted_content, formatting_status:previous.formatting_status,
       related_links: previous.related_links, images: incoming.images ?? previous.images
     };
   }

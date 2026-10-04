@@ -21,6 +21,12 @@ const (
 
 // Config contains all validated settings needed by the service.
 type Config struct {
+	FormatBaseURL    string
+	FormatAPIKey     string
+	FormatModel      string
+	FormatAuto       bool
+	FormatDailyLimit int
+
 	TypesafeBaseURL string
 	TypesafeAPIKey  string
 	TypesafeModel   string
@@ -131,6 +137,11 @@ func baseConfig() Config {
 	return Config{
 		TypesafeBaseURL:          valueOrDefault("TYPESAFE_BASE_URL", "https://api.typesafe.ai"),
 		TypesafeAPIKey:           strings.TrimSpace(os.Getenv("TYPESAFE_API_KEY")),
+		FormatBaseURL:            strings.TrimSpace(os.Getenv("FORMAT_BASE_URL")),
+		FormatAPIKey:             strings.TrimSpace(os.Getenv("FORMAT_API_KEY")),
+		FormatModel:              strings.TrimSpace(os.Getenv("FORMAT_MODEL")),
+		FormatAuto:               os.Getenv("FORMAT_AUTO") == "true",
+		FormatDailyLimit:         20,
 		TypesafeModel:            valueOrDefault("TYPESAFE_MODEL", "jev-1.13.0"),
 		CairnBaseURL:             valueOrDefault("CAIRN_API_BASE_URL", defaultCairnBaseURL),
 		CairnToken:               strings.TrimSpace(os.Getenv("CAIRN_ENRICHER_TOKEN")),
@@ -232,6 +243,9 @@ func (c *Config) readNumbers() error {
 	if c.ShutdownTimeout, err = durationValue("SHUTDOWN_TIMEOUT", 15*time.Second); err != nil {
 		return err
 	}
+	if c.FormatDailyLimit, err = intValue("FORMAT_DAILY_LIMIT", 20, 1, 100); err != nil {
+		return err
+	}
 	if c.MaxConcurrency, err = intValue("MAX_CONCURRENCY", 2, 1, 16); err != nil {
 		return err
 	}
@@ -245,6 +259,15 @@ func (c *Config) readNumbers() error {
 // and HTTP/log settings are needed everywhere; Grok is only needed by the
 // reading path; Typesafe is only needed by the classification path.
 func (c Config) validateFor(role Role) error {
+	if c.FormatModel != "" || c.FormatBaseURL != "" || c.FormatAPIKey != "" {
+		if c.FormatModel == "" || c.FormatBaseURL == "" || c.FormatAPIKey == "" {
+			return fmt.Errorf("FORMAT_MODEL, FORMAT_BASE_URL and FORMAT_API_KEY must be configured together")
+		}
+		if err := validateBaseURL("FORMAT_BASE_URL", c.FormatBaseURL); err != nil {
+			return err
+		}
+	}
+
 	if strings.TrimSpace(c.CairnToken) == "" {
 		return fmt.Errorf("CAIRN_ENRICHER_TOKEN is required")
 	}

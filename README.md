@@ -169,3 +169,31 @@ Momax NAS 使用 [deploy/nas/compose.yaml](deploy/nas/compose.yaml)，局域网�
 [MIT](LICENSE)
 
 Opt-in semantic extensions use a shared, persistent Worker budget. See [limits, failure recovery and rollout](docs/jev-v2/09-semantic-extensions.md) before enabling them.
+
+
+### 可选正文整理
+
+浏览器插件 0.2.0 可直接归档已加载正文与图片；Worker 迁移 `0053_capture_and_formatting.sql`
+及对应 API 需先发布。来源快照会标注 `browser_capture`，普通阅读增强复用该快照，
+仍保留已有翻译、摘要和分类流程。只有明确请求重新读取原帖才走原来的源站检索。
+
+正文整理使用独立模型配置 `FORMAT_BASE_URL`（含 `/v1`）、`FORMAT_API_KEY` 和
+`FORMAT_MODEL`，使用与现有服务一致的 Responses API 结构化输出协议。三个变量需一起配置。
+未配置时不启动整理执行器，也不会产生整理模型费用。`FORMAT_AUTO=false` 为默认值，
+可在网页或 Android 阅读页点“整理正文”；网页多选菜单可批量提交。
+`FORMAT_AUTO=true` 会自动处理有正文且尚无有效整理版的收藏（包括历史收藏）。
+`FORMAT_DAILY_LIMIT` 默认 20，范围 1–100，按 UTC 日期限制任务领取次数。
+
+独立队列每 15 秒检查一次，不阻塞来源采集和分类。单次请求最多 180 秒，租约 4 分钟，
+意外中断最多领取 3 次；失败可手动重试。模型可使用独立供应商与密钥，不自动沿用其他模型密钥。
+整理输入优先为现有译文，否则为原文；输出单独保存在 `content_presentations.formatted_content`，
+记录输入指纹、输入类型、模型和提示词版本。输入变化后旧结果失效，两端回退到译文或原文。
+只校验通过的结果作为默认阅读版；不搜索、补写、改动分类或覆盖人工标记。
+
+校验覆盖正文异常丢失、原有数字、URL、代码块及图片引用，不等同于语义完全无损证明。
+页面提供查看原内容，原文始终保留；历史采集已丢失的图片或表格不能通过排版恢复。
+正文格式为受限 Markdown，两端通过安全组件渲染，不执行来源 HTML。
+
+发布顺序：备份 D1 → 应用迁移并发布 Worker → 更新本服务并配置整理模型 → 更新 Android 与插件。
+关闭整理配置即可停止新增调用，已保存原文及整理版仍可读。数据库迁移只新增表和触发器，
+发布本身不会批量调用模型；自动处理和真实模型验收应单独启用。

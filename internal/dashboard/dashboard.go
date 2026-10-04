@@ -358,6 +358,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/rerank", s.rerank)
 	mux.HandleFunc("GET /api/offline-scope", s.offlineScope)
 	mux.HandleFunc("GET /api/bookmarks/{id}", s.getBookmark)
+	mux.HandleFunc("GET /api/bookmarks/{id}/presentation", s.presentation)
+	mux.HandleFunc("POST /api/bookmarks/{id}/presentation", s.presentation)
 	mux.HandleFunc("GET /api/bookmarks/{id}/identity", s.getBookmarkIdentity)
 	mux.HandleFunc("GET /api/bookmarks/{id}/reading", s.getReading)
 	mux.HandleFunc("GET /api/images/{key...}", s.getImage)

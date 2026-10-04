@@ -1,7 +1,7 @@
 // Application controller: routing, layout, selection and the curation actions
 // that span several components (status changes with auto-advance and undo,
 // batch operations, export).
-import { api, errorLabel } from "./api.js";
+import { api, errorLabel, fetchJSON } from "./api.js";
 import * as backstage from "./backstage.js";
 import * as curation from "./curation.js";
 import * as detail from "./detail.js";
@@ -574,6 +574,10 @@ function openListMenu(anchor) {
 
 function openBatchMenu(anchor, ids) {
   openMenu(anchor, [
+    { label: "整理正文", icon: "sparkles", hint: "整理已存正文，保留原内容", run: async () => {
+      let accepted=0;for(const id of ids){try{await fetchJSON(`/api/bookmarks/${id}/presentation`,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});accepted++;}catch{}}
+      toast(`已提交 ${accepted} 条正文整理${accepted < ids.length ? `，${ids.length-accepted} 条未提交（无正文或连接失败）` : ""}`);
+    } },
     { label: "确认 AI 标签", icon: "sparkles", hint: "只确认有 AI 建议且未确认的", run: () => confirmMany(ids) },
     { label: "导出所选（Markdown）", icon: "download", run: () => exportIds(ids) },
     { label: "重新读取原帖", icon: "refresh", hint: "会调用模型", run: () => processMany(ids) }

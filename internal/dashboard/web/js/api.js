@@ -376,6 +376,8 @@ async function fetchReadingDetail(id, { prefetch = false, signal } = {}) {
           current?.content_loaded === false) throw new APIError("invalid_reading", 502);
       reading.detail.original_text = current.original_text;
       reading.detail.translated_text = current.translated_text;
+      reading.detail.formatted_content = current.formatted_content;
+      reading.detail.formatting_status = current.formatting_status;
       reading.detail.content_loaded = true;
     }
     readingSupported = true;
