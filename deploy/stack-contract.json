@@ -1,7 +1,7 @@
 {
   "version": 1,
   "worker_repository": "Alpenl/cairn-share",
-  "worker_revision": "784efd3445adc70f4065c9ac6bb52543863cc73b",
+  "worker_revision": "a7f8c39ff01ae8b2c8429df4da3c297b9a7aba37",
   "last_worker_migration": "0055_library_sync.sql",
   "verification": {
     "paid_models": false,
