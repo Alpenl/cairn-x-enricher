@@ -1,58 +1,82 @@
-// Small, safe Markdown subset. Source HTML is always text; remote images are never embedded.
+// Parsing and extraction are provided by Marked and Defuddle; DOMPurify is the
+// final safety boundary. Only Cairn archive identities are resolved into images.
 import { h } from "./dom.js";
-function inline(parent,text) {
- const tokens=/(!?\[([^\]\n]*)\]\(([^\s]+)\)|\*\*([^*]+)\*\*|`([^`]+)`)/g;
- let last=0;
- for(const m of text.matchAll(tokens)) {
-  parent.append(document.createTextNode(text.slice(last,m.index)));
-  if(m[4])parent.append(h("strong",m[4]));
-  else if(m[5])parent.append(h("code",m[5]));
-  else {
-   let url;try{url=new URL(m[3]);}catch{}
-   if(url&&/^https?:$/.test(url.protocol)&&!url.username&&!url.password) {
-    const a=h("a",m[2]||url.host);a.href=url.href;a.target="_blank";a.rel="noopener noreferrer";parent.append(a);
-   }else parent.append(document.createTextNode(m[2]||m[0]));
-  }
-  last=m.index+m[0].length;
- }
- parent.append(document.createTextNode(text.slice(last)));
+import { Defuddle, Marked, DOMPurify } from "./vendor/reader.js";
+import { adaptLegacyCapture } from "./reading-legacy.js";
+
+const parser = new Marked({gfm:true, breaks:true});
+// Archive HTML is source text, never executable markup, even in the raw view.
+parser.use({renderer:{html({text}){return text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}}});
+const allowedTags=['p','br','hr','h1','h2','h3','h4','h5','h6','ul','ol','li','blockquote','pre','code','strong','em','del','a','img','table','thead','tbody','tr','th','td','sup','sub','div','span'];
+function archiveMarkdown(text) {
+ // Compatibility for linked images produced by the old browser collector.
+ return text.replace(/^\[!([^\[\]\n]*)\(cairn-image:(\d+)\)\]\([^\n]*\)$/gm,'![$1](cairn-image:$2)')
+  .replace(/^\[(!\[[^\]]*\]\(cairn-image:\d+\))\]\([^\n]*\)$/gm,'$1');
 }
-function archivedImage(line) {
- // Older X article captures used [!alt(cairn-image:N)](source-link).
- // Resolve only the local archive marker; never embed the outer remote URL.
- const match = line.trim().match(/^!\[([^\]]*)\]\(cairn-image:(\d+)\)$/)
-  || line.trim().match(/^\[!\[([^\]]*)\]\(cairn-image:(\d+)\)\]\([^\n]*\)$/)
-  || line.trim().match(/^\[!([^\[\]\n]*)\(cairn-image:(\d+)\)\]\([^\n]*\)$/);
- return match ? { index: Number(match[2]), alt: match[1] } : null;
-}
-export function renderReading(container,text,{image}={}) {
- const renderedImages = new Set();
- const fragment=document.createDocumentFragment();
- const lines=(text||"").replace(/\r/g,"").split("\n");
- let paragraph=[],list=null,code=null;
- const flush=()=>{if(paragraph.length){const p=h("p");inline(p,paragraph.join("\n"));fragment.append(p);paragraph=[];}list=null;};
- for(let i=0;i<lines.length;i++) {
-  const line=lines[i];
-  if(/^\s*```/.test(line)){flush();if(code){fragment.append(h("pre",h("code",code.join("\n"))));code=null;}else code=[];continue;}
-  if(code){code.push(line);continue;}
-  if(!line.trim()){flush();continue;}
-  const asset=archivedImage(line);
-  if(asset&&image){flush();const node=image(asset.index,asset.alt);if(node){fragment.append(node);renderedImages.add(asset.index);}continue;}
-  const heading=line.match(/^(#{1,6})\s+(.+)$/);
-  if(heading){flush();const node=h(`h${Math.min(4,heading[1].length+1)}`);inline(node,heading[2]);fragment.append(node);continue;}
-  const bullet=line.match(/^\s*(?:([-*+•])|([0-9]+)[.)])\s+(.+)$/);
-  if(bullet){if(paragraph.length)flush();const tag=bullet[2]?"ol":"ul";if(!list||list.tagName.toLowerCase()!==tag){list=h(tag);if(bullet[2])list.start=Number(bullet[2]);fragment.append(list);}const li=h("li");inline(li,bullet[3]);list.append(li);continue;}
-  if(/^>\s?/.test(line)){flush();const q=h("blockquote");inline(q,line.replace(/^>\s?/,""));fragment.append(q);continue;}
-  if(line.includes("|")&&/^\s*\|?\s*:?-{3,}/.test(lines[i+1]||"")) {
-   flush();const table=h("table"),head=h("thead"),body=h("tbody");
-   const cells=s=>s.trim().replace(/^\||\|$/g,"").split("|");
-   const row=(values,tag)=>{const tr=h("tr");for(const value of values){const td=h(tag);inline(td,value.trim());tr.append(td);}return tr;};
-   head.append(row(cells(line),"th"));i++;while(i+1<lines.length&&lines[i+1].includes("|")){body.append(row(cells(lines[++i]),"td"));}table.append(head,body);fragment.append(h("div.reading-table",table));continue;
-  }
-  list=null;paragraph.push(line);
+export function renderReading(container,text,{image,url='',clean=true}={}) {
+ const original=archiveMarkdown(text||'').replace(/(^>[^\n]*)\n\n(?=>)/gm,'$1\n>\n');
+ // Preserve our private URI scheme during sanitization, then remove all src
+ // attributes before mounting anything into the live document.
+ const html=parser.parse(original.replace(/\[([^\]]*)\]\(cairn-media:(\d+)\)/g,'[$1](https://cairn.invalid/media-placeholder/$2)')).replace(/src="cairn-image:(\d+)"/g,'src="https://cairn.invalid/archive/$1"');
+ const doc=new DOMParser().parseFromString('<!doctype html><html><head><title></title></head><body><article id="cairn-article"></article></body></html>','text/html');
+ const root=doc.querySelector('article');
+ root.append(DOMPurify.sanitize(html,{RETURN_DOM_FRAGMENT:true,ALLOWED_TAGS:allowedTags,ALLOWED_ATTR:['href','src','alt','title','start','colspan','rowspan'],ALLOW_DATA_ATTR:false,ALLOW_ARIA_ATTR:false}));
+ for(const img of root.querySelectorAll('img')) {
+  const match=(img.getAttribute('src')||'').match(/^https:\/\/cairn\.invalid\/archive\/(\d+)$/);
+  if(match) {img.setAttribute('src',`cairn-image:${match[1]}`);img.setAttribute('width','800');img.setAttribute('height','600');}
+  else img.replaceWith(doc.createTextNode(img.alt||'图片未归档'));
  }
- flush();if(code)fragment.append(h("pre",h("code",code.join("\n"))));container.replaceChildren(fragment);
- return renderedImages;
+ let changed=false;
+ if(clean) {
+  changed=adaptLegacyCapture(root,url);
+  // The archive is already an article: score its blocks, never fetch another
+  // page or third-party extractor API. Keep uncertain images and source text.
+  try {
+   const result=new Defuddle(doc.cloneNode(true),{url:'https://cairn.invalid/article',contentSelector:'#cairn-article',useAsync:false,includeReplies:false,removeSmallImages:false,removeHiddenElements:false}).parse();
+   if(result.content?.trim()) {
+    const extracted=new DOMParser().parseFromString(result.content,'text/html').body;
+    const beforeImages=[...root.querySelectorAll('img')].map(n=>n.getAttribute('src'));
+    const afterImages=[...extracted.querySelectorAll('img')].map(n=>n.getAttribute('src'));
+    // Never silently lose an archived image in a generic extraction heuristic.
+    const headings=[...root.querySelectorAll('h1,h2,h3,h4,h5,h6')].map(n=>n.textContent.trim());
+    const keptHeadings=[...extracted.querySelectorAll('h1,h2,h3,h4,h5,h6')].map(n=>n.textContent.trim());
+    const code=[...root.querySelectorAll('pre')].map(n=>n.textContent);
+    const keptCode=[...extracted.querySelectorAll('pre')].map(n=>n.textContent);
+    const media=[...root.querySelectorAll('a[href^="https://cairn.invalid/media-placeholder/"]')].map(n=>n.getAttribute('href'));
+    const keptMedia=[...extracted.querySelectorAll('a[href^="https://cairn.invalid/media-placeholder/"]')].map(n=>n.getAttribute('href'));
+    if(beforeImages.every(src=>afterImages.includes(src))&&headings.every(t=>keptHeadings.includes(t))&&code.every(t=>keptCode.includes(t))&&media.every(t=>keptMedia.includes(t))){changed ||= root.textContent.trim()!==extracted.textContent.trim();root.replaceChildren(...extracted.childNodes);}
+   }
+  } catch { /* The sanitized archived document remains readable. */ }
+ }
+ // DOMPurify's default URL policy rejects Cairn's private URI; use a temporary
+ // inert HTTPS identity and resolve it only after the final sanitization.
+ const finalHTML=root.innerHTML.replace(/src="cairn-image:(\d+)"/g,'src="https://cairn.invalid/archive/$1"');
+ const fragment=DOMPurify.sanitize(finalHTML,{RETURN_DOM_FRAGMENT:true,ALLOWED_TAGS:allowedTags,ALLOWED_ATTR:['href','src','alt','title','start','colspan','rowspan'],ALLOW_DATA_ATTR:false,ALLOW_ARIA_ATTR:false});
+ const renderedImages=new Set();
+ for(const img of fragment.querySelectorAll('img')) {
+  const match=(img.getAttribute('src')||'').match(/^https:\/\/cairn\.invalid\/archive\/(\d+)$/);
+  img.removeAttribute('src');
+  const index=match?Number(match[1]):-1;
+  const alt=/^(图片|图像|image)$/i.test(img.alt||'')?'':img.alt;
+  const node=index>=0&&image?image(index,alt):null;
+  if(node){const parent=img.closest('a')||img;parent.replaceWith(node);renderedImages.add(index);}
+  else img.replaceWith(h('span','图片未归档'));
+ }
+ for(const a of fragment.querySelectorAll('a')) {
+  const media=(a.getAttribute('href')||'').match(/^https:\/\/cairn\.invalid\/media-placeholder\/(\d+)(\?poster=1)?$/);
+  if(media){const slot=h('div.reading-media-slot',{dataset:{mediaIndex:media[1],poster:String(Boolean(media[2]))}},h('a',{href:url||'#'},'媒体未归档，查看原文'));const parent=a.parentElement?.tagName==='P'&&a.parentElement.childNodes.length===1?a.parentElement:a;parent.replaceWith(slot);continue;}
+
+  try {const u=new URL(a.getAttribute('href'));if(!/^https?:$/.test(u.protocol)||u.username||u.password)throw 0;a.href=u.href;a.target='_blank';a.rel='noopener noreferrer';}
+  catch {a.replaceWith(...a.childNodes);}
+ }
+ for(const heading of fragment.querySelectorAll('h1,h2,h3,h4,h5,h6')) {
+  const level=Math.min(4,Number(heading.tagName.slice(1))+1),replacement=h(`h${level}`);replacement.append(...heading.childNodes);heading.replaceWith(replacement);
+ }
+ for(const table of fragment.querySelectorAll('table')){const wrapper=h('div.reading-table');table.replaceWith(wrapper);wrapper.append(table);}
+ for(const p of fragment.querySelectorAll('p'))if(p.childNodes.length===1&&p.firstChild.tagName==='FIGURE')p.replaceWith(p.firstChild);
+ const links=[...fragment.querySelectorAll("a[href]")].map(a=>({url:a.href,title:a.textContent.trim()}));
+ container.replaceChildren(fragment);container.dataset.cleaned=String(changed);
+ return {images:renderedImages,links,cleaned:changed};
 }
 
 // A Chinese source is already readable. A generated Chinese rewrite must not

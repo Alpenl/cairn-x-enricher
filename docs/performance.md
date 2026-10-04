@@ -76,3 +76,14 @@ Counts retain the previous response while the new query is pending, then update 
 Search previews metadata matches from a valid complete query snapshot, or already displayed rows when only the search text changes. This is explicitly partial: the UI says full-text search is still running, always requests the authoritative server query, and replaces the preview with its full results/count. It never treats absent metadata matches as an empty full-text result. Cache lifetime, account invalidation and query semantics are unchanged. Input composition does not trigger intermediate queries; Enter submits without discarding keyboard focus.
 
 Chinese archives display their original Markdown by default rather than a generated Chinese rewrite. This restores existing headings, links and inline image positions without paid reprocessing. Explicit formatted content retains priority and the original toggle remains available. Future Chinese reading-aid results preserve the exact archived body programmatically. Figures already embedded inline are not duplicated into a gallery.
+
+
+## Library-based clean reading
+
+Defuddle 0.19.4 extracts and standardizes article blocks; Marked 18.0.14 replaces the handwritten Markdown subset, and DOMPurify 3.4.16 sanitizes the output. Libraries are pinned and bundled locally (`npm run build-reader`, `npm run check-reader`); the committed bundle keeps Go builds self-contained. Third-party asynchronous extraction is disabled. No LLM is required for the default reading view.
+
+Legacy browser captures have already lost HTML roles. A narrow X compatibility adapter restores known profile/statistics/promotion roles and split inline links before Defuddle extraction. It does not remove arbitrary promotional-sounding prose, quoted examples or code. Existing source text stays immutable and is available through the raw toggle. Extraction falls back to the sanitized Marked document if it would drop archived images, headings, code or media placeholders. Related links are collected from retained content and merged separately with saved links, excluding platform chrome and media endpoints.
+
+Native media players are visible in article order and load a preview on approaching the viewport. Clips up to 8 MiB reuse the bounded session blob cache; larger files retain Range streaming. They never autoplay. View changes abort outstanding downloads and release players/object URLs. Optional AI formatting is advertised only when all formatter settings are configured; the NAS rejects new formatting submissions otherwise.
+
+`tests/browser/clean-reading.mjs` covers non-destructive cleanup, nested lists/quotes, separate citations, raw fallback, no remote image requests and measured parse time. `media-preview.mjs` decodes/plays a generated local WebM, checks inline placement, raw toggling, one-download reuse and mobile overflow. Real-library data is used only in protected deployment evidence, not committed fixtures.

@@ -1907,3 +1907,17 @@ button.chip:hover .chip-x, button.chip:focus-visible .chip-x { width: 11px; opac
 .archived-media [hidden] { display:none; }
 .media-title { font-weight:600; margin:0 0 12px; }
 .media-download { display:block; margin-top:12px; font-size:13px; }
+
+/* Archived media is part of the article, with a visible native player. */
+.archived-media { padding:0; border:0; border-radius:0; margin:1.6em 0; }
+.archived-media .media-title { display:none; }
+.media-preview { position:relative; }
+.media-preview video { width:100%; aspect-ratio:16/9; object-fit:contain; background:#171b1e; border-radius:12px; margin:0; }
+.media-preview audio { width:100%; }
+.media-status { position:absolute; inset:40% 12px auto; text-align:center; color:#dce2e5; font-size:13px; pointer-events:none; }
+.media-status button { pointer-events:auto; }
+.media-more { margin-top:8px; color:var(--text-muted); font-size:12px; }
+.media-more summary { cursor:pointer; }
+.detail-body p,.original p { white-space:normal; }
+.detail-body blockquote p { margin:.55em 0; }
+.detail-body li > p { margin:.4em 0; }

@@ -14,7 +14,7 @@ try {
  await page.locator('#detail-body h3').waitFor();
  assert.equal(await page.locator('#reading-version').textContent(),'整理版');
  assert.equal(await page.locator('#detail-body li').count(),2);
- assert.equal(await page.locator('#detail-body pre code').textContent(),'const value = 123;');
+ assert.equal(await page.locator('#detail-body pre code').textContent(),'const value = 123;\n');
  assert.equal(await page.locator('#detail-body table tbody tr').count(),1);
  assert.equal(await page.locator('#detail-body script').count(),0);
  assert.equal(await page.locator('#detail-body a[href^="javascript:"]').count(),0);
@@ -28,7 +28,7 @@ try {
  item.translated_text="AI改写的扁平中文正文，没有图文位置。";
  item.images=Array.from({length:21},(_,i)=>({key:`test/archive-${i}.png`}));
  await page.reload();await page.locator('#detail-body .reading-figure').first().waitFor();
- assert.equal(await page.locator('#reading-version').textContent(),'原文');
+ assert.equal(await page.locator('#reading-version').textContent(),'净读版');
  assert.equal(await page.locator('#detail-body h3').count(),21);
  assert.equal(await page.locator('#detail-body .reading-figure').count(),21);
  assert.equal(await page.locator('#figures').isVisible(),false);
