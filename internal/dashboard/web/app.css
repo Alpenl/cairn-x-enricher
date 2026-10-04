@@ -1881,3 +1881,25 @@ button.chip:hover .chip-x, button.chip:focus-visible .chip-x { width: 11px; opac
 .quality-table-scroll { overflow-x: auto; }
 .quality-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
 .quality-table td, .quality-table th { padding: 8px; border-bottom: 1px solid var(--line, #e4e7ea); white-space: nowrap; }
+
+.reading-toolbar { display:flex; gap:12px; align-items:center; margin:20px 0; font-size:12px; color:var(--muted); }
+.detail-body,.original { overflow-wrap:anywhere; }
+.detail-body p,.original p { white-space:pre-line; }
+.detail-body h2,.detail-body h3,.detail-body h4,.original h2,.original h3 { line-height:1.45; margin:1.8em 0 .7em; font-weight:650; }
+.detail-body h2 { font-size:1.45em; }.detail-body h3 { font-size:1.2em; }.detail-body h4 { font-size:1.05em; }
+.detail-body ul,.detail-body ol,.original ul,.original ol { padding-left:1.5em; margin:1em 0; }
+.detail-body li { margin:.4em 0; }
+.detail-body blockquote,.original blockquote { border-left:3px solid #88977d; margin:1.2em 0; padding:.5em 1em; color:inherit; background:#879a7710; }
+.detail-body pre,.original pre { overflow:auto; padding:18px; border-radius:10px; background:#879a7714; line-height:1.6; font-size:.85em; white-space:pre; }
+.detail-body code,.original code { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; background:#879a7710; border-radius:3px; }
+.detail-body a,.original a { color:inherit; text-decoration:underline; text-underline-offset:3px; }
+.reading-table { overflow:auto; margin:1.2em 0; }.reading-table table { border-collapse:collapse; width:100%; font-size:.9em; }
+.reading-table th,.reading-table td { text-align:left; border:1px solid #879a7735; padding:9px 12px; }
+.reading-figure { margin:1.5em 0; }.reading-figure img { max-width:100%;height:auto;border-radius:10px; }.reading-figure figcaption { text-align:center;font-size:12px;opacity:.7;margin-top:8px; }
+@media(max-width:600px) { .detail-body {font-size:16px;line-height:1.85;} .reading-toolbar {flex-wrap:wrap;} }
+/* Archived video/audio stays in the private reader; downloads start on demand. */
+.archived-media { margin:24px 0; padding:16px; border:1px solid var(--border); border-radius:12px; }
+.archived-media video,.archived-media audio { display:block; width:100%; max-height:70vh; margin:12px 0; }
+.archived-media [hidden] { display:none; }
+.media-title { font-weight:600; margin:0 0 12px; }
+.media-download { display:block; margin-top:12px; font-size:13px; }

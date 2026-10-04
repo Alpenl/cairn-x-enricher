@@ -228,6 +228,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
     const item = state.items.find((entry) => entry.id === Number(match[1]));
     if (!item) return send(404, { error: "not_found" });
     const action = match[2] || "";
+    if (action === 'media' && request.method === 'GET') return send(200, {items: item.media || []});
 
     if (!action && request.method === "GET") return send(200, publicDetail(item));
 

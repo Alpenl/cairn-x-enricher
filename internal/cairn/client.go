@@ -66,6 +66,8 @@ type ImageRef struct {
 
 // Bookmark is the secret-free enrichment state shown in the management UI.
 type Bookmark struct {
+	FormattedContent       string                   `json:"formatted_content,omitempty"`
+	FormattingStatus       string                   `json:"formatting_status,omitempty"`
 	CacheIdentity          *BookmarkCacheIdentity   `json:"cache_identity,omitempty"`
 	ID                     int64                    `json:"id"`
 	URL                    string                   `json:"url"`

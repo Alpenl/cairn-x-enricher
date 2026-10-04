@@ -28,6 +28,7 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/extension"
 	"github.com/Alpenl/cairn-x-enricher/internal/health"
 	"github.com/Alpenl/cairn-x-enricher/internal/observability"
+	"github.com/Alpenl/cairn-x-enricher/internal/presentation"
 	"github.com/Alpenl/cairn-x-enricher/internal/processor"
 )
 
@@ -289,6 +290,10 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 	// Track the scheduler so shutdown can wait for an in-flight batch. Without
 	// this, main returns while a batch is still running and the process exits,
 	// stranding every lease that batch holds.
+	if cfg.FormatModel != "" && cfg.FormatBaseURL != "" && cfg.FormatAPIKey != "" {
+		formatter := &presentation.Runner{Config: presentation.Config{WorkerURL: cfg.CairnBaseURL, WorkerToken: cfg.CairnToken, BaseURL: cfg.FormatBaseURL, APIKey: cfg.FormatAPIKey, Model: cfg.FormatModel, Auto: cfg.FormatAuto, DailyLimit: cfg.FormatDailyLimit}, Client: upstreamHTTPClient(120 * time.Second)}
+		go formatter.Run(ctx, logger)
+	}
 	schedulerDone := make(chan struct{})
 	go func() {
 		defer close(schedulerDone)

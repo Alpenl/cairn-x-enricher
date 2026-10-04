@@ -1,0 +1,26 @@
+import assert from "node:assert/strict";
+import { chromium } from "playwright";
+import { createFixtureState,startFixtureServer } from "./fixture-server.mjs";
+const state=createFixtureState();
+const item=state.items[0];
+item.images=[];item.ai_title="正文整理阅读示例";item.summary="保留完整内容，改善标题、列表和代码的阅读层次。";
+item.original_text="原始收藏正文。";item.translated_text="原内容译文。";item.status="completed";item.formatting_status="completed";
+item.formatted_content="## 清晰的章节\n\n正文包含 **重点** 和 [来源](https://example.com/article)。\n\n- 第一条\n- 第二条\n\n> 保留引用\n\n```js\nconst value = 123;\n```\n\n| 名称 | 数量 |\n| --- | --- |\n| 示例 | 123 |\n\n<script>window.pwned=true</script>\n\n[危险链接](javascript:alert)";
+const {server,url}=await startFixtureServer({state});
+const browser=await chromium.launch({executablePath:process.env.CHROME_PATH||undefined,headless:true,args:["--no-sandbox"]});
+try {
+ const page=await browser.newPage({viewport:{width:1280,height:960}});const errors=[];page.on("pageerror",e=>errors.push(e.message));
+ await page.goto(`${url}/bookmarks/${item.id}`);
+ await page.locator('#detail-body h3').waitFor();
+ assert.equal(await page.locator('#reading-version').textContent(),'整理版');
+ assert.equal(await page.locator('#detail-body li').count(),2);
+ assert.equal(await page.locator('#detail-body pre code').textContent(),'const value = 123;');
+ assert.equal(await page.locator('#detail-body table tbody tr').count(),1);
+ assert.equal(await page.locator('#detail-body script').count(),0);
+ assert.equal(await page.locator('#detail-body a[href^="javascript:"]').count(),0);
+ await page.locator('#reading-version').scrollIntoViewIfNeeded();await page.screenshot({path:'/tmp/cairn-reading-desktop.png'});
+ await page.locator('#toggle-formatted').click();assert.match(await page.locator('#detail-body').textContent(),/原内容译文/);
+ await page.locator('#toggle-formatted').click();assert.equal(await page.locator('#detail-body h3').count(),1);
+ const mobile=await browser.newPage({viewport:{width:390,height:844}});await mobile.goto(`${url}/bookmarks/${item.id}`);await mobile.locator('#detail-body h3').waitFor();await mobile.locator('#detail-body h3').scrollIntoViewIfNeeded();await mobile.screenshot({path:'/tmp/cairn-reading-mobile.png'});
+ assert.deepEqual(errors,[]);console.log('PASS: formatted reading, source toggle, lists, code, table, safe links and HTML; desktop/mobile screenshots');
+}finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
