@@ -44,3 +44,13 @@ export function renderReading(container,text,{image}={}) {
  }
  flush();if(code)fragment.append(h("pre",h("code",code.join("\n"))));container.replaceChildren(fragment);
 }
+
+// A Chinese source is already readable. A generated Chinese rewrite must not
+// replace its archived structure, links or inline image positions.
+export function readingVersions(item, unformatted = false) {
+ const original = item.original_text || "", translated = item.translated_text || "";
+ const chinese = /^(zh(?:[-_].*)?|chinese|中文|简体中文|繁体中文)$/i.test((item.original_language || "").trim());
+ const base = chinese && original ? original : translated || original;
+ const formatted = !unformatted && item.formatted_content;
+ return { body: formatted || base, label: formatted ? "整理版" : chinese && original ? "原文" : translated && translated !== original ? "译文" : "原内容" };
+}

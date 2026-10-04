@@ -22,5 +22,22 @@ try {
  await page.locator('#toggle-formatted').click();assert.match(await page.locator('#detail-body').textContent(),/原内容译文/);
  await page.locator('#toggle-formatted').click();assert.equal(await page.locator('#detail-body h3').count(),1);
  const mobile=await browser.newPage({viewport:{width:390,height:844}});await mobile.goto(`${url}/bookmarks/${item.id}`);await mobile.locator('#detail-body h3').waitFor();await mobile.locator('#detail-body h3').scrollIntoViewIfNeeded();await mobile.screenshot({path:'/tmp/cairn-reading-mobile.png'});
+ // Existing Chinese archives recover their structure without a model rerun.
+ item.formatted_content="";item.original_language="zh";
+ item.original_text=Array.from({length:21},(_,i)=>`## 第${i+1}节\n\n第${i+1}段完整正文。\n\n![图${i+1}](cairn-image:${i})\n\n图片后的说明${i+1}。`).join("\n\n");
+ item.translated_text="AI改写的扁平中文正文，没有图文位置。";
+ item.images=Array.from({length:21},(_,i)=>({key:`test/archive-${i}.png`}));
+ await page.reload();await page.locator('#detail-body .reading-figure').first().waitFor();
+ assert.equal(await page.locator('#reading-version').textContent(),'原文');
+ assert.equal(await page.locator('#detail-body h3').count(),21);
+ assert.equal(await page.locator('#detail-body .reading-figure').count(),21);
+ assert.equal(await page.locator('#detail-figures').isVisible(),false);
+ assert.equal(await page.locator('#original-block').isVisible(),false);
+ const sequence=await page.locator('#detail-body').evaluate(node=>[...node.children].slice(0,4).map(n=>n.tagName));
+ assert.deepEqual(sequence,['H3','P','FIGURE','P']);
+ assert.doesNotMatch(await page.locator('#detail-body').textContent(),/扁平中文/);
+ await mobile.reload();await mobile.locator('#detail-body .reading-figure').first().waitFor();
+ assert.equal(await mobile.locator('#detail-body .reading-figure').count(),21);
+ assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  assert.deepEqual(errors,[]);console.log('PASS: formatted reading, source toggle, lists, code, table, safe links and HTML; desktop/mobile screenshots');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

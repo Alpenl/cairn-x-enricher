@@ -62,3 +62,17 @@ IndexedDB 升至版本 2，文章正文和轻量容量元数据分开保存。�
 - 配套 Worker：`npm test`、`npm run typecheck`、`npm run deploy:dry-run`。
 - 固定配对提交：`tests/local-integration/run.sh` 和 `tests/local-integration/browser-e2e.sh`，使用本地 Worker/D1/R2 与零付费模型夹具。
 - 发布后以 GET 核对全部收藏的标签/阅读合同，并复测首次筛选、重复筛选、首次正文、图片字节和关键请求排队时间。生产收藏和数据库快照仅放入受限恢复目录，不上传公共测试产物。
+
+### Stable facet rendering
+
+Filter selection updates mounted topic and vocabulary controls in place. Rows and sections are keyed by term/section identity, and click handlers read the current facet role so a specific topic can safely change between a topic and a refinement. Unchanged navigation links and secondary groups remain mounted. Search text, open groups, focus and pin preferences survive selection and count responses.
+
+Counts retain the previous response while the new query is pending, then update in place; an absent count retains an empty fixed-width slot. Labels keep the same font weight when selected, and the filter header reserves the clear-button line height. Together these prevent wrapped labels from widening, shrinking or shifting on every click. Actual section membership can still change when refinements, search, taxonomy or pins change.
+
+`stable-facets-browser-test.mjs` samples every animation frame while toggling multiline Chinese/Latin labels at normal and larger font sizes with delayed, changing counts. It asserts zero node removals and zero navigation-row geometry changes, and checks resource toggling, dynamic refinement roles, search preservation and disappearing refinement sections. It runs in both browser test entry points.
+
+### Search feedback and archived Chinese reading
+
+Search previews metadata matches from a valid complete query snapshot, or already displayed rows when only the search text changes. This is explicitly partial: the UI says full-text search is still running, always requests the authoritative server query, and replaces the preview with its full results/count. It never treats absent metadata matches as an empty full-text result. Cache lifetime, account invalidation and query semantics are unchanged. Input composition does not trigger intermediate queries; Enter submits without discarding keyboard focus.
+
+Chinese archives display their original Markdown by default rather than a generated Chinese rewrite. This restores existing headings, links and inline image positions without paid reprocessing. Explicit formatted content retains priority and the original toggle remains available. Future Chinese reading-aid results preserve the exact archived body programmatically. Figures already embedded inline are not duplicated into a gallery.

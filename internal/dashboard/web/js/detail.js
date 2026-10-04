@@ -1,6 +1,6 @@
 // The reading pane: one bookmark with its status control, curation card,
 // images, translation, lazily rendered original text and diagnostics.
-import { renderReading } from "./reading.js";
+import { renderReading, readingVersions } from "./reading.js";
 import { renderMedia, resetMedia } from './media.js';
 import { fetchJSON } from "./api.js";
 import { api, errorLabel, imagePath, prepareSourceSubmission } from "./api.js";
@@ -68,15 +68,14 @@ function paragraphs(container, text) {
   }});
 }
 
-function renderFigures(item) {
+function renderFigures(item, body) {
   const images = Array.isArray(item.images) ? item.images : [];
-  const key = JSON.stringify([images.map((image) => image.key),item.formatted_content,item.translated_text,item.original_text,showUnformatted]);
+  const key = JSON.stringify([images.map((image) => image.key),body]);
   if (key === renderedImages) return;
   renderedImages = key;
   els.figures.replaceChildren();
   els.figures.dataset.count = String(images.length);
   images.forEach((ref, index) => {
-    const body = (!showUnformatted && item.formatted_content) || item.translated_text || item.original_text || "";
     if (body.includes(`(cairn-image:${index})`)) return;
     const image = h("img", { alt: "", decoding: "async" });
     queueImage(image, imagePath(ref.key), { priority: 0 });
@@ -87,7 +86,7 @@ function renderFigures(item) {
     figure.addEventListener("click", () => openLightbox(images, index));
     els.figures.append(figure);
   });
-  els.figures.hidden = images.length === 0;
+  els.figures.hidden = els.figures.childElementCount === 0;
 }
 
 function renderLinks(item) {
@@ -192,18 +191,17 @@ function render(item) {
   els.bodyLoading.hidden = full;
   if (full) {
     if (formattedItemId !== item.id) { showUnformatted=false;formattedItemId=item.id; }
-    const formatted=item.formatted_content && !showUnformatted;
-    const body=formatted ? item.formatted_content : item.translated_text || item.original_text || "";
-    renderFigures(item);
+    const { body, label } = readingVersions(item, showUnformatted);
+    renderFigures(item, body);
     paragraphs(els.body, body);
     void renderMedia(byId('detail-media'),item);
-    byId("reading-version").textContent=formatted ? "整理版" : "原内容";
+    byId("reading-version").textContent=label;
     byId("toggle-formatted").hidden=!item.formatted_content;
     byId("toggle-formatted").textContent=showUnformatted ? "查看整理版" : "查看原内容";
     const waiting=["pending","processing"].includes(item.formatting_status);
     byId("format-body").disabled=waiting || !body;
     byId("format-body").textContent=waiting ? "等待正文整理" : item.formatting_status === "failed" ? "重试正文整理" : item.formatted_content ? "重新整理正文" : "整理正文";
-    els.originalBlock.hidden = !item.original_text || item.original_text === (item.translated_text || item.original_text);
+    els.originalBlock.hidden = !item.original_text || item.original_text === body;
     if (!els.original.hidden) paragraphs(els.original, item.original_text || "");
     renderLinks(item);
   }

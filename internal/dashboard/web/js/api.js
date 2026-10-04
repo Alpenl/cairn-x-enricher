@@ -259,6 +259,34 @@ function queryRead(path, params, signal, { reuse = false, priority } = {}) {
   });
 }
 
+// A fast, explicitly partial preview. Only fields also searched by the server
+// are used; full-text matches and the authoritative total still come from it.
+export function previewSearch(params, previous) {
+  const text = params.get("q")?.trim();
+  if (!text || text.length > 200 || text.includes("\0")) return null;
+  const fold = value => String(value || "").replace(/[A-Z]/g, c => c.toLowerCase());
+  const terms = text.split(/\s+/).map(fold);
+  if (terms.length > 10) return null;
+  const matching = items => items.filter(item => {
+    const fields = [item.url, item.note, item.ai_title, item.summary, item.why].map(fold);
+    return terms.every(term => fields.some(field => field.includes(term)));
+  });
+  const filters = new URLSearchParams(params); filters.delete("q");
+  for (const [key, entry] of queryCache) {
+    if (entry.until <= Date.now() || !key.startsWith("/api/bookmarks?")) continue;
+    const page = localFilterResult("/api/bookmarks", filters, new URLSearchParams(key.split("?")[1]), entry.value, filterCatalog);
+    if (!page) continue;
+    return matching(page.items);
+  }
+  // Already displayed rows can also provide a partial preview when only q
+  // changes. This does not renew cache TTL or skip the authoritative request.
+  if (previous?.params) {
+    const old = new URLSearchParams(previous.params); old.delete("q"); old.sort(); filters.sort();
+    if (old.toString() === filters.toString()) return matching(previous.items.filter(Boolean));
+  }
+  return null;
+}
+
 // A deep link initially reads only a filtered subset. After that foreground
 // read, warm one bounded page of its view when the overview says it can fit.
 // Larger libraries, search and rapid navigation do not launch a library crawl.

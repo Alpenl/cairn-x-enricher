@@ -194,3 +194,25 @@ func TestTransformPreservesLongSourceExactly(t *testing.T) {
 		t.Fatalf("oversized source reached provider: calls=%d error=%v", calls, err)
 	}
 }
+
+func TestChineseReadingPreservesArchivedMarkdown(t *testing.T) {
+	source := "## 完整标题\n\n第一段。\n\n![示意图](cairn-image:0)\n\n- 原有列表\n\n[出处](https://example.com/article)"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		payload, _ := json.Marshal(map[string]string{
+			"ai_title":          "保留完整图文排版的中文文章",
+			"original_language": "zh-CN", "translated_text": "模型错误改写的扁平内容", "summary": "测试中文摘要",
+		})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "completed", "model": "fixture",
+			"output": []any{map[string]any{"type": "message", "content": []any{map[string]any{"type": "output_text", "text": string(payload)}}}},
+		})
+	}))
+	defer server.Close()
+	client := NewResponsesClient(server.URL, "key", "fixture", 1000, "", server.Client(), testTaxonomy())
+	result, err := client.Transform(context.Background(), Input{ID: 1, URL: "https://x.com/a/status/1", SourceText: source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.OriginalText != source || result.TranslatedText != source {
+		t.Fatal("Chinese archived structure was rewritten")
+	}
+}
