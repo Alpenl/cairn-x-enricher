@@ -74,7 +74,7 @@ function processBadge(item) {
 
 function rowMeta(item) {
   const labels = primaryTags(item.classification, item.custom_tags, terms("topics"))
-    .map((tag) => ({ ...tag, label: tag.label || termLabel(tag.field, tag.id) }));
+    .map((tag) => ({ ...tag, label: termLabel(tag.field, tag.id, tag.label) }));
   const visible = labels.slice(0, 5);
   const hidden = labels.slice(5);
   return h("div.row-meta",

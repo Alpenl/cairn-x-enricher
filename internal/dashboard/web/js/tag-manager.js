@@ -1,6 +1,7 @@
 import {h,clear,byId} from "./dom.js";
 import {openDialog,toast,confirmAction} from "./ui.js";
-import {loadV2} from "./taxonomy.js";
+import {loadV1,loadV2,loadCustomTags} from "./taxonomy.js";
+import {invalidateTaxonomyReads} from "./api.js";
 import {emit} from "./store.js";
 const dimensions={topics:"主题",resource_kinds:"资源类型",content_functions:"内容特征",carriers:"载体",affordances:"潜在用途",forms:"旧版形态",uses:"旧版用途"};
 const labels={tag_collision:"名称或别名已被其他标签使用",invalid_tag_definition:"请填写名称和含义，检查字段长度",last_ai_tag:"这个分类至少需要保留一个可供 AI 判断的标签",revision_conflict:"标签已在别处修改，请重新核对后保存",tag_limit:"这个分类的标签数量已达上限",personal_use_human_only:"反对意见仅供人工使用"};
@@ -26,7 +27,7 @@ export async function browseTags(){
  const query=h('input.collection-input',{type:'search',placeholder:'查找名称、别名或含义','aria-label':'查找标签'}),mode=h('select.collection-input',{'aria-label':'标签状态'},h('option',{value:'active'},'使用中'),h('option',{value:'archived'},'已停用'));
  const dim=h('select.collection-input',{'aria-label':'标签类别'},h('option',{value:'all'},'全部类别'),Object.entries(dimensions).map(([value,label])=>h('option',{value},label)));
  const rows=h('div.collection-list'),recover=h('div');
- const refresh=async()=>{data=await request('/api/tag-catalog');await loadV2();emit('taxonomy');emit('tags:catalog-changed');render();};
+ const refresh=async()=>{data=await request('/api/tag-catalog');invalidateTaxonomyReads();emit('custom-tags:changed');await Promise.all([loadV1(),loadV2(),loadCustomTags()]);emit('taxonomy');emit('tags:catalog-changed');render();};
  const send=async (body,path="/api/tag-catalog/operations",method="POST")=>{
   const old=pending();if(old&&JSON.stringify(old.body||old)!==JSON.stringify(body)){toast('还有一项未确认的修改，请先核对');return false;}
   try{retain({body,path,method});}catch{toast('浏览器无法保存修改，请允许本站本地存储');return false;}

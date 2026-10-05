@@ -98,7 +98,8 @@ function renderSummary() {
   const item = getItem(currentId);
   const modern = tagSystem.tagSystemOverview(currentId);
   const selection = modern?.selection || (session.v1.dirty ? session.v1.selection : null) || item?.effective_selection || (els.section.open && session.v2.status === "ready" ? session.v2.selection : null) || item?.classification || {};
-  const tags = primaryTags(selection, modern?.custom_tags || item?.custom_tags, terms("topics"));
+  const tags = primaryTags(selection, modern?.custom_tags || item?.custom_tags, terms("topics"))
+    .map((tag) => ({ ...tag, label: termLabel(tag.field, tag.id, tag.label) }));
   els.summaryTags.replaceChildren(...tags.slice(0, 5).map((tag) => h("button.tag.curate-summary-tag.tag-filter", {
     type: "button", title: `筛选：${tag.label || termLabel(tag.field, tag.id)}`,
     onclick: (event) => { event.preventDefault(); event.stopPropagation(); emit("tag-filter-request", { field: tag.field, term: tag.id }); }
@@ -870,6 +871,10 @@ export function initCuration() {
   });
   on("tag-system:fallback", (id) => { if (id === currentId) renderTags(); });
   on("tag-system:render", (id) => { if (id === currentId) renderSummary(); });
+  on("taxonomy", () => {
+    renderSummary();
+    if (els.section?.open) renderTags();
+  });
   Object.assign(els, {
     section: byId("curate"), fields: byId("curate-fields"), why: byId("curation-why"), whyCount: byId("why-count"),
     suggestion: byId("why-suggestion"), suggestionBlock: byId("why-suggestion-block"), useSuggestion: byId("use-suggestion"),
