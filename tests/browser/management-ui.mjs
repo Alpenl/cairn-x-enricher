@@ -52,6 +52,7 @@ try {
   };
   await page.goto(url);
   await page.locator("#pinned-collections .nav-item").waitFor();
+  await page.waitForFunction(() => document.querySelector("#list-pane").dataset.loading === "false");
   await alignedNavigation();
   await page.locator("#pinned-collections .nav-item").click();
   await page.waitForFunction(() => document.querySelector("#pinned-collections [aria-current='page']"));
