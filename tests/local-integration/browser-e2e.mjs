@@ -149,13 +149,28 @@ async function main() {
     const automaticCount = ["topics", "resource_kinds", "content_functions"].reduce((count, key) => count + (selection.payload.selection?.[key]?.length || 0), 0);
     check("the current policy keeps two to five supported automatic tags", automaticCount >= 2 && automaticCount <= 5, String(automaticCount));
 
+    // Source checkpoints can be classified before reading finishes. Wait for
+    // the final source and its matching run before replaying its policy; a
+    // revision change during this setup is legitimate, not a replay failure.
+    await waitFor("source and reading completion", async () => {
+      const source = await jsonFetch(`${workerURL}/api/enrichment/jobs/${id}`, { headers: auth(enricherToken) });
+      return source.payload.status === "completed";
+    });
+    const replayRun = await waitFor("classification of the completed source", async () => {
+      const latestSelection = await jsonFetch(`${workerURL}/api/v2/links/${id}/selection?include_state=1`, { headers: auth(enricherToken) });
+      const latestRuns = await jsonFetch(`${workerURL}/api/v2/links/${id}/runs`, { headers: auth(enricherToken) });
+      const matching = latestRuns.payload.runs?.find(candidate => candidate.content_revision === latestSelection.payload.state?.content_revision);
+      if (matching) { selection = latestSelection; return matching; }
+      return null;
+    });
+
     // Rebuild two identical policy projections from the actual production run.
     // AI-only display values must never become legacy or human source data.
     for (let pass = 0; pass < 2; pass++) {
       const replay = await jsonFetch(`${workerURL}/api/v2/links/${id}/decisions`, {
         method: "POST", headers: auth(enricherToken), body: JSON.stringify({
-          operation_key: `browser-ai-rebuild-${pass}`, run_ids: [run.id], policy_version: policyVersion,
-          spec_id: spec.spec_id, requested_model: "jev-1.13.0", content_revision: run.content_revision,
+          operation_key: `browser-ai-rebuild-${pass}`, run_ids: [replayRun.id], policy_version: policyVersion,
+          spec_id: spec.spec_id, requested_model: "jev-1.13.0", content_revision: replayRun.content_revision,
           automatic: selection.payload.selection
         })
       });
