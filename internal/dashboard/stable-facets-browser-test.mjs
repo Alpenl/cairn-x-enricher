@@ -36,6 +36,10 @@ try {
     await page.evaluate(size => { document.querySelector("#facets").style.width = "210px";
       for (const node of document.querySelectorAll(".facet-chip")) node.style.fontSize = `${size}px`;
     }, fontSize);
+    // Enlarged labels can extend below the drawer after navigation grows.
+    // Bring every sampled row into view before recording the baseline so
+    // intentional focus scrolling is not mistaken for a filter layout shift.
+    await page.locator('[data-topic-section="navigation"] .facet-chip').last().scrollIntoViewIfNeeded();
     await page.evaluate(() => {
       const nodes = [...document.querySelectorAll('[data-topic-section="navigation"] .facet-chip')];
       const rects = () => nodes.map(node => { const r = node.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });

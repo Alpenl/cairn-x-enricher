@@ -1,5 +1,5 @@
 import {h,clear,byId} from "./dom.js";
-import {openDialog,toast,confirmAction} from "./ui.js";
+import {openDialog,toast} from "./ui.js";
 import {loadV1,loadV2,loadCustomTags} from "./taxonomy.js";
 import {invalidateTaxonomyReads} from "./api.js";
 import {emit} from "./store.js";
@@ -41,6 +41,7 @@ export async function browseTags(){
   clear(rows,Object.entries(dimensions).filter(([d])=>dim.value==='all'||dim.value===d).flatMap(([d,label])=>(data.catalog[d]||[]).filter(t=>mode.value==='active'?t.active&&!t.deprecated:!t.active||t.deprecated).filter(t=>(t.label+' '+(t.aliases||[]).join(' ')+' '+t.description).toLowerCase().includes(query.value.toLowerCase())).map(t=>h('div.tag-manager-row',
    h('div.tag-manager-copy',h('strong',t.label),h('small',`${label} · ${counts.get(`${d==='forms'?'form':d==='uses'?'use':d}:${t.id}`)||0} 条 · ${d==='uses'&&t.id==='contra'||t.ai_enabled===false?'仅手动':'AI 自动打标'}`),h('p',t.description)),button('管理',()=>editTag(d,t))))));
   if(dim.value==='all')for(const t of (data.custom_tags||[]).filter(t=>mode.value==='active'?t.status==='active':t.status!=='active').filter(t=>t.label.toLowerCase().includes(query.value.toLowerCase())))rows.append(h('div.tag-manager-row',h('div.tag-manager-copy',h('strong',t.label),h('small',`个人标签 · ${t.link_count} 条 · 仅手动`)),button('管理',()=>editCustom(t))));
+  if(!rows.childElementCount)rows.append(h('p.management-empty','没有符合条件的标签'));
  };
  function editCustom(term){
   const input=h('input.collection-input',{value:term.label,maxLength:80,'aria-label':'个人标签名称'});let body=null;
@@ -53,7 +54,7 @@ export async function browseTags(){
   let savedBody=null;const expected=data.revision;
   const make=(type,definition)=>({operation_key:uuid(),expected_revision:expected,dimension:d,...(term?{id:term.id}:{}),type,...(definition?{definition}:{})});
   const history=async()=>{const response=await request(`/api/tag-catalog/history?dimension=${d}&id=${term.id}`);openDialog({title:'标签变更',body:(response.items||[]).length?response.items.map(x=>h('p',`${x.created_at} · ${x.action} · 版本 ${x.revision}`)):h('p','暂无管理变更记录')});};
-  openDialog({title:term?'管理标签':'新建主题标签',body:[h('label.collection-field','名称',name),h('label.collection-field','别名（逗号分隔）',aliases),h('label.collection-field','含义：这个标签应该匹配什么',desc),h('label.collection-field','正例（每行一项）',include),h('label.collection-field','反例（每行一项）',exclude),d==='topics'?h('label.collection-field','粒度',granularity):null,h('label',ai,' 参与 AI 自动打标'),h('p.collection-hint','更改含义和 AI 开关作用于待处理与新收藏。停用后保留历史标签及合集成员。'),term?button('查看变更',history):null],actions:[...(term?[{label:term.active&&!term.deprecated?'停用':'恢复',run:async()=>{savedBody??=make(term.active&&!term.deprecated?'archive':'restore');return send(savedBody);}}]:[]),{label:'保存',primary:true,run:async()=>{
+  openDialog({title:term?'管理标签':'新建主题标签',body:[h('label.collection-field','名称',name),h('label.collection-field','别名（逗号分隔）',aliases),h('label.collection-field','含义：这个标签应该匹配什么',desc),d==='topics'?h('label.collection-field','粒度',granularity):null,h('label.management-check',ai,'参与 AI 自动打标'),h('details.management-advanced',h('summary','匹配示例与排除条件'),h('label.collection-field','正例（每行一项）',include),h('label.collection-field','反例（每行一项）',exclude)),h('p.collection-hint','更改含义和 AI 开关作用于待处理与新收藏。停用后保留历史标签及合集成员。'),term?button('查看变更',history):null],actions:[...(term?[{label:term.active&&!term.deprecated?'停用':'恢复',run:async()=>{savedBody??=make(term.active&&!term.deprecated?'archive':'restore');return send(savedBody);}}]:[]),{label:'保存',primary:true,run:async()=>{
    const split=v=>v.split(/[\n,，]/).map(x=>x.trim()).filter(Boolean);
    const lines=v=>v.split(/\n/).map(x=>x.trim()).filter(Boolean);
    const definition={label:name.value,aliases:split(aliases.value),description:desc.value,includes:lines(include.value),excludes:lines(exclude.value),ai_enabled:ai.checked,...(d==='topics'?{granularity:granularity.value}:{})};
@@ -63,6 +64,6 @@ export async function browseTags(){
   }}]});
  }
  query.addEventListener('input',render);mode.addEventListener('change',render);dim.addEventListener('change',render);
- openDialog({title:'标签管理',wide:true,body:[h('div.collection-tools',query,dim,mode,button('新建标签',()=>editTag('topics',null))),recover,rows]});render();
+ openDialog({title:'标签管理',wide:true,body:[h('div.management-toolbar',query,h('div.collection-tools',dim,mode,h('div.management-actions',button('新建标签',()=>editTag('topics',null))))),recover,rows]});render();
 }
 export function initTagManager(){byId('browse-tags')?.addEventListener('click',()=>browseTags());}
