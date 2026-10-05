@@ -5,6 +5,7 @@ import { state, on, emit } from "./store.js";
 import { openDialog, confirmAction, toast } from "./ui.js";
 import { openOrganizing } from "./collection-organizing.js";
 import { emptyFilters } from "./query.js";
+import { icon } from "./icons.js";
 
 let catalog = [], hooks = {}, loading = null, pinnedSignature = "", loadEpoch = 0;
 // randomUUID is unavailable on plain HTTP NAS addresses; getRandomValues works there.
@@ -29,8 +30,15 @@ function select(id) {hooks.select({...emptyFilters(),curation_status:"all",colle
 function renderNav(){
  const nav=byId("pinned-collections");if(!nav)return;
  const pinned=live().filter(c=>c.pinned&&!c.archived).slice(0,6);
- const signature=JSON.stringify(pinned.map(c=>[c.id,c.name]));
- if(signature!==pinnedSignature){pinnedSignature=signature;clear(nav,pinned.map(c=>button(c.name,()=>select(c.id),"collection-shortcut")));}
+ const signature=JSON.stringify([state.filters.collection_id,pinned.map(c=>[c.id,c.name,c.item_count])]);
+ nav.hidden=!pinned.length;
+ if(signature!==pinnedSignature){
+  pinnedSignature=signature;
+  clear(nav,pinned.map(c=>h("button.nav-item.collection-shortcut",{
+   type:"button",title:c.name,"aria-current":state.filters.collection_id===c.id?"page":null,
+   onclick:()=>select(c.id)
+  },icon("folder",16),h("span.nav-label",c.name),h("span.nav-count",String(c.item_count)))));
+ }
  renderContext();
 }
 function renderContext(){
@@ -75,7 +83,7 @@ export async function browse(){
   button(`${c.pinned?"☆ ":""}${c.name} · ${c.item_count}`,()=>{if(c.deleted)return;dialog.close();select(c.id);},"collection-title"),
   c.deleted?button("恢复",async()=>{await mutation(c.id,c.revision,"restore",{})();render();}):button("管理",()=>edit(c.id,render),"link-btn"))));
  query.addEventListener("input",render);mode.addEventListener("change",render);
- dialog=openDialog({title:"合集",body:[h("div.collection-tools",query,mode,button("新建",()=>create(render)),button("自动整理",()=>{dialog.close();return openOrganizing(catalog,uuid,()=>{load().catch(()=>{});hooks.reload();});})),rows],wide:true});render();
+ dialog=openDialog({title:"合集",body:[h("div.management-toolbar",query,h("div.collection-tools",mode,h("div.management-actions",button("新建",()=>create(render)),button("自动整理",()=>{dialog.close();return openOrganizing(catalog,uuid,()=>{load().catch(()=>{});hooks.reload();});})))),rows],wide:true});render();
 }
 export async function pick(ids){
  ids=[...new Set(ids.filter(Boolean))];if(!ids.length)return;
@@ -151,7 +159,7 @@ export function initCollections(options){
  byId("browse-collections")?.addEventListener("click",()=>browse());
  byId("add-to-collection")?.addEventListener("click",()=>pick([state.selectedId]));
  on("collections:changed",id=>{if(state.filters.collection_id===id)hooks.reload();renderContext();});
- on("list:loaded",renderContext);
+ on("list:loaded",renderNav);
  load().catch(()=>{});
  window.addEventListener("focus",()=>load().catch(()=>{}));
 }

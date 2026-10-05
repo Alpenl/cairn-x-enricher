@@ -48,8 +48,17 @@
 
       <div class="sidebar-scroll">
         <nav class="nav" id="nav-views" aria-label="收藏视图"></nav>
-        <button class="nav-item" id="browse-tags" type="button">标签管理</button>
-        <nav id="collection-nav" aria-label="合集"><button class="nav-item" id="browse-collections" type="button">合集</button><div id="pinned-collections"></div></nav>
+        <nav class="nav nav-management" aria-label="标签与合集">
+          <button class="nav-item" id="browse-tags" type="button">
+            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20.59 13.41-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/><path d="M7 7h.01"/></svg>
+            <span class="nav-label">标签管理</span>
+          </button>
+          <button class="nav-item" id="browse-collections" type="button">
+            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+            <span class="nav-label">合集</span>
+          </button>
+        </nav>
+        <nav class="nav nav-pinned" id="pinned-collections" aria-label="置顶合集" hidden></nav>
 
         <div class="facets-head">
           <span>筛选</span>
