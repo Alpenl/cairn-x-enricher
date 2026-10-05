@@ -54,6 +54,8 @@ func (s *Server) tagSystemProxy(writer http.ResponseWriter, request *http.Reques
 			}
 			path += "/" + url.PathEscape(customID)
 		}
+	case strings.HasPrefix(request.URL.Path, "/api/tag-catalog"):
+		path = strings.Replace(request.URL.Path, "/api/tag-catalog", "/api/v2/tag-catalog", 1)
 	case request.URL.Path == "/api/tag-counts":
 		path = "/api/v2/tags/counts"
 	case request.URL.Path == "/api/tag-quality":
@@ -96,7 +98,7 @@ func (s *Server) tagSystemProxy(writer http.ResponseWriter, request *http.Reques
 	}
 	if request.Method != http.MethodGet {
 		s.invalidateOverview()
-		if strings.HasPrefix(request.URL.Path, "/api/custom-tags") {
+		if strings.HasPrefix(request.URL.Path, "/api/custom-tags") || strings.HasPrefix(request.URL.Path, "/api/tag-catalog") {
 			s.catalog.Invalidate()
 		}
 	}

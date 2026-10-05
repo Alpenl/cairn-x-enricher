@@ -1,3 +1,4 @@
+import {verifyManagedTags} from "./managed-tags.mjs";
 // Real browser end-to-end: real Go HTTP service (serve) + real Worker/D1/R2 +
 // real Chrome. Only the two paid model boundaries are local mocks.
 //
@@ -201,6 +202,10 @@ async function main() {
 
     // 4. The real browser loads the real Go proxy over the real Worker.
     browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ["--no-sandbox"] });
+    if (process.env.CAIRN_MANAGED_TAGS_ONLY === "1") {
+      await verifyManagedTags(browser, `http://127.0.0.1:${goPort}`, workerURL, enricherToken, id);
+      return;
+    }
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(String(error)));
@@ -404,6 +409,7 @@ async function main() {
 
     await verifyLocalFilters(`http://127.0.0.1:${goPort}`);
     await verifyCollections(browser, `http://127.0.0.1:${goPort}`, id);
+    await verifyManagedTags(browser, `http://127.0.0.1:${goPort}`, workerURL, enricherToken, id);
 
     check("no page errors during the real browser session", pageErrors.length === 0, pageErrors.join("; "));
   } catch (error) {

@@ -80,6 +80,8 @@ type Classifier interface {
 }
 
 type stages struct {
+	classificationMu       sync.Mutex
+	classificationRefresh  func(context.Context) (Classifier, string, error)
 	queue                  StageQueue
 	reader                 SourceReader
 	classifier             Classifier
@@ -731,6 +733,18 @@ func (p *Processor) RunClassifications(ctx context.Context, maxJobs int) (int64,
 		return 0, 0, err
 	}
 	s := p.stages
+	s.classificationMu.Lock()
+	defer s.classificationMu.Unlock()
+	if s.classificationRefresh != nil {
+		classifier, version, err := s.classificationRefresh(ctx)
+		if err != nil {
+			return 0, 0, fmt.Errorf("refresh managed tag catalog: %w", err)
+		}
+		if classifier != nil {
+			s.classifier = classifier
+			s.version = version
+		}
+	}
 	var completed, failed int64
 	// The pause gate runs before any claim. A component that failed on the
 	// previous poll must not acquire another lease until the backoff elapses:
@@ -1117,4 +1131,12 @@ func evidenceFromSnapshot(payload json.RawMessage) (*classify.Evidence, error) {
 		return nil, errors.New("snapshot has no primary block")
 	}
 	return evidence, nil
+}
+
+// SetClassificationRefresh replaces a catalog only between classification batches.
+// Source and evidence lanes never read the mutable classifier fields.
+func (p *Processor) SetClassificationRefresh(refresh func(context.Context) (Classifier, string, error)) {
+	if p.stages != nil {
+		p.stages.classificationRefresh = refresh
+	}
 }

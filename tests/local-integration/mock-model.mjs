@@ -67,7 +67,7 @@ export function startMockModel() {
       const questions = body?.questions || {};
       const answers = {};
       for (const [id, question] of Object.entries(questions)) {
-        if (question.type === "noul") answers[id] = { type: "noul", noul: 0.93 };
+        if (question.type === "noul") answers[id] = { type: "noul", noul: JSON.stringify(question).includes("LoRA") ? 0.999 : 0.93 };
         else if (question.type === "choice") answers[id] = choiceAnswers(question);
         else if (question.type === "score") answers[id] = scoreAnswer(question);
       }

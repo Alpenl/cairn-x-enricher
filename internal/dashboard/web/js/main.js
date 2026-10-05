@@ -1,3 +1,4 @@
+import {initTagManager} from "./tag-manager.js";
 import * as collections from "./collections.js";
 import { processingPaused } from "./process-status.js";
 // Application controller: routing, layout, selection and the curation actions
@@ -794,3 +795,5 @@ async function boot() {
 }
 
 boot();
+
+initTagManager();

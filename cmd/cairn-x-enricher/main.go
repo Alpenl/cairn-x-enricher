@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -301,6 +302,23 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 		return err
 	}
 	organizer := &collectionorganize.Runner{Queue: queue, Judge: collectionJudge, Limits: extension.ReservationLimits{MaxCallsTotal: cfg.ExtensionMaxCalls, MaxCallsPerItem: cfg.ExtensionMaxCallsPerItem, MaxTokens: cfg.ExtensionMaxInputTokens, MaxTokensPerItem: cfg.ExtensionMaxInputTokensPerItem}}
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			drainCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			err := queue.DrainCollectionRules(drainCtx)
+			cancel()
+			if err != nil && !cairn.IsUnsupported(err) {
+				logger.Warn("collection tag rules deferred", "error", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
 	organizerDone := make(chan struct{})
 	go func() { defer close(organizerDone); organizer.Run(ctx, logger) }()
 	schedulerDone := make(chan struct{})
@@ -618,6 +636,53 @@ func newProcessor(
 	}
 	tracker.MarkStarted()
 	worker := processor.NewStaged(queue, reader, classifier, catalog.Version, cfg.TypesafeModel, logger, cfg.MaxConcurrency)
+	loadedCatalogVersion := catalog.Version
+	worker.SetClassificationRefresh(func(ctx context.Context) (processor.Classifier, string, error) {
+		latest, _, err := queue.GetClassificationCatalog(ctx)
+		if err != nil {
+			return nil, "", err
+		}
+		if !strings.HasPrefix(latest.Version, "managed-") {
+			return nil, "", nil
+		}
+		// Always verify the authoritative target: another process may have
+		// completed the version switch after this process started.
+		next := classifier
+		if latest.Version != loadedCatalogVersion {
+			next, err = classify.NewClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel, upstreamHTTPClient(cfg.TypesafeRequestTimeout), latest)
+			if err != nil {
+				return nil, "", err
+			}
+			next, err = configureClassificationCandidates(ctx, cfg, queue, next)
+			if err != nil {
+				return nil, "", err
+			}
+			if err = configureClassificationBudget(cfg, queue, next); err != nil {
+				return nil, "", err
+			}
+			if err = queue.PutQuestionSpec(ctx, next.Spec()); err != nil {
+				return nil, "", err
+			}
+		}
+		handshake, err := queue.Handshake(ctx, cairn.ClassificationCapabilities(next.SpecID(), latest.Version, cfg.TypesafeModel))
+		if err != nil {
+			return nil, "", err
+		}
+		if !handshake.Supported {
+			if handshake.Target.PolicyVersion != classify.PolicyVersion || handshake.Target.RequestedModel != cfg.TypesafeModel {
+				return nil, "", errors.New("managed catalog cannot change the active model or policy")
+			}
+			if err = queue.AdoptManagedCatalog(ctx, handshake.Target, next.Spec(), cfg.TypesafeModel); err != nil {
+				return nil, "", err
+			}
+		}
+		if _, err = queue.ClassificationReady(ctx, next.SpecID(), latest.Version, cfg.TypesafeModel); err != nil {
+			return nil, "", err
+		}
+		classifier = next
+		loadedCatalogVersion = latest.Version
+		return next, latest.Version, nil
+	})
 	worker.SetSourcePreflight(preflight, preflightErr)
 	if withSource {
 		worker.SetSourceRecovery(func(ctx context.Context) (cairn.ProviderCheckStatus, error) {
