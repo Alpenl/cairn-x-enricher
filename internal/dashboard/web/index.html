@@ -48,6 +48,7 @@
 
       <div class="sidebar-scroll">
         <nav class="nav" id="nav-views" aria-label="收藏视图"></nav>
+        <nav id="collection-nav" aria-label="合集"><button class="nav-item" id="browse-collections" type="button">合集</button><div id="pinned-collections"></div></nav>
 
         <div class="facets-head">
           <span>筛选</span>
@@ -82,6 +83,7 @@
           </button>
           <kbd class="search-kbd">/</kbd>
         </form>
+        <div class="collection-context" id="collection-context" hidden></div>
         <div class="active-filters" id="active-filters" hidden></div>
         <div class="batch-bar" id="batch-bar" hidden></div>
       </header>
@@ -151,6 +153,7 @@
                 <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                 <span>打开原帖</span>
               </a>
+              <button class="btn" id="add-to-collection" type="button">加入合集</button>
               <div class="detail-meta" id="detail-meta"></div>
             </div>
             <div class="banner" id="process-banner" role="status" hidden></div>

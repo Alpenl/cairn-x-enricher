@@ -4,6 +4,7 @@
 // Expects CAIRN_WORKER_URL and GO_BIN; the shell wrapper starts the Worker and
 // builds the binary. It creates a normal bookmark, lets the real scheduler
 // retrieve, read and classify it, then drives the actual dashboard page.
+import { verifyCollections } from "./collections.mjs";
 import { verifyLocalFilters } from "./local-filters.mjs";
 import { spawn } from "node:child_process";
 import { chromium } from "playwright";
@@ -387,6 +388,7 @@ async function main() {
     check("the new bookmark is counted in the inbox", overview.payload.views?.inbox >= 1 && overview.payload.views?.all >= 1);
 
     await verifyLocalFilters(`http://127.0.0.1:${goPort}`);
+    await verifyCollections(browser, `http://127.0.0.1:${goPort}`, id);
 
     check("no page errors during the real browser session", pageErrors.length === 0, pageErrors.join("; "));
   } finally {

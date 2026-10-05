@@ -1,3 +1,4 @@
+import { collectionName } from "./collections.js";
 // The library list: one dense, keyboard-navigable column of bookmarks grouped
 // by day, with search highlighting, infinite scroll and multi-select.
 import { api, errorLabel, imagePath, invalidateQueryReads, previewSearch } from "./api.js";
@@ -164,7 +165,7 @@ function renderRows(ids, { append = false, reuseImages = true } = {}) {
     const item = getItem(id);
     if (!item) continue;
     const bucket = bucketLabel(item.created_at);
-    if (bucket !== lastBucket) {
+    if (!state.filters.collection_id && bucket !== lastBucket) {
       fragment.append(bucketRow(bucket));
       lastBucket = bucket;
     }
@@ -231,6 +232,7 @@ export function restoreRow(item) {
 }
 
 function viewLabel() {
+  if(state.filters.collection_id) return collectionName(state.filters.collection_id);
   const view = activeView(state.filters);
   return VIEWS.find((entry) => entry.id === view)?.label || "全部收藏";
 }
@@ -600,3 +602,5 @@ export function initList(options) {
     if (state.order.includes(id)) updateRow(id);
   });
 }
+
+on("collections:loaded", () => { if(els.title) updateHeader(); });

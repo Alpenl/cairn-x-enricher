@@ -3,7 +3,7 @@
 // browser history restores it. Pure module: no DOM access.
 
 export const MULTI_KEYS = Object.freeze(["topics", "topic_refinements", "resource_kinds", "custom_tags", "content_functions", "carriers", "affordances", "entity_state"]);
-export const SINGLE_KEYS = Object.freeze(["topics_mode", "resource_mode", "custom_mode", "functions_mode", "curation_status", "form", "use", "source", "since", "uncertain"]);
+export const SINGLE_KEYS = Object.freeze(["collection_id", "topics_mode", "resource_mode", "custom_mode", "functions_mode", "curation_status", "form", "use", "source", "since", "uncertain"]);
 export const FILTER_KEYS = Object.freeze([...SINGLE_KEYS, ...MULTI_KEYS]);
 
 // Dimensions whose values only the multidimensional (v2) Worker can evaluate.
@@ -85,7 +85,7 @@ export function activeView(filters) {
 }
 
 export function withView(filters, view) {
-  const next = { ...filters };
+  const next = { ...filters, collection_id: "" };
   if (view === "uncertain") {
     next.curation_status = "all";
     next.uncertain = "true";
@@ -113,7 +113,7 @@ export function toggleValue(filters, key, value) {
 export function facetFilterCount(filters) {
   let count = 0;
   for (const key of FILTER_KEYS) {
-    if (key === "curation_status") continue;
+    if (key === "curation_status" || key === "collection_id") continue;
     if (key === "uncertain" && activeView(filters) === "uncertain") continue;
     count += MULTI_KEYS.includes(key) ? splitList(filters[key]).length : filters[key] ? 1 : 0;
   }
@@ -123,6 +123,7 @@ export function facetFilterCount(filters) {
 export function clearFacets(filters) {
   const next = emptyFilters();
   next.curation_status = filters.curation_status || "all";
+  next.collection_id = filters.collection_id || "";
   if (activeView(filters) === "uncertain") next.uncertain = "true";
   return next;
 }

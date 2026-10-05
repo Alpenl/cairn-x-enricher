@@ -1,3 +1,4 @@
+import * as collections from "./collections.js";
 import { processingPaused } from "./process-status.js";
 // Application controller: routing, layout, selection and the curation actions
 // that span several components (status changes with auto-advance and undo,
@@ -581,6 +582,7 @@ function openListMenu(anchor) {
 
 function openBatchMenu(anchor, ids) {
   openMenu(anchor, [
+    { label: "加入合集", icon: "layers", run: () => collections.pick(ids) },
     { label: "整理正文", icon: "sparkles", hint: "整理已存正文，保留原内容", run: async () => {
       let accepted=0;for(const id of ids){try{await fetchJSON(`/api/bookmarks/${id}/presentation`,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});accepted++;}catch{}}
       toast(`已提交 ${accepted} 条正文整理${accepted < ids.length ? `，${ids.length-accepted} 条未提交（无正文或连接失败）` : ""}`);
@@ -660,6 +662,7 @@ async function boot() {
     isFocusMode,
     toggleFocus
   });
+  collections.initCollections({select:filters=>setFilters(filters,"",{push:true}),reload:()=>list.reload()});
   curation.initCuration();
   diagnostics.initDiagnostics();
   sidebar.initSidebar({ viewHref, openBackstage, ...hooksForFilters });

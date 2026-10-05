@@ -1921,3 +1921,29 @@ button.chip:hover .chip-x, button.chip:focus-visible .chip-x { width: 11px; opac
 .detail-body p,.original p { white-space:normal; }
 .detail-body blockquote p { margin:.55em 0; }
 .detail-body li > p { margin:.4em 0; }
+
+/* Collections share the light reader palette and compact navigation. */
+#nav-views { padding-bottom:4px; }
+#collection-nav { margin:0 12px 8px; }
+#collection-nav button { width:100%; text-align:left; background:transparent; color:inherit; border:0; cursor:pointer; padding:9px 10px; border-radius:8px; font-family:inherit; }
+#collection-nav button:hover { background:var(--surface-hover, #edf1f4); }
+.collection-shortcut { padding-left:28px!important; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.collection-context { display:flex; align-items:center; gap:12px; padding-top:8px; font-size:12px; color:var(--muted); }
+.collection-context[hidden] { display:none; }
+.collection-context span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.collection-input { width:100%; min-width:0; border:1px solid var(--border, #dce3e9); border-radius:9px; padding:10px 12px; background:var(--bg, transparent); color:inherit; font:inherit; box-sizing:border-box; }
+.collection-tools { display:flex; align-items:center; gap:12px; margin:12px 0; }
+.collection-tools select { max-width:110px; }
+.collection-tools label { display:flex; align-items:center; gap:5px; }
+.collection-field { display:block; margin-bottom:14px; line-height:2; }
+.collection-list { max-height:50vh; overflow:auto; }
+.collection-row,.collection-pick,.collection-member { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border, #e8edf1); }
+.collection-title { flex:1; text-align:left; background:transparent; border:0; color:inherit; font:inherit; cursor:pointer; padding:8px 0; }
+.collection-pick { cursor:pointer; }
+.collection-pick span,.collection-member-copy { flex:1; min-width:0; }
+.collection-member-copy span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.collection-member small { display:block; color:var(--muted); white-space:pre-wrap; overflow-wrap:anywhere; }
+.collection-hint { font-size:13px; color:var(--muted); line-height:1.6; }
+.collection-member-actions { display:flex; gap:5px; }
+.collection-member-actions .btn { padding:5px 8px; }
+@media(max-width:600px) { .collection-member { flex-wrap:wrap; } .collection-member-copy { flex-basis:100%; } .collection-member-actions { margin-left:auto; } }
