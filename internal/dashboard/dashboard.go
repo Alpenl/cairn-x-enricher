@@ -332,6 +332,16 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, http.StatusOK, s.observation())
 	})
 
+	mux.HandleFunc("GET /api/collections/organizing", s.collections)
+	mux.HandleFunc("POST /api/collections/organizing", s.collections)
+	mux.HandleFunc("GET /api/collections/organizing/{run}", s.collections)
+	mux.HandleFunc("POST /api/collections/organizing/{run}/apply", s.collections)
+	mux.HandleFunc("POST /api/collections/organizing/{run}/dismiss", s.collections)
+	mux.HandleFunc("POST /api/collections/organizing/{run}/undo", s.collections)
+	mux.HandleFunc("GET /api/collections", s.collections)
+	mux.HandleFunc("GET /api/collections/sync", s.collections)
+	mux.HandleFunc("GET /api/collections/{collection}", s.collections)
+	mux.HandleFunc("POST /api/collections/{collection}/operations", s.collections)
 	mux.HandleFunc("GET /api/bookmarks", s.listBookmarks)
 	mux.HandleFunc("GET /api/taxonomy", s.getTaxonomy)
 	mux.HandleFunc("PATCH /api/bookmarks/{id}/curation", s.updateCuration)
@@ -1290,10 +1300,13 @@ func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 		return cairn.BookmarkQuery{}, errors.New("search is too long")
 	}
 	query := cairn.BookmarkQuery{
-		Limit: limit, BeforeID: beforeID, Status: status, Search: search,
+		CollectionID: values.Get("collection_id"), Limit: limit, BeforeID: beforeID, Status: status, Search: search,
 		CurationStatus: values.Get("curation_status"), Topic: values.Get("topic"),
 		Form: values.Get("form"), Use: values.Get("use"), Source: values.Get("source"), Since: values.Get("since"),
 		SummaryOnly: values.Get("view") == "summary",
+	}
+	if values.Has("collection_id") && (len(values["collection_id"]) != 1 || !collectionIDPattern.MatchString(query.CollectionID)) {
+		return cairn.BookmarkQuery{}, errors.New("invalid collection")
 	}
 	if options := values["include_cache_identity"]; len(options) > 1 || len(options) == 1 && options[0] != "0" && options[0] != "1" {
 		return cairn.BookmarkQuery{}, errors.New("invalid cache identity option")

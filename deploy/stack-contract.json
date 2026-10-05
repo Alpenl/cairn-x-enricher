@@ -1,8 +1,8 @@
 {
   "version": 1,
   "worker_repository": "Alpenl/cairn-share",
-  "worker_revision": "c661f0c493bbe70c99744544765195631a364471",
-  "last_worker_migration": "0056_provider_checks.sql",
+  "worker_revision": "7007c28634aeca76ca952c54bc0c911cdabbb63d",
+  "last_worker_migration": "0058_collection_organizing.sql",
   "verification": {
     "paid_models": false,
     "integration": "tests/local-integration/run.sh",

@@ -146,6 +146,20 @@ func NewClient(baseURL, key, model string, client *http.Client, catalog taxonomy
 	}, nil
 }
 
+// NewJudgeClient uses the same strict transport and DTOs for judgments that
+// have no taxonomy projection. Workflow code owns their interpretation.
+func NewJudgeClient(baseURL, key, model string, client *http.Client) (*Client, error) {
+	if strings.TrimSpace(key) == "" || model != "jev-1.13.0" {
+		return nil, errors.New("verified Jev key and model required")
+	}
+	if client == nil {
+		client = &http.Client{Timeout: 60 * time.Second}
+	}
+	copyClient := *client
+	copyClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
+	return &Client{endpoint: strings.TrimRight(baseURL, "/") + "/v1/systemone", key: key, model: model, http: &copyClient, budget: DefaultBudget()}, nil
+}
+
 // Spec returns the compiled, immutable question set.
 func (c *Client) Spec() QuestionSpec { return c.spec }
 
@@ -513,54 +527,66 @@ func (c *Client) buildJudgeRequest(state any, questions map[string]ProviderQuest
 	return body, wire, nil
 }
 
-// Judge runs bounded ad-hoc questions for opt-in extensions. The caller owns
-// budget reservation and fallback; this method performs exactly one HTTP call.
+// JudgeReceipt preserves typed answers and the exact provider model and usage.
+type JudgeReceipt struct {
+	Answers map[string]RawAnswer `json:"answers"`
+	Model   string               `json:"model"`
+	Usage   json.RawMessage      `json:"usage"`
+}
+
+// Judge evaluates bounded ad-hoc questions with exactly one HTTP call.
 func (c *Client) Judge(ctx context.Context, state any, questions map[string]ProviderQuestion) (map[string]RawAnswer, error) {
+	result, err := c.JudgeWithReceipt(ctx, state, questions)
+	return result.Answers, err
+}
+
+// JudgeWithReceipt also preserves provenance; callers own budget and fallback.
+func (c *Client) JudgeWithReceipt(ctx context.Context, state any, questions map[string]ProviderQuestion) (JudgeReceipt, error) {
 	body, wire, err := c.buildJudgeRequest(state, questions)
 	if err != nil {
-		return nil, err
+		return JudgeReceipt{}, err
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, errors.New("invalid TypeSafe endpoint")
+		return JudgeReceipt{}, errors.New("invalid TypeSafe endpoint")
 	}
 	request.Header.Set("Authorization", "Bearer "+c.key)
 	request.Header.Set("Content-Type", "application/json")
 	response, err := c.http.Do(request)
 	if err != nil {
-		return nil, enrich.ClassifyModelError(fmt.Errorf("call TypeSafe: %w", err))
+		return JudgeReceipt{}, enrich.ClassifyModelError(fmt.Errorf("call TypeSafe: %w", err))
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return nil, enrich.ClassifyModelError(&enrich.ModelHTTPError{
+		return JudgeReceipt{}, enrich.ClassifyModelError(&enrich.ModelHTTPError{
 			StatusCode: response.StatusCode, RetryAfter: enrich.ProviderRetryAfter(response.Header, time.Now())})
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
 	if err != nil {
-		return nil, enrich.Classified(fmt.Errorf("read TypeSafe response: %w", err), enrich.ErrorClassTransient)
+		return JudgeReceipt{}, enrich.Classified(fmt.Errorf("read TypeSafe response: %w", err), enrich.ErrorClassTransient)
 	}
 	if err := rejectDuplicateKeys(raw); err != nil {
-		return nil, enrich.Classified(err, enrich.ErrorClassContract)
+		return JudgeReceipt{}, enrich.Classified(err, enrich.ErrorClassContract)
 	}
 	var decoded providerResponse
 	if err := strictDecode(raw, &decoded); err != nil {
-		return nil, enrich.Classified(fmt.Errorf("invalid TypeSafe response JSON: %w", err), enrich.ErrorClassContract)
+		return JudgeReceipt{}, enrich.Classified(fmt.Errorf("invalid TypeSafe response JSON: %w", err), enrich.ErrorClassContract)
 	}
 	if decoded.Model == "" || len(decoded.Model) > 200 {
-		return nil, enrich.Classified(errors.New("TypeSafe response missing model"), enrich.ErrorClassContract)
+		return JudgeReceipt{}, enrich.Classified(errors.New("TypeSafe response missing model"), enrich.ErrorClassContract)
 	}
 	if len(decoded.Answers) != len(wire) {
-		return nil, enrich.Classified(fmt.Errorf("extension answer set has %d entries, want %d", len(decoded.Answers), len(wire)), enrich.ErrorClassContract)
+		return JudgeReceipt{}, enrich.Classified(fmt.Errorf("extension answer set has %d entries, want %d", len(decoded.Answers), len(wire)), enrich.ErrorClassContract)
 	}
 	if c.model == "jev-1.13.0" && decoded.Model != c.model {
-		return nil, enrich.Classified(errors.New("extension resolved model differs from verified pinned model"), enrich.ErrorClassContract)
+		return JudgeReceipt{}, enrich.Classified(errors.New("extension resolved model differs from verified pinned model"), enrich.ErrorClassContract)
 	}
 	for id := range wire {
 		if _, ok := decoded.Answers[id]; !ok {
-			return nil, enrich.Classified(fmt.Errorf("extension answer for %s is missing", id), enrich.ErrorClassContract)
+			return JudgeReceipt{}, enrich.Classified(fmt.Errorf("extension answer for %s is missing", id), enrich.ErrorClassContract)
 		}
 	}
-	return decoded.Answers, nil
+	return JudgeReceipt{Answers: decoded.Answers, Model: decoded.Model, Usage: decoded.Usage}, nil
 }
 
 // Classify evaluates, decides and projects in one step. The processor uses it

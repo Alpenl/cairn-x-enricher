@@ -106,7 +106,7 @@ function persistOpen() {
 // --- Views ------------------------------------------------------------------------
 
 function renderViews() {
-  const current = state.route.name === "backstage" ? "" : activeView(state.filters);
+  const current = state.route.name === "backstage" || state.filters.collection_id ? "" : activeView(state.filters);
   const counts = state.overview?.views || {};
   const previous = new Map([...els.views.children].map(node => [node.dataset.view, node]));
   const links = VIEWS.map((view) => {

@@ -146,6 +146,7 @@ type BookmarkPage struct {
 
 // BookmarkQuery controls server-side filtering and pagination.
 type BookmarkQuery struct {
+	CollectionID            string
 	IncludeCacheIdentity    bool
 	Topics                  []string
 	TopicRefinements        []string
@@ -504,7 +505,7 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 		values.Set("q", query.Search)
 	}
 	for key, value := range map[string]string{
-		"curation_status": query.CurationStatus, "topic": query.Topic, "form": query.Form,
+		"collection_id": query.CollectionID, "curation_status": query.CurationStatus, "topic": query.Topic, "form": query.Form,
 		"use": query.Use, "source": query.Source, "since": query.Since,
 		"topics_mode": query.TopicMode, "resource_mode": query.ResourceMode, "custom_mode": query.CustomMode,
 		"functions_mode": query.FunctionsMode,
@@ -542,6 +543,9 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		return BookmarkPage{}, apiError(response)
+	}
+	if query.CollectionID != "" && response.Header.Get("X-Cairn-Collections") != "1" {
+		return BookmarkPage{}, &APIError{StatusCode: http.StatusConflict, Code: "collections_unsupported"}
 	}
 	if query.NeedsTagFilterContract() && response.Header.Get("X-Cairn-Tag-System") != "1" {
 		return BookmarkPage{}, &APIError{StatusCode: http.StatusConflict, Code: "unsupported_tag_filter_contract"}
@@ -828,6 +832,7 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, body an
 	// This client understands the additive tag-system contract. Older clients
 	// omit the header, allowing the Worker to keep strict legacy responses legal.
 	request.Header.Set("X-Cairn-Tag-System", "1")
+	request.Header.Set("X-Cairn-Collections", "1")
 	request.Header.Set("X-Cairn-Content-Functions", "1")
 	request.Header.Set("X-Cairn-Topic-Granularity", "1")
 	request.Header.Set("X-Cairn-Candidate-Manifest", "2")
