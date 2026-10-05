@@ -162,7 +162,7 @@ func (c *Client) GetV2Catalog(ctx context.Context) (taxonomy.Catalog, error) {
 		for _, term := range terms {
 			out = append(out, taxonomy.Term{
 				ID: term.ID, Label: term.Label, Description: term.Description,
-				Aliases: term.Aliases, Active: term.Active && !term.Deprecated,
+				Aliases: term.Aliases, Active: term.Active && !term.Deprecated && (term.AIEnabled == nil || *term.AIEnabled),
 				Includes: term.Includes, Excludes: term.Excludes,
 				DefinitionVersion: term.DefinitionVersion, DisplayRevision: term.DisplayRevision, Status: term.Status,
 				Granularity: term.Granularity, Navigation: term.Navigation, RecallTerms: term.RecallTerms,
@@ -213,6 +213,7 @@ type V2Taxonomy struct {
 
 // TaxonomyTerm is one vocabulary entry in the v2 shape.
 type TaxonomyTerm struct {
+	AIEnabled         *bool                  `json:"ai_enabled,omitempty"`
 	DefinitionVersion int                    `json:"definition_version,omitempty"`
 	DisplayRevision   int                    `json:"display_revision,omitempty"`
 	Status            string                 `json:"status,omitempty"`

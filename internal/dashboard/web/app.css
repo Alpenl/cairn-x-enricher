@@ -1886,7 +1886,7 @@ button.chip:hover .chip-x, button.chip:focus-visible .chip-x { width: 11px; opac
 .quality-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
 .quality-table td, .quality-table th { padding: 8px; border-bottom: 1px solid var(--line, #e4e7ea); white-space: nowrap; }
 
-.reading-toolbar { display:flex; gap:12px; align-items:center; margin:20px 0; font-size:12px; color:var(--muted); }
+.reading-toolbar { display:flex; gap:12px; align-items:center; margin:20px 0; font-size:12px; color:var(--text-3); }
 .detail-body,.original { overflow-wrap:anywhere; }
 .detail-body p,.original p { white-space:pre-line; }
 .detail-body h2,.detail-body h3,.detail-body h4,.original h2,.original h3 { line-height:1.45; margin:1.8em 0 .7em; font-weight:650; }
@@ -1928,7 +1928,7 @@ button.chip:hover .chip-x, button.chip:focus-visible .chip-x { width: 11px; opac
 #collection-nav button { width:100%; text-align:left; background:transparent; color:inherit; border:0; cursor:pointer; padding:9px 10px; border-radius:8px; font-family:inherit; }
 #collection-nav button:hover { background:var(--surface-hover, #edf1f4); }
 .collection-shortcut { padding-left:28px!important; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.collection-context { display:flex; align-items:center; gap:12px; padding-top:8px; font-size:12px; color:var(--muted); }
+.collection-context { display:flex; align-items:center; gap:12px; padding-top:8px; font-size:12px; color:var(--text-3); }
 .collection-context[hidden] { display:none; }
 .collection-context span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .collection-input { width:100%; min-width:0; border:1px solid var(--border, #dce3e9); border-radius:9px; padding:10px 12px; background:var(--bg, transparent); color:inherit; font:inherit; box-sizing:border-box; }
@@ -1942,10 +1942,16 @@ button.chip:hover .chip-x, button.chip:focus-visible .chip-x { width: 11px; opac
 .collection-pick { cursor:pointer; }
 .collection-pick span,.collection-member-copy { flex:1; min-width:0; }
 .collection-member-copy span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.collection-member small { display:block; color:var(--muted); white-space:pre-wrap; overflow-wrap:anywhere; }
-.collection-hint { font-size:13px; color:var(--muted); line-height:1.6; }
+.collection-member small { display:block; color:var(--text-3); white-space:pre-wrap; overflow-wrap:anywhere; }
+.collection-hint { font-size:13px; color:var(--text-3); line-height:1.6; }
 .collection-member-actions { display:flex; gap:5px; }
 .collection-member-actions .btn { padding:5px 8px; }
 @media(max-width:600px) { .collection-member { flex-wrap:wrap; } .collection-member-copy { flex-basis:100%; } .collection-member-actions { margin-left:auto; } }
 
 .collection-review-item{padding:16px 0;border-bottom:1px solid var(--border)}.collection-review-item>p{margin:0 0 10px;font-weight:600}.collection-review-item .collection-tools{flex-wrap:wrap}
+
+/* Definition management shares the quiet collection surfaces. */
+.tag-manager-row{display:flex;align-items:flex-start;gap:16px;padding:16px 0;border-bottom:1px solid var(--border)}
+.tag-manager-copy{min-width:0;flex:1}.tag-manager-copy small{display:block;color:var(--text-3);margin-top:4px}.tag-manager-copy p{font-size:13px;color:var(--text-3);margin:8px 0 0;line-height:1.6}
+.tag-manager-choices{max-height:280px;overflow:auto;margin-top:8px}.tag-manager-pending{padding:12px;background:var(--panel-2);border-radius:8px;margin-block:12px}.collection-rule-summary{font-size:13px;color:var(--text-3);margin:8px 0}
+@media(max-width:600px){.tag-manager-row{gap:8px}.tag-manager-copy p{font-size:12px}.collection-tools{flex-wrap:wrap}}

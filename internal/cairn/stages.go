@@ -18,6 +18,7 @@ import (
 // ClassificationTarget is the Worker's authoritative classification goal. The
 // consumer declares capabilities; it never defines the target itself.
 type ClassificationTarget struct {
+	NewItemsOnly    int    `json:"new_items_only,omitempty"`
 	Generation      int64  `json:"generation"`
 	SpecID          string `json:"spec_id"`
 	SpecHash        string `json:"spec_hash"`

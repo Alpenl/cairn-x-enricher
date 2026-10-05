@@ -192,6 +192,12 @@ function cached(key, load) {
   return once.get(key);
 }
 
+export function invalidateTaxonomyReads() {
+  once.delete("taxonomy");
+  once.delete("taxonomy-v2");
+}
+on("account:changed", invalidateTaxonomyReads);
+
 // Filter navigation can revisit an identical query while the server is still
 // expensive to read. Keep a small, short-lived copy of successful responses;
 // explicit refreshes and background polling always go to the server.

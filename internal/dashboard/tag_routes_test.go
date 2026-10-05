@@ -39,6 +39,9 @@ func TestTagSystemProxyRoutesAndIncrementalBody(t *testing.T) {
 	for _, test := range []struct{ method, path, upstream, body string }{
 		{"GET", "/api/bookmarks/4/tags", "/api/v2/links/4/tags", ""},
 		{"GET", "/api/bookmarks/4/tag-history?limit=30&before_id=9", "/api/v2/links/4/tag-history?before_id=9&limit=30", ""},
+		{"GET", "/api/tag-catalog", "/api/v2/tag-catalog", ""},
+		{"GET", "/api/tag-catalog/history?dimension=topics&id=ai_coding", "/api/v2/tag-catalog/history?dimension=topics&id=ai_coding", ""},
+		{"POST", "/api/tag-catalog/operations", "/api/v2/tag-catalog/operations", `{ "operation_key":"fixture", "expected_revision":0 }`},
 		{"GET", "/api/custom-tags", "/api/v2/custom-tags", ""},
 		{"POST", "/api/bookmarks/4/tags", "/api/v2/links/4/tags", `{"operation_key":"op-replace","expected_revision":4,"expected_decision_id":3,"expected_content_revision":2,"actions":[{"action":"replace","from_tag_ref":"system/topics/ai_coding","to_tag_ref":"system/topics/image_creation"}]}`},
 		{"PATCH", "/api/custom-tags/custom-1", "/api/v2/custom-tags/custom-1", `{"operation_key":"rename-1","expected_revision":2,"label":"项目资料"}`},

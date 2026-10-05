@@ -42,9 +42,10 @@ function index(dimension, terms) {
 export async function loadV1() {
   const catalog = await api.taxonomy();
   vocab.v1 = catalog;
-  index("topics", catalog.topics);
-  index("forms", catalog.forms);
-  index("uses", catalog.uses);
+  // A legacy response must not replace the managed names in a modern catalog.
+  if (!vocab.v2) index("topics", catalog.topics);
+  if (!vocab.v2?.forms) index("forms", catalog.forms);
+  if (!vocab.v2?.uses) index("uses", catalog.uses);
   return catalog;
 }
 
@@ -58,6 +59,8 @@ export async function loadV2() {
     vocab.v2 = catalog;
     if (Array.isArray(catalog.resource_kinds)) loadCustomTags().catch(() => {});
     for (const { key } of V2_DIMENSIONS) index(key, catalog[key]);
+    index("forms", catalog.forms);
+    index("uses", catalog.uses);
     return catalog;
   } catch (error) {
     vocab.v2Available = false;
@@ -67,10 +70,10 @@ export async function loadV2() {
 
 // termLabel resolves a controlled ID to its display name, degrading to the raw
 // ID before the vocabulary loads or for a retired term.
-export function termLabel(dimension, id) {
+export function termLabel(dimension, id, fallback = "") {
   const key = dimension === "topic_refinements" ? "topics" : dimension === "form" ? "forms" : dimension === "use" ? "uses" : dimension;
   const term = vocab.labels.get(`${key}:${id}`);
-  return term?.label || id;
+  return term?.label || fallback || id;
 }
 
 export function termActive(dimension, id) {
@@ -81,8 +84,8 @@ export function termActive(dimension, id) {
 
 export function terms(dimension) {
   if (dimension === "custom_tags") return vocab.custom;
-  if (dimension === "form") return vocab.v1?.forms || [];
-  if (dimension === "use") return vocab.v1?.uses || [];
+  if (dimension === "form") return vocab.v2?.forms || vocab.v1?.forms || [];
+  if (dimension === "use") return vocab.v2?.uses || vocab.v1?.uses || [];
   if (V2_DIMENSIONS.some(({ key }) => key === dimension) && vocab.v2) return vocab.v2[dimension] || [];
   if (dimension === "topics") return vocab.v1?.topics || [];
   return [];
@@ -101,7 +104,7 @@ export function loadCustomTags() {
   const flight = api.customTags().then((payload) => {
     if (epoch !== customEpoch) return loadCustomTags();
     if (payload.available === false) { customUntil = Date.now() + 60_000; return []; }
-    const next = (payload.tags || []).map((tag) => ({ ...tag, active: tag.status !== "archived" && tag.status !== "inactive" }));
+    const next = (payload.tags || []).map((tag) => ({ ...tag, active: tag.status === "active" }));
     const changed = JSON.stringify(next) !== JSON.stringify(vocab.custom);
     vocab.custom = next;
     customUntil = Date.now() + 60_000;
