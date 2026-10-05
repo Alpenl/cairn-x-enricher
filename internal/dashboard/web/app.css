@@ -1947,3 +1947,5 @@ button.chip:hover .chip-x, button.chip:focus-visible .chip-x { width: 11px; opac
 .collection-member-actions { display:flex; gap:5px; }
 .collection-member-actions .btn { padding:5px 8px; }
 @media(max-width:600px) { .collection-member { flex-wrap:wrap; } .collection-member-copy { flex-basis:100%; } .collection-member-actions { margin-left:auto; } }
+
+.collection-review-item{padding:16px 0;border-bottom:1px solid var(--border)}.collection-review-item>p{margin:0 0 10px;font-weight:600}.collection-review-item .collection-tools{flex-wrap:wrap}

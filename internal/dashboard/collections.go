@@ -25,6 +25,10 @@ func (s *Server) collections(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_collection")
 		return
 	}
+	if id := r.PathValue("run"); id != "" && !collectionIDPattern.MatchString(id) {
+		writeError(w, 400, "invalid_operation")
+		return
+	}
 	var body any
 	if r.Method == http.MethodPost {
 		if r.Header.Get("Sec-Fetch-Site") == "cross-site" {

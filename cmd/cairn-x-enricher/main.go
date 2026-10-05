@@ -22,6 +22,7 @@ import (
 	"github.com/Alpenl/cairn-x-enricher/internal/buildinfo"
 	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 	"github.com/Alpenl/cairn-x-enricher/internal/classify"
+	"github.com/Alpenl/cairn-x-enricher/internal/collectionorganize"
 	"github.com/Alpenl/cairn-x-enricher/internal/config"
 	"github.com/Alpenl/cairn-x-enricher/internal/dashboard"
 	"github.com/Alpenl/cairn-x-enricher/internal/enrich"
@@ -295,6 +296,13 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 		formatter := &presentation.Runner{Config: presentation.Config{WorkerURL: cfg.CairnBaseURL, WorkerToken: cfg.CairnToken, BaseURL: cfg.FormatBaseURL, APIKey: cfg.FormatAPIKey, Model: cfg.FormatModel, Auto: cfg.FormatAuto, DailyLimit: cfg.FormatDailyLimit}, Client: upstreamHTTPClient(120 * time.Second)}
 		go formatter.Run(ctx, logger)
 	}
+	collectionJudge, err := classify.NewJudgeClient(cfg.TypesafeBaseURL, cfg.TypesafeAPIKey, cfg.TypesafeModel, upstreamHTTPClient(cfg.TypesafeRequestTimeout))
+	if err != nil {
+		return err
+	}
+	organizer := &collectionorganize.Runner{Queue: queue, Judge: collectionJudge, Limits: extension.ReservationLimits{MaxCallsTotal: cfg.ExtensionMaxCalls, MaxCallsPerItem: cfg.ExtensionMaxCallsPerItem, MaxTokens: cfg.ExtensionMaxInputTokens, MaxTokensPerItem: cfg.ExtensionMaxInputTokensPerItem}}
+	organizerDone := make(chan struct{})
+	go func() { defer close(organizerDone); organizer.Run(ctx, logger) }()
 	schedulerDone := make(chan struct{})
 	go func() {
 		defer close(schedulerDone)
@@ -346,6 +354,9 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger, obser
 			logger.Warn("scheduler did not stop within the shutdown budget; " +
 				"its leased jobs keep their lease and will be retried")
 		}
+	}
+	if remaining := time.Until(deadline); remaining > 0 && !waitForSignal(organizerDone, remaining) {
+		logger.Warn("collection organizer did not stop within the shutdown budget; unknown results require review")
 	}
 	if serverErr != nil {
 		return fmt.Errorf("shutdown health server: %w", serverErr)

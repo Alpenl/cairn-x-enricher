@@ -406,6 +406,9 @@ async function main() {
     await verifyCollections(browser, `http://127.0.0.1:${goPort}`, id);
 
     check("no page errors during the real browser session", pageErrors.length === 0, pageErrors.join("; "));
+  } catch (error) {
+    process.stderr.write(`Local Go diagnostic: ${goLog.slice(-12000)}\n`);
+    throw error;
   } finally {
     await browser?.close();
     await teardown();

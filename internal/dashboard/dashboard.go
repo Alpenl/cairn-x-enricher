@@ -332,6 +332,12 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, http.StatusOK, s.observation())
 	})
 
+	mux.HandleFunc("GET /api/collections/organizing", s.collections)
+	mux.HandleFunc("POST /api/collections/organizing", s.collections)
+	mux.HandleFunc("GET /api/collections/organizing/{run}", s.collections)
+	mux.HandleFunc("POST /api/collections/organizing/{run}/apply", s.collections)
+	mux.HandleFunc("POST /api/collections/organizing/{run}/dismiss", s.collections)
+	mux.HandleFunc("POST /api/collections/organizing/{run}/undo", s.collections)
 	mux.HandleFunc("GET /api/collections", s.collections)
 	mux.HandleFunc("GET /api/collections/sync", s.collections)
 	mux.HandleFunc("GET /api/collections/{collection}", s.collections)

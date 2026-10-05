@@ -2,6 +2,7 @@ import { fetchJSON, errorLabel, invalidateQueryReads } from "./api.js";
 import { byId, h, clear } from "./dom.js";
 import { state, on, emit } from "./store.js";
 import { openDialog, confirmAction, toast } from "./ui.js";
+import { openOrganizing } from "./collection-organizing.js";
 import { emptyFilters } from "./query.js";
 
 let catalog = [], hooks = {}, loading = null, pinnedSignature = "", loadEpoch = 0;
@@ -73,7 +74,7 @@ export async function browse(){
   button(`${c.pinned?"☆ ":""}${c.name} · ${c.item_count}`,()=>{if(c.deleted)return;dialog.close();select(c.id);},"collection-title"),
   c.deleted?button("恢复",async()=>{await mutation(c.id,c.revision,"restore",{})();render();}):button("管理",()=>edit(c.id,render),"link-btn"))));
  query.addEventListener("input",render);mode.addEventListener("change",render);
- dialog=openDialog({title:"合集",body:[h("div.collection-tools",query,mode,button("新建",()=>create(render))),rows],wide:true});render();
+ dialog=openDialog({title:"合集",body:[h("div.collection-tools",query,mode,button("新建",()=>create(render)),button("自动整理",()=>{dialog.close();return openOrganizing(catalog,uuid,()=>{load().catch(()=>{});hooks.reload();});})),rows],wide:true});render();
 }
 export async function pick(ids){
  ids=[...new Set(ids.filter(Boolean))];if(!ids.length)return;

@@ -12,6 +12,7 @@ export async function verifyCollections(browser, base, bookmarkID) {
     assert.equal(response.status, 200, await response.clone().text());
     return response.json();
   };
+  const waitAPI=async(check,timeout=60000)=>{const end=Date.now()+timeout;while(Date.now()<end){if(await check())return;await new Promise(r=>setTimeout(r,200));}throw Error("timeout waiting for collection state");};
   try {
     // Plain HTTP NAS pages do not expose randomUUID.
     await page.addInitScript(() => Object.defineProperty(crypto, "randomUUID", { value: undefined }));
@@ -89,11 +90,48 @@ export async function verifyCollections(browser, base, bookmarkID) {
     await manager.waitFor({ state: "detached" });
     assert.equal((await api(`/${id}`)).collection.deleted, 1);
     await page.getByRole("button", { name: "撤销", exact: true }).click();
-    await page.waitForFunction(async cid => !(await (await fetch(`/api/collections/${cid}`)).json()).collection.deleted, id);
+    await waitAPI(async()=>!(await api(`/${id}`)).collection.deleted);
     assert.equal((await api(`/${id}`)).items[0].note, "引用其中的方法");
+    await page.setViewportSize({width:1280,height:900});
+    const target=crypto.randomUUID();await api(`/${target}/operations`,{operation_key:crypto.randomUUID(),expected_revision:0,type:"create",name:"整理测试合集",description:"LLM实践参考"});
+    await page.reload();await page.locator("#browse-collections").click();await page.getByRole("dialog",{name:"合集",exact:true}).getByRole("button",{name:"自动整理",exact:true}).click();
+    let organizer=page.getByRole("dialog",{name:"自动整理合集",exact:true});assert.equal(await organizer.getByLabel("自动整理模式").inputValue(),"review");
+    await organizer.getByRole("button",{name:"开始整理现有收藏",exact:true}).click();
+    let results=page.getByRole("dialog",{name:"核对整理结果",exact:true});
+    await results.locator(".collection-review-item").first().waitFor({timeout:60000});
+    assert.deepEqual((await api(`/${target}`)).items,[],"review mode must not write memberships");
+    const item=results.locator(".collection-review-item").first();await item.getByRole("button",{name:"确认加入",exact:true}).click();
+    await waitAPI(async()=>(await api(`/${target}`)).items.length>0);
+    await results.getByLabel("关闭").click();
+    const direct=crypto.randomUUID();await api(`/${direct}/operations`,{operation_key:crypto.randomUUID(),expected_revision:0,type:"create",name:"直接应用测试",description:"LLM实践参考"});
+    // Entity extraction already reserved one per-item call on the first bookmark.
+    // Use a distinct, normally archived source for direct mode; never clear the
+    // ledger or raise limits to force two workflows through an exhausted item.
+    const captureResponse=await fetch(process.env.CAIRN_WORKER_URL+"/api/captures",{method:"POST",headers:{Authorization:"Bearer "+process.env.CAIRN_APP_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({url:"https://example.com/direct-organizing",note:"",client_id:crypto.randomUUID(),capture:{title:"独立整理材料",language:"zh",text:"# 网站设计\n\n用于网站改版的LLM实践参考与界面设计方法。",images:[]}})});
+    assert.equal(captureResponse.status,201,await captureResponse.clone().text());const fresh=await captureResponse.json();
+    const directRun=await api("/organizing",{operation_key:crypto.randomUUID(),collection_ids:[direct],link_ids:[fresh.id],mode:"apply"});
+    await waitAPI(async()=>{const d=await api("/organizing/"+directRun.run.id);return d.run.auto_finished===1&&d.actions.some(a=>a.actor==="direct"&&a.status==="applied");});
+    assert.deepEqual((await api(`/${direct}`)).items.map(i=>i.link_id),[fresh.id]);
+    await page.reload();await page.locator("#browse-collections").click();await page.getByRole("dialog",{name:"合集",exact:true}).getByRole("button",{name:"自动整理",exact:true}).click();
+    organizer=page.getByRole("dialog",{name:"自动整理合集",exact:true});await organizer.locator(".collection-row").filter({hasText:"直接应用"}).getByRole("button").first().click();
+    results=page.getByRole("dialog",{name:"核对整理结果",exact:true});await results.getByText(/直接应用 ·/).first().waitFor();
+    assert.equal((await api(`/${direct}`)).collection.name,"直接应用测试");
+    await page.setViewportSize({width:390,height:844});assert.equal(await results.evaluate(n=>n.scrollWidth<=n.clientWidth),true);await results.getByLabel("关闭").click();
+    await page.setViewportSize({width:1280,height:900});await page.locator("#browse-collections").click();await page.getByRole("dialog",{name:"合集",exact:true}).getByRole("button",{name:"自动整理",exact:true}).click();
+    organizer=page.getByRole("dialog",{name:"自动整理合集",exact:true});await organizer.getByLabel("自动整理模式").selectOption("apply");await organizer.getByRole("button",{name:"开始整理现有收藏",exact:true}).click();
+    const before=(await api(`/${direct}`)).items;
+    await waitAPI(async()=>Boolean((await api("/organizing")).items[0].next_attempt_at));
+    results=page.getByRole("dialog",{name:"核对整理结果",exact:true});await results.getByText(/当日预算已用完/).waitFor({timeout:15000});
+    assert.deepEqual((await api(`/${direct}`)).items,before);await results.getByLabel("关闭").click();
+    console.log("ok   Collection organizing: actual Jev mock, review default with no writes, explicit approval, scoped direct application, preserved definitions, budget deferral and mobile layout");
     const response = await fetch(`${base}/api/bookmarks/${bookmarkID}`);
     assert.equal(response.status, 200, "collection deletion never deletes a bookmark");
     assert.deepEqual(errors, []);
     console.log("ok   Collections: HTTP NAS UUID, create/add, contextual note, conflict draft, lost response, mobile and delete/undo through real Go/Worker/D1");
+  } catch(error) {
+    const runs=await api("/organizing");
+    console.error("Organizing diagnostics",JSON.stringify({dialogs:await page.locator("dialog").allTextContents(),runs}));
+    if(runs.items?.length)console.error("Latest organizing run",JSON.stringify(await api("/organizing/"+runs.items[0].id)));
+    throw error;
   } finally { await page.close(); }
 }
