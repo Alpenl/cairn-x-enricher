@@ -1,3 +1,4 @@
+import {openFilters} from "../../tests/browser/workspace-helper.mjs";
 // Reproducible frontend timings and regressions; synthetic API responses only.
 // Run with BASELINE=1 to record the old behavior without improvement assertions.
 import assert from "node:assert/strict";
@@ -62,6 +63,7 @@ async function elapsed(started) {
 }
 try {
   await page.goto(`${url}/?curation_status=all`);
+  await openFilters(page);
   await ready();
   await page.locator('.facet-group[data-group="topics"] > summary').click();
   await page.locator(".facet-chip-count").first().waitFor({ state: "attached" });

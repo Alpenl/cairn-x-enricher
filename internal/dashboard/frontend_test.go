@@ -68,7 +68,7 @@ func TestDashboardAssetsAreEmbedded(t *testing.T) {
 	for _, match := range shellAssetPattern.FindAllStringSubmatch(string(appShell), -1) {
 		referenced[match[1]] = true
 	}
-	if !referenced["/assets/js/main.js"] || !referenced["/assets/app.css"] {
+	if !referenced["/assets/js/main.js"] || !referenced["/assets/components.css"] {
 		t.Fatalf("the shell does not load the application: %v", referenced)
 	}
 	for name, asset := range webAssets {

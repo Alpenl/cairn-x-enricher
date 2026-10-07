@@ -34,14 +34,14 @@ func decodedGzip(t *testing.T, content []byte) []byte {
 func TestStaticGzipVariantRevalidatesItsOwnETag(t *testing.T) {
 	server := New(context.Background(), startedTracker(), &fakeBackend{}, &fakeProcessor{}, testLogger(), 1)
 	defer server.Drain(time.Second)
-	asset := webAssets["app.css"]
+	asset := webAssets["components.css"]
 	if len(asset.gzipContent) == 0 {
 		t.Fatal("stylesheet has no precompressed variant")
 	}
 	handler := server.Handler()
 	request := func(encoding, etag string) *httptest.ResponseRecorder {
 		t.Helper()
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/assets/app.css", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/assets/components.css", nil)
 		if encoding != "" {
 			req.Header.Set("Accept-Encoding", encoding)
 		}
@@ -194,7 +194,7 @@ func BenchmarkDashboardStaticTransfer(b *testing.B) {
 	handler := server.Handler()
 	for _, encoding := range []string{"plain", "gzip"} {
 		b.Run(encoding, func(b *testing.B) {
-			request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/assets/app.css", nil)
+			request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/assets/components.css", nil)
 			if encoding == "gzip" {
 				request.Header.Set("Accept-Encoding", "gzip")
 			}

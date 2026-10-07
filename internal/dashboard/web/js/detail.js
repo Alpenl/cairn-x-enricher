@@ -275,7 +275,7 @@ async function fetchDetail(id, { silent = false } = {}) {
 }
 
 function readerVisible() {
-  return !document.hidden && currentId > 0 && state.route.name !== "backstage" &&
+  return !document.hidden && !byId("app").classList.contains("route-management") && currentId > 0 && state.route.name !== "backstage" &&
     (state.layout !== "narrow" || state.route.name === "bookmark");
 }
 export function syncReaderVisibility() {

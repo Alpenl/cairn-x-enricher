@@ -246,7 +246,9 @@ export async function replayPolicy(id, commit = false) {
 }
 
 export function show(id) {
-  if (id !== currentId) {
+  const changed = id !== currentId;
+  currentId = id;
+  if (changed) {
     historyId = 0;
     historyCursor = null;
     els.historyItems.replaceChildren();
@@ -260,6 +262,7 @@ export function show(id) {
 }
 
 export function openDiagnostics() {
+  emit("inspector:open", "processing");
   els.root.open = true;
   els.root.scrollIntoView({ block: "start", behavior: "smooth" });
 }

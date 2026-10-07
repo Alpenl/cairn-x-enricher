@@ -24,7 +24,7 @@ function apply(choice) {
   if (button) button.title = `外观：${LABELS[choice]}`;
 }
 
-function save(choice) {
+export function saveTheme(choice) {
   try {
     if (choice === "system") localStorage.removeItem(KEY);
     else localStorage.setItem(KEY, choice);
@@ -44,7 +44,7 @@ export function initTheme() {
       ...["system", "light", "dark"].map((choice) => ({
         label: LABELS[choice] + (choice === current ? "  ✓" : ""),
         icon: choice === "system" ? "monitor" : choice === "light" ? "sun" : "moon",
-        run: () => save(choice)
+        run: () => saveTheme(choice)
       }))
     ], { align: "start" });
   });

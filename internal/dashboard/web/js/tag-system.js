@@ -272,7 +272,7 @@ function catalogEntries() {
     .concat(vocab.custom.map((tag) => ({ ...tag, field: "custom_tags", group: "自定义", tag_ref: tag.tag_ref })));
 }
 function focusToolbar(session, label) {
-  if (session.id !== currentID || !byId("curate")?.open || document.querySelector("dialog[open]")) return;
+  if (session.id !== currentID || !byId("curate")?.open || document.querySelector("wa-dialog[open], dialog[open]")) return;
   [...byId("tag-rows").querySelectorAll(".tag-system-toolbar button")].find((button) => button.textContent === label)?.focus({ preventScroll: true });
 }
 async function openPicker(session, { field, from } = {}) {

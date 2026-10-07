@@ -397,7 +397,7 @@ function renderService() {
 export function syncFacetVisibility() {
   if (!els.root) return;
   const visible = !document.hidden && state.route.name !== "backstage" &&
-    (state.layout === "wide" || byId("app").classList.contains("sidebar-open"));
+    Boolean(byId("filter-panel")?.open);
   const needed = ["topics", "resource_kinds", "content_functions", "custom_tags"].some(key => openGroups.has(key));
   if (!visible || !needed) {
     if (countsTimer || countsController) {
@@ -451,6 +451,7 @@ export function initSidebar(options) {
   });
   on("overview", () => { renderViews(); renderService(); });
   on("list:loaded", () => { if (state.search) syncFacetVisibility(); });
+  on("filter:visibility", syncFacetVisibility);
   on("taxonomy", renderSidebar);
   on("tags:changed", () => { countsSignature = ""; renderSidebar(); });
   on("library:changed", () => { countsSignature = ""; renderSidebar(); });

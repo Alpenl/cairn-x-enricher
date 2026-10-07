@@ -3,15 +3,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test-browser": "npm run check-reader && node tests/browser/management-ui.mjs && node tests/browser/clean-reading.mjs && node tests/browser/media-preview.mjs && node internal/dashboard/search-preview-browser-test.mjs && CHROME_PATH=$CHROME_PATH node tests/browser/reading.mjs && node internal/dashboard/stable-facets-browser-test.mjs && node internal/dashboard/filter-performance-browser-test.mjs && node internal/dashboard/local-filter-browser-test.mjs && node internal/dashboard/topic-navigation-browser-test.mjs && node tests/browser/run.mjs && node tests/browser/offline.mjs && node tests/browser/diagnostics.mjs && node tests/browser/performance.mjs && CAIRN_IMAGE_BROWSER=1 go test ./internal/dashboard -run '^TestBrowserPerformanceFollowup$' -count=1 -v",
+    "test-browser": "npm run check-reader && npm run check-components && node tests/browser/management-ui.mjs && node tests/browser/clean-reading.mjs && node tests/browser/media-preview.mjs && node internal/dashboard/search-preview-browser-test.mjs && CHROME_PATH=$CHROME_PATH node tests/browser/reading.mjs && node internal/dashboard/stable-facets-browser-test.mjs && node internal/dashboard/filter-performance-browser-test.mjs && node internal/dashboard/local-filter-browser-test.mjs && node internal/dashboard/topic-navigation-browser-test.mjs && node tests/browser/run.mjs && node tests/browser/offline.mjs && node tests/browser/diagnostics.mjs && node tests/browser/performance.mjs && CAIRN_IMAGE_BROWSER=1 go test ./internal/dashboard -run '^TestBrowserPerformanceFollowup$' -count=1 -v",
     "build-reader": "node scripts/build-reader.mjs",
-    "check-reader": "node scripts/build-reader.mjs --check"
+    "check-reader": "node scripts/build-reader.mjs --check",
+    "build-components": "node scripts/build-components.mjs",
+    "check-components": "node scripts/build-components.mjs --check"
   },
   "devDependencies": {
     "esbuild": "0.25.12",
     "playwright": "1.63.0"
   },
   "dependencies": {
+    "@awesome.me/webawesome": "3.14.0",
     "defuddle": "0.19.4",
     "dompurify": "3.4.16",
     "marked": "18.0.14"

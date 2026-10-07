@@ -299,7 +299,7 @@ func TestHandlerServesChineseDashboardAndBookmarkData(t *testing.T) {
 	}
 
 	stylesheet := httptest.NewRecorder()
-	server.Handler().ServeHTTP(stylesheet, httptest.NewRequestWithContext(ctx, http.MethodGet, "/assets/app.css", nil))
+	server.Handler().ServeHTTP(stylesheet, httptest.NewRequestWithContext(ctx, http.MethodGet, "/assets/components.css", nil))
 	if stylesheet.Code != http.StatusOK || !strings.Contains(stylesheet.Header().Get("Content-Type"), "text/css") || !strings.Contains(stylesheet.Body.String(), ".detail-pane") {
 		t.Fatalf("GET /assets/app.css = %d %q", stylesheet.Code, stylesheet.Header().Get("Content-Type"))
 	}

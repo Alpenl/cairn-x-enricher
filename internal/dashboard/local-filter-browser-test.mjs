@@ -1,3 +1,4 @@
+import {openFilters} from "../../tests/browser/workspace-helper.mjs";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { createFixtureState, startFixtureServer } from "../../tests/browser/fixture-server.mjs";
@@ -26,6 +27,7 @@ try {
   });
   await page.route("**/api/tag-counts?*", route => { countReads++; return route.fulfill({ json: { topics: [], resource_kinds: [], custom_tags: [], content_functions: [] } }); });
   await page.goto(`${url}/?curation_status=all`);
+  await openFilters(page);
   await page.waitForFunction(() => document.querySelector("#list-pane")?.dataset.loading === "false");
   await page.locator('[data-group="topics"] > summary').click();
   await page.waitForTimeout(250);

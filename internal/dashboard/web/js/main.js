@@ -1,3 +1,4 @@
+import {initWorkspace,closeWorkspace,workspaceOpen} from "./workspace.js";
 import {initTagManager} from "./tag-manager.js";
 import * as collections from "./collections.js";
 import { processingPaused } from "./process-status.js";
@@ -22,7 +23,7 @@ import * as sidebar from "./sidebar.js";
 import { createSidebarModal } from "./sidebar-modal.js";
 import { emit, getItem, mergeItem, on, state } from "./store.js";
 import { ENTITY_STATES, loadV1, loadV2, vocab } from "./taxonomy.js";
-import { initTheme } from "./theme.js";
+import { initTheme, saveTheme } from "./theme.js";
 import { confirmAction, openMenu, runLastToastAction, toast } from "./ui.js";
 
 const OVERVIEW_INTERVAL = 30000;
@@ -80,7 +81,7 @@ function applyRouteClasses() {
 
 // --- Layout --------------------------------------------------------------------------
 
-const wideQuery = matchMedia("(min-width: 1180px)");
+const wideQuery = matchMedia("(min-width: 760px)");
 const mediumQuery = matchMedia("(min-width: 760px)");
 const setSidebarModal = createSidebarModal(app);
 
@@ -138,6 +139,7 @@ function prefetch(id) {
 
 function select(id, { fromList = false, scroll = true, prefetchNext = true } = {}) {
   if (!id) return;
+  closeWorkspace();
   cancelPrefetch(id);
   const narrow = state.layout === "narrow";
   state.selectedId = id;
@@ -151,6 +153,7 @@ function select(id, { fromList = false, scroll = true, prefetchNext = true } = {
   const index = state.order.indexOf(id);
   if (prefetchNext && index >= 0 && state.order[index + 1]) prefetch(state.order[index + 1]);
   if (fromList && !narrow) byId("detail-scroll").scrollTop = 0;
+  emit("selection",id);
 }
 
 async function step(delta) {
@@ -182,6 +185,7 @@ function closeDetail() {
 // --- Filters -----------------------------------------------------------------------------
 
 function setFilters(filters, search = state.search, { push = false } = {}) {
+  closeWorkspace();
   cancelPrefetch();
   state.filters = filters;
   state.search = search;
@@ -597,6 +601,7 @@ function openBatchMenu(anchor, ids) {
 // --- Backstage ----------------------------------------------------------------------------------
 
 function openBackstage() {
+  closeWorkspace();
   if (state.route.name === "backstage") return;
   state.route = { name: "backstage", id: 0 };
   history.pushState({ backstage: true }, "", `/backstage${querySuffix()}`);
@@ -609,6 +614,7 @@ function openBackstage() {
 // --- Boot ------------------------------------------------------------------------------------------
 
 function onPopState() {
+  if(!location.hash)closeWorkspace({navigate:false});
   const previousQuery = querySuffix();
   parseLocation();
   applyRouteClasses();
@@ -631,6 +637,7 @@ function onPopState() {
 }
 
 function escape() {
+  if(workspaceOpen()){closeWorkspace();return true;}
   if (state.checked.size) { list.clearChecked(); return true; }
   if (app.classList.contains("sidebar-open")) { setSidebarOpen(false); return true; }
   if (isFocusMode()) { toggleFocus(); return true; }
@@ -681,6 +688,15 @@ async function boot() {
     }
   });
   wireSearch();
+  initWorkspace({
+    library:()=>setFilters(state.filters),service:openBackstage,theme:saveTheme,
+    collection:id=>setFilters({...state.filters,collection_id:id,curation_status:"all"},"",{push:true}),
+    pick:()=>collections.pick([state.selectedId]),help:showHelp,export:exportCurrentList,
+    offline:async()=>{if(!await downloadOffline())toast("请先打开一篇收藏阅读");},
+    forget:async()=>{await forgetOffline();toast("已清除本机离线副本");}
+  });
+  on("workspace:navigate",()=>setSidebarOpen(false));
+  on("workspace:visibility",()=>{detail.syncReaderVisibility();if(workspaceOpen())cancelPrefetch();});
 
   on("account:changed", () => location.reload());
   on("tags:changed", () => { scheduleOverview(); list.reload({ silent: true }); });
@@ -688,7 +704,7 @@ async function boot() {
   on("confirm-request", (id) => confirmOne(id));
   on("select-request", (id) => select(id));
   on("list:loaded", ({ silent } = {}) => {
-    if (silent || state.route.name === "backstage") return;
+    if (silent || workspaceOpen() || state.route.name === "backstage") return;
     if (state.selectedId && state.order.includes(state.selectedId)) {
       list.markSelected(state.selectedId);
       bootDeepLink = 0;

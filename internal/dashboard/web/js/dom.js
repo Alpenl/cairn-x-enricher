@@ -78,6 +78,7 @@ export function isEditable(target) {
   if (!(target instanceof Element)) return false;
   if (target.closest("[contenteditable='true']")) return true;
   const tag = target.tagName;
+  if (["WA-INPUT", "WA-TEXTAREA", "WA-SELECT"].includes(tag)) return true;
   if (tag === "TEXTAREA" || tag === "SELECT") return true;
   if (tag !== "INPUT") return false;
   return !["checkbox", "radio", "button", "submit", "reset"].includes(target.type);

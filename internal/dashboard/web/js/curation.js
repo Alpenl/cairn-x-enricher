@@ -117,6 +117,7 @@ function renderSummary() {
 
 function openPanel() {
   if (!currentId || els.section.hidden) return false;
+  emit("inspector:open","curation");
   els.section.open = true;
   autoGrow();
   return true;
@@ -776,7 +777,7 @@ export function show(id) {
   const switched = currentId !== id;
   if (currentId && switched) { flushPending(currentId); suspendRemote(); }
   currentId = id;
-  if (switched) els.section.open = false;
+  if (switched) els.section.open = Boolean(byId("inspector")?.getClientRects().length && byId("inspector-tabs")?.active === "curation");
   tagSystem.showTagSystem(id);
   pruneSessions();
   const session = sessionFor(id);

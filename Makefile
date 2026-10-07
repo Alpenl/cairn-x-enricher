@@ -26,6 +26,7 @@ test:
 # Enable with CHROME_PATH when Chrome is not on the default path.
 test-browser:
 	node scripts/build-reader.mjs --check
+	node scripts/build-components.mjs --check
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome)} node tests/browser/management-ui.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome)} node tests/browser/clean-reading.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome)} node tests/browser/media-preview.mjs
