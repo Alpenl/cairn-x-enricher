@@ -59,10 +59,9 @@ export async function verifyManagedTags(
     await manager
       .getByRole("button", { name: "新建标签", exact: true })
       .click();
-    let editor = page.locator(".manager-editor");
-    await editor.getByLabel("标签名称").fill("LoRA");
-    await editor.getByLabel("标签含义").fill("LoRA 低秩适配器的训练和使用");
-    assert.equal(await editor.getByRole("checkbox").isChecked(), true);
+    const add = manager.locator('.tl-add[data-dim="topics"]');
+    await add.getByLabel("新标签名称").fill("LoRA");
+    await add.getByLabel("新标签说明").fill("LoRA 低秩适配器的训练和使用");
     const keys = [];
     let lose = true;
     await page.route("**/api/tag-catalog/operations", async (route) => {
@@ -73,15 +72,12 @@ export async function verifyManagedTags(
         await route.abort("failed");
       } else await route.continue();
     });
-    await editor.getByRole("button", { name: "保存", exact: true }).click();
-    await wait(
-      async () =>
-        !(await editor
-          .getByRole("button", { name: "保存", exact: true })
-          .isDisabled()),
-    );
-    await editor.getByRole("button", { name: "保存", exact: true }).click();
-    await editor.getByLabel("标签名称").waitFor({ state: "detached" });
+    await add.getByRole("button", { name: "创建", exact: true }).click();
+    // A lost response keeps a durable receipt; retrying reuses the same key.
+    const receipt = manager.locator(".tl-receipt");
+    await receipt.waitFor();
+    await receipt.getByRole("button", { name: "重试", exact: true }).click();
+    await receipt.waitFor({ state: "detached" });
     assert.equal(keys.length, 2);
     assert.equal(keys[0], keys[1]);
     await page.unroute("**/api/tag-catalog/operations");
@@ -104,16 +100,9 @@ export async function verifyManagedTags(
     await closeInspector(page);
     await page.locator("#browse-tags").click();
     manager = page.locator("#management-page");
-    await manager.getByLabel("查找标签").fill("LoRA");
-    await manager
-      .locator(".tag-manager-row")
-      .filter({ has: page.getByText("LoRA", { exact: true }) })
-      .getByRole("button", { name: "管理", exact: true })
-      .click();
-    editor = page.locator(".manager-editor");
-    await editor.getByLabel("标签名称").fill("LoRA 微调");
-    await editor.getByRole("button", { name: "保存", exact: true }).click();
-    await editor.getByLabel("标签名称").waitFor({ state: "detached" });
+    await openTag(manager, "LoRA");
+    await renameOpen(manager, "LoRA 微调");
+    await wait(async () => (await api("/api/tag-catalog")).catalog.topics.find((t) => t.id === term.id).label === "LoRA 微调");
     const renamed = await api("/api/tag-catalog");
     assert.equal(
       renamed.catalog.version,
@@ -146,16 +135,9 @@ export async function verifyManagedTags(
     await closeInspector(page);
     await page.locator("#browse-tags").click();
     manager = page.locator("#management-page");
-    await manager.getByLabel("查找标签").fill(existing.label);
-    await manager
-      .locator(".tag-manager-row")
-      .filter({ has: page.getByText(existing.label, { exact: true }) })
-      .getByRole("button", { name: "管理", exact: true })
-      .click();
-    editor = page.locator(".manager-editor");
-    await editor.getByLabel("标签名称").fill("AI 编程实践");
-    await editor.getByRole("button", { name: "保存", exact: true }).click();
-    await editor.getByLabel("标签名称").waitFor({ state: "detached" });
+    await openTag(manager, existing.label);
+    await renameOpen(manager, "AI 编程实践");
+    await wait(async () => (await api("/api/tag-catalog")).catalog.topics.find((t) => t.id === "ai_coding").label === "AI 编程实践");
     await page.evaluate(async () => {
       const { loadV1, loadV2 } = await import("/assets/js/taxonomy.js");
       await loadV2();
@@ -181,20 +163,17 @@ export async function verifyManagedTags(
     await closeInspector(page);
     await page.locator("#browse-collections").click();
     let collections = page.locator("#management-page");
-    const row = collections
+    await collections
       .locator(".collection-row")
-      .filter({ hasText: "AIGC 自动收录" });
-    await row.getByRole("button", { name: /AIGC 自动收录/ }).click();
-    const collectionManager = page.locator(".manager-editor");
-    await collectionManager
-      .getByRole("button", { name: "自动收录标签", exact: true })
+      .filter({ hasText: "AIGC 自动收录" })
       .click();
-    let rule = page.locator('wa-dialog[label="合集自动收录"]');
-    await setCheckbox(rule, "按标签自动收录新收藏", true);
-    await rule.getByLabel("查找自动收录标签").fill("LoRA");
-    await setCheckbox(rule, /LoRA 微调/, true);
-    await rule.getByRole("button", { name: "保存规则", exact: true }).click();
+    await collections.locator(".cl-hooks .tl-chip-add").click();
+    const rule = page.locator('wa-dialog[label="给「AIGC 自动收录」挂标签"]');
+    await rule.getByLabel("查找标签").fill("LoRA");
+    await rule.locator(".tag-pick", { hasText: "LoRA 微调" }).click();
+    await rule.getByRole("button", { name: "保存", exact: true }).click();
     await rule.waitFor({ state: "detached" });
+    await wait(async () => (await api("/api/collections/" + collectionID)).collection.rule_enabled);
     const created = await fetch(workerURL + "/api/links", {
       method: "POST",
       headers: {
@@ -251,16 +230,13 @@ export async function verifyManagedTags(
       await manager.evaluate((n) => n.scrollWidth <= n.clientWidth),
       true,
     );
-    await manager.getByLabel("查找标签").fill("LoRA");
+    await manager.getByLabel("搜索或新建标签").fill("LoRA");
     await manager
-      .locator(".tag-manager-row")
-      .filter({ has: page.getByText("LoRA 微调", { exact: true }) })
-      .getByRole("button", { name: "管理", exact: true })
+      .locator(".tl-row")
+      .filter({ hasText: "LoRA 微调" })
+      .locator(".tl-ai")
       .click();
-    editor = page.locator(".manager-editor");
-    await setCheckbox(editor, "参与 AI 自动打标", false);
-    await editor.getByRole("button", { name: "保存", exact: true }).click();
-    await editor.getByLabel("标签名称").waitFor({ state: "detached" });
+    await wait(async () => (await api("/api/tag-catalog")).catalog.topics.find((t) => t.id === term.id).ai_enabled === false);
     data = await api("/api/tag-catalog");
     assert.equal(
       data.catalog.topics.find((t) => t.id === term.id).ai_enabled,
@@ -273,4 +249,16 @@ export async function verifyManagedTags(
   } finally {
     await page.close();
   }
+}
+
+// Search, open the matching row in place, and rename it on blur.
+async function openTag(manager, label) {
+  await manager.getByLabel("搜索或新建标签").fill(label);
+  await manager.locator(".tl-row").filter({ hasText: label }).first().locator(".tl-main").click();
+  await manager.locator(".tl-panel").waitFor();
+}
+async function renameOpen(manager, label) {
+  const name = manager.locator(".tl-panel").getByLabel("名称", { exact: true });
+  await name.fill(label);
+  await name.press("Enter");
 }

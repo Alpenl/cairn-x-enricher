@@ -39,6 +39,7 @@ const renderedText = new WeakMap();
 let renderedImages = "";
 let showUnformatted = false;
 let formattedItemId = 0;
+const versionLabels=new Map();
 let renderedLinks = "";
 
 export function currentItemId() {
@@ -201,9 +202,13 @@ function render(item) {
     renderFigures(item, body, reading.images);
     void renderMedia(byId('detail-media'),item,els.body);
     const cleaned = !showUnformatted && els.body.dataset.cleaned === "true";
-    byId("reading-version").textContent=cleaned ? "净读版" : label;
+    const processed=showUnformatted ? (versionLabels.get(item.id) || "整理版") : (cleaned ? "净读版" : label);
+    if(!showUnformatted) versionLabels.set(item.id,processed);
+    byId("reading-version").textContent=processed;
+    byId("reading-version").setAttribute("aria-checked",String(!showUnformatted));
     byId("toggle-formatted").hidden=!item.formatted_content && !cleaned && !showUnformatted;
-    byId("toggle-formatted").textContent=showUnformatted ? "查看净读版" : "查看原内容";
+    byId("toggle-formatted").textContent="原内容";
+    byId("toggle-formatted").setAttribute("aria-checked",String(showUnformatted));
     const waiting=["pending","processing"].includes(item.formatting_status);
     byId("format-body").hidden=!aiFormatting;
     byId("format-body").disabled=waiting || !body;
@@ -496,6 +501,7 @@ export function initDetail(options) {
   byId("format-body").hidden=true;
   fetchJSON("/api/reading-capabilities").then(result=>{aiFormatting=result.ai_formatting===true;if(currentId&&getItem(currentId))render(getItem(currentId));}).catch(()=>{});
   byId("toggle-formatted").addEventListener("click",()=>{showUnformatted=!showUnformatted;render(getItem(currentId));});
+  byId("reading-version").addEventListener("click",()=>{if(showUnformatted){showUnformatted=false;render(getItem(currentId));}});
   byId("format-body").addEventListener("click",async()=>{
     const id=currentId;const button=byId("format-body");button.disabled=true;
     try {

@@ -16,7 +16,8 @@ import { curationLabels, needsReview } from "./format.js";
 import * as list from "./list.js";
 import { downloadOffline, forgetOffline } from "./offline.js";
 import {
-  apiParams, buildQuery, clearFacets, matchesStatusView, parseQuery, sinceLabel, toggleValue, withView
+  apiParams, buildQuery, clearFacets, matchesStatusView, parseQuery, sinceLabel, toggleValue, withView,
+  emptyFilters
 } from "./query.js";
 import { initShortcuts, showHelp } from "./shortcuts.js";
 import * as sidebar from "./sidebar.js";
@@ -670,7 +671,7 @@ async function boot() {
     isFocusMode,
     toggleFocus
   });
-  collections.initCollections({select:filters=>setFilters(filters,"",{push:true}),reload:()=>list.reload()});
+  collections.initCollections({select:filters=>setFilters(filters,"",{push:true}),reload:()=>list.reload(),openItem:(id,collection)=>{setFilters({...emptyFilters(),curation_status:"all",collection_id:collection},"",{push:true});select(id);}});
   curation.initCuration();
   diagnostics.initDiagnostics();
   sidebar.initSidebar({ viewHref, openBackstage, ...hooksForFilters });
@@ -812,4 +813,4 @@ async function boot() {
 
 boot();
 
-initTagManager();
+initTagManager({select:filters=>setFilters(filters,"",{push:true})});

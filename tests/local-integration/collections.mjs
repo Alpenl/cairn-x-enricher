@@ -41,7 +41,8 @@ export async function verifyCollections(browser, base, bookmarkID) {
     await page.locator("#browse-collections").click();
     await page
       .locator("#management-page")
-      .getByRole("button", { name: "新建", exact: true })
+      .getByRole("button", { name: "新建合集", exact: true })
+      .first()
       .click();
     const create = page.locator('wa-dialog[label="新建合集"]');
     await create.getByLabel("合集名称").fill("项目资料");
@@ -64,23 +65,24 @@ export async function verifyCollections(browser, base, bookmarkID) {
 
     await closeInspector(page);
     await page.locator("#browse-collections").click();
-    await page
-      .locator("#management-page .collection-row")
-      .filter({ hasText: "项目资料" })
-      .getByRole("button", { name: "阅读", exact: true })
-      .click();
+    let manager = page.locator("#management-page");
+    await manager.locator(".collection-row").filter({ hasText: "项目资料" }).click();
+    await manager.locator(".cl-detail").getByRole("button", { name: "阅读", exact: true }).click();
     await page.waitForURL(
       (url) => url.searchParams.get("collection_id") === id,
     );
     await page.waitForFunction(
       () => document.querySelector("#list-title")?.textContent === "项目资料",
     );
+    // The list context opens the same collection on the collections page.
     await page
       .locator("#collection-context")
       .getByRole("button", { name: "管理" })
       .click();
-    let manager = page.locator('wa-dialog[label="管理合集"]');
-    await manager.getByRole("button", { name: "备注", exact: true }).click();
+    manager = page.locator("#management-page .cl-detail");
+    await manager.getByLabel("合集名称").waitFor();
+    await manager.locator(".cl-member").first().getByRole("button", { name: "操作" }).click();
+    await page.getByRole("menuitem", { name: /写合集内备注/ }).click();
     const note = page.locator('wa-dialog[label="合集内备注"]');
     await note
       .getByRole("textbox", { name: "合集内备注", exact: true })
@@ -97,28 +99,22 @@ export async function verifyCollections(browser, base, bookmarkID) {
       type: "edit",
       name: "网页另一端",
     });
-    await manager.getByLabel("合集名称").fill("我的项目资料");
-    await manager.getByRole("button", { name: "保存", exact: true }).click();
+    const name = manager.getByLabel("合集名称");
+    await name.fill("我的项目资料");
+    await name.press("Enter");
     const conflict = page.locator('wa-dialog[label="合集已在其他设备更新"]');
     await conflict.getByRole("button", { name: "取消", exact: true }).click();
-    assert.equal(
-      await manager.getByLabel("合集名称").inputValue(),
-      "我的项目资料",
-    );
+    await conflict.waitFor({ state: "detached" });
+    assert.equal(await name.inputValue(), "我的项目资料");
     assert.equal((await api(`/${id}`)).collection.name, "网页另一端");
-    await manager.getByRole("button", { name: "保存", exact: true }).click();
+    await name.press("Enter");
     await conflict
       .getByRole("button", { name: "重新提交", exact: true })
       .click();
-    await manager.waitFor({ state: "detached" });
-    assert.equal((await api(`/${id}`)).collection.name, "我的项目资料");
+    await waitAPI(async () => (await api(`/${id}`)).collection.name === "我的项目资料");
 
     // A response lost AFTER commit reuses the exact operation identity.
-    await page
-      .locator("#collection-context")
-      .getByRole("button", { name: "管理" })
-      .click();
-    manager = page.locator('wa-dialog[label="管理合集"]');
+    await manager.getByLabel("合集名称").waitFor();
     const keys = [];
     let lose = true;
     await page.route(`**/api/collections/${id}/operations`, async (route) => {
@@ -129,39 +125,32 @@ export async function verifyCollections(browser, base, bookmarkID) {
         await route.abort("failed");
       } else await route.continue();
     });
-    await manager.getByLabel("合集说明").fill("响应丢失也能恢复");
-    await manager.getByRole("button", { name: "保存", exact: true }).click();
-    await page.waitForFunction(
-      () =>
-        !document.querySelector(
-          'wa-dialog[label="管理合集"] wa-button[variant=brand]',
-        )?.disabled,
-    );
-    await manager.getByRole("button", { name: "保存", exact: true }).click();
-    await manager.waitFor({ state: "detached" });
-    assert.equal(keys.length, 2);
+    const description = manager.getByLabel("合集说明");
+    await description.fill("响应丢失也能恢复");
+    await description.press("Enter");
+    await waitAPI(async () => keys.length === 1);
+    // The lost response finishes before a retry; an in-flight save ignores repeats.
+    await page.waitForFunction(() => !document.querySelector(".cl-desc[data-saving]"));
+    await description.press("Enter");
+    await waitAPI(async () => keys.length === 2);
     assert.equal(keys[0], keys[1]);
     await page.unroute(`**/api/collections/${id}/operations`);
+    await waitAPI(async () => (await api(`/${id}`)).collection.description === "响应丢失也能恢复");
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.locator("#detail-back").click();
-    await page
-      .locator("#collection-context")
-      .getByRole("button", { name: "管理" })
-      .click();
-    manager = page.locator('wa-dialog[label="管理合集"]');
+    manager = page.locator("#management-page .cl-detail");
+    await manager.getByLabel("合集名称").waitFor();
     assert.equal(
-      await manager.evaluate((n) => n.scrollWidth <= n.clientWidth),
+      await page.locator("#management-page").evaluate((n) => n.scrollWidth <= n.clientWidth),
       true,
     );
-    await manager
-      .getByRole("button", { name: "删除合集", exact: true })
-      .click();
+    await manager.getByRole("button", { name: "合集操作" }).click();
+    await page.getByRole("menuitem", { name: /删除合集/ }).click();
     await page
       .locator('wa-dialog[label="删除这个合集？"]')
-      .getByRole("button", { name: "删除合集", exact: true })
+      .getByRole("button", { name: "删除", exact: true })
       .click();
-    await manager.waitFor({ state: "detached" });
+    await waitAPI(async () => (await api(`/${id}`)).collection.deleted === 1);
     assert.equal((await api(`/${id}`)).collection.deleted, 1);
     await page.getByRole("button", { name: "撤销", exact: true }).click();
     await waitAPI(async () => !(await api(`/${id}`)).collection.deleted);
@@ -179,12 +168,12 @@ export async function verifyCollections(browser, base, bookmarkID) {
     await page.locator("#browse-collections").click();
     await page
       .locator("#management-page")
-      .getByRole("button", { name: "自动整理", exact: true })
+      .getByRole("button", { name: "AI 整理", exact: true })
       .click();
     let organizer = page.locator("#management-page");
     assert.equal(
-      await organizer.locator("wa-select").evaluate((n) => n.value),
-      "review",
+      await organizer.getByRole("radio", { name: /由我审核后加入/ }).isChecked(),
+      true,
     );
     await organizer
       .getByRole("button", { name: "开始整理现有收藏", exact: true })
@@ -262,13 +251,12 @@ export async function verifyCollections(browser, base, bookmarkID) {
     await page.locator("#browse-collections").click();
     await page
       .locator("#management-page")
-      .getByRole("button", { name: "自动整理", exact: true })
+      .getByRole("button", { name: "AI 整理", exact: true })
       .click();
     organizer = page.locator("#management-page");
     await organizer
-      .locator(".collection-row")
-      .filter({ hasText: "直接应用" })
-      .getByRole("button")
+      .locator(".og-run")
+      .filter({ hasText: "直接加入" })
       .first()
       .click();
     results = page.locator("#management-page");
@@ -287,13 +275,10 @@ export async function verifyCollections(browser, base, bookmarkID) {
     await page.locator("#browse-collections").click();
     await page
       .locator("#management-page")
-      .getByRole("button", { name: "自动整理", exact: true })
+      .getByRole("button", { name: "AI 整理", exact: true })
       .click();
     organizer = page.locator("#management-page");
-    await organizer.getByRole("combobox", { name: "自动整理模式" }).click();
-    await page
-      .getByRole("option", { name: "直接应用预选，无需审核", exact: true })
-      .click();
+    await organizer.getByRole("radio", { name: /直接加入预选结果/ }).check();
     await organizer
       .getByRole("button", { name: "开始整理现有收藏", exact: true })
       .click();

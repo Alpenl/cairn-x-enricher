@@ -868,7 +868,7 @@ export function initCuration() {
       ? renderV2Rows(session, getItem(currentId)).filter((entry) => entry.dataset?.dimension && !["topics", "resource_kinds", "content_functions"].includes(entry.dataset.dimension)) : [];
     const entity = renderEntityRow(session);
     if (entity) secondary.push(entity);
-    if (secondary.length) els.tags.append(h("details.tag-secondary", h("summary", "更多内容属性与实体"), ...secondary));
+    if (secondary.length) els.tags.append(h("details.tag-secondary", h("summary", "载体、潜在用途与实体"), ...secondary));
   });
   on("tag-system:fallback", (id) => { if (id === currentId) renderTags(); });
   on("tag-system:render", (id) => { if (id === currentId) renderSummary(); });

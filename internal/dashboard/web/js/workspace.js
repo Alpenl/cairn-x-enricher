@@ -15,10 +15,10 @@ let current = null,
   membershipGeneration = 0,
   membershipID = 0;
 const descriptions = {
-  tags: "统一维护标签含义、别名与自动打标范围。人工整理与历史记录保留。",
-  collections: "用少量合集组织收藏，挂上标签后可自动收录新内容。",
-  organize: "对已有合集生成归属预选，默认由你审核后加入。",
-  settings: "调整这台设备的阅读体验。",
+  tags: "标签用来按内容找收藏。打开 AI 的标签会自动加到新收藏上；任何标签都可以随时手动加、改、删。点一行展开编辑。",
+  collections: "把收藏按项目或主题放在一起。给合集挂上标签，带这些标签的新收藏会自动归入。",
+  organize: "让 AI 判断已有收藏适合放进哪些现有合集。只在你点开始时运行，默认由你审核后才加入。",
+  settings: "这些偏好只保存在这台设备的浏览器里。",
 };
 export function workspaceOpen() {
   return Boolean(current);
@@ -68,7 +68,7 @@ export function restoreWorkspace(key) {
     .catch((error) => toast(errorLabel(error.message), { tone: "error" }));
   return true;
 }
-export function openWorkspace({ key, title, body, onClose, split = false }) {
+export function openWorkspace({ key, title, body, onClose, split = false, actions = null }) {
   if (current) current.onClose?.();
   if (drawer) closeInspector();
   emit("workspace:navigate");
@@ -94,6 +94,7 @@ export function openWorkspace({ key, title, body, onClose, split = false }) {
           h("h1", title),
           h("p", descriptions[key] || ""),
         ),
+        actions ? h("div.page-head-actions", actions) : null,
       ),
       split
         ? h("div.manager-split", h("div.manager-list", content), editorHost)
@@ -348,73 +349,44 @@ async function navigate(key) {
   }
 }
 function settings() {
-  const theme = control(
-    "select",
-    { "aria-label": "外观" },
-    ...[
-      ["system", "跟随系统"],
-      ["light", "浅色"],
-      ["dark", "深色"],
-    ].map(([value, label]) => control("option", { value }, label)),
-  );
-  theme.value = localStorage.getItem("cairn.theme") || "system";
-  theme.addEventListener("change", () => {
-    hooks.theme(theme.value);
-  });
-  const size = control(
-    "select",
-    { "aria-label": "正文字号" },
-    ...[16, 17, 18, 20, 22].map((value) =>
-      control("option", { value: String(value) }, `${value} px`),
-    ),
-  );
-  size.value = String(readSize());
-  size.addEventListener("change", () => {
-    localStorage.setItem("cairn.reader.font-size", size.value);
-    document.documentElement.style.setProperty(
-      "--reader-font-size",
-      `${size.value}px`,
-    );
-  });
-  const card = (title, ...body) =>
-    h("section.settings-card", h("h2", title), body);
+  const seg = (label, options, current, onPick) => {
+    const group = h("div.version-seg.settings-seg", { role: "radiogroup", "aria-label": label });
+    for (const [value, text] of options)
+      group.append(h("button", { type: "button", role: "radio", "aria-checked": String(value === current), onclick: (event) => {
+        for (const b of group.children) b.setAttribute("aria-checked", String(b === event.currentTarget));
+        onPick(value);
+      } }, text));
+    return group;
+  };
+  let theme = "system";
+  try { theme = localStorage.getItem("cairn.theme") || "system"; } catch {}
+  const row = (title, hint, control) => h("div.settings-row", h("span", title, h("small", hint)), control);
+  const card = (title, ...body) => h("section.settings-card", h("h2", title), body);
+  const action = (label, ic, run, cls = "") => h(`button.btn.btn-sm${cls}`, { type: "button", onclick: run }, icon(ic, 14), label);
   openWorkspace({
     key: "settings",
     title: "设置与快捷键",
     body: [
       card(
         "阅读与外观",
-        h(
-          "label.settings-row",
-          h("span", "外观", h("small", "选择浅色、深色或跟随设备")),
-          theme,
-        ),
-        h(
-          "label.settings-row",
-          h("span", "正文字号", h("small", "仅影响这台设备的阅读字号")),
-          size,
-        ),
+        row("外观", "浅色、深色或跟随设备", seg("外观", [["system", "跟随系统"], ["light", "浅色"], ["dark", "深色"]], theme, (v) => hooks.theme(v))),
+        row("正文字号", "只影响这台设备", seg("正文字号", [16, 17, 18, 20, 22].map((n) => [n, n === 17 ? "17 默认" : String(n)]), readSize(), (v) => {
+          try { localStorage.setItem("cairn.reader.font-size", String(v)); } catch {}
+          document.documentElement.style.setProperty("--reader-font-size", `${v}px`);
+        })),
       ),
       card(
         "离线与导出",
-        h(
-          "p.collection-hint",
-          "阅读过的文章会保存文字副本。媒体使用现有归档与图片缓存策略。",
-        ),
-        h(
-          "div.collection-tools",
-          control("button", { onclick: hooks.offline }, "下载离线阅读文件"),
-          control("button", { onclick: hooks.export }, "导出当前结果"),
-          control("button", { onclick: hooks.forget }, "清除本机离线副本"),
-        ),
+        h("p.tl-note", "读过的文章会在这台设备上保存文字副本，断网时也能打开。"),
+        h("div.settings-actions",
+          action("下载离线阅读文件", "download", hooks.offline),
+          action("导出当前结果（Markdown）", "fileText", hooks.export),
+          action("清除本机离线副本", "x", hooks.forget, ".btn-ghost.btn-danger")),
       ),
       card(
-        "键盘操作",
-        h(
-          "p.collection-hint",
-          "⌘ / Ctrl K 打开命令搜索；J / K 浏览；1–4 整理；I 打开整理面板。",
-        ),
-        control("button", { onclick: hooks.help }, "查看全部快捷键"),
+        "键盘",
+        h("dl.settings-keys", [["⌘ / Ctrl K", "搜索或执行命令"], ["J / K", "下一条 / 上一条"], ["1 2 3 4", "收件箱 / 精选 / 已编入 / 搁置"], ["I", "打开或关闭整理面板"], ["A", "确认自动标签"], ["Z", "撤销上一次操作"]].map(([k, d]) => [h("dt", h("kbd", k)), h("dd", d)])),
+        h("div.settings-actions", action("查看全部快捷键", "keyboard", hooks.help)),
       ),
     ],
   });

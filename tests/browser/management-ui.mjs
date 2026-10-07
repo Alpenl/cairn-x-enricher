@@ -110,69 +110,33 @@ try {
         theme,
       );
       await go("tags");
-      await page.getByLabel("查找标签", { exact: true }).fill("");
-      await page.locator(".tag-manager-row").first().waitFor();
-      assert.ok(
-        (await page.locator("#management-page .tag-manager-row").count()) > 10,
-      );
+      await page.getByLabel("搜索或新建标签", { exact: true }).fill("");
+      await page.locator(".tl-row").first().waitFor();
+      assert.ok((await page.locator("#management-page .tl-row").count()) > 10);
       await overflow();
-      await page.getByLabel("查找标签", { exact: true }).fill("无此标签");
-      await page.getByText("没有符合条件的标签").waitFor();
-      await page.getByRole("button", { name: "新建标签", exact: true }).click();
-      const editor = page.locator(".manager-editor");
-      assert.equal(
-        await editor
-          .getByRole("checkbox", { name: "参与 AI 自动打标" })
-          .isChecked(),
-        true,
-      );
-      await editor.getByLabel("标签名称", { exact: true }).fill("LoRA");
-      await editor
-        .getByLabel("标签含义", { exact: true })
-        .fill("低秩适配训练与模型应用");
-      assert.equal(
-        await editor.getByLabel("正例", { exact: true }).isVisible(),
-        false,
-      );
-      await editor.getByText("匹配示例与排除条件", { exact: true }).click();
-      await editor
-        .getByLabel("正例", { exact: true })
-        .fill("LoRA 的训练与应用");
+      // Expanding a row edits in place; only one row is open at a time.
+      await page.locator("#management-page .tl-main").first().click();
+      await page.locator("#management-page .tl-panel").waitFor();
+      assert.equal(await page.locator("#management-page .tl-panel").count(), 1);
+      await page.getByLabel("搜索或新建标签", { exact: true }).fill("无此标签");
+      await page.locator(".tl-create").waitFor();
+      await page.getByLabel("搜索或新建标签", { exact: true }).press("Enter");
+      const add = page.locator('.tl-add[data-dim="topics"]');
+      await add.waitFor();
+      assert.equal(await add.getByLabel("新标签名称").inputValue(), "无此标签");
+      await add.getByLabel("新标签说明").fill("低秩适配训练与模型应用");
       await overflow();
+      await add.getByRole("button", { name: "取消" }).click();
       await go("collections");
       await page.locator("#management-page .collection-row").first().waitFor();
       await page.getByLabel("查找合集", { exact: true }).fill("AIGC");
-      assert.equal(
-        await page.locator("#management-page .collection-row").count(),
-        1,
-      );
-      await page
-        .getByRole("button", { name: /AIGC 生图生成视频相关/ })
-        .last()
-        .click();
+      assert.equal(await page.locator("#management-page .collection-row").count(), 1);
+      await page.locator("#management-page .collection-row").first().click();
       await page.getByLabel("合集名称", { exact: true }).waitFor();
       await overflow();
-      await page.waitForFunction(
-        () =>
-          [...document.querySelectorAll(".manager-editor wa-checkbox")].find(
-            (n) => n.textContent.includes("置顶"),
-          )?.checked === true,
-      );
-      await page
-        .getByRole("checkbox", { name: "置顶", exact: true })
-        .press("Space");
-      await page.waitForFunction(
-        () =>
-          [...document.querySelectorAll(".manager-editor wa-checkbox")].find(
-            (n) => n.textContent.includes("置顶"),
-          )?.checked === false,
-      );
-      assert.equal(
-        await page
-          .getByRole("checkbox", { name: "置顶", exact: true })
-          .isChecked(),
-        false,
-      );
+      const pin = page.getByRole("checkbox", { name: "置顶", exact: true });
+      assert.equal(await pin.isChecked(), true);
+      await page.getByText("挂着的标签", { exact: true }).waitFor();
     }
     await page.evaluate(async () => {
       (await import("/assets/js/workspace.js")).closeWorkspace();
