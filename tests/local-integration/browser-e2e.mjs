@@ -211,7 +211,7 @@ async function main() {
     await page.goto(`http://127.0.0.1:${goPort}/bookmarks/${id}`, { waitUntil: "load" });
     await page.waitForSelector("#curate-summary-tags .tag", { state: "attached", timeout: 30000 });
     await page.locator("#inspector-toggle").click();
-    check("collapsed editor has no editor rows before opening", await page.locator(".tag-system-row").count() === 0);
+    check("closing the inspector hides every editor row", await page.locator(".tag-system-row:visible").count() === 0);
     check("the real tag editor starts collapsed", !await page.locator("#curate").evaluate(node => node.open));
     // Exercise actual Worker projections through NAS and the real list merge.
     // A synthetic summary that retained identity unconditionally hid this bug.

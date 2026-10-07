@@ -1,4 +1,5 @@
 import { closeWorkspace, setCheckbox } from "./workspace-helper.mjs";
+import { openCuration } from "../browser/workspace-helper.mjs";
 import assert from "node:assert/strict";
 export async function verifyManagedTags(
   browser,
@@ -94,10 +95,12 @@ export async function verifyManagedTags(
       actions: [{ action: "accept", tag_ref: ref }],
     });
     await page.reload();
+    await closeWorkspace(page);
+    await openCuration(page);
     await page
-      .locator("#curate-summary-tags")
+      .locator('.tag-system-row[data-dimension="topics"]')
       .getByText("LoRA", { exact: true })
-      .waitFor({ state: "attached" });
+      .waitFor({ state: "visible" });
     await page.locator("#browse-tags").click();
     manager = page.locator("#management-page");
     await manager.getByLabel("查找标签").fill("LoRA");
@@ -123,11 +126,12 @@ export async function verifyManagedTags(
       renamed.catalog.topics.find((t) => t.id === term.id).label,
       "LoRA 微调",
     );
-    assert.ok(
-      (await page.locator("#curate-summary-tags").textContent()).includes(
-        "LoRA 微调",
-      ),
-    );
+    await closeWorkspace(page);
+    await openCuration(page);
+    await page
+      .locator('.tag-system-row[data-dimension="topics"]')
+      .getByText("LoRA 微调", { exact: true })
+      .waitFor({ state: "visible" });
     const existing = renamed.catalog.topics.find((t) => t.id === "ai_coding");
     assert.ok(existing);
     const attached = await api("/api/bookmarks/" + bookmarkID + "/tags");
@@ -136,6 +140,10 @@ export async function verifyManagedTags(
       expected_revision: attached.revision,
       actions: [{ action: "accept", tag_ref: "system/topics/ai_coding" }],
     });
+    await page.goto(base + "/bookmarks/" + bookmarkID);
+    await openCuration(page);
+    await page.locator("#browse-tags").click();
+    manager = page.locator("#management-page");
     await manager.getByLabel("查找标签").fill(existing.label);
     await manager
       .locator(".tag-manager-row")
@@ -153,11 +161,12 @@ export async function verifyManagedTags(
       const { emit } = await import("/assets/js/store.js");
       emit("taxonomy");
     });
-    assert.ok(
-      (await page.locator("#curate-summary-tags").textContent()).includes(
-        "AI 编程实践",
-      ),
-    );
+    await closeWorkspace(page);
+    await openCuration(page);
+    await page
+      .locator('.tag-system-row[data-dimension="topics"]')
+      .getByText("AI 编程实践", { exact: true })
+      .waitFor({ state: "visible" });
     const old = await internal("classifications/" + bookmarkID);
     const collectionID = crypto.randomUUID();
     await api(`/api/collections/${collectionID}/operations`, {
