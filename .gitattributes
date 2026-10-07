@@ -1,0 +1,5 @@
+# Upstream template literals may contain intentional line-end spaces. Keep
+# generated component bytes reproducible; review their source entry instead.
+internal/dashboard/web/js/vendor/components.js linguist-generated=true -whitespace
+internal/dashboard/web/components.css linguist-generated=true
+internal/dashboard/web/icons/system/** linguist-generated=true

@@ -290,7 +290,7 @@ export async function verifyCollections(browser, base, bookmarkID) {
       .getByRole("button", { name: "自动整理", exact: true })
       .click();
     organizer = page.locator("#management-page");
-    await organizer.getByLabel("自动整理模式").click();
+    await organizer.getByRole("combobox", { name: "自动整理模式" }).click();
     await page
       .getByRole("option", { name: "直接应用预选，无需审核", exact: true })
       .click();
