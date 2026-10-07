@@ -1,5 +1,5 @@
 import { closeWorkspace, setCheckbox } from "./workspace-helper.mjs";
-import { openCuration } from "../browser/workspace-helper.mjs";
+import { openCuration, closeInspector } from "../browser/workspace-helper.mjs";
 import assert from "node:assert/strict";
 export async function verifyManagedTags(
   browser,
@@ -53,6 +53,7 @@ export async function verifyManagedTags(
       Object.defineProperty(crypto, "randomUUID", { value: undefined }),
     );
     await page.goto(base + "/bookmarks/" + bookmarkID);
+    await closeInspector(page);
     await page.locator("#browse-tags").click();
     let manager = page.locator("#management-page");
     await manager
@@ -94,13 +95,13 @@ export async function verifyManagedTags(
       expected_revision: human.revision,
       actions: [{ action: "accept", tag_ref: ref }],
     });
-    await page.reload();
-    await closeWorkspace(page);
+    await page.goto(base + "/bookmarks/" + bookmarkID);
     await openCuration(page);
     await page
       .locator('.tag-system-row[data-dimension="topics"]')
       .getByText("LoRA", { exact: true })
       .waitFor({ state: "visible" });
+    await closeInspector(page);
     await page.locator("#browse-tags").click();
     manager = page.locator("#management-page");
     await manager.getByLabel("查找标签").fill("LoRA");
@@ -142,6 +143,7 @@ export async function verifyManagedTags(
     });
     await page.goto(base + "/bookmarks/" + bookmarkID);
     await openCuration(page);
+    await closeInspector(page);
     await page.locator("#browse-tags").click();
     manager = page.locator("#management-page");
     await manager.getByLabel("查找标签").fill(existing.label);
@@ -176,6 +178,7 @@ export async function verifyManagedTags(
       name: "AIGC 自动收录",
     });
     await closeWorkspace(page);
+    await closeInspector(page);
     await page.locator("#browse-collections").click();
     let collections = page.locator("#management-page");
     const row = collections

@@ -13,6 +13,9 @@ export async function closeFilters(page) {
 }
 export async function openCuration(page) {
   await closeFilters(page);
+  await page.waitForFunction(async () =>
+    Boolean((await import("/assets/js/store.js")).state.selectedId),
+  );
   await page.evaluate(async () =>
     (await import("/assets/js/workspace.js")).showInspector("curation"),
   );
