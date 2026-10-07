@@ -56,6 +56,44 @@ export async function verifyManagedTags(
     await closeInspector(page);
     await page.locator("#browse-tags").click();
     let manager = page.locator("#management-page");
+    // Reproduce a pending legacy uses/contra archive from the real UI. Losing
+    // its response must keep the original operation identity and audit once.
+    await manager.getByLabel("搜索或新建标签", { exact: true }).fill("反对");
+    const opposition = manager.locator('.tl-group[data-dim="uses"] .tl-row').filter({ hasText: "反对" });
+    await opposition.locator(".tl-main").click();
+    const archiveKeys = [];
+    let loseArchive = true;
+    await page.route("**/api/tag-catalog/operations", async (route) => {
+      const body = route.request().postDataJSON();
+      if (body.dimension !== "uses" || body.id !== "contra" || body.type !== "archive") return route.continue();
+      archiveKeys.push(body.operation_key);
+      if (loseArchive) {
+        loseArchive = false;
+        const response = await route.fetch();
+        assert.equal(response.status(), 200, await response.text());
+        await route.abort("failed");
+      } else await route.continue();
+    });
+    await manager.locator(".tl-panel").getByRole("button", { name: "停用", exact: true }).click();
+    await manager.locator(".tl-receipt").getByRole("button", { name: "重试", exact: true }).click();
+    await manager.locator(".tl-receipt").waitFor({ state: "detached" });
+    assert.equal(archiveKeys.length, 2);
+    assert.equal(archiveKeys[0], archiveKeys[1]);
+    await page.unroute("**/api/tag-catalog/operations");
+    let archived = await api("/api/tag-catalog");
+    assert.equal(archived.catalog.uses.find((t) => t.id === "contra").active, false);
+    assert.equal((await api("/api/tag-catalog/history?dimension=uses&id=contra")).items.length, 1);
+    await manager.locator(".tl-row.is-off").filter({ hasText: "反对" }).getByRole("button", { name: "恢复", exact: true }).click();
+    await wait(async () => (await api("/api/tag-catalog")).catalog.uses.find((t) => t.id === "contra").active);
+    archived = await api("/api/tag-catalog");
+    assert.equal(archived.catalog.uses.find((t) => t.id === "contra").ai_enabled, false);
+    const forbidden = await fetch(base + "/api/tag-catalog/operations", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operation_key: crypto.randomUUID(), expected_revision: archived.revision, dimension: "uses", id: "contra", type: "edit", definition: { ai_enabled: true } }),
+    });
+    assert.equal(forbidden.status, 400);
+    assert.equal((await forbidden.json()).error, "personal_use_human_only");
+    await manager.getByLabel("搜索或新建标签", { exact: true }).fill("");
     await manager
       .getByRole("button", { name: "新建标签", exact: true })
       .click();

@@ -1457,6 +1457,16 @@ func (s *Server) writeBackendError(writer http.ResponseWriter, operation string,
 		case "invalid_limit", "invalid_before_id", "invalid_status", "invalid_query", "invalid_curation":
 			writeError(writer, http.StatusBadRequest, apiErr.Code)
 			return
+		case "invalid_tag_operation", "invalid_tag_definition", "invalid_dimension", "invalid_tag", "invalid_label", "personal_use_human_only":
+			if apiErr.StatusCode == http.StatusBadRequest {
+				writeError(writer, http.StatusBadRequest, apiErr.Code)
+				return
+			}
+		case "tag_not_found":
+			if apiErr.StatusCode == http.StatusNotFound {
+				writeError(writer, http.StatusNotFound, apiErr.Code)
+				return
+			}
 		}
 		// An optimistic-concurrency conflict is actionable: the UI must show the
 		// current revision and let the user re-apply, not a generic 502. The

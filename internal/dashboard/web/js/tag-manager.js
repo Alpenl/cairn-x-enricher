@@ -40,6 +40,10 @@ const labels = {
   tag_limit: "这一组的标签数量已达上限",
   personal_use_human_only: "「反对」只能由你手动添加",
   tag_in_use: "这个标记还在使用中",
+  tag_not_found: "这个标签已不存在，已载入最新标签库",
+  invalid_tag_operation: "标签操作无效，请载入最新标签库后重试",
+  invalid_dimension: "这一组暂不支持新建标签",
+  backend_error: "保存结果暂未确认，请重试原操作",
 };
 const uuid = () => {
   const b = crypto.getRandomValues(new Uint8Array(16));
