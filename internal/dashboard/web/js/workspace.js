@@ -246,7 +246,7 @@ export function showInspector(name = "curation") {
     instance.append(byId("inspector"));
     document.body.append(instance);
     instance.addEventListener("wa-after-hide", (event) => {
-      if (event.target !== instance) return;
+      if (event.target !== instance || instance.open) return;
       byId("library").append(byId("inspector"));
       instance.remove();
       if (drawer === instance) drawer = null;
@@ -254,9 +254,15 @@ export function showInspector(name = "curation") {
       emit("inspector:visibility");
     });
     instance.updateComplete.then(() => {
-      if (drawer === instance) instance.open = true;
+      if (drawer === instance) {
+        instance.open = true;
+        // The disclosures must observe the dialog's open state. Before the
+        // first reactive update the dialog is still closed, so opening a
+        // disclosure earlier would leave the drawer's content collapsed.
+        setInspectorTab(name);
+      }
     });
-  }
+  } else if (drawer) drawer.open = true;
   setInspectorTab(name);
   void memberships();
 }

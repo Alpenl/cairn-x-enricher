@@ -187,11 +187,18 @@ try {
   await page.locator("#inspector-toggle").click();
   const drawer = page.locator("wa-dialog.inspector-drawer[open]");
   await drawer.waitFor();
+  await drawer.locator("#curation-why").waitFor();
   await drawer.getByRole("tab", { name: "处理", exact: true }).click();
   assert.equal(
     await page.locator("#diagnostics").evaluate((node) => node.open),
     true,
   );
+  await page.evaluate(async () => {
+    const { closeInspector, showInspector } = await import("/assets/js/workspace.js");
+    closeInspector();
+    showInspector("curation");
+  });
+  await drawer.locator("#curation-why").waitFor();
   await page.keyboard.press("Escape");
   await drawer.waitFor({ state: "detached" });
   assert.equal(
