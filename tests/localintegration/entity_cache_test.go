@@ -92,7 +92,7 @@ func TestLocalWorkerEntityCacheCLI(t *testing.T) {
 	switchTarget(t, base, token, classifier, "jev-1.13.0")
 	created := postJSON(ctx, t, base+"/api/links", envOr("CAIRN_APP_TOKEN", "app"), map[string]any{"url": "https://x.com/entitycache/status/98001"})
 	id := int64(created["id"].(float64))
-	seedArchivedOriginal(t, id, "Fixture original text")
+	seedArchivedOriginal(ctx, t, id, "Fixture original text")
 	sourceJob, err := queue.Claim(ctx)
 	if err != nil || sourceJob == nil || sourceJob.ID != id {
 		t.Fatalf("source claim: %+v %v", sourceJob, err)

@@ -140,7 +140,7 @@ func TestLocalWorkerClassificationBudgetAcrossProcesses(t *testing.T) {
 		t.Helper()
 		created := postJSON(ctx, t, base+"/api/links", envOr("CAIRN_APP_TOKEN", "app"), map[string]any{"url": fmt.Sprintf("https://x.com/classbudget/status/%d", 97000+n)})
 		id := int64(created["id"].(float64))
-		seedArchivedOriginal(t, id, "Fixture original text")
+		seedArchivedOriginal(ctx, t, id, "Fixture original text")
 		job, err := queue.Claim(ctx)
 		if err != nil || job == nil || job.ID != id {
 			t.Fatalf("source claim: %+v %v", job, err)

@@ -29,7 +29,7 @@ func TestLocalWorkerSourceGateKeepsReadingAvailable(t *testing.T) {
 	defer cancel()
 	queue := cairn.NewClient(base, "internal", &http.Client{Timeout: 10 * time.Second})
 	waitingID := createURLOnlyLink(t, base, "app")
-	localFixtureSQL(t, "UPDATE enrichment_component_gates SET state='open',retry_at='9999-01-01' WHERE component='source'")
+	localFixtureSQL(ctx, t, "UPDATE enrichment_component_gates SET state='open',retry_at='9999-01-01' WHERE component='source'")
 	readingID := createLink(t, base, "app")
 	job, err := queue.Claim(ctx)
 	if err != nil || job == nil || job.ID != readingID {

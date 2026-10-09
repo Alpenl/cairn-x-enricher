@@ -137,7 +137,7 @@ func TestLocalWorkerHalfOpenClaimFaultsAndIndependentSource(t *testing.T) {
 	created := postJSON(ctx, t, base+"/api/links", appToken,
 		map[string]any{"url": "https://x.com/halfopen/status/2", "note": ""})
 	secondID := int64(created["id"].(float64))
-	seedArchivedOriginal(t, secondID, "Fixture original text")
+	seedArchivedOriginal(ctx, t, secondID, "Fixture original text")
 	if secondID == firstID {
 		t.Fatal("fixture links were not distinct")
 	}

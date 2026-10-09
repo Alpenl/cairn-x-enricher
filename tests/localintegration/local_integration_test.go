@@ -732,24 +732,24 @@ func createURLOnlyLink(t *testing.T, base, token string) int64 {
 func createLink(t *testing.T, base, token string) int64 {
 	t.Helper()
 	id := createURLOnlyLink(t, base, token)
-	seedArchivedOriginal(t, id, "Fixture original text")
+	seedArchivedOriginal(t.Context(), t, id, "Fixture original text")
 	return id
 }
 
-func seedArchivedOriginal(t *testing.T, id int64, text string) {
+func seedArchivedOriginal(ctx context.Context, t *testing.T, id int64, text string) {
 	t.Helper()
 	sql := fmt.Sprintf("UPDATE links SET original_text='%s',original_language='en' WHERE id=%d", strings.ReplaceAll(text, "'", "''"), id)
-	localFixtureSQL(t, sql)
+	localFixtureSQL(ctx, t, sql)
 
 }
 
-func localFixtureSQL(t *testing.T, sql string) {
+func localFixtureSQL(ctx context.Context, t *testing.T, sql string) {
 	t.Helper()
 	shareRoot, configPath := os.Getenv("CAIRN_SHARE_ROOT"), os.Getenv("CAIRN_WRANGLER_CONFIG")
 	if shareRoot == "" || configPath == "" {
 		t.Fatal("isolated local D1 configuration is required")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, filepath.Join(shareRoot, "worker", "node_modules", ".bin", "wrangler"), "d1", "execute", "DB", "--local", "--config", configPath, "--command", sql) // #nosec G204 G702 -- isolated test fixtures, local mode only; no production endpoint or credentials.
 	command.Dir = filepath.Join(shareRoot, "worker")

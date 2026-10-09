@@ -41,7 +41,7 @@ func TestLocalWorkerPrivateImageLifecycle(t *testing.T) {
 	if response.StatusCode != 201 || decodeErr != nil || created.ID != 1 {
 		t.Fatalf("create status=%d id=%d err=%v", response.StatusCode, created.ID, decodeErr)
 	}
-	seedArchivedOriginal(t, created.ID, "Fixture original text")
+	seedArchivedOriginal(ctx, t, created.ID, "Fixture original text")
 	client := cairn.NewClient(base, envOr("CAIRN_ENRICHER_TOKEN", "internal"), &http.Client{Timeout: 10 * time.Second})
 	app := dashboard.New(ctx, health.NewTracker(), client, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), 1)
 	proxy := httptest.NewServer(app.Handler())

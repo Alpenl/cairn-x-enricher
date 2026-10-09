@@ -99,7 +99,7 @@ func TestLocalWorkerEvidenceCheckpointAndBoundRead(t *testing.T) {
 	}
 	switchTarget(t, base, token, classifier)
 	id := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
-	seedArchivedOriginal(t, id, "Synthetic <LLM> & evaluation 中文\u2028source "+strings.Repeat("长材料", 5000))
+	seedArchivedOriginal(ctx, t, id, "Synthetic <LLM> & evaluation 中文\u2028source "+strings.Repeat("长材料", 5000))
 
 	var snapshotPosts int
 	faultHTTP := &http.Client{Timeout: 10 * time.Second, Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
