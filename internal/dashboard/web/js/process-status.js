@@ -6,6 +6,7 @@ export function processingPaused(health) {
 }
 
 export function failureReason(item, now = Date.now()) {
+  if (item.error === "capture_required") return "等待浏览器插件采集原文。打开原帖后，在 Cairn 插件中采集并同步即可继续整理。";
   const archived = Boolean(item.original_text || item.paid_stage === "reading" || item.error?.startsWith("[recovered_source]"));
   const prefix = archived ? "正文已保存，可直接阅读。" : "";
   if (item.paid_call_unresolved) return prefix + "上次模型调用结果尚未核对，自动重试已暂停。";

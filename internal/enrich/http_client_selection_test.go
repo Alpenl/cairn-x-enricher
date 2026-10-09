@@ -14,7 +14,7 @@ type routeTransport func(*http.Request) (*http.Response, error)
 
 func (f routeTransport) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }
 
-func TestSourceAndReadingUseSeparateConfiguredClients(t *testing.T) {
+func TestURLOnlyNeverUsesEitherClientAndReadingUsesConfiguredClient(t *testing.T) {
 	var fetchCalls, readingCalls int
 	response := func(request *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusUnauthorized, Header: make(http.Header),
@@ -30,10 +30,10 @@ func TestSourceAndReadingUseSeparateConfiguredClients(t *testing.T) {
 	})}
 	client := NewResponsesClient("https://fixture.invalid", "fixture", "grok", 1024, "", fetchClient, taxonomy.Catalog{})
 	client.SetReadingHTTPClient(readingClient)
-	_, _ = client.FetchSource(context.Background(), Input{URL: "https://x.com/a/status/1"})
+	_, _ = client.Generate(context.Background(), Input{URL: "https://x.com/a/status/1"})
 	_, _ = client.Transform(context.Background(), Input{SourceText: "saved original"})
 	_, _ = client.Transform(context.Background(), Input{SourceText: "canary", Canary: true})
-	if fetchCalls != 1 || readingCalls != 2 {
-		t.Fatalf("fetch/reading clients received %d/%d calls, want 1/2", fetchCalls, readingCalls)
+	if fetchCalls != 0 || readingCalls != 2 {
+		t.Fatalf("fetch/reading clients received %d/%d calls, want 0/2", fetchCalls, readingCalls)
 	}
 }

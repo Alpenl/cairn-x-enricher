@@ -136,7 +136,7 @@ func (p *Processor) Process(ctx context.Context, job *cairn.Job) error {
 	return p.ProcessWithSource(ctx, job, "")
 }
 
-// ProcessWithSource handles one job using caller-supplied source text instead of x_search.
+// ProcessWithSource handles one job using explicit caller-supplied source text.
 func (p *Processor) ProcessWithSource(ctx context.Context, job *cairn.Job, sourceText string) error {
 	select {
 	case p.slots <- struct{}{}:
@@ -264,7 +264,6 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 	var completed atomic.Int64
 	var failed atomic.Int64
 	var claimSlots atomic.Int64
-	var sourceSkipLogged atomic.Bool
 	var readingSkipLogged atomic.Bool
 	var firstErr error
 	var errOnce sync.Once
@@ -319,30 +318,23 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 					if p.claimTimeout > 0 {
 						requestCtx, stopRequest = context.WithTimeout(claimCtx, p.claimTimeout)
 					}
-					sourceAllowed, readingAllowed := true, true
-					var sourceHalf, readingHalf bool
-					var sourceEpoch, readingEpoch uint64
+					readingAllowed := true
+					var readingHalf bool
+					var readingEpoch uint64
 					if p.stages != nil {
-						sourceAllowed, sourceHalf, sourceEpoch, _ = p.stages.sourcePause.beginStageProbe()
+						// Source retrieval is retired; only reading can acquire work.
 						readingAllowed, readingHalf, readingEpoch, _ = p.stages.readingPause.beginStageProbe()
-						if !sourceAllowed && sourceSkipLogged.CompareAndSwap(false, true) {
-							p.logger.InfoContext(claimCtx, "source stage event",
-								"event_name", "claim_skipped_local_pause", "stage", "source")
-						}
 						if !readingAllowed && readingSkipLogged.CompareAndSwap(false, true) {
 							p.logger.InfoContext(claimCtx, "source stage event",
 								"event_name", "claim_skipped_local_pause", "stage", "reading")
 						}
 					}
 					releaseUnclaimed := func() {
-						if sourceHalf {
-							p.stages.sourcePause.releaseStageProbe(sourceEpoch)
-						}
 						if readingHalf {
 							p.stages.readingPause.releaseStageProbe(readingEpoch)
 						}
 					}
-					if !sourceAllowed && !readingAllowed {
+					if !readingAllowed {
 						stopRequest()
 						return false
 					}
@@ -351,8 +343,8 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 					finishClaim := trackProgress(claimCtx, p.claimGrace())
 					defer finishClaim()
 					if staged, ok := p.queue.(sourceStageClaimer); ok {
-						job, err = staged.ClaimAllowed(requestCtx, sourceAllowed, readingAllowed)
-					} else if sourceAllowed && readingAllowed && !sourceHalf && !readingHalf {
+						job, err = staged.ClaimAllowed(requestCtx, false, readingAllowed)
+					} else if readingAllowed && !readingHalf {
 						job, err = p.queue.Claim(requestCtx)
 					} else {
 						err = errors.New("source queue does not support stage-filtered claims")
@@ -374,13 +366,6 @@ func (p *Processor) RunSources(ctx context.Context, maxJobs int) (Stats, error) 
 					finishJob := trackProgress(workCtx, sourceJobMaxDuration+30*time.Second)
 					defer finishJob()
 					var probe *sourceStageProbe
-					if sourceHalf {
-						if job.SourceComponent == "source" {
-							probe = &sourceStageProbe{stage: "source", epoch: sourceEpoch, gate: p.stages.sourcePause}
-						} else {
-							p.stages.sourcePause.releaseStageProbe(sourceEpoch)
-						}
-					}
 					if readingHalf {
 						if job.SourceComponent == "reading" {
 							probe = &sourceStageProbe{stage: "reading", epoch: readingEpoch, gate: p.stages.readingPause}
@@ -470,28 +455,22 @@ func (p *Processor) processJobWithProbe(ctx context.Context, job *cairn.Job,
 	var existing cairn.BookmarkDetail
 	useExisting := false
 	sourceText = strings.TrimSpace(sourceText)
-	if sourceText == "" && job.Attempt > 1 {
+	if sourceText == "" {
 		var detailErr error
 		existing, detailErr = p.queue.GetBookmark(ctx, job.ID)
 		if detailErr != nil {
 			logger.WarnContext(ctx, "failed to inspect existing enrichment detail", "error", detailErr)
-		} else if strings.TrimSpace(existing.OriginalText) != "" && needsTransform(existing.Bookmark) {
+		} else if strings.TrimSpace(existing.OriginalText) != "" {
 			sourceText = existing.OriginalText
 			useExisting = true
 			logger.InfoContext(ctx, "recovering partial enrichment from existing source text")
 		}
 	}
 
-	// The path decides what the result can be trusted for, so it is recorded on
-	// every outcome. A search result establishes the post text from the source,
-	// while the recovery path only reformats text that was already stored: it can
-	// add a missing translation or summary, but it cannot detect that the stored
-	// text was truncated or was never the requested post. Without this label an
-	// operator cannot tell a fresh retrieval from a re-derivation of old data.
-	path := failurePathSearch
-	if useExisting {
-		path = failurePathRecovered
+	if sourceText == "" {
+		return enrich.ErrCaptureRequired
 	}
+	path := failurePathRecovered
 	logger = logger.With("path", string(path))
 
 	result, err := p.enricher.Enrich(ctx, enrich.Input{
@@ -540,10 +519,6 @@ func (p *Processor) processJobWithProbe(ctx context.Context, job *cairn.Job,
 		logger.WarnContext(ctx, "classification requires review", "discarded_tags", discarded)
 	}
 	return nil
-}
-
-func needsTransform(bookmark cairn.Bookmark) bool {
-	return bookmark.AITitle == "" || bookmark.OriginalLanguage == "" || bookmark.TranslatedText == "" || bookmark.Summary == ""
 }
 
 func relatedLinks(resultLinks, existingLinks []string) []string {

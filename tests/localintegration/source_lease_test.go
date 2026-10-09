@@ -56,12 +56,12 @@ func countRoute(routes []string, route string) int {
 	return n
 }
 
-func (r *localFailedSourceReader) FetchSource(ctx context.Context, input enrich.Input) (enrich.Source, error) {
-	r.fetches++
-	if err := r.reserve(ctx, input, "fetch", false); err != nil {
-		return enrich.Source{}, err
+func (r *localFailedSourceReader) Transform(ctx context.Context, input enrich.Input) (enrich.Result, error) {
+	r.transforms++
+	if err := r.reserve(ctx, input, "reading", false); err != nil {
+		return enrich.Result{}, err
 	}
-	return enrich.Source{}, &enrich.ModelHTTPError{StatusCode: http.StatusBadGateway, Type: "upstream_error"}
+	return enrich.Result{}, &enrich.ModelHTTPError{StatusCode: http.StatusBadGateway, Type: "upstream_error"}
 }
 
 func (r *localFailedReadingReader) Transform(ctx context.Context, input enrich.Input) (enrich.Result, error) {
@@ -81,7 +81,7 @@ func (r *localSourceReader) reserve(ctx context.Context, input enrich.Input, sta
 		variant = "reading"
 	}
 	granted, err := r.queue.ReserveProviderAttempt(ctx, enrich.ProviderAttempt{
-		OperationKey: operation, RequestHash: hex.EncodeToString(hash[:]), Model: "fixture",
+		OperationKey: operation, RequestHash: hex.EncodeToString(hash[:]), Model: "manual",
 		Stage: stage, Variant: variant, AttemptNumber: 1,
 		LinkID: input.ID, LeaseToken: input.LeaseToken, ContentRevision: input.ContentRevision,
 		MinRemainingMS: input.MinRemainingMS,
@@ -103,7 +103,7 @@ func (r *localSourceReader) FetchSource(ctx context.Context, input enrich.Input)
 	if err := r.reserve(ctx, input, "fetch", true); err != nil {
 		return enrich.Source{}, err
 	}
-	return enrich.Source{OriginalText: "Fixture source for lease admission", Model: "fixture",
+	return enrich.Source{OriginalText: "Fixture original text", Model: "manual",
 		RelatedLinks: []string{}, ImageURLs: []string{}}, nil
 }
 
@@ -114,7 +114,7 @@ func (r *localSourceReader) Transform(ctx context.Context, input enrich.Input) (
 	}
 	return enrich.Result{OriginalText: input.SourceText, OriginalLanguage: "en",
 		AITitle: "Lease admission fixture", TranslatedText: "租约准入测试", Summary: "Fixture reading aid",
-		Model: "fixture"}, nil
+		Model: "manual"}, nil
 }
 
 func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
@@ -138,32 +138,32 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 	worker.SetPaidStageTimeout(10 * time.Second)
 	beforeProcess := len(recorder.snapshot())
 	if err := worker.Process(ctx, job); err != nil {
-		t.Fatalf("source processing with two paid-stage admissions: %v", err)
+		t.Fatalf("source processing with reading admission: %v", err)
 	}
 	processRoutes := recorder.snapshot()[beforeProcess:]
 	// The old seven-call estimate predates source-lease admission and the
 	// per-network-attempt ledger. Keep the current safe path's full HTTP
-	// budget visible, including its two paid stages.
+	// budget visible, with only the reading paid stage.
 	if len(processRoutes) > 12 ||
-		countRoute(processRoutes, "POST /api/enrichment/provider-attempts/reserve") != 2 ||
-		countRoute(processRoutes, "POST /api/enrichment/provider-attempts/settle") != 2 ||
-		countRoute(processRoutes, "POST /api/enrichment/jobs/"+strconv.FormatInt(id, 10)+"/lease-admit") != 2 {
+		countRoute(processRoutes, "POST /api/enrichment/provider-attempts/reserve") != 1 ||
+		countRoute(processRoutes, "POST /api/enrichment/provider-attempts/settle") != 1 ||
+		countRoute(processRoutes, "POST /api/enrichment/jobs/"+strconv.FormatInt(id, 10)+"/lease-admit") != 1 {
 		t.Fatalf("source request budget or paid-stage accounting changed: %v", processRoutes)
 	}
 	t.Logf("source Worker HTTP calls = %d (budget 12): %v", len(processRoutes), processRoutes)
 	detail, err := queue.GetBookmark(ctx, id)
 	if err != nil || detail.Status != "completed" ||
-		detail.OriginalText != "Fixture source for lease admission" ||
+		detail.OriginalText != "Fixture original text" ||
 		detail.Classification != nil ||
-		reader.fetches != 1 || reader.transforms != 1 {
+		reader.fetches != 0 || reader.transforms != 1 {
 		t.Fatalf("source admission lifecycle = %+v, fetches=%d transforms=%d, err=%v",
 			detail, reader.fetches, reader.transforms, err)
 	}
 	// The first completion was committed by Worker.Process. A lost HTTP
 	// response must replay that receipt without running the model again.
 	completion := cairn.Completion{LeaseToken: job.LeaseToken, AITitle: "Lease admission fixture",
-		OriginalLanguage: "en", OriginalText: "Fixture source for lease admission",
-		TranslatedText: "租约准入测试", Summary: "Fixture reading aid", Model: "fixture",
+		OriginalLanguage: "en", OriginalText: "Fixture original text",
+		TranslatedText: "租约准入测试", Summary: "Fixture reading aid", Model: "manual",
 		RelatedLinks: []string{}, Images: []cairn.ImageRef{}}
 	if err := queue.Complete(ctx, id, completion); err != nil {
 		t.Fatalf("exact completion replay: %v", err)
@@ -174,7 +174,7 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 	if err := queue.Complete(ctx, id, changed); !errors.As(err, &conflict) || conflict.Code != "operation_conflict" {
 		t.Fatalf("different completion reused old receipt: %v", err)
 	}
-	if reader.fetches != 1 || reader.transforms != 1 {
+	if reader.fetches != 0 || reader.transforms != 1 {
 		t.Fatalf("completion replay ran paid stages: fetches=%d transforms=%d", reader.fetches, reader.transforms)
 	}
 	// Personal changes must preserve the saved objective source and reading.
@@ -210,7 +210,7 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 	if err != nil || saved == nil || saved.OriginalText != detail.OriginalText {
 		t.Fatalf("personal edit removed source checkpoint: %+v %v", saved, err)
 	}
-	if claimed, err := queue.Claim(ctx); err != nil || claimed != nil || reader.fetches != 1 || reader.transforms != 1 {
+	if claimed, err := queue.Claim(ctx); err != nil || claimed != nil || reader.fetches != 0 || reader.transforms != 1 {
 		t.Fatalf("personal edit requeued paid source work: claim=%+v fetches=%d reading=%d err=%v",
 			claimed, reader.fetches, reader.transforms, err)
 	}
@@ -235,7 +235,7 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 	}
 	failedRoutes := recorder.snapshot()[beforeFailedProcess:]
 	failedJobBase := "POST /api/enrichment/jobs/" + strconv.FormatInt(failedID, 10)
-	if len(failedRoutes) > 5 ||
+	if len(failedRoutes) > 10 ||
 		countRoute(failedRoutes, failedJobBase+"/lease-admit") != 1 ||
 		countRoute(failedRoutes, "POST /api/enrichment/provider-attempts/reserve") != 1 ||
 		countRoute(failedRoutes, "POST /api/enrichment/provider-attempts/settle") != 0 ||
@@ -245,7 +245,7 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 	t.Logf("unknown provider result Worker HTTP calls = %d (budget 5): %v", len(failedRoutes), failedRoutes)
 	failedDetail, err := queue.GetBookmark(ctx, failedID)
 	if err != nil || failedDetail.Status != "failed" || !failedDetail.PaidCallUnresolved ||
-		failedDetail.PaidStage != "fetch" || failedReader.fetches != 1 {
+		failedDetail.PaidStage != "reading" || failedReader.transforms != 1 {
 		t.Fatalf("ambiguous result guard = %+v, fetches=%d, err=%v", failedDetail, failedReader.fetches, err)
 	}
 	if claimed, err := queue.Claim(ctx); err != nil || claimed != nil {
@@ -262,12 +262,12 @@ func TestLocalWorkerSourceLeaseAdmission(t *testing.T) {
 		slog.New(slog.NewJSONHandler(io.Discard, nil)), 1)
 	readingWorker.SetPaidStageTimeout(10 * time.Second)
 	if err := readingWorker.Process(ctx, readingJob); err == nil ||
-		readingFailure.fetches != 1 || readingFailure.transforms != 1 {
+		readingFailure.fetches != 0 || readingFailure.transforms != 1 {
 		t.Fatalf("reading fixture did not fail after saving source: fetches=%d reading=%d err=%v",
 			readingFailure.fetches, readingFailure.transforms, err)
 	}
 	retained, err := queue.GetSource(ctx, readingID)
-	if err != nil || retained == nil || retained.OriginalText != "Fixture source for lease admission" {
+	if err != nil || retained == nil || retained.OriginalText != "Fixture original text" {
 		t.Fatalf("reading failure lost durable source: %+v %v", retained, err)
 	}
 	failedReading, err := queue.GetBookmark(ctx, readingID)

@@ -169,7 +169,7 @@ func TestLocalWorkerOnceSkipsEmptySourceCanary(t *testing.T) {
 	classificationID := createLink(t, base, "app")
 	lease := claimEnrichmentJob(t, base, "internal", classificationID)
 	source := enrich.Source{OriginalText: "A saved source for classification without Grok.",
-		OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "fixture"}
+		OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := queue.SaveSource(ctx, classificationID, lease, source); err != nil {
 		t.Fatal(err)
 	}

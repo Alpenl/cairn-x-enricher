@@ -127,7 +127,7 @@ func TestLocalWorkerHalfOpenClaimFaultsAndIndependentSource(t *testing.T) {
 	firstID := createLink(t, base, appToken)
 	lease := claimEnrichmentJob(t, base, token, firstID)
 	source := enrich.Source{OriginalText: "A synthetic guide to language model evaluation.", OriginalLanguage: "en",
-		RelatedLinks: []string{}, ImageURLs: []string{}, Model: "fixture"}
+		RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := firstQueue.SaveSource(ctx, firstID, lease, source); err != nil {
 		t.Fatal(err)
 	}
@@ -137,6 +137,7 @@ func TestLocalWorkerHalfOpenClaimFaultsAndIndependentSource(t *testing.T) {
 	created := postJSON(ctx, t, base+"/api/links", appToken,
 		map[string]any{"url": "https://x.com/halfopen/status/2", "note": ""})
 	secondID := int64(created["id"].(float64))
+	seedArchivedOriginal(ctx, t, secondID, "Fixture original text")
 	if secondID == firstID {
 		t.Fatal("fixture links were not distinct")
 	}
@@ -164,7 +165,7 @@ func TestLocalWorkerHalfOpenClaimFaultsAndIndependentSource(t *testing.T) {
 		t.Fatal("backoff reached the classification claim endpoint")
 	}
 	stats, err := first.RunSources(ctx, 1)
-	if err != nil || stats.Completed != 1 || reader.fetches != 1 || reader.transforms != 1 {
+	if err != nil || stats.Completed != 1 || reader.fetches != 0 || reader.transforms != 1 {
 		t.Fatalf("classification pause blocked real source/reading: stats=%+v fetches=%d reading=%d err=%v",
 			stats, reader.fetches, reader.transforms, err)
 	}

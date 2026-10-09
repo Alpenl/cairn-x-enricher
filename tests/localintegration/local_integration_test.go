@@ -15,6 +15,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -149,7 +151,7 @@ func TestLocalWorkerFullLifecycle(t *testing.T) {
 	source := enrich.Source{
 		OriginalText:     "A practical guide to evaluating large language models.",
 		OriginalLanguage: "en", ContextText: "A related comment", RelatedLinks: []string{},
-		ImageURLs: []string{}, Model: "local-fetch",
+		ImageURLs: []string{}, Model: "manual",
 	}
 	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
 		t.Fatalf("save source: %v", err)
@@ -441,7 +443,7 @@ func TestLocalWorkerCompletionPreflightRace(t *testing.T) {
 	id := createLink(t, base, appToken)
 	lease := claimEnrichmentJob(t, base, enricherToken, id)
 	source := enrich.Source{OriginalText: "A practical guide to evaluating large language models.",
-		OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "local-fetch"}
+		OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
 		t.Fatalf("save source: %v", err)
 	}
@@ -548,7 +550,7 @@ func TestLocalWorkerVersionCompetition(t *testing.T) {
 	id := createLink(t, base, appToken)
 	lease := claimEnrichmentJob(t, base, enricherToken, id)
 	source := enrich.Source{OriginalText: "Version competition source.", OriginalLanguage: "en",
-		ContextText: "", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "local"}
+		ContextText: "", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
 		t.Fatalf("save source: %v", err)
 	}
@@ -697,7 +699,7 @@ func mustSpec(t *testing.T, catalog taxonomy.Catalog) classify.QuestionSpec {
 	return spec
 }
 
-func createLink(t *testing.T, base, token string) int64 {
+func createURLOnlyLink(t *testing.T, base, token string) int64 {
 	t.Helper()
 	body, _ := json.Marshal(map[string]any{"url": "https://x.com/local/status/1", "note": ""})
 	request, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, base+"/api/links", bytes.NewReader(body))
@@ -722,6 +724,38 @@ func createLink(t *testing.T, base, token string) int64 {
 		t.Fatal("create link returned no id")
 	}
 	return payload.ID
+}
+
+// createLink represents a legacy archived original in the isolated D1 fixture.
+// URL-only save and fresh browser capture are tested separately. No test
+// endpoint or bypass is enabled in the production Worker.
+func createLink(t *testing.T, base, token string) int64 {
+	t.Helper()
+	id := createURLOnlyLink(t, base, token)
+	seedArchivedOriginal(t.Context(), t, id, "Fixture original text")
+	return id
+}
+
+func seedArchivedOriginal(ctx context.Context, t *testing.T, id int64, text string) {
+	t.Helper()
+	sql := fmt.Sprintf("UPDATE links SET original_text='%s',original_language='en' WHERE id=%d", strings.ReplaceAll(text, "'", "''"), id)
+	localFixtureSQL(ctx, t, sql)
+
+}
+
+func localFixtureSQL(ctx context.Context, t *testing.T, sql string) {
+	t.Helper()
+	shareRoot, configPath := os.Getenv("CAIRN_SHARE_ROOT"), os.Getenv("CAIRN_WRANGLER_CONFIG")
+	if shareRoot == "" || configPath == "" {
+		t.Fatal("isolated local D1 configuration is required")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, filepath.Join(shareRoot, "worker", "node_modules", ".bin", "wrangler"), "d1", "execute", "DB", "--local", "--config", configPath, "--command", sql) // #nosec G204 G702 -- isolated test fixtures, local mode only; no production endpoint or credentials.
+	command.Dir = filepath.Join(shareRoot, "worker")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("seed local fixture: %v %s", err, output)
+	}
 }
 
 func claimEnrichmentJob(t *testing.T, base, token string, id int64) string {

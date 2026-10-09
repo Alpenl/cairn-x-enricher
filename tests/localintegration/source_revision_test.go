@@ -26,7 +26,7 @@ func TestLocalWorkerSourceRevisionOnce(t *testing.T) {
 	if err != nil || job == nil {
 		t.Fatalf("claim: %v", err)
 	}
-	source := enrich.Source{OriginalText: "Synthetic source", OriginalLanguage: "en", ContextText: "initial context", RelatedLinks: []string{"https://example.com/initial"}, ImageURLs: []string{}, Model: "fixture"}
+	source := enrich.Source{OriginalText: "Synthetic source", OriginalLanguage: "en", ContextText: "initial context", RelatedLinks: []string{"https://example.com/initial"}, ImageURLs: []string{}, Model: "manual"}
 	type identity struct {
 		ID       int64  `json:"id"`
 		Revision int64  `json:"content_revision"`

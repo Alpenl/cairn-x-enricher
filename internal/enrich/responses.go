@@ -21,21 +21,10 @@ import (
 )
 
 const (
-	maxModelResponseBytes  = 4 << 20
-	maxModelOutputBytes    = 1 << 20
-	promptTemplate         = "读取此 X 帖及相关评论。严格返回：约20个简体中文字符的标题；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅与内容直接相关的最终链接；原帖或相关评论中的图片原始媒体 URL（仅 pbs.twimg.com/media）。无图或无链接返回空数组，忽略广告和无关项。\nURL: %s"
-	postOnlyPromptTemplate = "读取此 X 帖。优先读取原帖正文；不要展开全量评论，只有在评论可立即获得且直接相关时才纳入。严格返回：约20个简体中文字符的标题；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅与内容直接相关的最终链接；原帖中的图片原始媒体 URL（仅 pbs.twimg.com/media）。无图或无链接返回空数组，忽略广告和无关项。\nURL: %s"
-	sourcePromptTemplate   = "基于已提供的 X 原文生成增强结果。不要搜索、不要补写未提供的正文。严格返回：约20个简体中文字符的标题；原文语言标识；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅保留原文中明确出现且与内容直接相关的最终链接；image_urls 返回空数组。\nURL: %s\n原文:\n%s"
+	maxModelResponseBytes = 4 << 20
+	maxModelOutputBytes   = 1 << 20
+	sourcePromptTemplate  = "基于已提供的 X 原文生成增强结果。不要搜索、不要补写未提供的正文。严格返回：约20个简体中文字符的标题；原文语言标识；保持原始语言、不改写的完整原文；完整简体中文译文；简短中文摘要；仅保留原文中明确出现且与内容直接相关的最终链接；image_urls 返回空数组。\nURL: %s\n原文:\n%s"
 )
-
-var responsePromptVariants = []responsePrompt{
-	{template: promptTemplate},
-	{template: postOnlyPromptTemplate},
-}
-
-type responsePrompt struct {
-	template string
-}
 
 // ResponsesClient implements the xAI-specific Responses wire protocol.
 type ResponsesClient struct {
@@ -122,50 +111,13 @@ func NewResponsesClient(baseURL, apiKey, model string, maxTokens int, userAgent 
 	}
 }
 
-// Generate uses trusted source text when present, otherwise x_search and strict structured output.
-//
-// The prompt variants form a degradation chain, and degrading happens for two
-// different reasons:
-//
-//   - the request failed in a retryable way, which means the previous prompt
-//     could not be served at all; and
-//   - the request succeeded but came back without a completed X search, which
-//     means the model answered without retrieving. That second case matters:
-//     measurements on the real collection showed a variant returning HTTP 200
-//     with no search evidence for a short post, and returning that candidate
-//     unexamined would abandon the bookmark even though the other prompt can
-//     serve it.
-//
-// A request error ends this invocation. Even a transient HTTP failure can
-// follow a provider-side execution, and the Responses API does not document
-// a guarantee that an idempotency key prevents a second paid call.
+// Generate only transforms explicitly supplied, archived source text. In
+// particular, legacy callers with just a URL cannot initiate source retrieval.
 func (c *ResponsesClient) Generate(ctx context.Context, input Input) (Candidate, error) {
-	if strings.TrimSpace(input.SourceText) != "" {
-		return c.generateFromSource(ctx, input)
+	if strings.TrimSpace(input.SourceText) == "" {
+		return Candidate{}, ErrCaptureRequired
 	}
-
-	var lastErr error
-	for _, prompt := range responsePromptVariants {
-		envelope, err := c.invokeResponse(ctx, input, prompt)
-		if err != nil {
-			return Candidate{}, err
-		}
-		candidate, err := c.candidateFromEnvelope(input, envelope, false)
-		if err != nil {
-			// The response was not usable as a candidate. Degrade to the next
-			// prompt rather than surfacing this immediately.
-			lastErr = err
-			continue
-		}
-		if !candidate.SearchVerified {
-			// The model answered without retrieving. Another prompt may still
-			// retrieve, so try it before giving up on the bookmark.
-			lastErr = errors.New("model did not provide evidence of a completed X search")
-			continue
-		}
-		return candidate, nil
-	}
-	return Candidate{}, lastErr
+	return c.generateFromSource(ctx, input)
 }
 
 func (c *ResponsesClient) generateFromSource(ctx context.Context, input Input) (Candidate, error) {
@@ -202,27 +154,6 @@ func (c *ResponsesClient) generateFromSource(ctx context.Context, input Input) (
 	}
 	candidate.Result.ImageURLs = []string{}
 	return candidate, nil
-}
-
-func (c *ResponsesClient) invokeResponse(ctx context.Context, input Input, prompt responsePrompt) (responseEnvelope, error) {
-	payload := responseRequest{
-		Model: c.model,
-		Input: []inputMessage{{
-			Role:    "user",
-			Content: c.classificationPrompt(fmt.Sprintf(prompt.template, input.URL), input),
-		}},
-		Tools:           []responseTool{{Type: "x_search"}},
-		ToolChoice:      "required",
-		MaxOutputTokens: c.maxTokens,
-		Text: responseTextConfig{Format: responseFormat{
-			Type:   "json_schema",
-			Name:   "x_enrichment",
-			Strict: true,
-			Schema: c.responseSchema(),
-		}},
-	}
-	envelope, _, err := c.invokePayload(ctx, input, "legacy", "legacy", 1, payload)
-	return envelope, err
 }
 
 func (c *ResponsesClient) classificationPrompt(content string, input Input) string {

@@ -348,9 +348,8 @@ equal("errorLabel unknown is shown verbatim", errorLabel("brand_new_code"), "bra
     return { ok: true, json: async () => ({ id: 8, action: "refresh_source" }) };
   };
   try {
-    await api.refreshSource(8).catch(() => {});
-    await api.refreshSource(8);
-    check("source refresh reuses its operation key after a lost response", keys.length === 2 && keys[0] === keys[1]);
+    check("source refresh model operation has been removed", api.refreshSource === undefined);
+    check("removed source refresh makes no request", keys.length === 0);
   } finally { globalThis.fetch = originalFetch; }
 }
 

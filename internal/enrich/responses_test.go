@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestResponsesClientForcesXSearchAndParsesStructuredOutput(t *testing.T) {
+func TestResponsesClientUsesArchivedTextAndParsesStructuredOutput(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/v1/responses" {
 			t.Errorf("path = %q", request.URL.Path)
@@ -26,7 +26,7 @@ func TestResponsesClientForcesXSearchAndParsesStructuredOutput(t *testing.T) {
 		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
-		if body["model"] != "grok-4.6" || body["tool_choice"] != "required" {
+		if body["model"] != "grok-4.6" || body["tool_choice"] != nil || body["tools"] != nil {
 			t.Errorf("request body = %#v", body)
 		}
 		messages := body["input"].([]any)
@@ -41,7 +41,7 @@ func TestResponsesClientForcesXSearchAndParsesStructuredOutput(t *testing.T) {
 			t.Errorf("classification schema is not closed: %#v", topics)
 		}
 		content := messages[0].(map[string]any)["content"].(string)
-		for _, required := range []string{"https://x.com/user/status/42", "约20个简体中文字符", "原始语言", "完整简体中文译文", "pbs.twimg.com/media", "忽略广告和无关项"} {
+		for _, required := range []string{"https://x.com/user/status/42", "约20个简体中文字符", "原始语言", "完整简体中文译文"} {
 			if !strings.Contains(content, required) {
 				t.Errorf("prompt does not contain %q: %q", required, content)
 			}
@@ -67,12 +67,12 @@ func TestResponsesClientForcesXSearchAndParsesStructuredOutput(t *testing.T) {
 
 	client := NewResponsesClient(server.URL+"/v1", "model-key", "grok-4.6", 8192, "test-agent", server.Client(), testTaxonomy())
 	candidate, err := client.Generate(context.Background(), Input{
-		ID: 42, URL: "https://x.com/user/status/42", Note: "later", Attempt: 3,
+		ID: 42, URL: "https://x.com/user/status/42", Note: "later", SourceText: "archived source", Attempt: 3,
 	})
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	if !candidate.SearchVerified || candidate.Result.AITitle != "人工智能生成的测试中文标题" || candidate.Result.OriginalText != "source" || candidate.Result.TranslatedText != "中文译文" || len(candidate.Result.ImageURLs) != 1 || candidate.Result.Model != "grok-4.6-20260901" {
+	if !candidate.SearchVerified || candidate.Result.AITitle != "人工智能生成的测试中文标题" || candidate.Result.OriginalText != "archived source" || candidate.Result.TranslatedText != "中文译文" || len(candidate.Result.ImageURLs) != 0 || candidate.Result.Model != "grok-4.6-20260901" {
 		t.Fatalf("Generate() = %+v", candidate)
 	}
 }
@@ -91,7 +91,7 @@ func TestResponsesClientRejectsMalformedStructuredOutput(t *testing.T) {
 	defer server.Close()
 
 	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client(), testTaxonomy())
-	if _, err := client.Generate(context.Background(), Input{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1}); err == nil {
+	if _, err := client.Generate(context.Background(), Input{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, SourceText: "archived source"}); err == nil {
 		t.Fatal("Generate() error = nil, want strict JSON error")
 	}
 }
@@ -105,7 +105,7 @@ func TestResponsesClientReturnsSanitizedHTTPError(t *testing.T) {
 	defer server.Close()
 
 	client := NewResponsesClient(server.URL, "secret-key", "model", 1024, "", server.Client(), testTaxonomy())
-	_, err := client.Generate(context.Background(), Input{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1})
+	_, err := client.Generate(context.Background(), Input{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, SourceText: "archived source"})
 	var httpErr *ModelHTTPError
 	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("Generate() error = %T %v", err, err)
@@ -126,7 +126,7 @@ func TestResponsesClientDoesNotRepeatAmbiguousHTTPFailures(t *testing.T) {
 	defer server.Close()
 
 	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client(), testTaxonomy())
-	_, err := client.Generate(context.Background(), Input{ID: 9, URL: "https://x.com/a/status/9", Attempt: 5})
+	_, err := client.Generate(context.Background(), Input{ID: 9, URL: "https://x.com/a/status/9", Attempt: 5, SourceText: "archived source"})
 	var httpErr *ModelHTTPError
 	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusBadGateway || calls != 1 {
 		t.Fatalf("ambiguous provider response: calls=%d, error=%v", calls, err)
@@ -172,7 +172,7 @@ func TestResponsesClientDoesNotTryAnotherPromptAfterHTTPFailure(t *testing.T) {
 	defer server.Close()
 
 	client := NewResponsesClient(server.URL, "key", "model", 1024, "", server.Client(), testTaxonomy())
-	_, err := client.Generate(context.Background(), Input{ID: 12, URL: "https://x.com/a/status/12", Attempt: 5})
+	_, err := client.Generate(context.Background(), Input{ID: 12, URL: "https://x.com/a/status/12", Attempt: 5, SourceText: "archived source"})
 	var httpErr *ModelHTTPError
 	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusBadGateway || sawFallback {
 		t.Fatalf("ambiguous response started fallback=%v: %v", sawFallback, err)

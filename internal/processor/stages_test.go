@@ -84,8 +84,14 @@ func (q *stageQueue) DeferSourceStage(ctx context.Context, _ int64, _ string, st
 	return nil
 }
 
-func (q *stageQueue) GetSource(context.Context, int64) (*enrich.Source, error) { return q.source, nil }
+func (q *stageQueue) GetSource(context.Context, int64) (*enrich.Source, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.source, nil
+}
 func (q *stageQueue) SaveSource(_ context.Context, id int64, _ string, s enrich.Source) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	q.source = &s
 	q.job = &cairn.ClassificationJob{ID: id, Input: classify.Input{OriginalText: s.OriginalText}}
 	return nil
@@ -318,7 +324,7 @@ func (r *stageReader) Transform(_ context.Context, i enrich.Input) (enrich.Resul
 }
 
 func TestProviderTransientIsReportedToOnlyItsSourceStage(t *testing.T) {
-	for _, stage := range []string{"fetch", "reading"} {
+	for _, stage := range []string{"reading"} {
 		t.Run(stage, func(t *testing.T) {
 			q := &stageQueue{fakeQueue: newFakeQueue()}
 			reader := &stageReader{q: q}
@@ -389,9 +395,10 @@ func (r *budgetStageReader) Transform(ctx context.Context, input enrich.Input) (
 }
 
 func TestPaidBudgetDenialDefersWithoutReportingModelFailure(t *testing.T) {
-	for _, stage := range []string{"fetch", "reading"} {
+	for _, stage := range []string{"reading"} {
 		t.Run(stage, func(t *testing.T) {
 			q := &stageQueue{fakeQueue: newFakeQueue()}
+			q.source = &enrich.Source{OriginalText: "saved original", Model: "browser_capture", RelatedLinks: []string{}}
 			r := &budgetStageReader{stageReader: &stageReader{q: q}, deniedStage: stage}
 			p := NewStaged(q, r, stageClassifier{}, "v1", "jev", discardLogger(), 1)
 			job := &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", LeaseToken: "lease", Attempt: 1}
@@ -416,17 +423,18 @@ func TestManualSourceDoesNotAdmitAFreeFetchAsPaid(t *testing.T) {
 	if err := p.ProcessWithSource(context.Background(), job, "pasted original"); err != nil {
 		t.Fatal(err)
 	}
-	if q.admitCalls != 1 || r.fetches != 1 || r.transforms != 1 || len(q.completions) != 1 {
+	if q.admitCalls != 1 || r.fetches != 0 || r.transforms != 1 || len(q.completions) != 1 {
 		t.Fatalf("admissions=%d fetches=%d reading=%d completions=%d",
 			q.admitCalls, r.fetches, r.transforms, len(q.completions))
 	}
 }
 
 func TestShortSourceLeaseDefersWithoutStartingAnotherPaidStage(t *testing.T) {
-	for _, denial := range []int{1, 2} {
+	for _, denial := range []int{1} {
 		t.Run(fmt.Sprintf("stage-%d", denial), func(t *testing.T) {
 			q := &stageQueue{fakeQueue: newFakeQueue(), admitErrAt: denial,
 				admitErr: &cairn.APIError{StatusCode: http.StatusConflict, Code: "lease_released"}}
+			q.source = &enrich.Source{OriginalText: "saved original", Model: "browser_capture", RelatedLinks: []string{}}
 			r := &stageReader{q: q}
 			p := NewStaged(q, r, stageClassifier{}, "v1", "jev", discardLogger(), 1)
 			job := &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, LeaseToken: "lease"}
@@ -466,14 +474,15 @@ func (c stageClassifier) Classify(context.Context, classify.Input) (classify.Res
 }
 
 func TestSourceSurvivesReadingFailureAndRetryDoesNotFetch(t *testing.T) {
-	q := &stageQueue{fakeQueue: newFakeQueue()}
+	q := &stageQueue{fakeQueue: newFakeQueue(), job: &cairn.ClassificationJob{ID: 1, Input: classify.Input{OriginalText: "saved original"}}}
+	q.source = &enrich.Source{OriginalText: "saved original", Model: "browser_capture", RelatedLinks: []string{}}
 	r := &stageReader{q: q, fail: true}
 	p := NewStaged(q, r, stageClassifier{}, "v1", "jev", discardLogger(), 1)
 	job := &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1}
 	if err := p.Process(context.Background(), job); err == nil {
 		t.Fatal("expected reading failure")
 	}
-	if q.source == nil || r.fetches != 1 {
+	if q.source == nil || r.fetches != 0 {
 		t.Fatal("source not saved")
 	}
 	if done, failed, err := p.RunClassifications(context.Background(), 1); err != nil || done != 1 || failed != 0 {
@@ -484,7 +493,7 @@ func TestSourceSurvivesReadingFailureAndRetryDoesNotFetch(t *testing.T) {
 	if err := p.Process(context.Background(), job); err != nil {
 		t.Fatal(err)
 	}
-	if r.fetches != 1 || q.completions[1].Classification != nil {
+	if r.fetches != 0 || q.completions[1].Classification != nil {
 		t.Fatal("retry fetched or reading wrote classification")
 	}
 }
@@ -764,8 +773,9 @@ func TestPersistentClassification401DoesNotStopSourceWork(t *testing.T) {
 		previousBackoff = backoff
 	}
 	base.jobs = []*cairn.Job{{ID: 7, URL: "https://x.com/synthetic/status/7", LeaseToken: "lease"}}
+	q.source = &enrich.Source{OriginalText: "saved original", Model: "browser_capture", RelatedLinks: []string{}}
 	stats, err := p.RunSources(context.Background(), 1)
-	if err != nil || stats.Completed != 1 || r.fetches != 1 || r.transforms != 1 || len(base.completions) != 1 {
+	if err != nil || stats.Completed != 1 || r.fetches != 0 || r.transforms != 1 || len(base.completions) != 1 {
 		t.Fatalf("classification fault blocked source or reading: stats=%+v fetches=%d transforms=%d completions=%d err=%v",
 			stats, r.fetches, r.transforms, len(base.completions), err)
 	}
@@ -1270,6 +1280,7 @@ func TestBoundEvidenceFailureNeverFallsBackToPlainText(t *testing.T) {
 
 func TestSourceCheckpointRetryRepairsMissingSnapshotWithoutFetch(t *testing.T) {
 	q := &stageQueue{fakeQueue: newFakeQueue(), evidenceErr: errors.New("snapshot unavailable")}
+	q.source = &enrich.Source{OriginalText: "saved original", Model: "browser_capture", RelatedLinks: []string{}}
 	r := &stageReader{q: q}
 	p := NewStaged(q, r, stageClassifier{}, "v1", "jev", discardLogger(), 1)
 	job := &cairn.Job{ID: 1, URL: "https://x.com/synthetic/status/42", Attempt: 1}
@@ -1284,7 +1295,7 @@ func TestSourceCheckpointRetryRepairsMissingSnapshotWithoutFetch(t *testing.T) {
 	if err := p.Process(context.Background(), job); err != nil {
 		t.Fatal(err)
 	}
-	if r.fetches != 1 || q.evidence != 2 || len(q.completions) != 1 {
+	if r.fetches != 0 || q.evidence != 2 || len(q.completions) != 1 {
 		t.Fatalf("retry did not repair checkpoint: fetches=%d snapshots=%d completions=%d", r.fetches, q.evidence, len(q.completions))
 	}
 	q.evidenceSnapshot = json.RawMessage(`{"current":true}`)
@@ -1298,6 +1309,7 @@ func TestSourceCheckpointRetryRepairsMissingSnapshotWithoutFetch(t *testing.T) {
 
 func TestRefreshedSourceSnapshotFailureDoesNotAcknowledgeFailedFetch(t *testing.T) {
 	q := &stageQueue{fakeQueue: newFakeQueue(), evidenceErr: errors.New("snapshot unavailable")}
+	q.source = &enrich.Source{OriginalText: "saved original", Model: "browser_capture", RelatedLinks: []string{}}
 	r := &stageReader{q: q}
 	p := NewStaged(q, r, stageClassifier{}, "v1", "jev", discardLogger(), 1)
 	job := &cairn.Job{ID: 1, URL: "https://x.com/synthetic/status/42", Attempt: 1, RefreshEpoch: 3}
@@ -1315,7 +1327,7 @@ func TestRefreshedSourceSnapshotFailureDoesNotAcknowledgeFailedFetch(t *testing.
 	if err := p.Process(context.Background(), job); err != nil {
 		t.Fatal(err)
 	}
-	if r.fetches != 1 || q.refreshAcks != 0 || q.evidence != 2 || len(q.completions) != 1 {
+	if r.fetches != 0 || q.refreshAcks != 0 || q.evidence != 2 || len(q.completions) != 1 {
 		t.Fatalf("retry did not repair saved refresh: fetches=%d acks=%d snapshots=%d completions=%d",
 			r.fetches, q.refreshAcks, q.evidence, len(q.completions))
 	}
@@ -1323,53 +1335,28 @@ func TestRefreshedSourceSnapshotFailureDoesNotAcknowledgeFailedFetch(t *testing.
 
 // TestRefreshIntentBypassesSourceCaches is the R2-06 regression: an explicit
 // refresh must fetch, not reuse the stored snapshot or the legacy saved text.
-func TestRefreshIntentBypassesSourceCaches(t *testing.T) {
+func TestLegacyRefreshIntentReusesArchivedSourceWithoutFetching(t *testing.T) {
 	q := &stageQueue{fakeQueue: newFakeQueue(), source: &enrich.Source{OriginalText: "old stored text", Model: "stored"}}
 	r := &stageReader{q: q}
 	p := NewStaged(q, r, &recordingClassifier{}, "v1", "jev", discardLogger(), 1)
-	job := &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, RefreshEpoch: 3}
-	if err := p.Process(context.Background(), job); err != nil {
-		t.Fatalf("refresh process: %v", err)
+	if err := p.Process(context.Background(), &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, RefreshEpoch: 3}); err != nil {
+		t.Fatal(err)
 	}
-	if r.fetches != 1 {
-		t.Fatalf("an explicit refresh must fetch exactly once: %d", r.fetches)
-	}
-	if q.source == nil || q.source.OriginalText != "saved original" {
-		t.Fatalf("the fetched source was not saved: %+v", q.source)
-	}
-	if q.refreshAcks != 0 {
-		t.Fatalf("a saved source checkpoint needs no separate success ack: acks=%d", q.refreshAcks)
-	}
-	// A failing fetch keeps the old readable content and consumes the intent.
-	q.source = &enrich.Source{OriginalText: "old stored text", Model: "stored"}
-	failing := &stageReader{q: q, fetchErr: errors.New("fetch down")}
-	p2 := NewStaged(q, failing, &recordingClassifier{}, "v1", "jev", discardLogger(), 1)
-	if err := p2.Process(context.Background(), &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, RefreshEpoch: 4}); err == nil {
-		t.Fatal("a failing refresh must report an error")
-	}
-	if q.source.OriginalText != "old stored text" {
-		t.Fatalf("a failed refresh must keep the old content: %+v", q.source)
-	}
-	if q.refreshAcks != 1 {
-		t.Fatalf("a failed refresh must still consume the intent: acks=%d", q.refreshAcks)
+	if r.fetches != 0 || r.transforms != 1 || q.source.OriginalText != "old stored text" || q.refreshAcks != 0 {
+		t.Fatalf("refresh retrieved/replaced original: %+v", q.source)
 	}
 }
 
-func TestFailedRefreshAckErrorIsNotSilentlyReportedAsHandled(t *testing.T) {
-	ackErr := errors.New("fixture ack unavailable")
-	q := &stageQueue{fakeQueue: newFakeQueue(), refreshAckErr: ackErr}
-	p := NewStaged(q, &stageReader{q: q, fetchErr: errors.New("fixture fetch failed")},
-		&recordingClassifier{}, "v1", "jev", discardLogger(), 1)
-	err := p.Process(context.Background(), &cairn.Job{ID: 1, URL: "https://x.com/a/status/1",
-		Attempt: 1, RefreshEpoch: 3})
-	if !errors.Is(err, ackErr) || q.refreshAcks != 1 || len(q.failures) != 0 {
-		t.Fatalf("unconfirmed refresh ack was hidden: error=%v acks=%d failures=%v", err, q.refreshAcks, q.failures)
+func TestURLOnlyJobReleasesUnusedLeaseWithoutCallingModel(t *testing.T) {
+	q := &stageQueue{fakeQueue: newFakeQueue()}
+	r := &stageReader{q: q}
+	p := NewStaged(q, r, &recordingClassifier{}, "v1", "jev", discardLogger(), 1)
+	err := p.Process(context.Background(), &cairn.Job{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1, RefreshEpoch: 3})
+	if !errors.Is(err, ErrJobDeferred) || q.admitCalls != 0 || r.fetches != 0 || r.transforms != 0 || len(q.failures) != 0 || len(q.deferredStages) != 1 {
+		t.Fatalf("uncaptured job ran: err=%v admissions=%d fetch=%d reading=%d", err, q.admitCalls, r.fetches, r.transforms)
 	}
 }
 
-// TestBoundEvidenceUsesTheStructuredSnapshot is the R2-07 regression: the
-// provider state comes from the stored blocks with their roles, not from a
-// reconstruction of the plain text fields.
 func TestBoundEvidenceUsesTheStructuredSnapshot(t *testing.T) {
 	snapshot := json.RawMessage(`{
 		"id": 7, "content_revision": 2, "content_hash": "abc", "completeness": "complete",

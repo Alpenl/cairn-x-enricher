@@ -104,7 +104,7 @@ func TestLocalWorkerTopicGranularity(t *testing.T) {
 	defer provider.Close()
 	id := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
 	lease := claimEnrichmentJob(t, base, token, id)
-	source := enrich.Source{OriginalText: "这份写真 Skill 使用图像模型制作人像照片。", OriginalLanguage: "zh", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "fixture"}
+	source := enrich.Source{OriginalText: "这份写真 Skill 使用图像模型制作人像照片。", OriginalLanguage: "zh", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
 		t.Fatal(err)
 	}

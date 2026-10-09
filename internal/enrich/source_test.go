@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestSourceAndReadingHaveSeparateContracts(t *testing.T) {
+func TestBrowserSourceAndReadingHaveSeparateContracts(t *testing.T) {
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
@@ -17,65 +17,27 @@ func TestSourceAndReadingHaveSeparateContracts(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Fatal(err)
 		}
-		format := request["text"].(map[string]any)["format"].(map[string]any)
-		props := format["schema"].(map[string]any)["properties"].(map[string]any)
-		if _, ok := props["classification"]; ok {
-			t.Error("taxonomy leaked into source/reading request")
+		if request["tools"] != nil || request["tool_choice"] != nil {
+			t.Fatal("reading must never retrieve source")
 		}
-		value := map[string]any{"original_text": "immutable source", "original_language": "en", "context_text": "a comment", "related_links": []string{}, "image_urls": []string{}}
-		output := []any{}
-		if calls == 1 {
-			if request["tool_choice"] != "required" || props["summary"] != nil {
-				t.Error("source should only retrieve")
-			}
-			output = append(output, map[string]any{"type": "x_search_call", "status": "completed"})
-		} else {
-			if request["tools"] != nil {
-				t.Error("reading must not search")
-			}
-			// The independent ReadingResult contract contains only reading
-			// fields: the model must not echo source, links, images or tags.
-			value = map[string]any{
-				"ai_title":          "用于测试的原文阅读增强标题",
-				"original_language": "en",
-				"translated_text":   "完整中文译文",
-				"summary":           "中文摘要",
-			}
-			if _, ok := props["original_text"]; ok {
-				t.Error("reading schema must not require the model to echo original_text")
-			}
-			if _, ok := props["related_links"]; ok {
-				t.Error("reading schema must not require the model to echo related_links")
-			}
-			if _, ok := props["image_urls"]; ok {
-				t.Error("reading schema must not require the model to echo image_urls")
+		props := request["text"].(map[string]any)["format"].(map[string]any)["schema"].(map[string]any)["properties"].(map[string]any)
+		for _, key := range []string{"classification", "original_text", "related_links", "image_urls"} {
+			if props[key] != nil {
+				t.Fatalf("reading contract contains %s", key)
 			}
 		}
-		payload, _ := json.Marshal(value)
-		output = append(output, map[string]any{"type": "message", "content": []any{map[string]any{"type": "output_text", "text": string(payload)}}})
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "completed", "model": "grok-test", "output": output})
+		value := `{"ai_title":"用于测试的原文阅读增强标题","original_language":"en","translated_text":"完整中文译文","summary":"中文摘要"}`
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "completed", "model": "grok-test", "output": []any{map[string]any{"type": "message", "content": []any{map[string]any{"type": "output_text", "text": value}}}}})
 	}))
 	defer server.Close()
 	c := NewResponsesClient(server.URL, "key", "grok", 1000, "", server.Client(), testTaxonomy())
-	source, err := c.FetchSource(context.Background(), Input{ID: 1, URL: "https://x.com/a/status/1", Attempt: 1})
+	source := Source{OriginalText: "immutable browser source", ContextText: "a comment", RelatedLinks: []string{"https://example.com/related"}}
+	result, err := c.Transform(context.Background(), Input{SourceText: source.OriginalText, RelatedLinks: source.RelatedLinks})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if source.ContextText != "a comment" || source.OriginalText != "immutable source" {
-		t.Fatalf("source/context merged: %+v", source)
-	}
-	r, err := c.Transform(context.Background(), Input{SourceText: source.OriginalText, RelatedLinks: []string{"https://example.com/related"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r.OriginalText != source.OriginalText {
-		t.Fatal("reading changed archived source")
-	}
-	if len(r.RelatedLinks) != 1 || r.RelatedLinks[0] != "https://example.com/related" {
-		t.Fatalf("reading must inject source links, got %v", r.RelatedLinks)
-	}
-	if len(r.ImageURLs) != 0 {
-		t.Fatalf("reading must not fabricate images, got %v", r.ImageURLs)
+	if calls != 1 || result.OriginalText != source.OriginalText || len(result.RelatedLinks) != 1 || len(result.ImageURLs) != 0 {
+		t.Fatalf("reading changed source or media: %+v calls=%d", result, calls)
 	}
 }
 
@@ -86,9 +48,8 @@ func TestSourceRequiresSearchEvidence(t *testing.T) {
 }
 
 func TestManualSourceKeepsExactInput(t *testing.T) {
-	client := NewResponsesClient("https://unused.example", "fixture", "grok-test", 1024, "", nil, testTaxonomy())
 	original := " \n人工原文\n "
-	source, err := client.FetchSource(context.Background(), Input{SourceText: original})
+	source, err := SourceFromText(original)
 	if err != nil || source.OriginalText != original {
 		t.Fatalf("manual source changed: %q, %v", source.OriginalText, err)
 	}
