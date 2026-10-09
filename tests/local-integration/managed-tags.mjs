@@ -225,6 +225,18 @@ export async function verifyManagedTags(
     });
     assert.equal(created.status, 201, await created.clone().text());
     const newID = (await created.json()).id;
+    const captured = await fetch(workerURL + "/api/captures", {
+      method: "POST", headers: {
+        Authorization: "Bearer " + (process.env.CAIRN_APP_TOKEN || "app"),
+        "Content-Type": "application/json"
+      }, body: JSON.stringify({
+        url: "https://x.com/test/status/2095999999999999888", note: "", client_id: crypto.randomUUID(),
+        capture: { title: "LoRA 自动归属验证", language: "en", images: [],
+          text: "BrowserEntity provides a practical guide to LoRA fine-tuning, evaluating large language models, methods, tools and data." }
+      })
+    });
+    assert.equal(captured.status, 201, await captured.clone().text());
+    assert.equal((await captured.json()).id, newID);
     await wait(async () => {
       const job = await internal("classifications/" + newID);
       return job.status === "completed";
