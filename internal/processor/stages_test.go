@@ -84,8 +84,14 @@ func (q *stageQueue) DeferSourceStage(ctx context.Context, _ int64, _ string, st
 	return nil
 }
 
-func (q *stageQueue) GetSource(context.Context, int64) (*enrich.Source, error) { return q.source, nil }
+func (q *stageQueue) GetSource(context.Context, int64) (*enrich.Source, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.source, nil
+}
 func (q *stageQueue) SaveSource(_ context.Context, id int64, _ string, s enrich.Source) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	q.source = &s
 	q.job = &cairn.ClassificationJob{ID: id, Input: classify.Input{OriginalText: s.OriginalText}}
 	return nil

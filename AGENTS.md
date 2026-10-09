@@ -2,7 +2,8 @@
 
 - For Jev/TypeSafe integration or classification changes, read the project-local
   `.agents/skills/typesafe-ai/SKILL.md` and its relevant current API references.
-- Production processing separates source retrieval, reading aids, and classification.
+- Production processing separates browser source capture, reading aids, and classification.
+  Never retrieve originals with an LLM; URL-only bookmarks wait for browser capture.
   Persist source snapshots before generating reading aids. Only the classification
   queue may write Jev suggestions; never overwrite human curation.
 - The Worker contract and migration live in `../cairn-share/worker`.
