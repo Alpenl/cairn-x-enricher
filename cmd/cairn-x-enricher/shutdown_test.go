@@ -92,7 +92,7 @@ func (q *panickingQueue) Claim(context.Context) (*cairn.Job, error) {
 }
 
 func (q *panickingQueue) GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error) {
-	return cairn.BookmarkDetail{}, nil
+	return cairn.BookmarkDetail{Bookmark: cairn.Bookmark{OriginalText: "archived source"}}, nil
 }
 
 func (q *panickingQueue) StoreImages(context.Context, int64, string, []string) ([]cairn.ImageRef, error) {
@@ -109,7 +109,7 @@ type emptyQueue struct{}
 func (q *emptyQueue) Claim(context.Context) (*cairn.Job, error) { return nil, nil }
 
 func (q *emptyQueue) GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error) {
-	return cairn.BookmarkDetail{}, nil
+	return cairn.BookmarkDetail{Bookmark: cairn.Bookmark{OriginalText: "archived source"}}, nil
 }
 
 func (q *emptyQueue) StoreImages(context.Context, int64, string, []string) ([]cairn.ImageRef, error) {
@@ -232,7 +232,7 @@ func (q *oneJobQueue) Claim(context.Context) (*cairn.Job, error) {
 }
 
 func (q *oneJobQueue) GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error) {
-	return cairn.BookmarkDetail{}, nil
+	return cairn.BookmarkDetail{Bookmark: cairn.Bookmark{OriginalText: "archived source"}}, nil
 }
 
 func (q *oneJobQueue) StoreImages(context.Context, int64, string, []string) ([]cairn.ImageRef, error) {

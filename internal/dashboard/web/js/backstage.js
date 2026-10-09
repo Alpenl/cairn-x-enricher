@@ -59,8 +59,8 @@ function stat(label, value, tone = "") {
 function attentionRow(item) {
   const title = displayTitle(item);
   const retry = h("button.btn.btn-sm", { type: "button" }, icon("refresh", 14), "再试一次");
-  retry.disabled = Boolean(item.paid_call_unresolved);
-  if (retry.disabled) retry.title = "先核对上次模型调用，避免重复计费";
+  retry.disabled = Boolean(item.paid_call_unresolved || item.error === "capture_required");
+  if (retry.disabled) retry.title = item.error === "capture_required" ? "请先用浏览器插件采集原文" : "先核对上次模型调用，避免重复计费";
   const paste = h("button.btn.btn-sm", { type: "button" }, icon("clipboard", 14), "粘贴原文");
   const form = h("form.source-form", { hidden: true });
   const textarea = h("textarea.source-input", { name: "original_text", maxLength: 100000, rows: 7, placeholder: "粘贴原帖正文，会直接根据这段文字生成标题、译文和摘要" });

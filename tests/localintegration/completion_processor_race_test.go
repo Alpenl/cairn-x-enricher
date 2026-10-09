@@ -93,7 +93,7 @@ func TestLocalWorkerProcessorCompletionPreflightRace(t *testing.T) {
 	id := createLink(t, base, appToken)
 	lease := claimEnrichmentJob(t, base, enricherToken, id)
 	source := enrich.Source{OriginalText: "ExternalEntity appears in a practical LLM evaluation guide.",
-		OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "local-fetch"}
+		OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := setupQueue.SaveSource(ctx, id, lease, source); err != nil {
 		t.Fatalf("save source: %v", err)
 	}

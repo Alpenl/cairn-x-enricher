@@ -49,7 +49,7 @@ func (l *recordingPaidLedger) AuthorizeProviderFallback(_ context.Context, key s
 	return nil
 }
 
-func TestPaidSourceAttemptIsReservedBeforePOSTAndSettledWithUsage(t *testing.T) {
+func TestPaidReadingAttemptIsReservedBeforePOSTAndSettledWithUsage(t *testing.T) {
 	ledger := &recordingPaidLedger{}
 	var posts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
@@ -64,10 +64,9 @@ func TestPaidSourceAttemptIsReservedBeforePOSTAndSettledWithUsage(t *testing.T) 
 		_ = json.NewEncoder(writer).Encode(map[string]any{
 			"id": "resp_test_1", "status": "completed", "model": "grok-test",
 			"usage": map[string]any{"input_tokens": 100, "output_tokens": 20, "total_tokens": 120,
-				"cost_in_usd_ticks": 1234, "server_side_tool_usage_details": map[string]any{"x_search_calls": 1}},
-			"output": []any{map[string]any{"type": "x_search_call", "status": "completed"},
-				map[string]any{"type": "message", "content": []any{map[string]any{"type": "output_text",
-					"text": `{"original_text":"saved source","original_language":"en","context_text":"","related_links":[],"image_urls":[]}`}}}},
+				"cost_in_usd_ticks": 1234, "server_side_tool_usage_details": map[string]any{"x_search_calls": 0}},
+			"output": []any{map[string]any{"type": "message", "content": []any{map[string]any{"type": "output_text",
+				"text": `{"ai_title":"原文阅读增强测试标题","original_language":"en","translated_text":"完整中文译文","summary":"中文摘要"}`}}}},
 		})
 	}))
 	defer server.Close()
@@ -76,8 +75,8 @@ func TestPaidSourceAttemptIsReservedBeforePOSTAndSettledWithUsage(t *testing.T) 
 	var diagnostic bytes.Buffer
 	client.SetLogger(slog.New(slog.NewJSONHandler(&diagnostic, nil)))
 	input := Input{ID: 7, URL: "https://x.com/a/status/7", LeaseToken: "lease-7",
-		ContentRevision: 3, MinRemainingMS: 210_000}
-	source, err := client.FetchSource(context.Background(), input)
+		SourceText: "saved source", ContentRevision: 3, MinRemainingMS: 210_000}
+	source, err := client.Transform(context.Background(), input)
 	if err != nil || source.OriginalText != "saved source" {
 		t.Fatalf("source=%+v error=%v", source, err)
 	}
@@ -86,11 +85,11 @@ func TestPaidSourceAttemptIsReservedBeforePOSTAndSettledWithUsage(t *testing.T) 
 	}
 	a := ledger.reservations[0]
 	s := ledger.settlements[0]
-	if a.Stage != "fetch" || a.Variant != "fetch_thread" || a.AttemptNumber != 1 ||
+	if a.Stage != "reading" || a.Variant != "reading" || a.AttemptNumber != 1 ||
 		a.LinkID != input.ID || a.ContentRevision != input.ContentRevision || len(a.RequestHash) != 64 ||
 		len(a.OperationKey) != 64 || s.OperationKey != a.OperationKey || s.ResponseID == nil ||
 		*s.ResponseID != "resp_test_1" || s.CostUSDTicks == nil || *s.CostUSDTicks != 1234 ||
-		s.XSearchCalls == nil || *s.XSearchCalls != 1 {
+		s.XSearchCalls == nil || *s.XSearchCalls != 0 {
 		t.Fatalf("reservation=%+v settlement=%+v", a, s)
 	}
 	if log := diagnostic.String(); !strings.Contains(log, `"event_name":"provider_attempt_reserved"`) ||
@@ -113,7 +112,7 @@ func TestPaidSourceAttemptIsReservedBeforePOSTAndSettledWithUsage(t *testing.T) 
 		}
 	}
 	// Re-entering the same leased operation cannot obtain a second permit.
-	_, err = client.FetchSource(context.Background(), input)
+	_, err = client.Transform(context.Background(), input)
 	if err == nil || posts.Load() != 1 {
 		t.Fatalf("replay posts=%d error=%v", posts.Load(), err)
 	}
@@ -136,8 +135,8 @@ func TestLostProviderResponseLeavesPaidAttemptUnsettledAndStopsFallback(t *testi
 	client.SetPaidAttemptLedger(ledger)
 	var diagnostic bytes.Buffer
 	client.SetLogger(slog.New(slog.NewJSONHandler(&diagnostic, nil)))
-	_, err := client.FetchSource(context.Background(), Input{ID: 8, URL: "https://x.com/a/status/8",
-		LeaseToken: "lease-8", ContentRevision: 1, MinRemainingMS: 210_000})
+	_, err := client.Transform(context.Background(), Input{ID: 8, URL: "https://x.com/a/status/8",
+		SourceText: "saved source", LeaseToken: "lease-8", ContentRevision: 1, MinRemainingMS: 210_000})
 	if err == nil || posts.Load() != 1 || len(ledger.reservations) != 1 ||
 		len(ledger.settlements) != 0 || len(ledger.authorizations) != 0 {
 		t.Fatalf("posts=%d reserve=%d settle=%d fallback=%d error=%v", posts.Load(),

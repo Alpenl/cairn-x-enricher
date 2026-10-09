@@ -31,14 +31,14 @@ func (r *checkpointReader) FetchSource(ctx context.Context, input enrich.Input) 
 	if err := r.reserve(ctx, input, "fetch", true); err != nil {
 		return enrich.Source{}, err
 	}
-	return enrich.Source{OriginalText: "Synthetic <LLM> & evaluation 中文\u2028source " + strings.Repeat("长材料", 5000), OriginalLanguage: "en", Model: "fixture", RelatedLinks: []string{}, ImageURLs: []string{}}, nil
+	return enrich.Source{OriginalText: "Synthetic <LLM> & evaluation 中文\u2028source " + strings.Repeat("长材料", 5000), OriginalLanguage: "en", Model: "manual", RelatedLinks: []string{}, ImageURLs: []string{}}, nil
 }
 
 func (r *checkpointReader) Transform(ctx context.Context, input enrich.Input) (enrich.Result, error) {
 	if err := r.reserve(ctx, input, "reading", true); err != nil {
 		return enrich.Result{}, err
 	}
-	return enrich.Result{OriginalText: input.SourceText, OriginalLanguage: "en", AITitle: "Synthetic title", TranslatedText: "合成评估材料", Summary: "Synthetic reading aid", Model: "fixture"}, nil
+	return enrich.Result{OriginalText: input.SourceText, OriginalLanguage: "en", AITitle: "Synthetic title", TranslatedText: "合成评估材料", Summary: "Synthetic reading aid", Model: "manual"}, nil
 }
 
 func TestLocalWorkerEvidenceCheckpointAndBoundRead(t *testing.T) {
@@ -99,6 +99,7 @@ func TestLocalWorkerEvidenceCheckpointAndBoundRead(t *testing.T) {
 	}
 	switchTarget(t, base, token, classifier)
 	id := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
+	seedArchivedOriginal(t, id, "Synthetic <LLM> & evaluation 中文\u2028source "+strings.Repeat("长材料", 5000))
 
 	var snapshotPosts int
 	faultHTTP := &http.Client{Timeout: 10 * time.Second, Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -154,7 +155,7 @@ func TestLocalWorkerEvidenceCheckpointAndBoundRead(t *testing.T) {
 	if err := p.Process(ctx, job); err != nil {
 		t.Fatalf("checkpoint repair: %v", err)
 	}
-	if reader.fetches != 1 || snapshotPosts != 2 {
+	if reader.fetches != 0 || snapshotPosts != 2 {
 		t.Fatalf("fetches=%d snapshot posts=%d", reader.fetches, snapshotPosts)
 	}
 	if calls.Load() != 0 {

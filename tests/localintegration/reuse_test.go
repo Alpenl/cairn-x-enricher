@@ -74,7 +74,7 @@ func TestLocalWorkerStoredQuestionReuse(t *testing.T) {
 	queue := cairn.NewClient(base, token, &http.Client{Timeout: 10 * time.Second})
 	id := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
 	lease := claimEnrichmentJob(t, base, token, id)
-	source := enrich.Source{OriginalText: "Language model benchmark procedure.", OriginalLanguage: "en", ContextText: "quoted unrelated text", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "fixture"}
+	source := enrich.Source{OriginalText: "Language model benchmark procedure.", OriginalLanguage: "en", ContextText: "quoted unrelated text", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
 		t.Fatal(err)
 	}

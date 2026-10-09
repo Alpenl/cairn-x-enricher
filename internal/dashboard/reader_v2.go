@@ -162,82 +162,9 @@ func (s *Server) retryClassification(writer http.ResponseWriter, request *http.R
 	})
 }
 
-// refreshSource schedules a real bounded retrieval. It is explicitly different
-// from a classification retry: it costs a retrieval, keeps the old readable
-// content and all human curation until new bytes arrive (B06-T07/F13).
-func (s *Server) refreshSource(writer http.ResponseWriter, request *http.Request) {
-	id, err := positiveID(request.PathValue("id"))
-	if err != nil {
-		writeError(writer, http.StatusBadRequest, "invalid_id")
-		return
-	}
-	v2, ok := s.v2Backend(writer)
-	if !ok {
-		return
-	}
-	request.Body = http.MaxBytesReader(writer, request.Body, maxActionBody)
-	decoder := json.NewDecoder(request.Body)
-	decoder.DisallowUnknownFields()
-	var body struct {
-		OperationKey string `json:"operation_key"`
-	}
-	if err := decoder.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-		writeError(writer, http.StatusBadRequest, "invalid_json")
-		return
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		writeError(writer, http.StatusBadRequest, "invalid_json")
-		return
-	}
-	if body.OperationKey == "" {
-		body.OperationKey, err = newManualOperationKey()
-		if err != nil {
-			writeError(writer, http.StatusInternalServerError, "backend_error")
-			return
-		}
-	}
-	if len(body.OperationKey) > 200 {
-		writeError(writer, http.StatusBadRequest, "invalid_operation_key")
-		return
-	}
-	var payload json.RawMessage
-	if operational, supported := v2.(interface {
-		RefreshSourceWithOperation(context.Context, int64, string) (json.RawMessage, error)
-	}); supported {
-		payload, err = operational.RefreshSourceWithOperation(request.Context(), id, body.OperationKey)
-	} else {
-		payload, err = v2.RefreshSource(request.Context(), id)
-	}
-	if errors.Is(err, cairn.ErrV2Unsupported) {
-		writeError(writer, http.StatusConflict, "v2_unsupported")
-		return
-	}
-	if err != nil {
-		var apiErr *cairn.APIError
-		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusTooManyRequests {
-			writer.Header().Set("Retry-After", apiErr.RetryAfter)
-			writeError(writer, http.StatusTooManyRequests, "manual_queue_full")
-			return
-		}
-		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusConflict &&
-			(apiErr.Code == "lease_conflict" || apiErr.Code == "input_changed" ||
-				apiErr.Code == "operation_conflict") {
-			writeError(writer, http.StatusConflict, apiErr.Code)
-			return
-		}
-		s.writeBackendError(writer, "refresh source", id, err)
-		return
-	}
-	if s.wakeup != nil {
-		select {
-		case s.wakeup <- struct{}{}:
-		default:
-		}
-	}
-	writeJSON(writer, http.StatusOK, map[string]any{
-		"id": id, "action": "refresh_source", "fetch": true, "worker": json.RawMessage(payload),
-		"detail": "重新抓取原文；旧内容与人工整理在新内容到达前保持不变。",
-	})
+// refreshSource is a compatibility tombstone. It cannot enqueue paid retrieval.
+func (s *Server) refreshSource(writer http.ResponseWriter, _ *http.Request) {
+	writeError(writer, http.StatusGone, "capture_required")
 }
 
 type controlledPolicyReplayBackend interface {
@@ -249,6 +176,7 @@ type controlledPolicyReplayBackend interface {
 // replayPolicy re-decides the stored run under a policy without any model call.
 // Dry-run is the default; a commit appends a decision and requires the explicit
 // CAIRN_ALLOW_DECISION_WRITE opt-in.
+
 func (s *Server) replayPolicy(writer http.ResponseWriter, request *http.Request) {
 	id, err := positiveID(request.PathValue("id"))
 	if err != nil {
