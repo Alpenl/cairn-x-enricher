@@ -69,7 +69,7 @@ for (const [name, source] of sources) {
   for (const [, list, target] of source.matchAll(/import \{([^}]+)\} from "\.\/([\w-]+\.js)"/g)) {
     check(`${name} imports an existing ${target}`, exportsOf.has(target));
     for (const imported of list.split(",").map((value) => value.trim()).filter(Boolean)) {
-      check(`${name} imports ${imported} exported by ${target}`, exportsOf.get(target)?.has(imported));
+      check(`${name} imports ${imported} exported by ${target}`, exportsOf.get(target)?.has(imported.split(/\s+as\s+/)[0]));
     }
   }
   for (const [, alias, target] of source.matchAll(/import \* as (\w+) from "\.\/([\w-]+\.js)"/g)) {

@@ -1,99 +1,192 @@
-// Protect the rendered navigation and manager layout, including narrow drawers.
-// Synthetic read-only APIs: no changes to a real library or model calls.
+// End-to-end workspace acceptance against synthetic read-only APIs.
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { createFixtureState, startFixtureServer } from "./fixture-server.mjs";
 import { taxonomyV2 } from "./fixture-data.mjs";
-
-const { server, url } = await startFixtureServer({ state: createFixtureState() });
-const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome", args: ["--no-sandbox"] });
-const collection = { id: "test-pinned", name: "AIGC 生图生成视频相关", description: "生图与视频参考", item_count: 3, pinned: true, archived: false, deleted: false, revision: 1 };
-const errors = [], writes = [];
+const { server, url } = await startFixtureServer({
+  state: createFixtureState(),
+});
+const browser = await chromium.launch({
+  executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome",
+  args: ["--no-sandbox"],
+});
+const collection = {
+  id: "test-pinned",
+  name: "AIGC 生图生成视频相关",
+  description: "生图与视频参考",
+  item_count: 3,
+  pinned: true,
+  archived: false,
+  deleted: false,
+  revision: 1,
+  rule_enabled: false,
+  rule_tags: "[]",
+  selected_count: 0,
+};
+const errors = [],
+  writes = [],
+  assets = [];
 try {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-  page.on("pageerror", error => errors.push(error.message));
-  await page.route("**/api/**", async route => {
-    const request = route.request(), pathname = new URL(request.url()).pathname;
-    if (request.method() !== "GET") { writes.push(pathname); return route.abort(); }
+  const page = await browser.newPage({
+    viewport: { width: 1600, height: 1000 },
+  });
+  page.setDefaultTimeout(10000);
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("response", (response) => {
+    if (
+      response.status() >= 400 &&
+      new URL(response.url()).pathname.startsWith("/assets")
+    )
+      assets.push(response.url());
+  });
+  await page.route("**/api/**", async (route) => {
+    const request = route.request(),
+      path = new URL(request.url()).pathname;
+    if (request.method() !== "GET") {
+      writes.push(path);
+      return route.abort();
+    }
     let data;
-    if (pathname === "/api/collections") data = { items: [collection] };
-    if (pathname === "/api/tag-catalog") data = { revision: 0, catalog: taxonomyV2(), counts: [], custom_tags: [] };
+    if (path === "/api/collections") data = { items: [collection] };
+    if (path === `/api/collections/${collection.id}`)
+      data = { collection, items: [] };
+    if (path === "/api/collections/organizing") data = { items: [] };
+    if (path === "/api/tag-catalog")
+      data = {
+        revision: 1,
+        catalog: taxonomyV2(),
+        counts: [],
+        custom_tags: [],
+      };
     if (data) return route.fulfill({ json: data });
     return route.continue();
   });
-  const close = async dialog => {
-    await dialog.getByLabel("关闭", { exact: true }).click();
-    await dialog.waitFor({ state: "detached" });
-  };
-  const alignedNavigation = async () => {
-    const rows = await page.locator("#sidebar .nav-item").evaluateAll(nodes => nodes.map(node => {
-      const rect = node.getBoundingClientRect(), style = getComputedStyle(node), label = node.querySelector(".nav-label"), icon = node.querySelector("svg");
-      return { x: rect.x, width: rect.width, height: rect.height, labelX: label?.getBoundingClientRect().x,
-        icon: !!icon, font: style.font, border: parseFloat(style.borderTopWidth), overflow: node.scrollWidth > node.clientWidth };
-    }));
-    assert.ok(rows.length >= 9);
-    const reference = rows[0];
-    for (const row of rows) {
-      for (const key of ["x", "width", "height", "labelX"]) assert.ok(Math.abs(row[key] - reference[key]) < 1, `${key}: ${JSON.stringify(row)}`);
-      assert.equal(row.font, reference.font);
-      assert.equal(row.border, 0);
-      assert.ok(row.icon && !row.overflow);
-    }
-  };
-  const toolbarFits = async dialog => {
-    const bounds = await dialog.locator(".management-toolbar").evaluate(node => {
-      const rect = node.getBoundingClientRect(), search = node.querySelector("input").getBoundingClientRect();
-      return { overflow: node.scrollWidth > node.clientWidth, searchWidth: search.width, width: rect.width,
-        controlsBelow: [...node.querySelectorAll("select,button")].every(control => control.getBoundingClientRect().top >= search.bottom) };
-    });
-    assert.ok(!bounds.overflow && bounds.controlsBelow);
-    assert.ok(Math.abs(bounds.searchWidth - bounds.width) < 1);
-    assert.equal(await dialog.evaluate(node => node.scrollWidth > node.clientWidth), false);
+  const overflow = async () =>
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+      false,
+    );
+  const go = async (key) => {
+    if (await page.locator("#sidebar").isVisible())
+      await page
+        .locator(`#${key === "tags" ? "browse-tags" : "browse-collections"}`)
+        .click();
+    else await page.locator(`#tabbar button[data-page="${key}"]`).click();
   };
   await page.goto(url);
+  await page.waitForFunction(
+    () => document.querySelector("#list-pane").dataset.loading === "false",
+  );
   await page.locator("#pinned-collections .nav-item").waitFor();
-  await page.waitForFunction(() => document.querySelector("#list-pane").dataset.loading === "false");
-  await alignedNavigation();
+  const columns = await page
+    .locator("#library")
+    .evaluate((node) =>
+      getComputedStyle(node).gridTemplateColumns.split(" ").map(parseFloat),
+    );
+  assert.equal(columns.length, 3);
+  assert.equal(columns[0], 350);
+  assert.equal(columns[2], 316);
   await page.locator("#pinned-collections .nav-item").click();
-  await page.waitForFunction(() => document.querySelector("#pinned-collections [aria-current='page']"));
+  await page.waitForFunction(() =>
+    document.querySelector("#pinned-collections [aria-current]"),
+  );
   assert.equal(await page.locator("#nav-views [aria-current]").count(), 0);
-  await page.locator("#nav-views [data-view='inbox']").click();
-  await page.waitForFunction(() => !document.querySelector("#pinned-collections [aria-current]"));
-
-  for (const width of [1280, 390, 320]) {
-    await page.setViewportSize({ width, height: 900 });
-    if (width < 1180) {
-      if (await page.locator("#app").evaluate(node => node.classList.contains("detail-open"))) await page.locator("#detail-back").click();
-      await page.locator("#list-pane [data-open-sidebar]").click();
-    }
-    await alignedNavigation();
+  await page.locator('#nav-views [data-view="inbox"]').click();
+  await page.locator("#inspector-toggle").click(); // preserve the user's closed panel across page changes
+  for (const width of [1600, 1100, 900, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    if (
+      width < 760 &&
+      (await page
+        .locator("#app")
+        .evaluate((node) => node.classList.contains("detail-open")))
+    )
+      await page.locator("#detail-back").click();
     for (const theme of ["light", "dark"]) {
-      await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
-      await page.locator("#browse-tags").click();
-      const tags = page.getByRole("dialog", { name: "标签管理", exact: true });
-      await toolbarFits(tags);
-      await tags.getByLabel("查找标签").fill("无此标签");
-      await tags.getByText("没有符合条件的标签").waitFor();
-      await tags.getByRole("button", { name: "新建标签", exact: true }).click();
-      const editor = page.getByRole("dialog", { name: "新建主题标签", exact: true });
-      assert.ok(await editor.getByRole("checkbox", { name: "参与 AI 自动打标" }).isChecked());
-      assert.equal(await editor.getByLabel("正例").isVisible(), false);
-      await editor.getByText("匹配示例与排除条件", { exact: true }).click();
-      await editor.getByLabel("正例").fill("LoRA 的训练与应用");
-      await editor.getByLabel("反例").fill("无关的图片展示");
-      await close(editor); await close(tags);
-      await page.locator("#browse-collections").click();
-      const collections = page.getByRole("dialog", { name: "合集", exact: true });
-      await toolbarFits(collections);
-      await collections.getByLabel("查找合集").fill("AIGC");
-      assert.equal(await collections.locator(".collection-row").count(), 1);
-      await close(collections);
+      await page.evaluate(
+        (theme) => (document.documentElement.dataset.theme = theme),
+        theme,
+      );
+      await go("tags");
+      await page.getByLabel("搜索或新建标签", { exact: true }).fill("");
+      await page.locator(".tl-row").first().waitFor();
+      assert.ok((await page.locator("#management-page .tl-row").count()) > 10);
+      await overflow();
+      // Expanding a row edits in place; only one row is open at a time.
+      await page.locator("#management-page .tl-main").first().click();
+      await page.locator("#management-page .tl-panel").waitFor();
+      assert.equal(await page.locator("#management-page .tl-panel").count(), 1);
+      await page.getByLabel("搜索或新建标签", { exact: true }).fill("无此标签");
+      await page.locator(".tl-create").waitFor();
+      await page.getByLabel("搜索或新建标签", { exact: true }).press("Enter");
+      const add = page.locator('.tl-add[data-dim="topics"]');
+      await add.waitFor();
+      assert.equal(await add.getByLabel("新标签名称").inputValue(), "无此标签");
+      await add.getByLabel("新标签说明").fill("低秩适配训练与模型应用");
+      await overflow();
+      await add.getByRole("button", { name: "取消" }).click();
+      await go("collections");
+      await page.locator("#management-page .collection-row").first().waitFor();
+      await page.getByLabel("查找合集", { exact: true }).fill("AIGC");
+      assert.equal(await page.locator("#management-page .collection-row").count(), 1);
+      await page.locator("#management-page .collection-row").first().click();
+      await page.getByLabel("合集名称", { exact: true }).waitFor();
+      await overflow();
+      const pin = page.getByRole("checkbox", { name: "置顶", exact: true });
+      assert.equal(await pin.isChecked(), true);
+      await page.getByText("挂着的标签", { exact: true }).waitFor();
     }
-    if (width < 1180) {
-      await page.keyboard.press("Escape");
-      assert.ok(await page.locator("#list-pane").evaluate(node => !node.inert));
-    }
+    await page.evaluate(async () => {
+      (await import("/assets/js/workspace.js")).closeWorkspace();
+    });
+    if (width === 1600)
+      await page.locator('#nav-views [data-view="inbox"]').click();
   }
-  assert.deepEqual(errors, []); assert.deepEqual(writes, []);
-  console.log("ok management UI: aligned navigation, pinned selection, search, advanced fields, 320/390/1280px, light/dark, read-only");
-} finally { await browser.close(); server.close(); }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(async () => {
+    (await import("/assets/js/workspace.js")).closeWorkspace();
+  });
+  await page.locator("#inspector-toggle").click();
+  const drawer = page.locator("wa-dialog.inspector-drawer[open]");
+  await drawer.waitFor();
+  await drawer.locator("#curation-why").waitFor();
+  await drawer.getByRole("tab", { name: "处理", exact: true }).click();
+  assert.equal(
+    await page.locator("#diagnostics").evaluate((node) => node.open),
+    true,
+  );
+  await page.evaluate(async () => {
+    const { closeInspector, showInspector } = await import("/assets/js/workspace.js");
+    closeInspector();
+    showInspector("curation");
+  });
+  await drawer.locator("#curation-why").waitFor();
+  await page.keyboard.press("Escape");
+  await drawer.waitFor({ state: "detached" });
+  assert.equal(
+    await page.locator("#inspector").evaluate((node) => node.parentElement.id),
+    "library",
+  );
+  await page.locator("#filter-button").click();
+  await page.locator("#filter-panel").evaluate((node) => {
+    if (!node.open) throw Error("Filter did not open");
+  });
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+k");
+  const palette = page.locator('wa-dialog[label="搜索或执行命令"]');
+  await palette.getByLabel("搜索命令", { exact: true }).waitFor();
+  await palette.getByLabel("搜索命令", { exact: true }).fill("标签库");
+  await palette.locator(".command-option").first().click();
+  await page.getByRole("heading", { name: "标签库", exact: true }).waitFor();
+  assert.deepEqual(errors, []);
+  assert.deepEqual(writes, []);
+  assert.deepEqual(assets, []);
+  console.log(
+    "ok redesigned workspace: pages, library columns, real forms, drawer, command palette, 320/390/900/1100/1600px, light/dark, read-only",
+  );
+} finally {
+  await browser.close();
+  server.close();
+}

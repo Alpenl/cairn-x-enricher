@@ -117,6 +117,7 @@ function renderSummary() {
 
 function openPanel() {
   if (!currentId || els.section.hidden) return false;
+  emit("inspector:open","curation");
   els.section.open = true;
   autoGrow();
   return true;
@@ -776,7 +777,7 @@ export function show(id) {
   const switched = currentId !== id;
   if (currentId && switched) { flushPending(currentId); suspendRemote(); }
   currentId = id;
-  if (switched) els.section.open = false;
+  if (switched) els.section.open = Boolean(byId("inspector")?.getClientRects().length && byId("inspector-tabs")?.active === "curation");
   tagSystem.showTagSystem(id);
   pruneSessions();
   const session = sessionFor(id);
@@ -867,7 +868,7 @@ export function initCuration() {
       ? renderV2Rows(session, getItem(currentId)).filter((entry) => entry.dataset?.dimension && !["topics", "resource_kinds", "content_functions"].includes(entry.dataset.dimension)) : [];
     const entity = renderEntityRow(session);
     if (entity) secondary.push(entity);
-    if (secondary.length) els.tags.append(h("details.tag-secondary", h("summary", "更多内容属性与实体"), ...secondary));
+    if (secondary.length) els.tags.append(h("details.tag-secondary", h("summary", "载体、潜在用途与实体"), ...secondary));
   });
   on("tag-system:fallback", (id) => { if (id === currentId) renderTags(); });
   on("tag-system:render", (id) => { if (id === currentId) renderSummary(); });

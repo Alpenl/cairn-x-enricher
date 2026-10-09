@@ -47,7 +47,15 @@ func (c *Client) tagSystemJSON(ctx context.Context, method, path string, body an
 		return nil, err
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed {
+	if response.StatusCode == http.StatusNotFound {
+		err := apiError(response)
+		var apiErr *APIError
+		if errors.As(err, &apiErr) && apiErr.Code == "tag_not_found" {
+			return nil, err
+		}
+		return nil, ErrV2Unsupported
+	}
+	if response.StatusCode == http.StatusMethodNotAllowed {
 		return nil, ErrV2Unsupported
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {

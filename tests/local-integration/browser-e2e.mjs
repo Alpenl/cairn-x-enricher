@@ -1,3 +1,4 @@
+import {openCuration,openFilters,closeFilters} from "../browser/workspace-helper.mjs";
 import {verifyManagedTags} from "./managed-tags.mjs";
 // Real browser end-to-end: real Go HTTP service (serve) + real Worker/D1/R2 +
 // real Chrome. Only the two paid model boundaries are local mocks.
@@ -54,10 +55,8 @@ async function waitFor(description, predicate, timeoutMs = 120000) {
 async function openTagEditor(page, { secondary = false } = {}) {
   // Reading supplies the compact summary first; the editor fetches only when
   // its disclosure opens. Click its label, clear of the tag-filter buttons.
-  await page.locator("#curate-summary-tags .tag").first().waitFor({ state: "visible", timeout: 30000 });
-  if (!await page.locator("#curate").evaluate(node => node.open)) {
-    await page.locator("#curate > summary .curate-summary-label").click();
-  }
+  await page.locator("#curate-summary-tags .tag").first().waitFor({ state: "attached", timeout: 30000 });
+  await openCuration(page);
   await page.locator('.tag-system-row[data-dimension="topics"]').waitFor({ state: "visible", timeout: 30000 });
   if (secondary && !await page.locator(".tag-secondary").evaluate(node => node.open)) {
     await page.locator(".tag-secondary > summary").click();
@@ -210,8 +209,9 @@ async function main() {
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(String(error)));
     await page.goto(`http://127.0.0.1:${goPort}/bookmarks/${id}`, { waitUntil: "load" });
-    await page.waitForSelector("#curate-summary-tags .tag", { state: "visible", timeout: 30000 });
-    check("collapsed editor has no editor rows before opening", await page.locator(".tag-system-row").count() === 0);
+    await page.waitForSelector("#curate-summary-tags .tag", { state: "attached", timeout: 30000 });
+    await page.locator("#inspector-toggle").click();
+    check("closing the inspector hides every editor row", await page.locator(".tag-system-row:visible").count() === 0);
     check("the real tag editor starts collapsed", !await page.locator("#curate").evaluate(node => node.open));
     // Exercise actual Worker projections through NAS and the real list merge.
     // A synthetic summary that retained identity unconditionally hid this bug.
@@ -244,7 +244,7 @@ async function main() {
     check("a real list reload preserves the loaded body and its versioned refresh", bodyReuse.preserved && bodyReuse.refreshed, JSON.stringify(bodyReuse));
     // The summary also contains independent tag-filter buttons. Its center
     // can hit one of those; click the disclosure label to open the editor.
-    await page.locator("#curate > summary .curate-summary-label").click();
+    await openCuration(page);
     await page.locator('.tag-system-row[data-dimension="topics"]').waitFor({ state: "visible" });
     check("the modern editor loads through the real proxy", await page.isVisible('.tag-system-row[data-dimension="topics"]'));
     const effectiveTopics = async () => (await page.locator('.tag-system-row[data-dimension="topics"] .tag-name').allTextContents()).map(label => catalog.topics.find(term => term.label === label)?.id || label);
@@ -264,9 +264,7 @@ async function main() {
     const libraryIdle = () => library.waitForFunction(() => document.querySelector("#list-pane")?.dataset.loading === "false");
     // Facets live in the drawer on a phone; open it and the group, then toggle.
     const toggleFacet = async (key, value) => {
-      if (!await library.evaluate(() => document.getElementById("app").classList.contains("sidebar-open"))) {
-        await library.click("#list-pane [data-open-sidebar]");
-      }
+      await openFilters(library);
       if (["carriers", "affordances", "entity_state"].includes(key)) {
         const more = library.locator("details[data-group='more']");
         if (!await more.evaluate(node => node.open)) await more.locator(":scope > summary").click();
@@ -330,7 +328,7 @@ async function main() {
 
     // 6. Re-selecting an earlier single-valued option must use action order,
     // including after the next request reconstructs the view from D1 rows.
-    if (!await page.locator("#curate").evaluate(node => node.open)) await page.locator("#curate > summary .curate-summary-label").click();
+    if (!await page.locator("#curate").evaluate(node => node.open)) await openCuration(page);
     if (!await page.locator(".tag-secondary").evaluate(node => node.open)) await page.locator(".tag-secondary > summary").click();
     await page.click("#v2-carriers [data-edit='carriers']");
     const carrierOptions = await page.$$eval("#v2-carriers [data-field='carriers'][data-term]:not([data-term=''])", (nodes) => nodes.map((node) => ({ value: node.dataset.term, checked: node.classList.contains("on") })));
@@ -368,22 +366,25 @@ async function main() {
     await otherPage.close();
 
     // Entity processing uses the actual opt-in extension and model client.
-    if (!await page.locator("#curate").evaluate(node => node.open)) await page.locator("#curate > summary .curate-summary-label").click();
+    if (!await page.locator("#curate").evaluate(node => node.open)) await openCuration(page);
     if (!await page.locator(".tag-secondary").evaluate(node => node.open)) await page.locator(".tag-secondary > summary").click();
     await page.waitForFunction(() => document.querySelector("#v2-entity-list")?.textContent.includes("BrowserEntity"));
     check("the entity row shows the production entity", (await page.textContent("#v2-entity-list")).includes("BrowserEntity"));
-    await page.click("#diagnostics > summary");
+    await page.evaluate(async()=>(await import("/assets/js/workspace.js")).showInspector("processing"));
     await page.waitForSelector("#v2-entity-observations li");
     check("real entity observations expose source occurrences and explicit unknown identity", (await page.textContent("#v2-entity-observations")).includes("原文「BrowserEntity」") && (await page.textContent("#v2-entity-observations")).includes("身份未确认"));
+    await openCuration(page);
     await page.locator(".v2-entity", { hasText: "BrowserEntity" }).getByRole("button", { name: "移除" }).click();
     await page.waitForFunction(() => !document.querySelector("#v2-entity-list")?.textContent.includes("BrowserEntity"));
     check("rejecting an entity removes it from the entity row", !(await page.textContent("#v2-entity-list")).includes("BrowserEntity"));
+    await page.evaluate(async()=>(await import("/assets/js/workspace.js")).showInspector("processing"));
     await page.waitForFunction(() => [...document.querySelectorAll("#v2-entity-observations li")].some((node) => node.textContent.includes("非当前有效结果")));
     check("rejected entity provenance remains an explicit historical judgment", (await page.locator("#v2-entity-observations li", { hasText: "BrowserEntity" }).first().textContent()).includes("非当前有效结果"));
     const serverExport = await fetch(`http://127.0.0.1:${goPort}/api/export`).then(response => response.text());
     check("server export excludes the rejected entity", !serverExport.includes("实体：BrowserEntity"));
     const downloadPromise = page.waitForEvent("download");
-    await page.click("#detail-export");
+    await page.locator("#detail-menu").click();
+    await page.getByRole("menuitem",{name:/导出这条/}).click();
     const download = await downloadPromise;
     let exported = "";
     for await (const chunk of await download.createReadStream()) exported += chunk;

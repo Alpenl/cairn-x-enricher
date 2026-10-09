@@ -1,3 +1,4 @@
+import {openFilters,closeFilters} from "../../tests/browser/workspace-helper.mjs";
 // Real embedded UI; all data and requests stay in the synthetic local fixture.
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -65,9 +66,10 @@ await page.route("**/api/bookmarks?*", async (route) => {
   return send(route, body);
 });
 const topics = () => page.locator('details[data-group="topics"]');
-const openTopics = async () => { if (!await topics().evaluate((node) => node.open)) await topics().locator(":scope > summary").click(); };
+const openTopics = async () => { await openFilters(page); if (!await topics().evaluate((node) => node.open)) await topics().locator(":scope > summary").click(); };
 try {
   await page.goto(`${url}/?curation_status=all`);
+  await openFilters(page);
   await page.locator('.row-meta [data-tag-id="portrait"]').first().waitFor();
   assert.equal(await page.locator('.row-meta').first().locator('.tag').first().textContent(), "写真");
   await openTopics();
@@ -79,11 +81,12 @@ try {
   await pin.click();
   await page.locator("#topic-search").fill("");
   assert.equal(await topics().locator('[data-topic-section="pinned"] [data-value="portrait"]').count(), 1);
-  await page.reload(); await topics().waitFor(); await openTopics();
+  await page.reload(); await openFilters(page); await topics().waitFor(); await openTopics();
   await topics().locator('[data-topic-section="pinned"] [data-value="portrait"]').waitFor();
   await topics().getByRole("button", { name: "取消固定写真", exact: true }).click();
 
   await page.goto(`${url}/?curation_status=all&topics=image_creation,design`);
+  await openFilters(page);
   await openTopics();
   const refine = topics().locator('[data-facet="topic_refinements"][data-value="portrait"]');
   await refine.waitFor(); await refine.click();
@@ -93,14 +96,16 @@ try {
   assert.equal(new URL(page.url()).searchParams.get("topics_mode"), null);
   assert.equal(await page.locator('.row[data-id]').count(), 2);
   assert.match(await page.locator('#active-filters').textContent(), /进一步筛选：写真/);
+  await closeFilters(page);
   await page.locator('#active-filters .filter-chip').filter({ hasText: "进一步筛选" }).click();
   await page.waitForURL((value) => !value.searchParams.has("topic_refinements"));
   assert.equal(new URL(page.url()).searchParams.get("topics"), "image_creation,design");
-  await page.reload();
+  await page.reload(); await openFilters(page);
   await page.waitForFunction(() => document.querySelector('#list-pane')?.dataset.loading === "false");
   assert.equal(new URL(page.url()).searchParams.get("topics"), "image_creation,design");
 
   await page.goto(`${url}/?curation_status=all`);
+  await openFilters(page);
   await page.waitForFunction(() => document.querySelector('.row.selected'));
   const previousPath = new URL(page.url()).pathname;
   let release;
@@ -122,7 +127,7 @@ try {
   });
   heldList.release();
   await page.waitForFunction(() => document.querySelector('#list-pane')?.dataset.loading === "false");
-  assert.equal(await page.evaluate(() => window.focusedBeforeListRefresh.isConnected), false, "filter response must replace the old row");
+  assert.equal(await page.evaluate(() => window.focusedBeforeListRefresh.isConnected), true, "filter response retains an unchanged row and its focused control");
   assert.deepEqual(await page.evaluate(() => ({ row: Number(document.activeElement.closest('.row')?.dataset.id),
     field: document.activeElement.dataset.tagField, term: document.activeElement.dataset.tagId })),
   { row: focusedRow, field: "topics", term: "portrait" }, "filter refresh must retain the focused tag");
@@ -154,7 +159,7 @@ try {
 
   await openTopics(); await page.locator('#topic-search').fill("写真");
   await topics().getByRole("button", { name: "固定写真", exact: true }).click();
-  scope = "c".repeat(64); await page.reload(); await topics().waitFor(); await openTopics();
+  scope = "c".repeat(64); await page.reload(); await openFilters(page); await topics().waitFor(); await openTopics();
   assert.equal(await topics().locator('[data-topic-section="pinned"]').count(), 0);
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem(`cairn.topic-pins.v1:${"b".repeat(64)}`)).includes("portrait")), true);
 
@@ -163,6 +168,7 @@ try {
     mkdirSync(artifacts, { recursive: true, mode: 0o700 });
     await page.evaluate(() => localStorage.setItem("cairn.theme", "dark"));
     await page.goto(`${url}/?curation_status=all&topics=image_creation,design&topic_refinements=portrait`);
+  await openFilters(page);
     await page.waitForFunction(() => document.querySelector('#list-pane')?.dataset.loading === "false");
     await page.waitForFunction(() => document.querySelector('#body-loading')?.hidden === true);
     await openTopics();
@@ -170,6 +176,7 @@ try {
     await page.screenshot({ path: join(artifacts, "topic-navigation-1204-dark.png") });
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto(`${url}/?curation_status=all`);
+  await openFilters(page);
     await page.locator('.row-meta [data-tag-id="portrait"]').first().waitFor();
     await page.locator('.row-meta [data-tag-id="portrait"]').first().click();
     await page.waitForURL((value) => value.searchParams.get("topics") === "portrait");
@@ -183,6 +190,7 @@ try {
 
   acknowledge = false;
   await page.goto(`${url}/?curation_status=all&topics=image_creation,design&topic_refinements=portrait`);
+  await openFilters(page);
   await page.locator('#load-error-text').waitFor();
   assert.match(await page.locator('#load-error-text').textContent(), /筛选|后端|服务/);
   assert.equal(new URL(page.url()).searchParams.get("topic_refinements"), "portrait");
@@ -190,6 +198,7 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('.row[data-id]').length > 0 && document.querySelector('#list-pane')?.dataset.loading === "false");
   acknowledge = true; tagAcknowledged = false;
   await page.goto(`${url}/?curation_status=all&topics=image_creation,design&topic_refinements=portrait`);
+  await openFilters(page);
   await page.locator('#load-error-text').waitFor();
   assert.equal(new URL(page.url()).searchParams.get("topic_refinements"), "portrait");
   assert.deepEqual(errors, []);

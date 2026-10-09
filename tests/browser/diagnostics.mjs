@@ -27,9 +27,9 @@ try {
   await page.goto(url, { waitUntil: "networkidle" });
   assert.equal(pages, 0);
   assert.equal(details, 0);
-  await page.locator("#diagnostics > summary").click();
+  await page.evaluate(async()=>(await import("/assets/js/workspace.js")).showInspector("processing"));
   assert.equal(pages, 0);
-  await page.locator("#run-history > summary").click();
+  await page.locator("#inspector-tabs").getByRole("tab",{name:"记录",exact:true}).click();
   await page.locator(".run-record").waitFor();
   assert.equal(pages, 1);
   assert.equal(details, 0);

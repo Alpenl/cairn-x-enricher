@@ -1,3 +1,4 @@
+import {openCuration,openFilters,closeFilters,closeInspector} from "./workspace-helper.mjs";
 // Browser acceptance harness for the dashboard application.
 //
 // It serves the *real* embedded assets from internal/dashboard/web with mock
@@ -47,10 +48,6 @@ async function waitFor(predicate, timeoutMs = 5000) {
   return false;
 }
 
-async function openCuration(page) {
-  await page.locator("#curate > summary").waitFor();
-  if (!await page.locator("#curate").evaluate((node) => node.open)) await page.locator("#curate > summary .curate-summary-label").click();
-}
 
 // --- Part A: focused curation mock ------------------------------------------------
 
@@ -337,7 +334,7 @@ async function partA(browser) {
   const state = createMock();
   const server = await startMockServer(state);
   const base = `http://127.0.0.1:${server.address().port}`;
-  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const page = await browser.newPage({ viewport: { width: 1600, height: 860 } });
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(String(error)));
   await page.goto(`${base}/bookmarks/12`, { waitUntil: "networkidle" });
@@ -444,12 +441,13 @@ async function partA(browser) {
 
   // 11. Evidence, classification status, entities and the three explicit redo
   // actions, each with its own stated cost.
-  await page.click("#diagnostics > summary");
+  await page.evaluate(async()=>(await import("/assets/js/workspace.js")).showInspector("processing"));
   await page.waitForSelector("#v2-evidence-blocks .v2-evidence-role");
   equal("evidence blocks render their real roles", await page.$$eval("#v2-evidence-blocks .v2-evidence-role", (nodes) => nodes.map((node) => node.textContent)), ["原帖", "引用"]);
   await waitFor(async () => /分类完成/.test(await page.textContent("#v2-classification-status") || ""));
   check("classification status is shown independently", /分类完成/.test(await page.textContent("#v2-classification-status") || ""));
   check("the entity row renders the stored entities", /acme/.test(await page.textContent("#v2-entity-list") || ""));
+  await openCuration(page);
   await page.fill("#v2-entity-input", "widget");
   await page.click("#v2-entity-add");
   await waitFor(() => state.actions.some((entry) => entry.action === "entity" && entry.body.term === "widget"));
@@ -458,13 +456,14 @@ async function partA(browser) {
   const entityRequest = state.actions.find((entry) => entry.action === "entity");
   check("entity corrections carry an operation key and revision", typeof entityRequest?.body.operation_key === "string" && Number.isInteger(entityRequest.body.expected_revision));
 
+  await page.evaluate(async()=>(await import("/assets/js/workspace.js")).showInspector("processing"));
   await page.click("#v2-retry-classification");
   await waitFor(() => state.actions.some((entry) => entry.action === "retry_classification"));
   check("classification retry is a separate action", state.actions.some((entry) => entry.action === "retry_classification"));
   await page.click("#v2-refresh-source");
-  await page.waitForSelector("dialog[open] [data-action='confirm']");
+  await page.waitForSelector("wa-dialog[open] [data-action='confirm']");
   check("refresh-source asks before re-reading the source", !state.actions.some((entry) => entry.action === "refresh_source"));
-  await page.click("dialog[open] [data-action='confirm']");
+  await page.click("wa-dialog[open] [data-action='confirm']");
   await waitFor(() => state.actions.some((entry) => entry.action === "refresh_source"));
   check("refresh-source is a separate, confirmed action", state.actions.some((entry) => entry.action === "refresh_source"));
   await page.click("#v2-replay-policy");
@@ -480,6 +479,7 @@ async function partA(browser) {
   check("an explicit override hides redundant AI confirmation", await waitFor(() => page.isHidden("#confirm-classification")));
 
   // 13. Keyboard reachability and narrow viewports.
+  await openCuration(page);
   check("tag chips are keyboard focusable", await page.evaluate(() => {
     const chip = document.querySelector("#v2-topics .chip");
     chip.focus();
@@ -491,7 +491,7 @@ async function partA(browser) {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     check(`no horizontal overflow at ${width}px`, overflow <= 1, `overflow=${overflow}px`);
   }
-  await page.setViewportSize({ width: 1280, height: 860 });
+  await page.setViewportSize({ width: 1600, height: 860 });
 
   // 14. The library carries every dimension through requests and URLs.
   const latestQuery = () => state.listQueries.at(-1);
@@ -501,6 +501,7 @@ async function partA(browser) {
   equal("library filter negotiation is explicit", latestQuery().filter_contract_version, "1");
   equal("URL restores selected function values", await page.$$eval("[data-facet='content_functions'][aria-pressed='true']", (nodes) => nodes.map((node) => node.dataset.value)), ["method", "data"]);
   const toggleFacet = async (key, value) => {
+    await openFilters(page);
     const group = page.locator(`details[data-group='${key}']`);
     await group.evaluate((node) => {
       for (let parent = node.parentElement; parent; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true;
@@ -571,7 +572,9 @@ async function partB(browser) {
   await page.keyboard.press("Escape");
   await page.locator("#list-menu").evaluate((node) => node.blur());
 
+  await page.locator("[role=menu]").waitFor({state:"hidden"});
   // J/K move through the list and keep the URL shareable.
+  await closeInspector(page);
   const beforeJRequests = state.requests.length;
   await page.keyboard.press("j");
   await waitFor(async () => (await selectedId()) === inbox[1]);
@@ -746,10 +749,10 @@ async function partB(browser) {
   const opener = phone.locator("#list-pane [data-open-sidebar]");
   await opener.click();
   check("phone navigation has modal semantics", await phone.locator("#sidebar").getAttribute("aria-modal") === "true");
-  check("phone navigation makes the background inert", await phone.locator("#list-pane").evaluate((node) => node.inert));
+  check("phone navigation makes the background inert", await phone.locator("#list-pane").evaluate((node) => Boolean(node.closest("[inert]"))));
   await phone.locator("#sidebar .brand").focus();
   await phone.keyboard.press("Shift+Tab");
-  check("sidebar reverse tab wraps to its last control", await phone.evaluate(() => document.activeElement?.id === "service-link"));
+  check("sidebar reverse tab wraps to its last control", await phone.evaluate(() => document.activeElement?.id === "settings-button"));
   await phone.keyboard.press("Tab");
   check("sidebar tab wraps to its first control", await phone.evaluate(() => document.activeElement?.classList.contains("brand")));
   await phone.keyboard.press("Escape");
@@ -786,7 +789,7 @@ async function partB(browser) {
 async function partC(browser) {
   const state = createFixtureState({ v2: false });
   const { server, url: base } = await startFixtureServer({ state });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const page = await browser.newPage({ viewport: { width: 1600, height: 860 } });
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(String(error)));
   const curationRequests = () => state.requests.filter((entry) => entry.path.endsWith("/curation"));
@@ -823,7 +826,7 @@ async function partD(browser) {
   const state = createMock();
   const server = await startMockServer(state);
   const base = `http://127.0.0.1:${server.address().port}`;
-  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const page = await browser.newPage({ viewport: { width: 1600, height: 860 } });
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(String(error)));
   try {
@@ -872,7 +875,7 @@ async function partE(browser) {
   state.selection = { ...state.selection, topics: ["llm"], resource_kinds: ["software"], content_functions: ["tool"] };
   const server = await startMockServer(state);
   const base = `http://127.0.0.1:${server.address().port}`;
-  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const page = await browser.newPage({ viewport: { width: 1600, height: 860 } });
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(String(error)));
   try {
@@ -886,7 +889,7 @@ async function partE(browser) {
     await page.waitForFunction(() => document.querySelector("#detail-title")?.textContent === "测试标题");
     await openCuration(page);
     await page.waitForSelector("#v2-topics .chip.on");
-    await page.locator("#curate > summary .curate-summary-label").click();
+    await openCuration(page);
     equal("late combined reading and panel toggle retain list tags", await page.locator('.row[data-id="12"] .row-meta .tag').allTextContents(), ["LLM", "软件与服务", "工具", "我的项目"]);
     check("late combined reading keeps all four tags visible", await page.locator('.row[data-id="12"] .tag-more').count() === 0);
     equal("combined snapshot keeps all three dimensions and personal tag", await page.evaluate(async () => {
@@ -924,7 +927,7 @@ async function partF(browser) {
   const state = createMock();
   const server = await startMockServer(state);
   const base = `http://127.0.0.1:${server.address().port}`;
-  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const page = await browser.newPage({ viewport: { width: 1600, height: 860 } });
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(String(error)));
   const curationRequests = () => state.requests.filter((entry) => entry.path.endsWith("/curation"));
@@ -988,7 +991,7 @@ async function partG(browser) {
   const state = createMock();
   const server = await startMockServer(state);
   const base = `http://127.0.0.1:${server.address().port}`;
-  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const page = await browser.newPage({ viewport: { width: 1600, height: 860 } });
   const curationRequests = () => state.requests.filter((entry) => entry.path.endsWith("/curation"));
   try {
     await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
@@ -1023,7 +1026,7 @@ async function partH(browser) {
   const state = createMock();
   const server = await startMockServer(state);
   const base = `http://127.0.0.1:${server.address().port}`;
-  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const page = await browser.newPage({ viewport: { width: 1600, height: 860 } });
   const confirms = () => state.requests.filter((entry) => entry.path.endsWith("/curation") && "classification" in entry.body);
   try {
     await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
@@ -1049,7 +1052,7 @@ async function partI(browser) {
   const state = createMock();
   const server = await startMockServer(state);
   const base = `http://127.0.0.1:${server.address().port}`;
-  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const page = await browser.newPage({ viewport: { width: 1600, height: 860 } });
   const confirms = () => state.requests.filter((entry) => entry.path.endsWith("/curation") && "classification" in entry.body);
   try {
     await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
@@ -1072,7 +1075,7 @@ async function partJ(browser) {
   const state = createMock();
   const server = await startMockServer(state);
   const base = `http://127.0.0.1:${server.address().port}`;
-  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const page = await browser.newPage({ viewport: { width: 1600, height: 860 } });
   try {
     await page.goto(`${base}/bookmarks/12?curation_status=all`, { waitUntil: "networkidle" });
     await openCuration(page);

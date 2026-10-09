@@ -1,3 +1,4 @@
+import {openFilters,closeFilters} from "../../tests/browser/workspace-helper.mjs";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { createFixtureState, startFixtureServer } from "../../tests/browser/fixture-server.mjs";
@@ -22,7 +23,9 @@ try {
  });
  await page.goto(`${url}/?curation_status=all`);
  await page.waitForFunction(()=>document.querySelector('#list-pane')?.dataset.loading==='false');
+ await openFilters(page);
  await page.locator('[data-group="topics"] > summary').click();
+ await closeFilters(page);
  const input=page.locator('#search');
  await input.focus();
  await input.evaluate(node=>{

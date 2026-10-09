@@ -1,3 +1,4 @@
+import {openCuration,openFilters,closeFilters,closeInspector} from "./workspace-helper.mjs";
 // Synthetic, GET-only fixture reads plus local custom-tag mock mutations. No external API/model.
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
@@ -53,7 +54,7 @@ try{
   assert.equal(await page.locator(".tag-system-row").count(),0);assert.match(await page.locator("#curate-summary-tags").textContent(),/参考资料/);
   ok("collapsed reader uses effective summary without tags/facets; one shared custom catalog read");
   const thumbnails=await page.locator("#rows .row-thumb img").evaluateAll(images=>images.map(image=>image.dataset.imageSource));assert.ok(thumbnails.length>0);assert.ok(thumbnails.every(source=>source.includes("privacy=1&size=160")));ok("list thumbnails use the bounded private thumbnail endpoint");
-  await page.locator('#curate > summary .curate-summary-label').click();
+  await openCuration(page);
   await page.locator('.tag-system-row[data-dimension="topics"]').waitFor();assert.equal(tags,1);
   tagDelay=250;
   await page.evaluate(async id=>{const store=await import('/assets/js/store.js');const tag=await import('/assets/js/tag-system.js');store.getItem(id).cache_identity.personal_revision++;for(let i=0;i<5;i++)tag.refreshTagSystem(id);},item.id);
@@ -71,17 +72,18 @@ try{
   ok("failed tag refresh keeps previous data without recursive retries");
   const taxonomyEvents=await page.evaluate(async()=>{const store=await import('/assets/js/store.js');const tax=await import('/assets/js/taxonomy.js');const {api}=await import('/assets/js/api.js');let count=0;store.on('taxonomy',()=>count++);await Promise.all([tax.loadCustomTags(),tax.loadCustomTags()]);await api.createCustomTag({label:'我的实验'});await Promise.all([tax.loadCustomTags(),tax.loadCustomTags()]);await tax.loadCustomTags();return count;});
   assert.equal(customReads,2);assert.equal(taxonomyEvents,1);ok("custom mutation invalidates one shared catalog and broadcasts only changed values");
+  await closeInspector(page);await openFilters(page);
   await page.locator('details[data-group="topics"] > summary').click();await wait(()=>counts===1);
   await page.locator('details[data-group="topics"] > summary').click();
   await page.evaluate(async()=>{const {state}=await import('/assets/js/store.js');state.filters.topics=['llm'];(await import('/assets/js/sidebar.js')).renderSidebar();});await pause(300);assert.equal(counts,1);
   await page.locator('details[data-group="topics"] > summary').click();await wait(()=>counts===2);
   ok("closed facet groups defer requests and reopening fetches the current query");
-  await page.setViewportSize({width:375,height:812});
+  await closeFilters(page);await page.setViewportSize({width:375,height:812});
   await page.waitForFunction(()=>document.querySelector("#app").dataset.layout==="narrow");
   await page.locator("#detail-back").click();
   const hiddenCounts=counts;
   await page.evaluate(async()=>{const {state}=await import('/assets/js/store.js');state.filters.topics=['llm','eng'];(await import('/assets/js/sidebar.js')).renderSidebar();});await pause(250);assert.equal(counts,hiddenCounts);
-  await page.locator('[data-open-sidebar]').first().click();await wait(()=>counts===hiddenCounts+1);
+  await openFilters(page);await wait(()=>counts===hiddenCounts+1);
   await page.keyboard.press('Escape');ok("a hidden mobile sidebar defers counts even when its topic group is open");
   await page.evaluate(async()=>{const {state}=await import('/assets/js/store.js');state.route={name:'library',id:0};(await import('/assets/js/detail.js')).syncReaderVisibility();});
   const beforeHidden=identities;await page.clock.fastForward(65_000);await pause(150);assert.equal(identities,beforeHidden);
@@ -159,8 +161,12 @@ try{
   ok("body priority pauses images; visible queue caps at two and removed images abort");
   await isolated.evaluate(async()=>{const img=document.createElement('img');img.width=30;img.height=30;document.querySelector('#images').append(img);(await import('/assets/js/image-loader.js')).queueImage(img,'/api/images/finish');});
   await isolated.waitForFunction(()=>document.querySelector('#images img')?.naturalWidth>0);
-  await isolated.evaluate(()=>document.querySelector('#images').replaceChildren());await pause(50);assert.equal(await isolated.evaluate(()=>window.objectRevokes),1);
+  await isolated.evaluate(()=>{window.reusableImage=document.querySelector('#images img');window.previousImageURL=window.reusableImage.src;document.querySelector('#images').replaceChildren();});await pause(50);assert.equal(await isolated.evaluate(()=>window.objectRevokes),1);
   ok("loaded image object URL is revoked when its DOM consumer is removed");
+  const startsBeforeReconnect=imageStarts;
+  await isolated.evaluate(async()=>{document.querySelector('#images').append(window.reusableImage);(await import('/assets/js/image-loader.js')).resumeImage(window.reusableImage);});
+  await isolated.waitForFunction(()=>window.reusableImage.src!==window.previousImageURL&&window.reusableImage.naturalWidth>0);assert.equal(imageStarts,startsBeforeReconnect);
+  ok('reconciled rows recreate revoked image URLs from bounded cached bytes');
   const imageBefore=imageStarts;
   await isolated.evaluate(async()=>{const img=document.createElement('img');img.width=30;img.height=30;document.querySelector('#images').append(img);(await import('/assets/js/image-loader.js')).queueImage(img,'/api/images/finish');});
   await isolated.waitForFunction(()=>document.querySelector('#images img')?.naturalWidth>0);assert.equal(imageStarts,imageBefore);

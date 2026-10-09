@@ -1,5 +1,6 @@
 // Shared interaction primitives: toasts (with an optional undo action), popover
 // menus and modal dialogs built on <dialog>.
+import "./vendor/components.js";
 import { append, byId, clear, h } from "./dom.js";
 import { icon } from "./icons.js";
 
@@ -7,12 +8,22 @@ import { icon } from "./icons.js";
 
 let lastAction = null;
 
-export function toast(message, { tone = "info", action = null, duration } = {}) {
+export function toast(
+  message,
+  { tone = "info", action = null, duration } = {},
+) {
   const host = byId("toasts");
   if (!host) return null;
-  const node = h("div.toast", { class: `toast-${tone}`, role: tone === "error" ? "alert" : "status" },
-    tone === "error" ? icon("alert", 16) : tone === "ok" ? icon("check", 16) : null,
-    h("span.toast-text", message));
+  const node = h(
+    "div.toast",
+    { class: `toast-${tone}`, role: tone === "error" ? "alert" : "status" },
+    tone === "error"
+      ? icon("alert", 16)
+      : tone === "ok"
+        ? icon("check", 16)
+        : null,
+    h("span.toast-text", message),
+  );
   let timer = 0;
   const close = () => {
     clearTimeout(timer);
@@ -21,15 +32,38 @@ export function toast(message, { tone = "info", action = null, duration } = {}) 
     if (lastAction?.node === node) lastAction = null;
   };
   if (action) {
-    const button = h("button.toast-action", { type: "button" }, action.label, action.key ? h("kbd", action.key) : null);
-    button.addEventListener("click", () => { close(); action.run(); });
+    const button = h(
+      "button.toast-action",
+      { type: "button" },
+      action.label,
+      action.key ? h("kbd", action.key) : null,
+    );
+    button.addEventListener("click", () => {
+      close();
+      action.run();
+    });
     node.append(button);
-    lastAction = { node, run: () => { close(); action.run(); } };
+    lastAction = {
+      node,
+      run: () => {
+        close();
+        action.run();
+      },
+    };
   }
-  node.append(h("button.toast-close", { type: "button", "aria-label": "关闭提示", onclick: close }, icon("x", 14)));
+  node.append(
+    h(
+      "button.toast-close",
+      { type: "button", "aria-label": "关闭提示", onclick: close },
+      icon("x", 14),
+    ),
+  );
   host.append(node);
   while (host.children.length > 3) host.firstElementChild.remove();
-  timer = setTimeout(close, duration ?? (action ? 7000 : tone === "error" ? 6000 : 3200));
+  timer = setTimeout(
+    close,
+    duration ?? (action ? 7000 : tone === "error" ? 6000 : 3200),
+  );
   return close;
 }
 
@@ -40,127 +74,198 @@ export function runLastToastAction() {
   return true;
 }
 
-// --- Popover menus ------------------------------------------------------------
-
+// --- Menus and dialogs: Web Awesome owns positioning, focus and dismissal. ---
 let openMenuState = null;
-
 export function closeMenu() {
   if (!openMenuState) return;
-  const { menu, anchor, onClose } = openMenuState;
+  const { menu, anchor, placeholder, onClose } = openMenuState;
   openMenuState = null;
+  placeholder.replaceWith(anchor);
+  anchor.removeAttribute("slot");
+  anchor.setAttribute("aria-expanded", "false");
   menu.remove();
-  anchor?.setAttribute("aria-expanded", "false");
-  document.removeEventListener("pointerdown", onOutside, true);
   onClose?.();
 }
-
-function onOutside(event) {
-  if (!openMenuState) return;
-  if (openMenuState.menu.contains(event.target) || openMenuState.anchor?.contains(event.target)) return;
-  closeMenu();
-}
-
 export function isMenuOpen() {
-  return Boolean(openMenuState);
+  return Boolean(openMenuState?.menu.open);
 }
-
-// items: [{ label, icon, hint, kbd, danger, disabled, run } | "separator" | { heading }]
 export function openMenu(anchor, items, { align = "end", onClose } = {}) {
-  if (openMenuState?.anchor === anchor) { closeMenu(); return; }
+  if (openMenuState?.anchor === anchor) {
+    closeMenu();
+    return;
+  }
   closeMenu();
-  const menu = h("div.menu", { role: "menu" });
-  const buttons = [];
+  const placeholder = document.createComment("menu-trigger");
+  anchor.before(placeholder);
+  const menu = h("wa-dropdown.menu", {
+    placement: `bottom-${align}`,
+    size: "s",
+  });
+  menu.style.display = "contents";
+  anchor.slot = "trigger";
+  placeholder.after(menu);
+  menu.append(anchor);
+  const actions = new Map();
+  let index = 0;
   for (const item of items) {
     if (!item) continue;
-    if (item === "separator") { menu.append(h("div.menu-sep", { role: "separator" })); continue; }
-    if (item.heading) { menu.append(h("div.menu-heading", item.heading)); continue; }
-    const button = h("button.menu-item", {
-      type: "button", role: "menuitem", disabled: item.disabled || false, class: item.danger ? "danger" : ""
-    },
-    item.icon ? icon(item.icon, 16) : h("span.menu-icon-space"),
-    h("span.menu-label", h("span", item.label), item.hint ? h("small", item.hint) : null),
-    item.kbd ? h("kbd", item.kbd) : null);
-    button.addEventListener("click", () => { closeMenu(); item.run?.(); });
-    menu.append(button);
-    buttons.push(button);
+    if (item === "separator") {
+      menu.append(h("div.menu-sep", { role: "separator" }));
+      continue;
+    }
+    if (item.heading) {
+      menu.append(h("div.menu-heading", item.heading));
+      continue;
+    }
+    const value = String(index++);
+    actions.set(value, item);
+    menu.append(
+      h(
+        "wa-dropdown-item",
+        {
+          value,
+          disabled: !!item.disabled,
+          class: item.danger ? "danger" : "",
+        },
+        item.icon ? h("span", { slot: "icon" }, icon(item.icon, 16)) : null,
+        h(
+          "span.menu-label",
+          h("span", item.label),
+          item.hint ? h("small", item.hint) : null,
+        ),
+        item.kbd ? h("kbd", { slot: "details" }, item.kbd) : null,
+      ),
+    );
   }
-  menu.addEventListener("keydown", (event) => {
-    const enabled = buttons.filter((button) => !button.disabled);
-    const index = enabled.indexOf(document.activeElement);
-    if (event.key === "ArrowDown" || event.key === "j") { event.preventDefault(); enabled[(index + 1) % enabled.length]?.focus(); }
-    else if (event.key === "ArrowUp" || event.key === "k") { event.preventDefault(); enabled[(index - 1 + enabled.length) % enabled.length]?.focus(); }
-    else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeMenu(); anchor?.focus(); }
-    else if (event.key === "Tab") closeMenu();
+  openMenuState = { menu, anchor, placeholder, onClose };
+  menu.addEventListener("wa-select", (event) => {
+    const action = actions.get(event.detail.item.value);
+    closeMenu();
+    action?.run?.();
   });
-  document.body.append(menu);
-  const rect = anchor.getBoundingClientRect();
-  const width = menu.offsetWidth;
-  const height = menu.offsetHeight;
-  let left = align === "end" ? rect.right - width : rect.left;
-  left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
-  let top = rect.bottom + 6;
-  if (top + height > window.innerHeight - 8) top = Math.max(8, rect.top - height - 6);
-  menu.style.left = `${left}px`;
-  menu.style.top = `${top}px`;
-  anchor.setAttribute("aria-expanded", "true");
-  openMenuState = { menu, anchor, onClose };
-  setTimeout(() => document.addEventListener("pointerdown", onOutside, true), 0);
-  buttons.find((button) => !button.disabled)?.focus({ preventScroll: true });
+  menu.addEventListener("wa-after-hide", () => {
+    if (openMenuState?.menu === menu) closeMenu();
+  });
+  menu.updateComplete.then(() => {
+    if (openMenuState?.menu === menu) menu.open = true;
+  });
 }
-
-// --- Dialogs ------------------------------------------------------------------
-
-export function openDialog({ title, body, actions = [], wide = false, onClose, initialFocus }) {
-  const dialog = h("dialog.dialog", { class: wide ? "dialog-wide" : "", "aria-label": title });
-  const close = (value) => {
-    if (!dialog.open) return;
-    dialog.close(value ?? "");
+export function openDialog({
+  title,
+  body,
+  actions = [],
+  wide = false,
+  onClose,
+  initialFocus,
+}) {
+  const dialog = h("wa-dialog.dialog", {
+    label: title,
+    class: wide ? "dialog-wide" : "",
+  });
+  let closing = false;
+  const close = (value = "") => {
+    if (closing || !dialog.isConnected) return;
+    closing = true;
+    dialog.returnValue = value;
+    dialog.open = false;
   };
-  const header = h("header.dialog-head", h("h2", title),
-    h("button.icon-btn", { type: "button", "aria-label": "关闭", onclick: () => close("") }, icon("x", 18)));
-  const footer = actions.length ? h("footer.dialog-foot", actions.map((action) => {
-    const button = h(`button.btn${action.primary ? ".btn-primary" : ""}${action.danger ? ".btn-danger" : ""}`, {
-      type: "button", dataset: action.id ? { action: action.id } : undefined
-    }, action.label);
-    button.addEventListener("click", async () => {
-      if (action.run) {
-        button.disabled = true;
-        try {
-          const keep = await action.run();
-          if (keep === false) { button.disabled = false; return; }
-        } catch {
-          button.disabled = false;
-          return;
-        }
-      }
-      close(action.value ?? action.id ?? "ok");
-    });
-    return button;
-  })) : null;
+  dialog.close = close;
+  const closeButton = h(
+    "wa-button",
+    {
+      slot: "header-actions",
+      appearance: "plain",
+      size: "s",
+      "aria-label": "关闭",
+      onclick: () => close(),
+    },
+    icon("x", 18),
+  );
+  const footer = actions.length
+    ? h(
+        "footer.dialog-foot",
+        { slot: "footer" },
+        actions.map((action) => {
+          const button = h(
+            "wa-button",
+            {
+              size: "s",
+              variant: action.danger
+                ? "danger"
+                : action.primary
+                  ? "brand"
+                  : "neutral",
+              appearance:
+                action.primary || action.danger ? "accent" : "outlined",
+              dataset: action.id ? { action: action.id } : undefined,
+            },
+            action.label,
+          );
+          button.addEventListener("click", async () => {
+            if (button.disabled) return;
+            button.disabled = true;
+            try {
+              if (action.run && (await action.run()) === false) {
+                button.disabled = false;
+                return;
+              }
+            } catch {
+              button.disabled = false;
+              return;
+            }
+            close(action.value ?? action.id ?? "ok");
+          });
+          return button;
+        }),
+      )
+    : null;
   const bodyNode = h("div.dialog-body", { tabindex: "-1" }, body);
-  append(dialog, [header, bodyNode, footer]);
-  dialog.addEventListener("close", () => { dialog.remove(); onClose?.(dialog.returnValue); });
-  dialog.addEventListener("click", (event) => { if (event.target === dialog) close(""); });
+  append(dialog, [closeButton, bodyNode, footer]);
+  dialog.addEventListener("wa-after-hide", (event) => {
+    if (event.target !== dialog) return;
+    dialog.remove();
+    onClose?.(dialog.returnValue || "");
+  });
+  dialog.addEventListener("wa-after-show", (event) => {
+    if (event.target !== dialog) return;
+    (initialFocus?.() || bodyNode)?.focus({ preventScroll: true });
+  });
   document.body.append(dialog);
-  dialog.showModal();
-  // Without an obvious first action, focus the content so the close button
-  // does not light up with a focus ring the user never asked for.
-  (initialFocus?.() || dialog.querySelector(".dialog-foot .btn-primary") || (actions.length ? dialog.querySelector(".dialog-foot button") : bodyNode))?.focus();
+  dialog.updateComplete.then(() => {
+    if (dialog.isConnected && !closing) dialog.open = true;
+  });
   return { dialog, close };
 }
 
 // confirmAction resolves true only on an explicit confirmation.
-export function confirmAction({ title, message, confirmLabel = "确认", danger = false, detail }) {
+export function confirmAction({
+  title,
+  message,
+  confirmLabel = "确认",
+  danger = false,
+  detail,
+}) {
   return new Promise((resolve) => {
     let confirmed = false;
     openDialog({
       title,
-      body: [h("p.dialog-text", message), detail ? h("p.dialog-detail", detail) : null],
+      body: [
+        h("p.dialog-text", message),
+        detail ? h("p.dialog-detail", detail) : null,
+      ],
       actions: [
         { id: "cancel", label: "取消" },
-        { id: "confirm", label: confirmLabel, primary: !danger, danger, run: () => { confirmed = true; } }
+        {
+          id: "confirm",
+          label: confirmLabel,
+          primary: !danger,
+          danger,
+          run: () => {
+            confirmed = true;
+          },
+        },
       ],
-      onClose: () => resolve(confirmed)
+      onClose: () => resolve(confirmed),
     });
   });
 }

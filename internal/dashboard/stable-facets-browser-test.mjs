@@ -1,3 +1,4 @@
+import {openFilters} from "../../tests/browser/workspace-helper.mjs";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { createFixtureState, startFixtureServer } from "../../tests/browser/fixture-server.mjs";
@@ -26,6 +27,7 @@ try {
       resource_kinds: [{ id: "reference", count: value }], content_functions: [], custom_tags: [] } }).catch(() => {});
   });
   await page.goto(`${url}/?curation_status=all`);
+  await openFilters(page);
   await page.waitForFunction(() => document.querySelector('[data-value="agent_workflow"]'));
   await page.locator('[data-group="topics"] > summary').click();
   await page.locator('[data-group="resource_kinds"] > summary').click();

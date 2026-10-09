@@ -163,7 +163,8 @@ function effectiveChip(session, field, term) {
   const name = h("button.tag-name", { type: "button", title: `${origin}；点击筛选`, onclick: () => emit("tag-filter-request", { field, term }) }, label);
   const menu = h("button.tag-action", { type: "button", "aria-label": `编辑${label}`, title: `编辑${label}` }, icon("more", 12));
   menu.addEventListener("click", () => tagMenu(session, field, term, menu));
-  return h("span.tag-system-chip", { title: origin }, name, h("small.tag-origin", origin), menu,
+  const kind = origin === "自动标签" ? "auto" : origin === "你已确认" ? "confirmed" : origin === "你添加" ? "added" : "unknown";
+  return h("span.tag-system-chip", { title: origin, dataset: { origin: kind } }, h("span.tag-dot", { "aria-hidden": "true" }), name, h("small.tag-origin.visually-hidden", origin), menu,
     h("button.tag-remove", { type: "button", "aria-label": `移除${label}`, title: "从这条收藏移除", onclick: () => queue(session, [{ action: "reject", tag_ref: tagRef(field, term) }]) }, icon("x", 12)));
 }
 function groupMenu(session, field, label, anchor) {
@@ -235,7 +236,7 @@ export function renderTagSystem(id) {
   });
   if (payload.source_state?.status === "empty") rows.unshift(h("p.tag-system-status", "暂无足够内容判断标签；已有人工标签保留，可以继续添加。"));
   else if (payload.source_state?.status === "partial") rows.unshift(h("p.tag-system-status", "标签仅依据已存档片段，原文补齐后可重新判断。"));
-  if (payload.custom_tags?.length) rows.push(h("div.tag-system-row", h("span.curate-label", "自定义"), h("div.tag-system-values", payload.custom_tags.map((tag) => {
+  if (payload.custom_tags?.length) rows.push(h("div.tag-system-row", { dataset: { dimension: "custom_tags" } }, h("div.tag-system-head", h("span.curate-label", "自定义标记")), h("div.tag-system-values", payload.custom_tags.map((tag) => {
     const menu = h("button.tag-action", { type: "button", "aria-label": `管理${tag.label}` }, icon("more", 12));
     menu.addEventListener("click", () => customMenu(session, tag, menu));
     return h("span.tag-system-chip.custom", h("button.tag-name", { type: "button", onclick: () => emit("tag-filter-request", { field: "custom_tags", term: tag.id }) }, tag.label), menu,
@@ -244,6 +245,9 @@ export function renderTagSystem(id) {
   const suggestions = PRIMARY_TAG_FIELDS.flatMap(({ key }) => reviewCandidates(payload, key).map((candidate) => ({ ...candidate, field: key })));
   if (suggestions.length) rows.push(h("details.tag-suggestions", h("summary", `其他建议（${suggestions.length}）`), h("p.tag-system-status", "这些候选尚未作为标签，不参与默认筛选。"),
     h("div.tag-system-values", suggestions.map((entry) => h("button.chip.option", { type: "button", title: "采用这项建议", onclick: () => queue(session, [{ action: "accept", tag_ref: tagRef(entry.field, entry.term_id) }]) }, termLabel(entry.field, entry.term_id), icon("plus", 12))))));
+  const autoCount = PRIMARY_TAG_FIELDS.reduce((n, { key }) => n + (payload.selection?.[key] || []).filter((term) => tagOrigin(payload, key, term) === "自动标签").length, 0);
+  rows.push(h("div.tag-legend", h("span", h("i.is-auto"), "自动标签"), h("span", h("i.is-confirmed"), "你已确认"), h("span", h("i.is-added"), "你添加"),
+    autoCount ? h("button.link-btn.small", { type: "button", title: "确认全部自动标签 (A)", onclick: () => queue(session, PRIMARY_TAG_FIELDS.flatMap(({ key }) => (payload.selection?.[key] || []).filter((term) => tagOrigin(payload, key, term) === "自动标签").map((term) => ({ action: "confirm", tag_ref: tagRef(key, term) })))) }, `确认 ${autoCount} 个自动标签`) : null));
   rows.push(h("div.tag-system-toolbar", h("button.btn.btn-sm", { type: "button", onclick: () => openPicker(session) }, icon("plus", 14), "添加标签"),
     h("button.link-btn.small", { type: "button", onclick: () => showHistory(session) }, "查看变更"),
     vocab.custom.length ? h("button.link-btn.small", { type: "button", onclick: () => manageCustomTags(session) }, "管理自定义标记") : null,
@@ -272,7 +276,7 @@ function catalogEntries() {
     .concat(vocab.custom.map((tag) => ({ ...tag, field: "custom_tags", group: "自定义", tag_ref: tag.tag_ref })));
 }
 function focusToolbar(session, label) {
-  if (session.id !== currentID || !byId("curate")?.open || document.querySelector("dialog[open]")) return;
+  if (session.id !== currentID || !byId("curate")?.open || document.querySelector("wa-dialog[open], dialog[open]")) return;
   [...byId("tag-rows").querySelectorAll(".tag-system-toolbar button")].find((button) => button.textContent === label)?.focus({ preventScroll: true });
 }
 async function openPicker(session, { field, from } = {}) {

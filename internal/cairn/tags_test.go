@@ -96,6 +96,29 @@ func TestTagCatalogReadsVersionsAndKeepsRetiredTermsOutOfInference(t *testing.T)
 	}
 }
 
+func TestMissingCatalogTermIsDistinctFromUnsupportedTagRoute(t *testing.T) {
+	for _, code := range []string{"tag_not_found", "not_found"} {
+		t.Run(code, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": code})
+			}))
+			defer server.Close()
+			_, err := NewClient(server.URL, "fixture", server.Client()).MutateV2TagSystem(context.Background(), http.MethodPost, "/api/v2/tag-catalog/operations", map[string]string{"operation_key": "missing-tag"})
+			if code == "not_found" {
+				if !errors.Is(err, ErrV2Unsupported) {
+					t.Fatalf("missing route: %v", err)
+				}
+			} else {
+				var apiErr *APIError
+				if !errors.As(err, &apiErr) || apiErr.StatusCode != 404 || apiErr.Code != code {
+					t.Fatalf("missing term: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestNegotiatedBookmarkReadsEffectiveResourcesAndCustomDefinitions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Cairn-Tag-System", "1")

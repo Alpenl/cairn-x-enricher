@@ -10,7 +10,7 @@ import { openDialog } from "./ui.js";
 export const SHORTCUTS = Object.freeze([
   { group: "浏览", items: [
     [["J", "/", "↓"], "下一条"], [["K", "/", "↑"], "上一条"], [["Enter"], "打开 / 聚焦阅读区"],
-    [["Space"], "向下翻阅正文"], [["/"], "搜索"], [["Esc"], "返回 / 取消选择"], [["F"], "专注阅读"]
+    [["Space"], "向下翻阅正文"], [["/"], "搜索"], [["Esc"], "返回 / 取消选择"], [["F"], "专注阅读"], [["Ctrl / ⌘", "+", "K"], "搜索命令"], [["I"], "整理面板"]
   ] },
   { group: "整理", items: [
     [["1"], "收件箱"], [["2"], "精选"], [["3"], "已编入笔记"], [["4"], "搁置"],
@@ -43,7 +43,7 @@ export function initShortcuts(actions) {
   document.addEventListener("keydown", (event) => {
     if (event.defaultPrevented || event.isComposing) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
-    if (document.querySelector("dialog[open], #sidebar[aria-modal='true']") || isMenuOpen()) return;
+    if (document.querySelector("wa-dialog[open], dialog[open], #sidebar[aria-modal='true']") || isMenuOpen()) return;
     const key = event.key;
     const target = event.target;
 
@@ -52,7 +52,7 @@ export function initShortcuts(actions) {
       if (actions.escape()) event.preventDefault();
       return;
     }
-    if (isEditable(target)) return;
+    if (isEditable(target) || document.querySelector("#app.route-management")) return;
 
     if (pendingG) {
       clearTimeout(pendingG);
@@ -65,7 +65,7 @@ export function initShortcuts(actions) {
     // Space scrolls the reading pane, unless a control has focus and would be
     // activated by it.
     if (key === " ") {
-      if (target instanceof Element && target.closest("button, summary, [role='button'], a[href]:not(.row-main)")) return;
+      if (target instanceof Element && target.closest("button, wa-button, wa-checkbox, wa-switch, wa-tab, input[type=checkbox], input[type=radio], summary, [role='button'], [role='checkbox'], a[href]:not(.row-main)")) return;
       event.preventDefault();
       actions.scrollDetail(event.shiftKey ? -1 : 1);
       return;

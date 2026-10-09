@@ -93,6 +93,48 @@ func TestTagSystemUnsupportedDoesNotPretendEmpty(t *testing.T) {
 	}
 }
 func ptrInt64(value int64) *int64 { return &value }
+
+func TestTagCatalogErrorsRemainActionableWithoutLeakingUpstreamFailures(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		code   string
+		want   int
+		error  string
+	}{
+		{400, "personal_use_human_only", 400, "personal_use_human_only"},
+		{400, "invalid_tag_definition", 400, "invalid_tag_definition"},
+		{400, "invalid_tag_operation", 400, "invalid_tag_operation"},
+		{400, "invalid_dimension", 400, "invalid_dimension"},
+		{400, "invalid_tag", 400, "invalid_tag"},
+		{400, "invalid_label", 400, "invalid_label"},
+		{404, "tag_not_found", 404, "tag_not_found"},
+		{409, "revision_conflict", 409, "revision_conflict"},
+		{409, "last_ai_tag", 409, "last_ai_tag"},
+		{500, "personal_use_human_only", 502, "backend_error"},
+		{400, "private_internal_error", 502, "backend_error"},
+		{500, "private_internal_error", 502, "backend_error"},
+	} {
+		t.Run(tc.code+http.StatusText(tc.status), func(t *testing.T) {
+			backend := &tagProxyBackend{fakeBackend: &fakeBackend{}, err: &cairn.APIError{StatusCode: tc.status, Code: tc.code}}
+			server := New(context.Background(), startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
+			defer server.Drain(time.Second)
+			request := httptest.NewRequestWithContext(context.Background(), "POST", "/api/tag-catalog/operations", strings.NewReader(`{"operation_key":"edab25d1-ead3-4287-8fdc-19dddbc1e246","expected_revision":0,"dimension":"uses","id":"contra","type":"archive"}`))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			server.Handler().ServeHTTP(response, request)
+			var payload struct {
+				Error string `json:"error"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+				t.Fatal(err)
+			}
+			if response.Code != tc.want || payload.Error != tc.error {
+				t.Fatalf("got %d %s; want %d %s", response.Code, payload.Error, tc.want, tc.error)
+			}
+		})
+	}
+}
+
 func TestTagSystemRejectsMalformedRequestsBeforeForwarding(t *testing.T) {
 	backend := &tagProxyBackend{fakeBackend: &fakeBackend{}, err: errors.New("must not be called")}
 	server := New(context.Background(), startedTracker(), backend, &fakeProcessor{}, testLogger(), 1)
