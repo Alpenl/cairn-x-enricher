@@ -550,7 +550,7 @@ func TestLocalWorkerVersionCompetition(t *testing.T) {
 	id := createLink(t, base, appToken)
 	lease := claimEnrichmentJob(t, base, enricherToken, id)
 	source := enrich.Source{OriginalText: "Version competition source.", OriginalLanguage: "en",
-		ContextText: "", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "local"}
+		ContextText: "", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
 		t.Fatalf("save source: %v", err)
 	}
