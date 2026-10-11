@@ -1,4 +1,5 @@
 import { collectionName } from "./collections.js";
+import { selectedRefs, tagRef } from "./tag-filter.js";
 // The library list: one dense, keyboard-navigable column of bookmarks grouped
 // by day, with search highlighting and infinite scroll.
 import {
@@ -105,6 +106,14 @@ function processBadge(item) {
   return null;
 }
 
+// Unconfirmed AI tags read as suggestions (fig, dashed); tags in the active
+// filter are highlighted.
+function tagClass(item, tag) {
+  const pending = tag.field !== "custom_tags" && !item.classification_reviewed;
+  const hit = selectedRefs().includes(tagRef(tag.field, tag.id));
+  return [pending ? "tag-ai" : "", hit ? "hit" : ""].filter(Boolean).join(" ");
+}
+
 function rowMeta(item) {
   const labels = primaryTags(
     item.classification,
@@ -121,12 +130,7 @@ function rowMeta(item) {
         "button.tag.tag-filter",
         {
           type: "button",
-          class:
-            tag.field === "resource_kinds"
-              ? "tag-resource"
-              : tag.field === "custom_tags"
-                ? "tag-custom"
-                : "",
+          class: tagClass(item, tag),
           title: `筛选：${tag.label}`,
           dataset: { tagField: tag.field, tagId: tag.id },
           onclick: () =>
@@ -168,19 +172,7 @@ export function renderRow(item, { thumbnail } = {}) {
   });
   const titleNode = textWithHighlights("span.row-title", title.text, terms);
   if (title.raw) titleNode.classList.add("raw");
-  const top = h(
-    "div.row-top",
-    h(
-      "div.row-source-line",
-      h("span.row-author", sourceLine(item.url)),
-      h(
-        "time.row-time",
-        { dateTime: item.created_at || "", title: formatFull(item.created_at) },
-        listTime(item.created_at),
-      ),
-    ),
-    titleNode,
-  );
+  const top = h("div.row-top", titleNode);
   const summaryNode = summary.wait
     ? null
     : textWithHighlights("p.row-summary", summary.text, terms);
@@ -197,7 +189,16 @@ export function renderRow(item, { thumbnail } = {}) {
     h("div.row-body", top, summaryNode, personalNode),
     imageThumb(item, thumbnail),
   ]);
-  row.append(link, rowMeta(item));
+  row.append(link, rowMeta(item), h(
+    "div.row-foot",
+    h("span.row-author", sourceLine(item.url)),
+    h("span.dot", "·"),
+    h(
+      "time.row-time",
+      { dateTime: item.created_at || "", title: formatFull(item.created_at) },
+      listTime(item.created_at),
+    ),
+  ));
   return row;
 }
 
@@ -249,6 +250,8 @@ function cachedRow(item, { reuseImages = true } = {}) {
   const cached = rowCache.get(item.id);
   const signature = JSON.stringify([
     state.search,
+    state.filters.tags || "",
+    Boolean(item.classification_reviewed),
     activeView(state.filters),
     displayTitle(item),
     state.search
@@ -429,7 +432,7 @@ export function updateHeader() {
           ? ""
           : `${state.total} 条`;
   els.count.hidden = !refreshing && state.total === null;
-  els.search.placeholder = `在「${viewLabel()}」中搜索`;
+  // tag-filter.js owns the placeholder (it hides it while tokens show).
   renderActiveFilters();
 }
 
@@ -850,7 +853,9 @@ export function initList(options) {
     const row = event.target.closest("li.row");
     if (!row || row.classList.contains("skeleton")) return;
     const id = Number(row.dataset.id);
-    const link = event.target.closest("a.row-main");
+    // The whole card selects, except its own buttons (tag pills).
+    if (!event.target.closest("a.row-main") && event.target.closest("button, a")) return;
+    const link = row.querySelector("a.row-main");
     if (!link) return;
     // Let the browser open a new tab or window for modified clicks.
     if (event.metaKey || event.ctrlKey || event.button !== 0) return;

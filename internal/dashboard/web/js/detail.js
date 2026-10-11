@@ -16,6 +16,7 @@ import { forgetOffline, offlineItem, rememberOffline } from "./offline.js";
 import { termLabel, terms } from "./taxonomy.js";
 import { primaryTags } from "./topic-presentation.js";
 import * as reason from "./reason.js";
+import { selectedRefs, tagRef } from "./tag-filter.js";
 import { emit, getItem, mergeItem, on, state } from "./store.js";
 import { confirmAction, openDialog, openMenu, toast } from "./ui.js";
 
@@ -111,6 +112,12 @@ function renderLinks(item, extracted = []) {
   }
 }
 
+function tagClass(item, tag) {
+  const pending = tag.field !== "custom_tags" && !item.classification_reviewed;
+  const hit = selectedRefs().includes(tagRef(tag.field, tag.id));
+  return [pending ? "tag-ai" : "", hit ? "hit" : ""].filter(Boolean).join(" ");
+}
+
 // Reader tags: the same primary tags as the list row; a click filters the
 // list through the search popover.
 function renderTags(item) {
@@ -118,7 +125,7 @@ function renderTags(item) {
     .map((tag) => ({ ...tag, label: termLabel(tag.field, tag.id, tag.label) }));
   clear(els.tags, labels.length ? labels.map((tag) => h("button.tag.tag-filter", {
     type: "button",
-    class: tag.field === "resource_kinds" ? "tag-resource" : tag.field === "custom_tags" ? "tag-custom" : "",
+    class: tagClass(item, tag),
     title: `筛选：${tag.label}`,
     onclick: () => emit("tag-filter-request", { field: tag.field, term: tag.id })
   }, tag.label)) : h("span.tag.tag-empty", "暂无标签"));

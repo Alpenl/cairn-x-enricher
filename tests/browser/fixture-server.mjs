@@ -84,10 +84,38 @@ function filterItems(state, params) {
     const wanted = params.get(key);
     if (wanted) items = items.filter((item) => effective(item)[key] === wanted);
   }
+  // Unified tag chips (tags=system/<field>/<id>,custom/default/<id>; tags_mode any|all, default any).
+  const refs = (params.get("tags") || "").split(",").filter(Boolean);
+  if (refs.length) {
+    const all = params.get("tags_mode") === "all";
+    items = items.filter((item) => (all ? refs.every : refs.some).call(refs, (ref) => hasTagRef(item, ref)));
+  }
   const entityStates = (params.get("entity_state") || "").split(",").filter(Boolean);
   if (entityStates.length) items = items.filter((item) => entityStates.includes(entityState(item)));
   if (terms.length) items = items.filter((item) => matchesSearch(item, terms));
   return items;
+}
+
+function tagValues(item, field) {
+  if (field === "custom_tags") return (item.custom_tags || []).map((tag) => tag.id ?? tag);
+  return effective(item)[field] || item.classification?.[field] || [];
+}
+
+function hasTagRef(item, ref) {
+  const [kind, field, id] = ref.split("/");
+  if (kind === "custom") return tagValues(item, "custom_tags").includes(id);
+  return kind === "system" && tagValues(item, field).includes(id);
+}
+
+// Mirrors the Worker's /api/v2/tags/counts shape: { total, <field>: [{ id, count }] }.
+function tagCounts(items) {
+  const out = { total: items.length };
+  for (const field of ["topics", "resource_kinds", "content_functions", "custom_tags"]) {
+    const map = new Map();
+    for (const item of items) for (const id of new Set(tagValues(item, field))) map.set(id, (map.get(id) || 0) + 1);
+    out[field] = [...map].map(([id, count]) => ({ id, count }));
+  }
+  return out;
 }
 
 function countsOf(items) {
@@ -157,6 +185,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
     }
 
     if (route === "/status") return send(200, { ready: true, state: "ok", build: { version: "fixture", commit: "0000000" } });
+    if (route === "/api/tag-counts" && request.method === "GET") return send(200, tagCounts(filterItems(state, url.searchParams)));
     if (route === "/api/taxonomy") return send(200, taxonomyV1());
     if (route === "/api/offline-scope") return send(200, { scope: "b".repeat(64) });
     if (route === "/api/v2-taxonomy") return state.v2 ? send(200, taxonomyV2()) : send(200, { available: false, reason: "v2_unsupported" });
