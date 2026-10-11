@@ -10,7 +10,7 @@
 .sp .field input { flex: 1; min-width: 0; border: none; background: transparent; outline: none; font: inherit; font-size: 13px; color: var(--ink); }
 .sp .field input::placeholder { color: var(--faint); }
 .sp .field input::-webkit-search-cancel-button { -webkit-appearance: none; }
-:where(.sp) button { font: inherit; color: inherit; cursor: pointer; border: none; background: none; }
+:where(.sp, .sp-pop) button { font: inherit; color: inherit; cursor: pointer; border: none; background: none; }
 :where(.sp) button:disabled { cursor: not-allowed; }
 .sp .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-btn); font-size: 13px; font-weight: 500; white-space: nowrap; transition: background .14s, color .14s, border-color .14s, box-shadow .14s; }
 .sp .btn svg { width: 15px; height: 15px; }
@@ -78,7 +78,7 @@
 .sp-link .pend { margin-left: auto; cursor: default; }
 .sp-section-dd, .sp-section-dd-wrap { display: none; }
 /* app shell has no global reset: zero the UA margins the prototype never had */
-.sp h1, .sp h2, .sp h3, .sp p, .sp ul, .sp ol, .sp figure { margin: 0; }
+.sp :is(h1, h2, h3, h4, h5, h6, p, ul, ol, figure), .sp-pop :is(h4, p, ul) { margin: 0; }
 .sp ul, .sp ol { padding: 0; list-style: none; }
 .sp-nav .brand { flex: none; }
 
@@ -456,7 +456,6 @@
 .sp-pop .type-dot.type-content_functions { background: var(--olive); }
 .sp-pop .type-dot.type-custom { background: var(--kraft); }
 .sp-pop .type-dot.type-other { background: var(--faint); }
-.sp-pop button { font: inherit; color: inherit; cursor: pointer; border: none; background: none; }
 .sp-pop .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: var(--r-btn); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
 .sp-pop .btn-primary { background: var(--terracotta); color: var(--on-accent, #fff); }
 .sp-pop .btn-primary:hover:not(:disabled) { background: var(--terracotta-deep); }
