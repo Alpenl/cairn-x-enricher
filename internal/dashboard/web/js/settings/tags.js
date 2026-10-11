@@ -310,7 +310,7 @@ function examplesBlock(t) {
   return h("div.sx", { dataset: { setting: "tag-examples" } },
     h("div.sx-label", "会打的例子"),
     chipBox(t, "includes", { placeholder: "加一个例子，按 Enter", fk: "inc-input" }),
-    h("div.sx-label", { style: "margin-top:14px" }, "这些情况不打"),
+    h("div.sx-label.sx-sub-label", "这些情况不打"),
     chipBox(t, "excludes", { placeholder: "加一个例外，按 Enter", fk: "exc-input" }),
     h("div.sx-help", "具体的正反例能让 AI 少打错；只影响之后的新收藏。"));
 }
@@ -330,7 +330,7 @@ function usageBlock(t) {
       const items = page.items || [];
       clear(host, items.length ? h("div.use-list", items.map((it) => h("button.use-row", { type: "button", onclick: () => openItem(it.id) },
         icon("fileText", 15), h("span.tt", displayTitle(it).text), icon("chevronRight", 14)))) : null,
-      h("button.btn.btn-ghost.btn-sm", { type: "button", style: "margin-top:6px", onclick: () => showInLibrary(t) }, icon("layers", 14), `在收藏库中查看全部 ${t.count} 条`));
+      h("button.btn.btn-ghost.btn-sm.use-more", { type: "button", onclick: () => showInLibrary(t) }, icon("layers", 14), `在收藏库中查看全部 ${t.count} 条`));
     }).catch(() => {
       if (token === usageToken && host.isConnected) clear(host, h("button.btn.btn-ghost.btn-sm", { type: "button", onclick: () => showInLibrary(t) }, icon("layers", 14), `在收藏库中查看 ${t.count} 条`));
     });
