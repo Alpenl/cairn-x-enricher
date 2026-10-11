@@ -86,6 +86,7 @@ const ERRORS = {
   tag_not_found: "这个标签已不存在，已载入最新标签库",
   invalid_tag_operation: "标签操作无效，请载入最新标签库后重试",
   invalid_dimension: "这一类暂不支持新建标签",
+  tag_deprecated: "已归档的标签不能合并，请先恢复",
   invalid_merge: "不能这样合并：只能合并同一类的主题或个人标签",
   invalid_rule: "规则无效：同一个标签不能既命中又排除，最多 20 个标签",
   invalid_preferences: "设置值无效",
