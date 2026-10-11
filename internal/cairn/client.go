@@ -160,6 +160,9 @@ type BookmarkQuery struct {
 	Carriers                []string
 	Affordances             []string
 	EntityStates            []string
+	Tags                    []string
+	TagsMode                string
+	TagsChildren            bool
 	RequireEffectiveFilters bool
 	Limit                   int
 	BeforeID                int64
@@ -178,14 +181,14 @@ type BookmarkQuery struct {
 
 // NeedsFilterContract rejects old backends that silently ignore v2 conditions.
 func (q BookmarkQuery) NeedsFilterContract() bool {
-	return q.RequireEffectiveFilters || len(q.Topics)+len(q.TopicRefinements)+len(q.ResourceKinds)+len(q.CustomTags)+len(q.ContentFunctions)+len(q.Carriers)+len(q.Affordances)+len(q.EntityStates) > 0 || q.TopicMode != "" || q.ResourceMode != "" || q.CustomMode != "" || q.FunctionsMode != ""
+	return q.RequireEffectiveFilters || len(q.Topics)+len(q.TopicRefinements)+len(q.ResourceKinds)+len(q.CustomTags)+len(q.ContentFunctions)+len(q.Carriers)+len(q.Affordances)+len(q.EntityStates)+len(q.Tags) > 0 || q.TopicMode != "" || q.ResourceMode != "" || q.CustomMode != "" || q.FunctionsMode != ""
 }
 
 // NeedsTagFilterContract detects fields that an older effective-filter backend
 // could silently ignore. Capability acknowledgement is required before using
 // its result as a filtered page.
 func (q BookmarkQuery) NeedsTagFilterContract() bool {
-	return len(q.TopicRefinements)+len(q.ResourceKinds)+len(q.CustomTags) > 0 || q.TopicMode != "" || q.ResourceMode != "" || q.CustomMode != "" || q.FunctionsMode != ""
+	return len(q.TopicRefinements)+len(q.ResourceKinds)+len(q.CustomTags)+len(q.Tags) > 0 || q.TopicMode != "" || q.ResourceMode != "" || q.CustomMode != "" || q.FunctionsMode != ""
 }
 
 // CurationUpdate applies explicit human edits; a null classification restores AI suggestions.
@@ -508,7 +511,7 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 		"collection_id": query.CollectionID, "curation_status": query.CurationStatus, "topic": query.Topic, "form": query.Form,
 		"use": query.Use, "source": query.Source, "since": query.Since,
 		"topics_mode": query.TopicMode, "resource_mode": query.ResourceMode, "custom_mode": query.CustomMode,
-		"functions_mode": query.FunctionsMode,
+		"functions_mode": query.FunctionsMode, "tags_mode": query.TagsMode,
 	} {
 		if value != "" {
 			values.Set(key, value)
@@ -517,7 +520,7 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 	for key, terms := range map[string][]string{
 		"topics": query.Topics, "topic_refinements": query.TopicRefinements, "content_functions": query.ContentFunctions, "carriers": query.Carriers,
 		"affordances": query.Affordances, "entity_state": query.EntityStates,
-		"resource_kinds": query.ResourceKinds, "custom_tags": query.CustomTags,
+		"resource_kinds": query.ResourceKinds, "custom_tags": query.CustomTags, "tags": query.Tags,
 	} {
 		if len(terms) > 0 {
 			values.Set(key, strings.Join(terms, ","))
@@ -525,6 +528,9 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 	}
 	if query.NeedsFilterContract() {
 		values.Set("filter_contract_version", "1")
+	}
+	if query.TagsChildren {
+		values.Set("tags_children", "1")
 	}
 	if query.Uncertain {
 		values.Set("uncertain", "true")
@@ -544,7 +550,7 @@ func (c *Client) ListBookmarks(ctx context.Context, query BookmarkQuery) (Bookma
 	if response.StatusCode != http.StatusOK {
 		return BookmarkPage{}, apiError(response)
 	}
-	if query.CollectionID != "" && response.Header.Get("X-Cairn-Collections") != "1" {
+	if query.CollectionID != "" && !CollectionsHeaderOK(response.Header.Get("X-Cairn-Collections")) {
 		return BookmarkPage{}, &APIError{StatusCode: http.StatusConflict, Code: "collections_unsupported"}
 	}
 	if query.NeedsTagFilterContract() && response.Header.Get("X-Cairn-Tag-System") != "1" {
@@ -832,7 +838,7 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, body an
 	// This client understands the additive tag-system contract. Older clients
 	// omit the header, allowing the Worker to keep strict legacy responses legal.
 	request.Header.Set("X-Cairn-Tag-System", "1")
-	request.Header.Set("X-Cairn-Collections", "1")
+	request.Header.Set("X-Cairn-Collections", CollectionsProtocol)
 	request.Header.Set("X-Cairn-Content-Functions", "1")
 	request.Header.Set("X-Cairn-Topic-Granularity", "1")
 	request.Header.Set("X-Cairn-Candidate-Manifest", "2")

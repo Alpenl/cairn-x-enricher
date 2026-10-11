@@ -56,7 +56,7 @@ func TestCollectionsProxyScopeOriginAndBounds(t *testing.T) {
 		if test.status != 200 && b.calls != before {
 			t.Fatal("rejected request reached backend")
 		}
-		if test.status == 200 && (!strings.HasPrefix(b.path, "/api/enrichment/collections") || w.Header().Get("X-Cairn-Collections") != "1") {
+		if test.status == 200 && (!strings.HasPrefix(b.path, "/api/enrichment/collections") || w.Header().Get("X-Cairn-Collections") != "2") {
 			t.Fatal("wrong private proxy contract")
 		}
 	}

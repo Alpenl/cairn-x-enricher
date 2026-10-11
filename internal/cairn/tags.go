@@ -65,7 +65,7 @@ func (c *Client) tagSystemJSON(ctx context.Context, method, path string, body an
 		(response.Header.Get("X-Cairn-Topic-Granularity") != "1" || response.Header.Get("X-Cairn-Tag-System") != "1") {
 		return nil, &APIError{StatusCode: http.StatusConflict, Code: "unsupported_topic_refinement_contract"}
 	}
-	if parsed.Query().Get("collection_id") != "" && response.Header.Get("X-Cairn-Collections") != "1" {
+	if parsed.Query().Get("collection_id") != "" && !CollectionsHeaderOK(response.Header.Get("X-Cairn-Collections")) {
 		return nil, &APIError{StatusCode: http.StatusConflict, Code: "collections_unsupported"}
 	}
 	if response.StatusCode == http.StatusNoContent {

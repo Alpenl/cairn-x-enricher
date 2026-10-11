@@ -54,6 +54,9 @@ func (s *Server) tagSystemProxy(writer http.ResponseWriter, request *http.Reques
 			}
 			path += "/" + url.PathEscape(customID)
 		}
+	case request.PathValue("merge") != "" && !collectionIDPattern.MatchString(request.PathValue("merge")):
+		writeError(writer, http.StatusBadRequest, "invalid_id")
+		return
 	case strings.HasPrefix(request.URL.Path, "/api/tag-catalog"):
 		path = strings.Replace(request.URL.Path, "/api/tag-catalog", "/api/v2/tag-catalog", 1)
 	case request.URL.Path == "/api/tag-counts":

@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/Alpenl/cairn-x-enricher/internal/cairn"
 )
 
 var collectionIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -61,6 +63,6 @@ func (s *Server) collections(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		s.invalidateOverview()
 	}
-	w.Header().Set("X-Cairn-Collections", "1")
+	w.Header().Set("X-Cairn-Collections", cairn.CollectionsProtocol)
 	writeJSON(w, http.StatusOK, payload)
 }
