@@ -76,7 +76,11 @@
 .sp-nav .nav-group + .nav-group { margin-top: 18px; }
 .sp-link { text-decoration: none; }
 .sp-link .pend { margin-left: auto; cursor: default; }
-.sp-section-dd { display: none; }
+.sp-section-dd, .sp-section-dd-wrap { display: none; }
+/* app shell has no global reset: zero the UA margins the prototype never had */
+.sp h1, .sp h2, .sp h3, .sp p, .sp ul, .sp ol, .sp figure { margin: 0; }
+.sp ul, .sp ol { padding: 0; list-style: none; }
+.sp-nav .brand { flex: none; }
 
 /* main */
 .sp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
@@ -496,6 +500,7 @@
   .sp-nav .brand { padding: 0 2px 0 0; }
   .sp-nav .brand-name, .sp-nav .brand-sub, .sp-nav .nav-scroll, .sp-nav .sidebar-footer { display: none; }
   .sp-back { width: auto; margin: 0; padding: 0 12px 0 9px; }
+  .sp-section-dd-wrap { display: block; }
   .sp-section-dd { display: inline-flex; height: 34px; min-width: 188px; }
   .sp-section-dd .dd-label svg { width: 15px; height: 15px; color: var(--terracotta); }
   .sp-search { order: 5; width: 260px; margin: 0 0 0 auto; }
