@@ -3,8 +3,7 @@ import {initTagManager} from "./tag-manager.js";
 import * as collections from "./collections.js";
 import { processingPaused } from "./process-status.js";
 // Application controller: routing, layout, selection and the curation actions
-// that span several components (status changes with auto-advance and undo,
-// batch operations, export).
+// that span several components (tag confirmation with auto-advance, export).
 import { api, errorLabel, fetchJSON } from "./api.js";
 import * as backstage from "./backstage.js";
 import * as curation from "./curation.js";
@@ -13,7 +12,6 @@ import * as reason from "./reason.js";
 import * as diagnostics from "./diagnostics.js";
 import { byId } from "./dom.js";
 import { exportItems, exportServer } from "./export.js";
-import { curationLabels, needsReview } from "./format.js";
 import * as list from "./list.js";
 import { downloadOffline, forgetOffline } from "./offline.js";
 import {
@@ -35,7 +33,6 @@ const app = byId("app");
 let bootDeepLink = 0;
 let overviewTimer = 0;
 let overviewGeneration = 0;
-let pendingCuration = 0;
 let healthState = "ok";
 let overviewState = "ok";
 let prefetchTimer = 0;
@@ -290,12 +287,11 @@ async function loadStatus() {
 }
 
 function refreshOverview() {
-  if (pendingCuration) return;
   if (overviewFlight) return overviewFlight;
   const generation = overviewGeneration;
   overviewFlight = loadOverview().finally(() => {
     overviewFlight = null;
-    if (generation !== overviewGeneration && !pendingCuration && !overviewTimer && !document.hidden) refreshOverview();
+    if (generation !== overviewGeneration && !overviewTimer && !document.hidden) refreshOverview();
   });
   return overviewFlight;
 }
@@ -305,7 +301,7 @@ async function loadOverview() {
     const overview = await api.overview();
     // A read started before a local edit may contain the old counts. Let
     // the edit's trailing refresh fetch a new snapshot after it is saved.
-    if (generation !== overviewGeneration || pendingCuration) return;
+    if (generation !== overviewGeneration) return;
     state.overview = overview;
     overviewState = overview?.stale ? "backend" : "ok";
     renderServiceState();
@@ -323,26 +319,6 @@ function scheduleOverview(delay = OVERVIEW_EDIT_DELAY) {
   overviewTimer = setTimeout(() => { overviewTimer = 0; refreshOverview(); }, delay);
 }
 
-function adjustOverviewCounts(changes, reverse = false) {
-  if (!state.overview?.views) return;
-  const views = { ...state.overview.views };
-  for (const { previous, next } of changes) {
-    if (!previous || !next || previous === next) continue;
-    const from = reverse ? next : previous;
-    const to = reverse ? previous : next;
-    if (Number.isFinite(views[from])) views[from] = Math.max(0, views[from] - 1);
-    if (Number.isFinite(views[to])) views[to]++;
-  }
-  for (const { uncertainBefore, uncertainAfter } of changes) {
-    if (typeof uncertainBefore !== "boolean" || typeof uncertainAfter !== "boolean") continue;
-    if (Number.isFinite(views.uncertain)) views.uncertain = Math.max(0,
-      views.uncertain + (reverse ? Number(uncertainBefore) - Number(uncertainAfter) : Number(uncertainAfter) - Number(uncertainBefore)));
-  }
-  overviewGeneration++;
-  state.overview = { ...state.overview, views };
-  emit("overview", state.overview);
-}
-
 // --- Curation actions ----------------------------------------------------------------------------
 
 function afterRemoval(removedSelected, successor) {
@@ -355,112 +331,6 @@ function afterRemoval(removedSelected, successor) {
     else history.replaceState(null, "", libraryURL());
     state.route = state.layout === "narrow" ? state.route : { name: "library", id: 0 };
   }
-}
-
-async function undoStatus(changes) {
-  const countChanges = changes.map(({ id, previous }) => ({
-    id, previous: getItem(id)?.curation_status, next: previous,
-    previousReviewed: getItem(id)?.classification_reviewed,
-    uncertainBefore: getItem(id) ? needsReview(getItem(id)) : false, uncertainAfter: false
-  }));
-  pendingCuration++;
-  for (const { id, previous } of changes) {
-    const item = getItem(id);
-    if (!item) continue;
-    mergeItem({ ...item, curation_status: previous, classification_reviewed: true });
-    if (matchesStatusView(getItem(id), state.filters)) list.restoreRow(getItem(id));
-    emit("item", id);
-  }
-  adjustOverviewCounts(countChanges);
-  if (changes.length === 1 && state.order.includes(changes[0].id)) select(changes[0].id);
-  const failures = [];
-  await Promise.all(changes.map(async ({ id, previous }) => {
-    try {
-      mergeItem(await api.curation(id, { curation_status: previous }));
-      emit("item", id);
-    } catch (error) {
-      failures.push({ id, error });
-    }
-  }));
-  const failed = countChanges.filter(({ id }) => failures.some((entry) => entry.id === id));
-  adjustOverviewCounts(failed, true);
-  const leaving = [];
-  for (const { id, previous, previousReviewed } of failed) {
-    const item = getItem(id);
-    if (!item || !previous) continue;
-    mergeItem({ ...item, curation_status: previous, classification_reviewed: previousReviewed });
-    if (matchesStatusView(getItem(id), state.filters)) list.restoreRow(getItem(id));
-    else if (state.order.includes(id)) leaving.push(id);
-    emit("item", id);
-  }
-  if (leaving.length) {
-    const successor = list.removeRows(leaving);
-    afterRemoval(leaving.includes(state.selectedId), successor);
-  }
-  pendingCuration--;
-  scheduleOverview();
-  if (failures.length) toast(`撤销没有全部完成：${errorLabel(failures[0].error.message)}`, { tone: "error" });
-  else toast("已撤销", { tone: "ok" });
-}
-
-// setStatuses applies one curation status to several bookmarks. Rows that
-// leave the current view disappear immediately and, when the open bookmark
-// leaves, the next one opens: the core of inbox triage.
-async function setStatuses(ids, status, { advance = true } = {}) {
-  const changes = ids
-    .map((id) => ({
-      id, previous: getItem(id)?.curation_status || "inbox",
-      previousReviewed: getItem(id)?.classification_reviewed,
-      uncertainBefore: needsReview(getItem(id))
-    }))
-    .filter((change) => getItem(change.id) && change.previous !== status);
-  if (!changes.length) return;
-  pendingCuration++;
-  const leaving = [];
-  for (const { id } of changes) {
-    const next = mergeItem({ ...getItem(id), curation_status: status, classification_reviewed: true });
-    if (state.order.includes(id) && !matchesStatusView(next, state.filters)) leaving.push(id);
-    else list.updateRow(id);
-    emit("item", id);
-  }
-  const removedSelected = leaving.includes(state.selectedId);
-  const successor = leaving.length ? list.removeRows(leaving) : 0;
-  if (advance) afterRemoval(removedSelected, successor);
-  else if (removedSelected) detail.showItem(state.selectedId);
-  adjustOverviewCounts(changes.map(({ previous, uncertainBefore }) => ({ previous, next: status, uncertainBefore, uncertainAfter: false })));
-
-  const failed = [];
-  const queue = changes.slice();
-  const worker = async () => {
-    while (queue.length) {
-      const change = queue.shift();
-      try {
-        // Only the status travels: a status change never confirms AI tags.
-        mergeItem(await api.curation(change.id, { curation_status: status }));
-        emit("item", change.id);
-      } catch (error) {
-        failed.push({ ...change, error });
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(4, changes.length) }, worker));
-  if (failed.length) {
-    adjustOverviewCounts(failed.map(({ previous, uncertainBefore }) => ({ previous, next: status, uncertainBefore, uncertainAfter: false })), true);
-    for (const { id, previous, previousReviewed } of failed) {
-      mergeItem({ ...getItem(id), curation_status: previous, classification_reviewed: previousReviewed });
-      if (matchesStatusView(getItem(id), state.filters)) list.restoreRow(getItem(id));
-      emit("item", id);
-    }
-    toast(`${failed.length} 条没有保存：${errorLabel(failed[0].error?.message)}`, { tone: "error" });
-  }
-  pendingCuration--;
-  scheduleOverview();
-  const saved = changes.filter((change) => !failed.some((entry) => entry.id === change.id));
-  if (!saved.length) return;
-  const label = curationLabels[status];
-  toast(saved.length === 1 ? `已移到「${label}」` : `已把 ${saved.length} 条移到「${label}」`, {
-    tone: "ok", action: { label: "撤销", key: "Z", run: () => undoStatus(saved) }
-  });
 }
 
 async function confirmOne(id) {
@@ -598,7 +468,6 @@ async function boot() {
     href: bookmarkURL,
     step,
     closeDetail,
-    setStatus: (id, status) => setStatuses([id], status),
     exportItems: exportIds,
     isFocusMode,
     toggleFocus
@@ -669,7 +538,7 @@ async function boot() {
   on("backstage:loading", () => { backstageOverviewGeneration = overviewGeneration; });
   on("backstage", (summary) => {
     backstageOverviewAvailable = Boolean(summary.overview);
-    if (summary.overview && !pendingCuration && backstageOverviewGeneration === overviewGeneration) {
+    if (summary.overview && backstageOverviewGeneration === overviewGeneration) {
       overviewGeneration++; state.overview = summary.overview;
       overviewState = summary.overview.stale ? "backend" : "ok";
       renderServiceState(); emit("overview", summary.overview);
