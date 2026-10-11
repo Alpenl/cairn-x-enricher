@@ -12,6 +12,11 @@ export function parseTagRef(ref) {
     ? { field: parts[1], term: parts[2] }
     : parts[0] === "custom" && parts.length === 3 ? { field: "custom_tags", term: parts[2] } : null;
 }
+// E4: AI suggestions the Worker held back for confirmation (not tags yet).
+export function aiPending(payload, field) {
+  const list = Array.isArray(payload?.state?.ai_pending) ? payload.state.ai_pending : [];
+  return field ? list.filter((entry) => entry.field === field) : list;
+}
 export function tagFieldState(payload, field) { return payload?.state?.fields?.[field] || {}; }
 export function tagOrigin(payload, field, term) {
   const state = tagFieldState(payload, field);
@@ -65,9 +70,14 @@ export function previewTagActions(payload, actions, customCatalog = []) {
       }
       continue;
     }
+    // A held AI suggestion (E4) stays held on reset; accepting, confirming or dismissing settles it.
+    const held = aiPending(next, field).some((entry) => entry.term === term);
     let selected = (next.selection[field] || []).filter((id) => id !== term);
     if (["accept", "confirm"].includes(action.action) ||
-        action.action === "reset" && (next.automatic?.[field] || []).includes(term)) selected.push(term);
+        action.action === "reset" && !held && (next.automatic?.[field] || []).includes(term)) selected.push(term);
+    if (held && ["accept", "confirm", "reject"].includes(action.action)) {
+      next.state.ai_pending = next.state.ai_pending.filter((entry) => !(entry.field === field && entry.term === term));
+    }
     next.selection[field] = selected;
     const state = next.state.fields[field] ||= {};
     state.values = (state.values || []).filter((entry) => entry.term !== term);

@@ -2421,6 +2421,12 @@ wa-button.collection-title::part(button) {
 .tag-system-chip{gap:0;padding:0 2px 0 8px;border:1px solid var(--line-2);border-radius:99px;background:var(--raised);font-size:var(--fs-sm);line-height:1.4}
 .tag-system-chip[data-origin="auto"]{border-style:dashed;border-color:color-mix(in srgb,var(--ai) 55%,var(--line-2))}
 .tag-system-chip.custom{border-style:solid;background:var(--sunken)}
+.tag-system-chip.pending{border-style:dashed;border-color:color-mix(in srgb,var(--fig,var(--ai)) 70%,transparent);background:color-mix(in srgb,var(--fig,var(--ai)) 6%,transparent)}
+.tag-system-chip.pending .tag-name{color:var(--fig,var(--ai))}
+.tag-system-chip.pending .tag-dot{background:none;border:1.5px dashed var(--fig,var(--ai))}
+.tag-system-chip.pending .lowc{margin-left:3px;font-size:.85em;opacity:.75}
+.tag-pending-note{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:6px 10px;border:1px dashed color-mix(in srgb,var(--fig,var(--ai)) 45%,transparent);border-radius:10px;font-size:var(--fs-sm);color:var(--ink-2)}
+.tag-legend .is-pending{border:1.5px dashed var(--fig,var(--ai));background:none}
 .tag-dot{width:6px;height:6px;border-radius:50%;flex:none;margin-right:5px;background:var(--ink-3)}
 .tag-system-chip[data-origin="auto"] .tag-dot{background:none;border:1.5px solid var(--ai)}
 .tag-system-chip[data-origin="confirmed"] .tag-dot{background:var(--ink-2)}

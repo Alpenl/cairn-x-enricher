@@ -8,6 +8,7 @@ import {verifyManagedTags} from "./managed-tags.mjs";
 // await browser capture, then read and classify it and drive the dashboard.
 import { verifyCollections } from "./collections.mjs";
 import { verifyLocalFilters } from "./local-filters.mjs";
+import { verifyAiConfirm } from "./ai-confirm.mjs";
 import { spawn } from "node:child_process";
 import { chromium } from "playwright";
 import { startMockModel } from "./mock-model.mjs";
@@ -212,6 +213,10 @@ async function main() {
 
     // 4. The real browser loads the real Go proxy over the real Worker.
     browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ["--no-sandbox"] });
+    if (process.env.CAIRN_AI_CONFIRM_ONLY === "1") {
+      await verifyAiConfirm(browser, `http://127.0.0.1:${goPort}`, workerURL, enricherToken);
+      return;
+    }
     if (process.env.CAIRN_MANAGED_TAGS_ONLY === "1") {
       await verifyManagedTags(browser, `http://127.0.0.1:${goPort}`, workerURL, enricherToken, id);
       return;
@@ -427,6 +432,7 @@ async function main() {
     await verifyLocalFilters(`http://127.0.0.1:${goPort}`);
     await verifyCollections(browser, `http://127.0.0.1:${goPort}`, id);
     await verifyManagedTags(browser, `http://127.0.0.1:${goPort}`, workerURL, enricherToken, id);
+    await verifyAiConfirm(browser, `http://127.0.0.1:${goPort}`, workerURL, enricherToken);
 
     check("no page errors during the real browser session", pageErrors.length === 0, pageErrors.join("; "));
   } catch (error) {

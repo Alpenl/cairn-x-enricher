@@ -394,6 +394,20 @@ const tags = await load("tag-state.js");
   equal("single reset readmits only its term under a group clear",readmitted.selection.resource_kinds,["skill"]);
   equal("single reset keeps automatic additions closed",tags.tagStatusText(readmitted,"resource_kinds"),"已关闭本组自动新增");
   equal("group restore uses the latest automatic result",tags.previewTagActions(readmitted,[{action:"reset_group",dimension:"resource_kinds"}]).selection.resource_kinds,["skill","prompt"]);
+}
+{
+  // E4: held AI suggestions are not tags until confirmed; confirm/reject settle them, reset keeps them held.
+  const held = { selection: { topics: [] }, automatic: { topics: ["image_creation", "ai_coding"] }, custom_tags: [],
+    state: { fields: { topics: { values: [] } }, ai_pending: [{ field: "topics", term: "image_creation", reason: "confirm" }, { field: "topics", term: "ai_coding", reason: "low_confidence" }] } };
+  equal("pending suggestions are listed per field", tags.aiPending(held, "topics").map((e) => e.term), ["image_creation", "ai_coding"]);
+  const ok = tags.previewTagActions(held, [{ action: "confirm", tag_ref: "system/topics/image_creation" }]);
+  equal("confirming a held suggestion makes it a confirmed tag", [ok.selection.topics, tags.tagOrigin(ok, "topics", "image_creation")], [["image_creation"], "你已确认"]);
+  equal("confirming removes it from the pending list", tags.aiPending(ok).map((e) => e.term), ["ai_coding"]);
+  const no = tags.previewTagActions(ok, [{ action: "reject", tag_ref: "system/topics/ai_coding" }]);
+  equal("dismissing keeps it out and settles it", [no.selection.topics, tags.aiPending(no).length], [["image_creation"], 0]);
+  const reset = tags.previewTagActions(held, [{ action: "reset", tag_ref: "system/topics/ai_coding" }]);
+  equal("a per-tag reset does not apply a held suggestion", [reset.selection.topics, tags.aiPending(reset).length], [[], 2]);
+  equal("payloads without ai_pending have no pending suggestions", tags.aiPending({ state: { fields: {} } }), []);
   equal("normalization detects explicit prompt alias",tags.findTagName("  ＰＲＯＭＰＴ  ",[{id:"prompt",label:"提示词",aliases:["Prompt"]}]).id,"prompt");
   equal("similar project mark is not silently merged",tags.findTagName("我的图片项目",[{id:"image_creation",label:"图像生成"}]),undefined);
   equal("identity stays scoped to dimension",tags.parseTagRef("system/resource_kinds/skill"),{field:"resource_kinds",term:"skill"});

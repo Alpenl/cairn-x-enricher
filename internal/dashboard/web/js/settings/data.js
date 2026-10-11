@@ -207,7 +207,8 @@ export const rulePreview = (c) => request(`/api/collections/${encodeURIComponent
 export const ruleCandidates = (c, status = "pending") => request(`/api/collections/${encodeURIComponent(c.id)}/rules/candidates?status=${status}&limit=100`);
 
 /* ---------- preferences ---------- */
-export const PREF_DEFAULTS = { ai_suggestion_limit: 3, ai_confirm_before_apply: false, ai_low_confidence_review: true };
+// Matches the Worker defaults: the classifier keeps its existing behaviour until changed (E4).
+export const PREF_DEFAULTS = { ai_suggestion_limit: 5, ai_confirm_before_apply: false, ai_low_confidence_review: false };
 export async function savePrefs(patch) {
   const body = { operation_key: uuid(), expected_revision: db.prefs?.revision ?? 0, patch };
   try {

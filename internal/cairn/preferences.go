@@ -30,10 +30,3 @@ func (c *Client) Preferences(ctx context.Context, method, path string, body any)
 	err = decodeJSON(response.Body, &payload)
 	return payload, err
 }
-
-// PreferenceValues is the subset the classification pipeline reads (E4).
-type PreferenceValues struct {
-	AISuggestionLimit     int  `json:"ai_suggestion_limit"`
-	AIConfirmBeforeApply  bool `json:"ai_confirm_before_apply"`
-	AILowConfidenceReview bool `json:"ai_low_confidence_review"`
-}
