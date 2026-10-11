@@ -331,3 +331,13 @@ button.tag:hover { filter: brightness(.94) saturate(1.15); }
 .tag.tag-resource, .tag.tag-custom { background: color-mix(in srgb, var(--olive) 14%, transparent); color: var(--olive-ink); }
 .tag.hit, .tag.tag-ai.hit { background: color-mix(in srgb, var(--terracotta) 10%, transparent); color: var(--danger); border-color: color-mix(in srgb, var(--terracotta) 42%, transparent); }
 .tag-ai.hit { border-style: dashed; }
+/* aria-current="false" is not current (the legacy rules matched any value). */
+.sidebar .nav-item[aria-current="false"], .sidebar .service-link[aria-current="false"] { background: transparent; box-shadow: none; font-weight: 500; }
+.sidebar .service-link { gap: 8px; padding: 6px 8px 6px 10px; border-radius: var(--r-btn); min-height: 30px; line-height: 18px; }
+.sidebar .service-link:hover { background: color-mix(in srgb, var(--raised) 55%, transparent); }
+.sidebar .service-link[aria-current="page"] { background: var(--raised); box-shadow: 0 0 0 1px var(--hairline); }
+.sidebar .service-link .service-caret { display: none; }
+.sidebar .status-dot[data-tone="warn"] { background: var(--clay); box-shadow: 0 0 0 3px color-mix(in srgb, var(--clay) 22%, transparent); }
+.sidebar .status-dot[data-tone="danger"] { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent); }
+.sidebar .status-dot[data-tone="work"] { background: var(--sky); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sky) 20%, transparent); }
+.sidebar .rail-foot { padding: 10px 0 0; }
