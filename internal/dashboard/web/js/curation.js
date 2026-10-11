@@ -186,6 +186,25 @@ function autoGrow() {
   els.why.style.height = `${Math.min(els.why.scrollHeight, 180)}px`;
 }
 
+// The reader's reason card edits the same draft as the panel textarea.
+export function reasonText(id) {
+  const session = sessions.get(id);
+  if (session && (session.why.dirty || session.why.saving)) return session.why.draft ?? "";
+  return getItem(id)?.why || "";
+}
+
+export async function saveReason(id, text) {
+  const value = [...String(text)].slice(0, MAX_WHY).join("");
+  const session = sessionFor(id);
+  if (id === currentId && els.why) { els.why.value = value; renderWhyCounter(); autoGrow(); }
+  session.why.dirty = true;
+  session.why.draft = value;
+  await saveWhy(session, { draft: value });
+  return !session.why.dirty;
+}
+
+export const REASON_MAX = MAX_WHY;
+
 export function focusWhy() {
   if (!openPanel()) return;
   els.why.focus();

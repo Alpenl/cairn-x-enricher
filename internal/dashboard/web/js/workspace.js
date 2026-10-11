@@ -205,6 +205,7 @@ function updateNav() {
     ["settings-button", "settings"],
   ]) {
     const node = byId(id);
+    if (!node) continue;
     if (current?.key === key) node.setAttribute("aria-current", "page");
     else node.removeAttribute("aria-current");
   }
@@ -219,14 +220,8 @@ function updateNav() {
       : button.removeAttribute("aria-current");
   }
 }
-function filterState() {
-  const n = facetFilterCount(state.filters),
-    button = byId("filter-button"),
-    count = byId("filter-count");
-  button.dataset.on = String(n > 0);
-  count.hidden = !n;
-  count.textContent = String(n);
-}
+// The tag filter popover (tag-filter.js) shows its own selection state.
+function filterState() {}
 function setInspectorTab(name) {
   byId("inspector-tabs").active = name;
   byId("diagnostics").open = name === "processing" && inspectorVisible();
@@ -385,7 +380,7 @@ function settings() {
       ),
       card(
         "键盘",
-        h("dl.settings-keys", [["⌘ / Ctrl K", "搜索或执行命令"], ["J / K", "下一条 / 上一条"], ["1 2 3 4", "收件箱 / 精选 / 已编入 / 搁置"], ["I", "打开或关闭整理面板"], ["A", "确认自动标签"], ["Z", "撤销上一次操作"]].map(([k, d]) => [h("dt", h("kbd", k)), h("dd", d)])),
+        h("dl.settings-keys", [["⌘ / Ctrl K", "搜索或执行命令"], ["J / K", "下一条 / 上一条"], ["I", "打开或关闭整理面板"], ["A", "确认自动标签"], ["Z", "撤销上一次操作"]].map(([k, d]) => [h("dt", h("kbd", k)), h("dd", d)])),
         h("div.settings-actions", action("查看全部快捷键", "keyboard", hooks.help)),
       ),
     ],
@@ -494,19 +489,9 @@ export function initWorkspace(options) {
   byId("inspector-add-collection").addEventListener("click", () =>
     hooks.pick(),
   );
-  byId("organize-button").addEventListener("click", () => navigate("organize"));
+  byId("organize-button")?.addEventListener("click", () => navigate("organize"));
   byId("settings-button").addEventListener("click", settings);
   byId("command-button").addEventListener("click", commandPalette);
-  const filters = byId("filter-panel"),
-    filter = byId("filter-button");
-  byId("filter-done").addEventListener("click", () => {
-    filters.open = false;
-  });
-  for (const event of ["wa-after-show", "wa-after-hide"])
-    filters.addEventListener(event, () => {
-      filter.setAttribute("aria-expanded", String(filters.open));
-      emit("filter:visibility");
-    });
   for (const [key, label, ic] of [
     ["library", "阅读", "inbox"],
     ["collections", "合集", "folder"],

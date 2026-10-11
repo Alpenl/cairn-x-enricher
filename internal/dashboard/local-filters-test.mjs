@@ -20,6 +20,14 @@ assert.equal(derive({}).counts.unsupported, 1);
 const counts = derive({ topics: "art" }, page, base, "/api/tag-counts");
 assert.equal(counts.total, 2);
 assert.deepEqual(counts.topics, [{ id: "art", count: 2 }, { id: "portrait", count: 1 }, { id: "design", count: 1 }]);
+// Unified tag chips from the search popover mix dimensions in one any/all group.
+const cid = "00000000-0000-0000-0000-000000000001";
+assert.deepEqual(derive({ tags: `system/topics/design,custom/default/${cid}`, tags_mode: "any" }).items.map(x => x.id), [4,3,2]);
+assert.deepEqual(derive({ tags: `system/topics/art,custom/default/${cid}`, tags_mode: "all" }).items.map(x => x.id), [4]);
+assert.deepEqual(derive({ tags: "system/topics/art,system/resource_kinds/skill", tags_mode: "all", topics: "design" }).items.map(x => x.id), [2]);
+assert.deepEqual(derive({ tags: "system/topics/design" }).items.map(x => x.id), [3,2]);
+for (const extra of [{ tags: "system/carriers/thread" }, { tags: "system/topics/unknown" }, { tags: "custom/other/" + cid }, { tags: "custom/default/nope" }, { tags: "system/topics/art/x" },
+  { tags: "system/topics/art", tags_mode: "bad" }, { tags_mode: "all" }, { tags: "system/topics/art", tags_children: "1" }]) assert.equal(derive(extra), null, JSON.stringify(extra));
 for (const extra of [{ q: "body text" }, { source: "x" }, { since: "yesterday" }, { entity_state: "stale" }, { form: "essay" }, { uncertain: "true" }, { topics: "unknown" }, { topics: "art," }, { topics_mode: "bad" }, { topic_refinements: "art" }, { filter_contract_version: "2" }, { before_id: "3" }, { counts: "0" }, { status: "completed" }, { limit: "0" }]) assert.equal(derive(extra), null, JSON.stringify(extra));
 for (const source of [{ ...page, next_before_id: 1 }, { ...page, counts: { total: 5 } }, { ...page, local_filter_version: 0 }, { ...page, items: [page.items[0],page.items[0]], counts: { total: 2 } }]) assert.equal(derive({}, source), null);
 assert.equal(derive({}, page, new URLSearchParams({ ...Object.fromEntries(base), curation_status: "inbox" })), null);

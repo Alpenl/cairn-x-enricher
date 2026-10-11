@@ -29,51 +29,36 @@
   <link rel="modulepreload" href="/assets/js/export.js">
   <link rel="modulepreload" href="/assets/js/shortcuts.js">
   <link rel="modulepreload" href="/assets/js/theme.js">
+  <link rel="modulepreload" href="/assets/js/tag-filter.js">
   <script type="module" src="/assets/js/main.js"></script>
 </head>
 <body>
   <div class="app" id="app">
-    <aside class="sidebar" id="sidebar" aria-label="视图与筛选">
+    <aside class="sidebar" id="sidebar" aria-label="合集与导航">
       <div class="sidebar-head">
-        <a class="brand" href="/" aria-label="Cairn 收藏首页">
-          <svg class="logo" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="19.2" rx="8.6" ry="3.1"/><ellipse cx="11.4" cy="12.9" rx="6.2" ry="2.8"/><ellipse cx="12.4" cy="7.1" rx="3.9" ry="2.3"/></svg>
-          <span>Cairn</span>
+        <a class="brand" href="/" aria-label="Cairn 收藏库首页">
+          <span class="brand-mark" aria-hidden="true"><svg class="logo" width="16" height="16" viewBox="0 0 24 24"><ellipse cx="12" cy="19.2" rx="8.6" ry="3.1"/><ellipse cx="11.4" cy="12.9" rx="6.2" ry="2.8"/><ellipse cx="12.4" cy="7.1" rx="3.9" ry="2.3"/></svg></span>
+          <span class="brand-name">Cairn</span><span class="brand-sub">收藏库</span>
         </a>
         <button class="icon-btn" id="theme-button" type="button" title="外观" aria-label="切换外观" aria-haspopup="menu">
-          <svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"/></svg>
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"/></svg>
         </button>
-
       </div>
 
-      <button class="cmdk" id="command-button" type="button" aria-label="搜索或执行命令"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg><span>搜索或执行命令</span><kbd>⌘K</kbd></button>
+      <button class="cmdk" id="command-button" type="button" aria-label="搜索或执行命令"><svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>搜索或执行命令</span><kbd>⌘K</kbd></button>
       <div class="sidebar-scroll">
-        <p class="rail-sec-h">整理流程</p>
-        <nav class="nav" id="nav-views" aria-label="收藏视图"></nav>
-        <p class="rail-sec-h">组织</p>
-        <nav class="nav nav-management" aria-label="标签与合集">
-          <button class="nav-item" id="browse-tags" type="button">
-            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20.59 13.41-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/><path d="M7 7h.01"/></svg>
-            <span class="nav-label">标签库</span>
-          </button>
-          <button class="nav-item" id="browse-collections" type="button">
-            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
-            <span class="nav-label">合集</span>
-          </button>
-        </nav>
-        <button class="nav-item" id="organize-button" type="button" title="AI 整理"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3-2 7-7 2 7 2 2 7 2-7 7-2-7-2Z"/></svg><span class="nav-label">AI 整理</span></button>
-        <p class="rail-sec-h" id="pinned-heading" hidden>置顶合集</p>
-        <nav class="nav nav-pinned" id="pinned-collections" aria-label="置顶合集" hidden></nav>
-
-
+        <p class="rail-sec-h">合集</p>
+        <nav class="nav" id="nav-views" aria-label="收藏库"></nav>
+        <nav class="nav nav-pinned" id="pinned-collections" aria-label="合集" hidden></nav>
       </div>
 
       <div class="rail-foot">
-      <a class="service-link" id="service-link" href="/backstage" title="服务状态与需要人工处理的收藏">
-        <span class="status-dot" data-tone="ok"></span><span class="service-text">服务状态</span>
-      </a>
-      <button class="nav-item" id="settings-button" type="button" title="设置与快捷键"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="9" cy="18" r="2"/></svg><span class="nav-label">设置与快捷键</span></button>
+        <a class="service-link" id="service-link" href="/backstage" title="服务状态与需要人工处理的收藏">
+          <span class="status-dot" data-tone="ok"></span><span class="service-text">服务状态</span>
+        </a>
+        <button class="btn-settings" id="settings-button" type="button" title="设置（,）"><svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>设置</span></button>
         <button class="icon-btn" id="help-button" type="button" title="键盘快捷键 (?)" aria-label="键盘快捷键">
-          <svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M8 13h.01M12 13h.01M16 13h.01M7 16.5h10"/></svg>
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M8 13h.01M12 13h.01M16 13h.01M7 16.5h10"/></svg>
         </button>
       </div>
     </aside>
@@ -93,17 +78,40 @@
             <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
           </button>
         </div>
-        <form class="search" id="search-form" role="search">
-          <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="search" type="search" maxlength="200" autocomplete="off" spellcheck="false" placeholder="搜索收藏" aria-label="搜索收藏" enterkeyhint="search">
-          <button class="search-clear" id="search-clear" type="button" aria-label="清除搜索" hidden>
-            <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-          <button class="filter-btn" id="filter-button" type="button" aria-expanded="false" aria-controls="filter-panel"><svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M7 12h10M10 17h4"/></svg><span>筛选</span><span id="filter-count" hidden></span></button>
-        </form>
+        <div class="search-wrap" id="search-wrap">
+          <form class="search search-field" id="search-form" role="search">
+            <svg class="icon lead" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <div class="tf-tokens" id="tf-tokens" hidden></div>
+            <input id="search" type="search" maxlength="200" autocomplete="off" spellcheck="false" placeholder="搜索标题、正文、标签、收藏原因" aria-label="搜索收藏或按标签筛选" enterkeyhint="search" role="combobox" aria-haspopup="dialog" aria-expanded="false" aria-controls="tf-pop">
+            <button class="search-clear" id="search-clear" type="button" tabindex="-1" aria-label="清空搜索与标签筛选" title="清空搜索与标签筛选" hidden>
+              <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+            <kbd id="search-kbd">/</kbd>
+            <button class="tf-toggle" id="tf-toggle" type="button" tabindex="-1" aria-label="按标签筛选" title="按标签筛选" aria-haspopup="dialog" aria-expanded="false" aria-controls="tf-pop">
+              <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
+            </button>
+          </form>
+          <div class="tf-pop" id="tf-pop" role="dialog" aria-labelledby="tf-title" hidden>
+            <div class="tf-head">
+              <div class="tf-title-row">
+                <h3 class="tf-title" id="tf-title">按标签筛选</h3>
+                <div class="seg sm" id="tf-mode" role="radiogroup" aria-label="匹配方式">
+                  <button type="button" role="radio" data-mode="all" aria-checked="true" class="active">全部满足</button>
+                  <button type="button" role="radio" data-mode="any" aria-checked="false">任一满足</button>
+                </div>
+              </div>
+              <p class="tf-desc" id="tf-desc"></p>
+            </div>
+            <div class="tf-body" id="tf-body"></div>
+            <div class="tf-foot">
+              <button type="button" class="btn btn-ghost btn-sm tf-clear" id="tf-clear">清除</button>
+              <span class="tf-hint" id="tf-hint"></span>
+              <button type="button" class="btn btn-primary" id="tf-apply">显示结果</button>
+            </div>
+          </div>
+        </div>
         <div class="collection-context" id="collection-context" hidden></div>
         <div class="active-filters" id="active-filters" hidden></div>
-        <div class="batch-bar" id="batch-bar" hidden></div>
       </header>
       <div class="list-scroll" id="list-scroll">
         <div class="list-notice" id="list-notice" role="alert" hidden></div>
@@ -131,7 +139,7 @@
       </div>
 
       <article class="detail" id="detail" hidden>
-        <header class="detail-bar">
+        <header class="detail-bar reader-actions">
           <button class="icon-btn only-narrow" id="detail-back" type="button" aria-label="返回列表" title="返回列表 (Esc)">
             <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
@@ -144,43 +152,38 @@
             </button>
             <span class="detail-position" id="detail-position"></span>
           </div>
-          <div class="seg" id="status-seg" role="radiogroup" aria-label="整理状态">
-            <button type="button" role="radio" data-status="inbox" aria-checked="false" title="收件箱 (1)"><svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg><span>收件箱</span><kbd>1</kbd></button>
-            <button type="button" role="radio" data-status="kept" aria-checked="false" title="精选 (2)"><svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span>精选</span><kbd>2</kbd></button>
-            <button type="button" role="radio" data-status="compiled" aria-checked="false" title="已编入笔记 (3)"><svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg><span>已编入</span><kbd>3</kbd></button>
-            <button type="button" role="radio" data-status="drop" aria-checked="false" title="搁置 (4)"><svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg><span>搁置</span><kbd>4</kbd></button>
-          </div>
-          <div class="detail-tools">
-            <button class="icon-btn" id="inspector-toggle" type="button" aria-pressed="true" aria-label="整理面板" title="整理面板 (I)"><svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></button>
-            <button class="icon-btn only-wide-tools" id="focus-toggle" type="button" aria-pressed="false" title="专注阅读 (F)" aria-label="专注阅读">
-              <svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-            </button>
-            <button class="icon-btn only-wide-tools" id="detail-export" type="button" title="导出这条 (E)" aria-label="导出这条收藏" disabled>
-              <svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            </button>
-            <button class="icon-btn" id="detail-menu" type="button" title="更多操作" aria-label="更多操作" aria-haspopup="menu">
+          <span class="bar-spacer"></span>
+          <a class="btn btn-primary" id="open-source" target="_blank" rel="noopener noreferrer" title="打开原帖 (V)" hidden><svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg><span class="lbl">打开原帖</span></a>
+          <button class="btn btn-ghost" id="detail-export" type="button" title="导出 Markdown (E)" aria-label="导出这条收藏" disabled><svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg><span class="lbl">导出</span></button>
+          <button class="btn btn-ghost only-wide-tools" id="focus-toggle" type="button" aria-pressed="false" title="专注阅读 (F)" aria-label="专注阅读"><svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/></svg><span class="lbl">专注阅读</span></button>
+          <button class="btn btn-ghost" id="inspector-toggle" type="button" aria-pressed="true" aria-controls="inspector" title="整理面板 (I)" aria-label="整理面板"><svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg><span class="lbl">整理</span></button>
+          <button class="icon-btn" id="detail-menu" type="button" title="更多操作" aria-label="更多操作" aria-haspopup="menu">
               <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
             </button>
-          </div>
         </header>
 
         <div class="detail-scroll" id="detail-scroll" tabindex="-1">
           <div class="detail-inner">
+            <div class="detail-meta" id="detail-meta"></div>
             <h1 class="detail-title" id="detail-title"></h1>
-            <div class="detail-origin">
-              <a class="source-action" id="open-source" target="_blank" rel="noopener noreferrer" title="打开原帖 (V)" aria-label="打开原帖" hidden>
-                <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                <span>打开原帖</span>
-              </a>
-              <button class="btn" id="add-to-collection" type="button">加入合集</button>
-              <div class="detail-meta" id="detail-meta"></div>
-            </div>
+            <div class="detail-tags" id="detail-tags" aria-label="标签（点击按标签筛选）"></div>
             <div class="banner" id="process-banner" role="status" hidden></div>
-            <p class="detail-lede" id="detail-lede"></p>
+            <div class="version-block" id="version-block" hidden>
+              <div class="seg" id="version-seg" role="tablist" aria-label="正文版本">
+                <button id="toggle-formatted" type="button" role="tab" data-mode="original" aria-selected="false">原文</button>
+                <button id="reading-version" type="button" role="tab" data-mode="organized" aria-selected="true">整理版</button>
+              </div>
+              <p class="version-note" id="version-note"></p>
+              <button class="btn btn-ghost btn-sm" id="format-body" type="button" hidden>AI 精排</button>
+            </div>
+            <div class="reason-block" id="reason-block"></div>
+            <div class="summary-card" id="summary-card">
+              <div class="summary-label"><svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg><span id="summary-label">摘要 · 系统根据已保存正文生成</span></div>
+              <p class="detail-lede" id="detail-lede"></p>
+            </div>
 
             <div class="figures" id="figures" hidden></div>
             <p class="body-loading" id="body-loading" hidden><span class="spinner" aria-hidden="true"></span>正在读取全文</p>
-            <div class="reading-toolbar"><div class="version-seg" role="radiogroup" aria-label="阅读版本"><button id="reading-version" type="button" role="radio" aria-checked="true">原内容</button><button id="toggle-formatted" type="button" role="radio" aria-checked="false" hidden>原内容</button></div><button class="btn btn-sm" id="format-body" type="button">整理正文</button></div>
             <div class="detail-body" id="detail-body"></div>
             <div id="detail-media" hidden></div>
 
@@ -200,14 +203,6 @@
             </a>
           </div>
         </div>
-
-        <footer class="mobile-actions only-narrow" id="mobile-actions" aria-label="整理状态">
-          <button type="button" data-status="inbox" aria-pressed="false"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg><span>收件箱</span></button>
-          <button type="button" data-status="kept" aria-pressed="false"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span>精选</span></button>
-          <button type="button" data-status="compiled" aria-pressed="false"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg><span>已编入</span></button>
-          <button type="button" data-status="drop" aria-pressed="false"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg><span>搁置</span></button>
-          <button type="button" id="mobile-more" aria-label="更多操作" aria-haspopup="menu"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg><span>更多</span></button>
-        </footer>
       </article>
     </main>
 
@@ -317,12 +312,6 @@
     </div>
     <nav class="tabbar" id="tabbar" aria-label="主导航"></nav>
   </div>
-  <wa-popover id="filter-panel" for="filter-button" placement="bottom-start" without-arrow class="filters-dialog" aria-label="筛选收藏">        <div class="facets-head">
-          <span>筛选</span>
-          <button class="link-btn" id="clear-filters" type="button" hidden>清除</button>
-        </div>
-        <div class="facets" id="facets"></div><div class="filter-foot"><wa-button id="filter-done" variant="brand">完成</wa-button></div></wa-popover>
-
   <div class="toasts" id="toasts" aria-live="polite"></div>
 </body>
 </html>

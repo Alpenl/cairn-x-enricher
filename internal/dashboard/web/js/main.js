@@ -9,6 +9,7 @@ import { api, errorLabel, fetchJSON } from "./api.js";
 import * as backstage from "./backstage.js";
 import * as curation from "./curation.js";
 import * as detail from "./detail.js";
+import * as reason from "./reason.js";
 import * as diagnostics from "./diagnostics.js";
 import { byId } from "./dom.js";
 import { exportItems, exportServer } from "./export.js";
@@ -23,7 +24,8 @@ import { initShortcuts, showHelp } from "./shortcuts.js";
 import * as sidebar from "./sidebar.js";
 import { createSidebarModal } from "./sidebar-modal.js";
 import { emit, getItem, mergeItem, on, state } from "./store.js";
-import { ENTITY_STATES, loadV1, loadV2, vocab } from "./taxonomy.js";
+import { ENTITY_STATES, loadV1, loadV2, termLabel, vocab } from "./taxonomy.js";
+import { initTagFilter, selectedRefs, syncTagFilter, tagRef, withTags } from "./tag-filter.js";
 import { initTheme, saveTheme } from "./theme.js";
 import { confirmAction, openMenu, runLastToastAction, toast } from "./ui.js";
 
@@ -199,6 +201,7 @@ function setFilters(filters, search = state.search, { push = false } = {}) {
   backstage.showBackstage(false);
   state.checked.clear();
   sidebar.renderSidebar();
+  syncTagFilter();
   list.reload({ reuse: true });
   if (state.layout !== "wide") setSidebarOpen(false);
 }
@@ -481,65 +484,6 @@ async function confirmOne(id) {
   } else list.updateRow(id);
 }
 
-async function confirmMany(ids) {
-  const candidates = ids.filter((id) => {
-    const item = getItem(id);
-    return item && (vocab.tagSystemAvailable || !item.classification_reviewed) && (item.classification?.topics?.length || item.classification?.resource_kinds?.length || item.classification?.content_functions?.length || item.classification?.form || item.classification?.use);
-  });
-  if (!candidates.length) {
-    toast("所选收藏没有待确认的 AI 标签");
-    return;
-  }
-  let done = 0;
-  for (const id of candidates) {
-    try {
-      if (await curation.confirmTags(id, { quiet: true })) done++;
-    } catch {
-      // Reported in the summary below.
-    }
-  }
-  const leaving = candidates.filter((id) => state.order.includes(id) && !matchesStatusView(getItem(id), state.filters));
-  const removedSelected = leaving.includes(state.selectedId);
-  const successor = leaving.length ? list.removeRows(leaving) : 0;
-  afterRemoval(removedSelected, successor);
-  for (const id of candidates) list.updateRow(id);
-  scheduleOverview();
-  toast(done === candidates.length ? `已确认 ${done} 条的 AI 标签` : `已确认 ${done} 条，${candidates.length - done} 条失败`, { tone: done ? "ok" : "error" });
-}
-
-async function processMany(ids) {
-  const items = ids.map(getItem).filter((item) => item && item.processable !== false && item.status !== "unsupported");
-  if (!items.length) {
-    toast("所选收藏都不能自动读取（只有 X 链接可以）", { tone: "error" });
-    return;
-  }
-  const rewrite = items.filter((item) => item.ai_title || item.translated_text).length;
-  const confirmed = await confirmAction({
-    title: `处理 ${items.length} 条收藏？`,
-    message: `会为每条调用模型读取原帖${rewrite ? `，其中 ${rewrite} 条已有内容会被覆盖` : ""}。人工整理不受影响。`,
-    confirmLabel: "开始处理"
-  });
-  if (!confirmed) return;
-  let accepted = 0;
-  const rejected = [];
-  for (let index = 0; index < items.length; index += 10) {
-    try {
-      const result = await api.process(items.slice(index, index + 10).map((item) => item.id));
-      accepted += result.accepted.length;
-      rejected.push(...result.rejected);
-      for (const id of result.accepted) {
-        mergeItem({ ...getItem(id), status: "processing" });
-        list.updateRow(id);
-        emit("item", id);
-      }
-    } catch (error) {
-      rejected.push({ error: error.message });
-    }
-  }
-  scheduleOverview();
-  toast(rejected.length ? `已提交 ${accepted} 条，${rejected.length} 条未提交：${errorLabel(rejected[0].error)}` : `已提交 ${accepted} 条处理请求`,
-    { tone: rejected.length && !accepted ? "error" : "ok" });
-}
 
 async function exportIds(ids) {
   const items = ids.map(getItem).filter(Boolean);
@@ -575,7 +519,6 @@ async function exportCurrentList() {
 function openListMenu(anchor) {
   openMenu(anchor, [
     { label: "导出当前结果（Markdown）", icon: "download", hint: state.total ? `${Math.min(state.total, 500)} 条，不调用模型` : "不调用模型", run: exportCurrentList },
-    { label: state.checked.size ? "取消全部选择" : "选择全部已加载", icon: "checkSquare", kbd: "X", run: list.checkAllLoaded },
     { label: "刷新列表", icon: "refresh", run: () => list.reload() },
     { label: "下载离线阅读文件", icon: "download", hint: "最近 20 条 · 文字副本", run: async () => {
       if (!await downloadOffline()) toast("还没有离线副本，请先打开一篇收藏阅读。");
@@ -583,19 +526,6 @@ function openListMenu(anchor) {
     { label: "清除本机离线副本", icon: "trash", run: async () => { await forgetOffline(); toast("已清除本机离线副本"); } },
     "separator",
     { label: "键盘快捷键", icon: "keyboard", kbd: "?", run: showHelp }
-  ]);
-}
-
-function openBatchMenu(anchor, ids) {
-  openMenu(anchor, [
-    { label: "加入合集", icon: "layers", run: () => collections.pick(ids) },
-    { label: "整理正文", icon: "sparkles", hint: "整理已存正文，保留原内容", run: async () => {
-      let accepted=0;for(const id of ids){try{await fetchJSON(`/api/bookmarks/${id}/presentation`,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});accepted++;}catch{}}
-      toast(`已提交 ${accepted} 条正文整理${accepted < ids.length ? `，${ids.length-accepted} 条未提交（无正文或连接失败）` : ""}`);
-    } },
-    { label: "确认 AI 标签", icon: "sparkles", hint: "只确认有 AI 建议且未确认的", run: () => confirmMany(ids) },
-    { label: "导出所选（Markdown）", icon: "download", run: () => exportIds(ids) },
-    { label: "重新读取原帖", icon: "refresh", hint: "会调用模型", run: () => processMany(ids) }
   ]);
 }
 
@@ -639,7 +569,6 @@ function onPopState() {
 
 function escape() {
   if(workspaceOpen()){closeWorkspace();return true;}
-  if (state.checked.size) { list.clearChecked(); return true; }
   if (app.classList.contains("sidebar-open")) { setSidebarOpen(false); return true; }
   if (isFocusMode()) { toggleFocus(); return true; }
   if (state.layout === "narrow" && state.route.name === "bookmark") { closeDetail(); return true; }
@@ -655,11 +584,13 @@ async function boot() {
   mediumQuery.addEventListener("change", updateLayout);
   applyRouteClasses();
 
+  initTagFilter({
+    setFilters: (filters, search = state.search) => setFilters(filters, search),
+    focusResults: () => { const row = byId("rows").querySelector("li.row.selected a.row-main") || byId("rows").querySelector("a.row-main"); row?.focus({ preventScroll: true }); }
+  });
   list.initList({
     select: (id, options) => select(id, options),
     querySuffix,
-    batchStatus: (ids, status) => { setStatuses(ids, status, { advance: true }); list.clearChecked(); },
-    batchMenu: openBatchMenu,
     ...hooksForFilters
   });
   detail.initDetail({
@@ -701,7 +632,14 @@ async function boot() {
 
   on("account:changed", () => location.reload());
   on("tags:changed", () => { scheduleOverview(); list.reload({ silent: true }); });
-  on("tag-filter-request", ({ field, term }) => setFilters(toggleValue(state.filters, field, term)));
+  // Tag pills in rows and the reader toggle the unified search-popover filter.
+  on("tag-filter-request", ({ field, term }) => {
+    const ref = tagRef(field === "topic_refinements" ? "topics" : field, term);
+    const refs = selectedRefs();
+    const on = !refs.includes(ref);
+    setFilters(withTags(state.filters, on ? [...refs, ref] : refs.filter((r) => r !== ref)));
+    toast(`${on ? "已按标签筛选" : "已移除标签筛选"}：${termLabel(field === "topic_refinements" ? "topics" : field, term, term)}`);
+  });
   on("confirm-request", (id) => confirmOne(id));
   on("select-request", (id) => select(id));
   on("list:loaded", ({ silent } = {}) => {
@@ -762,14 +700,12 @@ async function boot() {
       if (state.layout !== "narrow") byId("detail-scroll").focus({ preventScroll: true });
     },
     search: () => { if (state.layout === "narrow" && state.route.name === "bookmark") closeDetail(); byId("search").focus(); byId("search").select(); },
-    status: (status) => { if (state.selectedId) setStatuses([state.selectedId], status); },
-    why: () => { if (state.selectedId) curation.focusWhy(); },
-    confirm: () => { if (state.checked.size) confirmMany([...state.checked]); else if (state.selectedId) confirmOne(state.selectedId); },
+    why: () => { if (state.selectedId) reason.startEdit(); },
+    confirm: () => { if (state.selectedId) confirmOne(state.selectedId); },
     editTags: () => curation.toggleEditingAll(),
     undo: () => { if (!runLastToastAction()) toast("没有可以撤销的操作"); },
-    check: () => { if (state.selectedId) list.toggleChecked(state.selectedId); },
     openSource: () => detail.openSource(),
-    exportCurrent: () => { if (state.checked.size) exportIds([...state.checked]); else if (state.selectedId) exportIds([state.selectedId]); },
+    exportCurrent: () => { if (state.selectedId) exportIds([state.selectedId]); },
     focus: toggleFocus,
     view: (view) => hooksForFilters.setView(view),
     backstage: openBackstage,

@@ -1,6 +1,6 @@
 import { collectionName } from "./collections.js";
 // The library list: one dense, keyboard-navigable column of bookmarks grouped
-// by day, with search highlighting, infinite scroll and multi-select.
+// by day, with search highlighting and infinite scroll.
 import {
   api,
   errorLabel,
@@ -11,7 +11,7 @@ import {
 import { append, byId, clear, h, highlightInto } from "./dom.js";
 import {
   bucketLabel,
-  curationShort,
+
   displaySummary,
   displayTitle,
   formatFull,
@@ -31,6 +31,7 @@ import {
   needsFilterContract,
   splitList,
   VIEWS,
+  LEGACY_VIEWS,
 } from "./query.js";
 import { emit, getItem, mergeItem, on, state } from "./store.js";
 import { termLabel, terms } from "./taxonomy.js";
@@ -47,7 +48,6 @@ let displayedQuery = "";
 let refreshing = false;
 let searchPreview = false;
 let pollBusy = false;
-let anchorId = 0; // shift-click range anchor
 let hooks = {};
 
 const els = {};
@@ -91,18 +91,6 @@ function textWithHighlights(tag, text, terms) {
   return highlightInto(node, text, highlightRanges(text, terms));
 }
 
-function statusBadge(item) {
-  const status = item.curation_status || "inbox";
-  const view = activeView(state.filters);
-  if (view === status || status === "inbox") return null;
-  return h(
-    "span.badge.status-badge",
-    { dataset: { status } },
-    h("i.dot"),
-    curationShort[status] || status,
-  );
-}
-
 function processBadge(item) {
   if (item.error === "capture_required")
     return h("span.badge.badge-work", icon("clock", 12), "待采集");
@@ -127,7 +115,6 @@ function rowMeta(item) {
   const hidden = labels.slice(5);
   return h(
     "div.row-meta",
-    statusBadge(item),
     processBadge(item),
     ...visible.map((tag) =>
       h(
@@ -172,26 +159,9 @@ export function renderRow(item, { thumbnail } = {}) {
     ? searchExcerpt(item, terms)
     : displaySummary(item);
   const selected = item.id === state.selectedId;
-  const checked = state.checked.has(item.id);
   const row = h("li.row", { dataset: { id: String(item.id) } });
   row.classList.toggle("selected", selected);
-  row.classList.toggle("checked", checked);
-  row.classList.toggle(
-    "dimmed",
-    item.curation_status === "drop" && activeView(state.filters) !== "drop",
-  );
 
-  const check = h(
-    "button.row-check",
-    {
-      type: "button",
-      role: "checkbox",
-      "aria-checked": String(checked),
-      "aria-label": "选择这条收藏",
-      tabindex: "-1",
-    },
-    icon("check", 12),
-  );
   const link = h("a.row-main", {
     href: bookmarkHref(item.id),
     "aria-current": selected ? "true" : null,
@@ -227,7 +197,7 @@ export function renderRow(item, { thumbnail } = {}) {
     h("div.row-body", top, summaryNode, personalNode),
     imageThumb(item, thumbnail),
   ]);
-  row.append(check, link, rowMeta(item));
+  row.append(link, rowMeta(item));
   return row;
 }
 
@@ -254,11 +224,7 @@ function rowFocus(container) {
       field: control.dataset.tagField,
       term: control.dataset.tagId,
     };
-  const selector = control.matches(".row-main")
-    ? ".row-main"
-    : control.matches(".row-check")
-      ? ".row-check"
-      : "";
+  const selector = control.matches(".row-main") ? ".row-main" : "";
   return selector ? { id: Number(row.dataset.id), selector } : null;
 }
 
@@ -312,15 +278,11 @@ function cachedRow(item, { reuseImages = true } = {}) {
   const image = row.querySelector(".row-thumb img");
   if (image) resumeImage(image);
   row.classList.toggle("selected", item.id === state.selectedId);
-  row.classList.toggle("checked", state.checked.has(item.id));
   const link = row.querySelector(".row-main"),
     href = bookmarkHref(item.id);
   if (link.getAttribute("href") !== href) link.setAttribute("href", href);
   if (item.id === state.selectedId) link.setAttribute("aria-current", "true");
   else link.removeAttribute("aria-current");
-  row
-    .querySelector(".row-check")
-    .setAttribute("aria-checked", String(state.checked.has(item.id)));
   rowCache.delete(item.id);
   rowCache.set(item.id, { signature, row });
   return row;
@@ -420,7 +382,6 @@ export function removeRows(ids) {
     state.total = Math.max(0, state.total - ids.filter(Boolean).length);
   updateHeader();
   updateFooter();
-  renderBatchBar();
   return successor;
 }
 
@@ -445,7 +406,7 @@ function viewLabel() {
   if (state.filters.collection_id)
     return collectionName(state.filters.collection_id);
   const view = activeView(state.filters);
-  return VIEWS.find((entry) => entry.id === view)?.label || "全部收藏";
+  return [...VIEWS, ...LEGACY_VIEWS].find((entry) => entry.id === view)?.label || "全部收藏";
 }
 
 export function updateHeader() {
@@ -695,7 +656,6 @@ export async function reload({
   els.notice.hidden = true;
   if (!silent) {
     if (!state.order.length) els.rows.replaceChildren(...skeleton());
-    syncChecks();
   }
   if (!silent && reuse && state.search) {
     const preview = previewSearch(params, {
@@ -752,7 +712,6 @@ export async function reload({
       els.pane.setAttribute("aria-busy", "false");
       updateHeader();
       updateFooter();
-      renderBatchBar();
     }
   }
 }
@@ -845,7 +804,7 @@ async function pollFirstPage() {
   }
 }
 
-// --- Selection & batch --------------------------------------------------------
+// --- Selection --------------------------------------------------------
 
 export function markSelected(id, { scroll = true } = {}) {
   for (const row of els.rows.querySelectorAll("li.row.selected")) {
@@ -859,108 +818,10 @@ export function markSelected(id, { scroll = true } = {}) {
   if (scroll) row.scrollIntoView({ block: "nearest" });
 }
 
-export function toggleChecked(id, { range = false } = {}) {
-  if (range && anchorId && state.order.includes(anchorId)) {
-    const [from, to] = [
-      state.order.indexOf(anchorId),
-      state.order.indexOf(id),
-    ].sort((a, b) => a - b);
-    const target = !state.checked.has(id);
-    for (const rangeId of state.order.slice(from, to + 1)) {
-      if (target) state.checked.add(rangeId);
-      else state.checked.delete(rangeId);
-    }
-  } else if (state.checked.has(id)) state.checked.delete(id);
-  else state.checked.add(id);
-  anchorId = id;
-  syncChecks();
-}
-
-export function checkAllLoaded() {
-  const all = state.order.every((id) => state.checked.has(id));
-  if (all) state.checked.clear();
-  else for (const id of state.order) state.checked.add(id);
-  syncChecks();
-}
-
+// Multi-select and batch actions were removed in the redesign; the
+// workspace acts on the open item only.
 export function clearChecked() {
   state.checked.clear();
-  syncChecks();
-}
-
-function syncChecks() {
-  for (const row of els.rows.querySelectorAll("li.row")) {
-    const checked = state.checked.has(Number(row.dataset.id));
-    row.classList.toggle("checked", checked);
-    row
-      .querySelector(".row-check")
-      ?.setAttribute("aria-checked", String(checked));
-  }
-  els.pane.classList.toggle("selecting", state.checked.size > 0);
-  renderBatchBar();
-}
-
-function renderBatchBar() {
-  const count = state.checked.size;
-  els.batch.hidden = count === 0;
-  els.head.classList.toggle("batching", count > 0);
-  if (!count) return;
-  const statusButton = (status, iconName, label) =>
-    h(
-      "button.btn.btn-sm",
-      {
-        type: "button",
-        title: `把所选收藏设为「${label}」`,
-        dataset: { batchStatus: status },
-        onclick: () => hooks.batchStatus([...state.checked], status),
-      },
-      icon(iconName, 14),
-      h("span", label),
-    );
-  const allChecked =
-    state.order.length > 0 && state.order.every((id) => state.checked.has(id));
-  clear(
-    els.batch,
-    h(
-      "div.batch-top",
-      h(
-        "button.icon-btn",
-        {
-          type: "button",
-          "aria-label": "取消选择",
-          title: "取消选择 (Esc)",
-          onclick: clearChecked,
-        },
-        icon("x", 16),
-      ),
-      h("span.batch-count", `已选 ${count} 条`),
-      h(
-        "button.link-btn",
-        { type: "button", onclick: checkAllLoaded },
-        allChecked ? "全不选" : "全选已加载",
-      ),
-      h("span.batch-spacer"),
-      h(
-        "button.icon-btn",
-        {
-          type: "button",
-          "aria-label": "更多批量操作",
-          title: "确认标签、导出、重新读取",
-          "aria-haspopup": "menu",
-          onclick: (event) =>
-            hooks.batchMenu(event.currentTarget, [...state.checked]),
-        },
-        icon("more", 18),
-      ),
-    ),
-    h(
-      "div.batch-actions",
-      statusButton("inbox", "inbox", "收件箱"),
-      statusButton("kept", "star", "精选"),
-      statusButton("compiled", "book", "已编入"),
-      statusButton("drop", "archive", "搁置"),
-    ),
-  );
 }
 
 // --- Wiring -------------------------------------------------------------------
@@ -974,7 +835,6 @@ export function initList(options) {
     count: byId("list-count"),
     search: byId("search"),
     activeFilters: byId("active-filters"),
-    batch: byId("batch-bar"),
     scroll: byId("list-scroll"),
     notice: byId("list-notice"),
     rows: byId("rows"),
@@ -990,21 +850,11 @@ export function initList(options) {
     const row = event.target.closest("li.row");
     if (!row || row.classList.contains("skeleton")) return;
     const id = Number(row.dataset.id);
-    if (event.target.closest(".row-check")) {
-      event.preventDefault();
-      toggleChecked(id, { range: event.shiftKey });
-      return;
-    }
     const link = event.target.closest("a.row-main");
     if (!link) return;
     // Let the browser open a new tab or window for modified clicks.
     if (event.metaKey || event.ctrlKey || event.button !== 0) return;
     event.preventDefault();
-    // Shift-click extends a multi-selection like a file manager.
-    if (event.shiftKey) {
-      toggleChecked(id, { range: true });
-      return;
-    }
     hooks.select(id, { fromList: true });
   });
 

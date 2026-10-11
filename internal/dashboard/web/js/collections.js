@@ -83,16 +83,17 @@ function select(id) {
 function renderNav() {
   const nav = byId("pinned-collections");
   if (!nav) return;
+  // Every active collection is navigation now (pinned first), replacing the
+  // old curation-status views.
   const pinned = live()
-    .filter((c) => c.pinned && !c.archived)
-    .slice(0, 6);
+    .filter((c) => !c.archived)
+    .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || String(a.name).localeCompare(String(b.name), "zh-CN"))
+    .slice(0, 200);
   const signature = JSON.stringify([
     state.filters.collection_id,
-    pinned.map((c) => [c.id, c.name, c.item_count]),
+    pinned.map((c) => [c.id, c.name, c.item_count, Boolean(c.pinned)]),
   ]);
   nav.hidden = !pinned.length;
-  const heading = byId("pinned-heading");
-  if (heading) heading.hidden = !pinned.length;
   if (signature !== pinnedSignature) {
     pinnedSignature = signature;
     clear(
@@ -109,6 +110,7 @@ function renderNav() {
           },
           h("span", { slot: "start" }, icon("folder", 16)),
           h("span.nav-label", c.name),
+          c.pinned ? h("span.nav-pin", { title: "已置顶", "aria-label": "已置顶" }, icon("pin", 11)) : null,
           h("span.nav-count", { slot: "end" }, String(c.item_count)),
         ),
       ),
