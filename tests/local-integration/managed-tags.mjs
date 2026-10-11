@@ -122,6 +122,8 @@ export async function verifyManagedTags(
     assert.equal(archives[0].operation_key, archiveKeys[0]);
     await page.locator("#lib-detail-foot").getByRole("button", { name: "恢复", exact: true }).click();
     await wait(async () => (await api("/api/tag-catalog")).catalog.topics.find((t) => t.id === term.id).active);
+    // Archive/restore change what AI may use; a later rename alone must not.
+    data = await api("/api/tag-catalog");
 
     const human = await api("/api/bookmarks/" + bookmarkID + "/tags");
     await api("/api/bookmarks/" + bookmarkID + "/tags", {
