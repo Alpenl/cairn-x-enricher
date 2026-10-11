@@ -385,3 +385,8 @@ button.tag:hover { filter: brightness(.94) saturate(1.15); }
 .switch:disabled { opacity: .6; cursor: progress; }
 .inspector-collections #inspector-add-collection { margin-top: 8px; font-size: 12.5px; }
 @media (prefers-reduced-motion: reduce) { .switch, .switch::after { transition: none; } }
+
+/* Sidebar collection rows: native buttons, same metrics as 全部收藏; review badge. */
+.sidebar button.nav-item { width: 100%; border: 0; font: inherit; font-size: 13.5px; font-weight: 500; text-align: left; cursor: pointer; }
+.sidebar button.nav-item:focus-visible { outline: none; box-shadow: var(--rd-focus); }
+.sidebar .nav-item .nav-badge { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--terracotta) 16%, transparent); color: var(--terracotta-deep); font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; }

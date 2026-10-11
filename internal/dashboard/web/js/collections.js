@@ -13,7 +13,10 @@ let catalog = [],
   hooks = {},
   loading = null,
   pinnedSignature = "",
-  loadEpoch = 0;
+  loadEpoch = 0,
+  // Pending rule candidates per collection (review admission); optional, an
+  // older Worker without the endpoint just shows no badges.
+  pendingReview = new Map();
 // randomUUID is unavailable on plain HTTP NAS addresses; getRandomValues works there.
 const uuid = () => {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -64,6 +67,7 @@ async function load() {
         catalog = data.items;
         renderNav();
         emit("collections:loaded");
+        void loadReviewSummary(epoch);
       }
       return catalog;
     })
@@ -73,6 +77,17 @@ async function load() {
   loading = flight;
   return flight;
 }
+async function loadReviewSummary(epoch) {
+  try {
+    const data = await fetchJSON("/api/collections/review-summary");
+    if (epoch !== loadEpoch) return;
+    pendingReview = new Map((data.items || []).map((r) => [r.collection_id, Number(r.pending) || 0]));
+  } catch {
+    pendingReview = new Map();
+  }
+  renderNav();
+}
+export const pendingReviewCount = (id) => pendingReview.get(id) || 0;
 function select(id) {
   hooks.select({
     ...emptyFilters(),
@@ -91,29 +106,31 @@ function renderNav() {
     .slice(0, 200);
   const signature = JSON.stringify([
     state.filters.collection_id,
-    pinned.map((c) => [c.id, c.name, c.item_count, Boolean(c.pinned)]),
+    pinned.map((c) => [c.id, c.name, c.item_count, pendingReview.get(c.id) || 0]),
   ]);
   nav.hidden = !pinned.length;
   if (signature !== pinnedSignature) {
     pinnedSignature = signature;
+    // Native buttons (not wa-button) so the rows share the 全部收藏 row metrics.
     clear(
       nav,
-      pinned.map((c) =>
-        h(
+      pinned.map((c) => {
+        const pending = pendingReview.get(c.id) || 0;
+        return el(
           "button.nav-item.collection-shortcut",
           {
             type: "button",
-            title: c.name,
+            title: pending ? `${c.name} · ${pending} 条待审核` : c.name,
             "aria-current":
               state.filters.collection_id === c.id ? "page" : null,
             onclick: () => select(c.id),
           },
-          h("span", { slot: "start" }, icon("folder", 16)),
-          h("span.nav-label", c.name),
-          c.pinned ? h("span.nav-pin", { title: "已置顶", "aria-label": "已置顶" }, icon("pin", 11)) : null,
-          h("span.nav-count", { slot: "end" }, String(c.item_count)),
-        ),
-      ),
+          icon("folder", 16),
+          el("span.nav-label", c.name),
+          pending ? el("span.nav-badge", { "aria-label": `${pending} 条待审核` }, String(pending)) : null,
+          el("span.nav-count", String(c.item_count)),
+        );
+      }),
     );
   }
   renderContext();
