@@ -193,12 +193,12 @@ export async function verifyManagedTags(
     await openSettingsPage(page, "rules", collectionID);
     await page.locator(".rd-titles h4", { hasText: "AIGC 自动收录" }).waitFor();
     await page.locator(".rd").getByRole("button", { name: "添加标签", exact: true }).click();
-    const pick = page.locator(".sp-pop");
+    const pick = page.locator(".pick-pop");
     await pick.getByPlaceholder("搜索标签或别名").fill("LoRA");
     await pick.locator(".tf-chip", { hasText: "LoRA 微调" }).click();
     await pick.locator('.tf-chip[aria-pressed="true"]', { hasText: "LoRA 微调" }).waitFor();
     await pick.getByRole("button", { name: "完成", exact: true }).click();
-    await pick.waitFor({ state: "detached" });
+    await pick.waitFor({ state: "hidden" }); // the picker is reused, only hidden
     await wait(async () => (await api("/api/collections/" + collectionID)).collection.rule_enabled);
     const created = await fetch(workerURL + "/api/links", {
       method: "POST",
