@@ -390,3 +390,18 @@ button.tag:hover { filter: brightness(.94) saturate(1.15); }
 .sidebar button.nav-item { width: 100%; border: 0; font: inherit; font-size: 13.5px; font-weight: 500; text-align: left; cursor: pointer; }
 .sidebar button.nav-item:focus-visible { outline: none; box-shadow: var(--rd-focus); }
 .sidebar .nav-item .nav-badge { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--terracotta) 16%, transparent); color: var(--terracotta-deep); font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Icon rail (760–1060px): keep collection rows square and centred like the
+   other rail buttons; the review badge shrinks to a dot on the icon. */
+@media (max-width: 1060px) and (min-width: 760px) {
+  .sidebar { padding-left: 0; padding-right: 0; }
+  .sidebar .sidebar-scroll { padding: 4px 12px 12px; }
+  .sidebar .cmdk { width: 40px; height: 36px; margin: 0 auto 8px; padding: 0; justify-content: center; }
+  .sidebar .rail-foot { flex-direction: column; align-items: center; gap: 6px; padding: 10px 0 4px; }
+  .sidebar .sidebar-head { justify-content: center; }
+  .sidebar .sidebar-head .brand { flex: none; justify-content: center; padding: 2px 0 16px; }
+  .sidebar .brand-name, .sidebar .brand-sub, .sidebar .btn-settings > span { display: none; }
+  .sidebar .btn-settings { justify-content: center; width: 36px; height: 32px; padding: 0; }
+  .sidebar .nav-item, .sidebar button.nav-item { position: relative; justify-content: center; width: 40px; height: 36px; margin: 0 auto 2px; padding: 0; }
+  .sidebar .nav-item .nav-badge { position: absolute; top: 5px; right: 6px; min-width: 7px; width: 7px; height: 7px; padding: 0; font-size: 0; background: var(--terracotta); }
+}
