@@ -82,7 +82,8 @@ const effectiveMode = () => selectedRefs().length ? tagMode() : pendingMode;
 // --- counts -----------------------------------------------------------------
 
 function scheduleCounts() {
-  if (!open) return;
+  // Counts follow the list: a foreground search or filter read goes first.
+  if (!open || state.loading || byId("list-pane")?.getAttribute("aria-busy") === "true") return;
   const mode = effectiveMode();
   // "all": a chip's number is the result size after adding it, i.e. its count
   // within the current result. "any": how many in scope carry the tag.
@@ -94,6 +95,8 @@ function scheduleCounts() {
   clearTimeout(countsTimer);
   countsAbort?.abort();
   countsTimer = setTimeout(() => {
+    // A search typed meanwhile owns the network; list:loaded reschedules.
+    if (state.loading || byId("list-pane")?.getAttribute("aria-busy") === "true" || (els.input.value.trim() !== state.search)) { countsKey = ""; return; }
     const controller = new AbortController();
     countsAbort = controller;
     api.tagCounts(params, controller.signal).then((value) => {

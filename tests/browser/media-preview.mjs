@@ -25,7 +25,7 @@ try {
  await player.evaluate(v=>v.play());await page.waitForFunction(()=>document.querySelector('#detail-body video')?.currentTime>0);await player.evaluate(v=>v.pause());
  assert.equal(downloads,1);
  await page.locator('#toggle-formatted').click();await page.locator('#detail-media video').waitFor();
- await page.locator('#toggle-formatted').click();await page.locator('#detail-body video').waitFor();assert.equal(downloads,1);
+ await page.locator('#reading-version').click();await page.locator('#detail-body video').waitFor();assert.equal(downloads,1);
  await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  assert.deepEqual(errors,[]);console.log('PASS: visible video first frame, inline placement, native play, raw toggle, bounded cache and mobile');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

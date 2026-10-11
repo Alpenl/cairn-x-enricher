@@ -20,7 +20,7 @@ try{
  assert.deepEqual(await page.locator("#related-links a").evaluateAll(nodes=>nodes.map(a=>a.href)),["https://example.org/paper","https://example.org/extra"]);
  assert.equal(await page.locator("#detail-body script").count(),0);assert.equal(await page.evaluate(()=>window.pwned),undefined);assert.deepEqual(remote,[]);
  await page.locator("#toggle-formatted").click();assert.match(await page.locator("#detail-body").textContent(),/升级为 Premium/);
- await page.locator("#toggle-formatted").click();assert.doesNotMatch(await page.locator("#detail-body").textContent(),/升级为 Premium/);
+ await page.locator("#reading-version").click();assert.doesNotMatch(await page.locator("#detail-body").textContent(),/升级为 Premium/);
  await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  const timing=await page.evaluate(async text=>{const {renderReading}=await import('/assets/js/reading.js');const times=[];for(let i=0;i<10;i++){const node=document.createElement('div'),start=performance.now();renderReading(node,text,{url:'https://x.com/Reader/status/123'});times.push(performance.now()-start);}return times.sort((a,b)=>a-b);},item.original_text);
  assert.ok(timing[5]<250,`unexpectedly slow parsing: ${timing[5]}ms`);assert.deepEqual(errors,[]);

@@ -20,7 +20,7 @@ try {
  assert.equal(await page.locator('#detail-body a[href^="javascript:"]').count(),0);
  await page.locator('#reading-version').scrollIntoViewIfNeeded();await page.screenshot({path:'/tmp/cairn-reading-desktop.png'});
  await page.locator('#toggle-formatted').click();assert.match(await page.locator('#detail-body').textContent(),/原内容译文/);
- await page.locator('#toggle-formatted').click();assert.equal(await page.locator('#detail-body h3').count(),1);
+ await page.locator('#reading-version').click();assert.equal(await page.locator('#detail-body h3').count(),1);
  const mobile=await browser.newPage({viewport:{width:390,height:844}});await mobile.goto(`${url}/bookmarks/${item.id}`);await mobile.locator('#detail-body h3').waitFor();await mobile.locator('#detail-body h3').scrollIntoViewIfNeeded();await mobile.screenshot({path:'/tmp/cairn-reading-mobile.png'});
  // Existing Chinese archives recover their structure without a model rerun.
  item.formatted_content="";item.original_language="zh";
