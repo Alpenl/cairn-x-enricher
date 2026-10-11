@@ -117,7 +117,9 @@ export async function verifyManagedTags(
     await page.unroute("**/api/tag-catalog/operations");
     archived = await api("/api/tag-catalog");
     assert.equal(archived.catalog.topics.find((t) => t.id === term.id).active, false);
-    assert.equal((await api(`/api/tag-catalog/history?dimension=topics&id=${term.id}`)).items.filter((i) => i.type === "archive").length, 1);
+    const archives = (await api(`/api/tag-catalog/history?dimension=topics&id=${term.id}`)).items.filter((i) => i.action === "archive");
+    assert.equal(archives.length, 1, JSON.stringify(archives));
+    assert.equal(archives[0].operation_key, archiveKeys[0]);
     await page.locator("#lib-detail-foot").getByRole("button", { name: "恢复", exact: true }).click();
     await wait(async () => (await api("/api/tag-catalog")).catalog.topics.find((t) => t.id === term.id).active);
 
