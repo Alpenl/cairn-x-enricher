@@ -5,7 +5,7 @@ import {verifyManagedTags} from "./managed-tags.mjs";
 //
 // Expects CAIRN_WORKER_URL and GO_BIN; the shell wrapper starts the Worker and
 // builds the binary. It creates a normal bookmark, lets the real scheduler
-// retrieve, read and classify it, then drives the actual dashboard page.
+// await browser capture, then read and classify it and drive the dashboard.
 import { verifyCollections } from "./collections.mjs";
 import { verifyLocalFilters } from "./local-filters.mjs";
 import { spawn } from "node:child_process";
@@ -127,11 +127,22 @@ async function main() {
     });
     check("new bookmark created", created.status === 200 || created.status === 201, JSON.stringify(created.payload));
     const id = created.payload.id;
+    const waiting = await jsonFetch(`${workerURL}/api/enrichment/jobs/${id}`, { headers: auth(enricherToken) });
+    check("URL-only bookmark waits for browser capture without an attempt", waiting.payload.error === "capture_required" && waiting.payload.attempts === 0);
+    const captured = await jsonFetch(`${workerURL}/api/captures`, {
+      method: "POST", headers: auth(appToken), body: JSON.stringify({
+        url: created.payload.url, note: "", client_id: crypto.randomUUID(),
+        capture: { title: "Browser captured original", language: "en", images: [],
+          text: "BrowserEntity provides a practical guide to evaluating large language models. It compares methods, tools and data." }
+      })
+    });
+    check("browser capture updates the same bookmark", captured.status === 201 && captured.payload.id === id, JSON.stringify(captured.payload));
 
     const run = await waitFor("a real v2 classification run", async () => {
       const result = await jsonFetch(`${workerURL}/api/v2/links/${id}/runs`, { headers: auth(enricherToken) });
       return result.status === 200 && result.payload.runs?.length ? result.payload.runs[0] : null;
     }, 180000);
+    check("no model request retrieves original content", mock.requests.filter(request => request.path === "/v1/responses").every(request => !request.body.tools?.length));
     check("the scheduler produced a v2 run with the mock model", run.resolved_model === "jev-1.13.0", JSON.stringify(run).slice(0, 300));
     const classificationRequests = mock.requests.filter(request => request.path === "/v1/systemone" &&
       !Object.hasOwn(request.body.questions || {}, "entity_0"));

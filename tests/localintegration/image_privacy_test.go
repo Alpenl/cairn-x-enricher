@@ -41,6 +41,7 @@ func TestLocalWorkerPrivateImageLifecycle(t *testing.T) {
 	if response.StatusCode != 201 || decodeErr != nil || created.ID != 1 {
 		t.Fatalf("create status=%d id=%d err=%v", response.StatusCode, created.ID, decodeErr)
 	}
+	seedArchivedOriginal(ctx, t, created.ID, "Fixture original text")
 	client := cairn.NewClient(base, envOr("CAIRN_ENRICHER_TOKEN", "internal"), &http.Client{Timeout: 10 * time.Second})
 	app := dashboard.New(ctx, health.NewTracker(), client, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), 1)
 	proxy := httptest.NewServer(app.Handler())
@@ -77,7 +78,7 @@ func TestLocalWorkerPrivateImageLifecycle(t *testing.T) {
 	}
 	completion := cairn.Completion{LeaseToken: job.LeaseToken, AITitle: "Image privacy fixture",
 		OriginalLanguage: "en", OriginalText: "Synthetic image source", TranslatedText: "图片隐私测试",
-		Summary: "Synthetic image reading aid", Model: "fixture", RelatedLinks: []string{},
+		Summary: "Synthetic image reading aid", Model: "manual", RelatedLinks: []string{},
 		Images: []cairn.ImageRef{{Key: "enrichment/1/" + strings.Repeat("a", 64) + ".png", ContentType: "image/png"}}}
 	if err := client.Complete(ctx, created.ID, completion); err != nil {
 		t.Fatalf("register current image: %v", err)

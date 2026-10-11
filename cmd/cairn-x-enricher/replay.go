@@ -139,31 +139,14 @@ func newReplayCommand() *cobra.Command {
 	return command
 }
 
-// newRefreshSourceCommand explicitly re-fetches a source. It is separate from
-// replay so a zero-call replay can never accidentally trigger a paid retrieval.
+// Keep the old command discoverable with explicit migration guidance.
 func newRefreshSourceCommand() *cobra.Command {
-	var id int64
 	command := &cobra.Command{
-		Use:   "refresh-source",
-		Short: "Explicitly re-fetch a bookmark's source before reclassification",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			if id < 1 {
-				return fmt.Errorf("--id must be a positive bookmark id")
-			}
-			cfg, err := config.LoadFor(config.RoleClassify)
-			if err != nil {
-				return err
-			}
-			httpClient := &http.Client{Timeout: cfg.RequestTimeout}
-			queue := cairn.NewClient(cfg.CairnBaseURL, cfg.CairnToken, httpClient)
-			payload, err := queue.RefreshSource(context.Background(), id)
-			if err != nil {
-				return err
-			}
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
-			return err
+		Use: "refresh-source", Short: "Retired: update originals with the browser extension",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return fmt.Errorf("source retrieval has been removed; open the original page and capture it with the Cairn browser extension")
 		},
 	}
-	command.Flags().Int64Var(&id, "id", 0, "bookmark id to re-enrol for source retrieval")
+	command.Flags().Int64("id", 0, "bookmark id (retired operation)")
 	return command
 }

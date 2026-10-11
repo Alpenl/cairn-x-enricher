@@ -128,12 +128,15 @@ function renderProcessBanner(item) {
   let text = "";
   if (item.offline_cached_at) {
     text = `离线副本 · ${formatFull(new Date(item.offline_cached_at).toISOString())} · 内容可能已更新，编辑需要联网。`;
+  } else if (item.error === "capture_required") {
+    text = failureReason(item);
+    actions.push(h("a.btn.btn-sm", { href: item.url, target: "_blank", rel: "noopener noreferrer" }, icon("external", 14), "打开原帖采集"));
   } else if (item.paid_call_unresolved) {
     tone = "danger";
     text = failureReason(item);
     actions.push(h("button.btn.btn-sm", { type: "button", onclick: () => pasteSource(item.id) }, icon("clipboard", 14), "粘贴原文"));
-  } else if (item.status === "processing") text = item.original_text ? "正在根据已存正文生成标题、译文与摘要…" : "正在读取原帖并生成中文标题、译文与摘要…";
-  else if (item.status === "pending") text = item.original_text ? "正文已保存，可直接阅读；标题、译文和摘要等待 AI 增强。" : "已排队，等待后台读取原帖。";
+  } else if (item.status === "processing") text = item.original_text ? "正在根据已存正文生成标题、译文与摘要…" : "等待浏览器插件采集原文…";
+  else if (item.status === "pending") text = item.original_text ? "正文已保存，可直接阅读；标题、译文和摘要等待 AI 增强。" : "等待浏览器插件采集原文。";
   else if (item.status === "failed") {
     tone = "warn";
     text = failureReason(item);
@@ -483,7 +486,7 @@ function openDetailMenu(anchor) {
       disabled: item.status === "processing" || item.paid_call_unresolved, run: () => processItem(item.id)
     } : null,
     { label: "粘贴原文生成", icon: "clipboard", hint: "跳过 X 搜索，直接用粘贴的正文", run: () => pasteSource(item.id) },
-    { label: "重新抓取原文", icon: "download", hint: "会重新读取来源", run: () => diagnostics.refreshSource(item.id) },
+    { label: "更新原文", icon: "external", hint: "打开原帖后使用插件重新采集", run: () => window.open(item.url, "_blank", "noopener,noreferrer") },
     "separator",
     { heading: "分类" },
     { label: "只重试分类", icon: "tag", hint: "0 次模型调用，只重新入队", run: () => diagnostics.retryClassification(item.id) },

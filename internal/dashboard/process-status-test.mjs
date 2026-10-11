@@ -10,3 +10,5 @@ assert.match(failureReason({ ...past, error: "[recovered_source] HTTP 502" }), /
 assert.match(failureReason({ ...past, paid_call_unresolved: true, paid_stage: "reading" }), /正文已保存.*自动重试已暂停/);
 assert.doesNotMatch(failureReason({ ...past, paid_call_unresolved: true }), /正文已保存|已到重试时间/);
 console.log("Processing status regressions passed");
+
+assert.match(failureReason({status:"pending", error:"capture_required", paid_call_unresolved:true}), /等待浏览器插件采集原文/);

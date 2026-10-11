@@ -75,7 +75,7 @@ func TestLocalWorkerProviderSettlementFailureSurvivesProcessExit(t *testing.T) {
 	var operationKey string
 	for _, item := range items {
 		if item.LinkID == id {
-			if item.Stage != "fetch" || item.State != "reserved" || item.ResponseID != "" {
+			if item.Stage != "reading" || item.State != "reserved" || item.ResponseID != "" {
 				t.Fatalf("unsettled provider attempt=%+v", item)
 			}
 			operationKey = item.OperationKey

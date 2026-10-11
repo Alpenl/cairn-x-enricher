@@ -47,11 +47,11 @@ func TestLocalWorkerProviderReservationResponseBoundaries(t *testing.T) {
 	if err != nil || job == nil || job.ID != id {
 		t.Fatalf("claim=%+v error=%v", job, err)
 	}
-	if err := queue.AdmitSourceStage(ctx, id, job.LeaseToken, "fetch", 210*time.Second); err != nil {
+	if err := queue.AdmitSourceStage(ctx, id, job.LeaseToken, "reading", 210*time.Second); err != nil {
 		t.Fatal(err)
 	}
 	input := enrich.Input{ID: id, URL: job.URL, Attempt: job.Attempt,
-		LeaseToken: job.LeaseToken, ContentRevision: job.ContentRevision, MinRemainingMS: 210_000}
+		LeaseToken: job.LeaseToken, ContentRevision: job.ContentRevision, MinRemainingMS: 210_000, SourceText: "Fixture original text"}
 	modelWithLedger := func(ledger *cairn.Client) *enrich.ResponsesClient {
 		model := enrich.NewResponsesClient(provider.URL, "fixture-key", "grok-test", 1024, "",
 			&http.Client{Timeout: 10 * time.Second}, catalog)
@@ -67,7 +67,7 @@ func TestLocalWorkerProviderReservationResponseBoundaries(t *testing.T) {
 			return http.DefaultTransport.RoundTrip(request)
 		}),
 	})
-	if _, err := modelWithLedger(before).FetchSource(ctx, input); err == nil || posts.Load() != 0 {
+	if _, err := modelWithLedger(before).Transform(ctx, input); err == nil || posts.Load() != 0 {
 		t.Fatalf("precommit reservation failure sent a provider POST: posts=%d error=%v", posts.Load(), err)
 	}
 	if attempts := readProviderAttempts(ctx, t, base, "internal"); len(attempts) != 0 {
@@ -94,19 +94,19 @@ func TestLocalWorkerProviderReservationResponseBoundaries(t *testing.T) {
 			return http.DefaultTransport.RoundTrip(request)
 		}),
 	})
-	if _, err := modelWithLedger(after).FetchSource(ctx, input); err == nil ||
+	if _, err := modelWithLedger(after).Transform(ctx, input); err == nil ||
 		reserveCalls.Load() != 1 || posts.Load() != 0 {
 		t.Fatalf("committed reservation response loss: reserve calls=%d posts=%d error=%v",
 			reserveCalls.Load(), posts.Load(), err)
 	}
 	attempts := readProviderAttempts(ctx, t, base, "internal")
-	if len(attempts) != 1 || attempts[0].LinkID != id || attempts[0].Stage != "fetch" ||
+	if len(attempts) != 1 || attempts[0].LinkID != id || attempts[0].Stage != "reading" ||
 		attempts[0].State != "reserved" || attempts[0].ResponseID != "" {
 		t.Fatalf("committed reservation was not retained: %+v", attempts)
 	}
 	// A new client repeats the same model operation under the same lease. The
 	// Worker recognizes it but cannot issue a second send permission.
-	if _, err := modelWithLedger(queue).FetchSource(ctx, input); err == nil || posts.Load() != 0 {
+	if _, err := modelWithLedger(queue).Transform(ctx, input); err == nil || posts.Load() != 0 {
 		t.Fatalf("same-operation replay sent a provider POST: posts=%d error=%v", posts.Load(), err)
 	}
 	operator := cairn.NewClient(base, "operator", &http.Client{Timeout: 10 * time.Second})

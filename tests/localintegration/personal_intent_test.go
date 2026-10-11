@@ -54,7 +54,7 @@ func TestLocalWorkerObjectivePersonalBoundary(t *testing.T) {
 	switchTarget(t, base, token, classifier)
 	id := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
 	lease := claimEnrichmentJob(t, base, token, id)
-	source := enrich.Source{OriginalText: "A method for evaluating language models.", OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "fixture"}
+	source := enrich.Source{OriginalText: "A method for evaluating language models.", OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
 		t.Fatal(err)
 	}

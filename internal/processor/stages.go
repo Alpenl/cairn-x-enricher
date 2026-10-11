@@ -23,8 +23,7 @@ import (
 // StageQueue persists source checkpoints and independent classification leases.
 type StageQueue interface {
 	Queue
-	// AdmitSourceStage fences the current lease before each paid retrieval or
-	// reading call, releasing a short lease without charging an unused attempt.
+	// AdmitSourceStage fences the current lease before each paid reading call, releasing a short lease without charging an unused attempt.
 	AdmitSourceStage(context.Context, int64, string, string, time.Duration) error
 	FailSourceStage(context.Context, int64, string, string, string, time.Duration, bool) error
 	DeferSourceBudget(context.Context, int64, string, string) error
@@ -65,9 +64,8 @@ type StageQueue interface {
 	RetryClassification(context.Context, int64) error
 }
 
-// SourceReader separates retrieval from generation of reading aids.
+// SourceReader generates reading aids exclusively from already archived text.
 type SourceReader interface {
-	FetchSource(context.Context, enrich.Input) (enrich.Source, error)
 	Transform(context.Context, enrich.Input) (enrich.Result, error)
 }
 
@@ -481,52 +479,10 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 	probe *sourceStageProbe) error {
 	s := p.stages
 	logger := p.logger.With("link_id", job.ID, "attempt", job.Attempt)
-	input := enrich.Input{ID: job.ID, URL: job.URL, Note: job.Note, Attempt: job.Attempt,
-		LeaseToken: job.LeaseToken, ContentRevision: job.ContentRevision,
-		MinRemainingMS: (s.paidStageTimeout + paidStageCommitMargin).Milliseconds(), SourceText: manual}
 	var source *enrich.Source
 	var err error
-	// An explicit refresh intent bypasses both reuse paths: the operator asked
-	// for a real fetch, not for the stored snapshot (R2-06).
-	if manual == "" && job.RefreshEpoch > 0 {
-		if err := p.admitPaidStage(ctx, job, "fetch", probe); err != nil {
-			return err
-		}
-		fetched, fetchErr := s.reader.FetchSource(ctx, input)
-		if fetchErr != nil {
-			if p.deferSourceGate(ctx, job, "fetch", fetchErr) {
-				return ErrJobDeferred
-			}
-			if p.deferSourceBudget(ctx, job, "fetch", fetchErr) {
-				return ErrJobDeferred
-			}
-			// The old readable content and all human data are kept; the intent is
-			// consumed so a broken URL cannot loop forever.
-			ackCtx, cancel := boundedStateReportContext(ctx)
-			ackErr := s.queue.AckSourceRefresh(ackCtx, job.ID, job.RefreshEpoch, "failed", boundedError(fetchErr))
-			cancel()
-			if ackErr != nil {
-				return errors.Join(fetchErr, fmt.Errorf("acknowledge failed source refresh: %w", ackErr))
-			}
-			return p.reportStageFailure(ctx, logger, job, failurePathSearch, "fetch", fetchErr)
-		}
-		source = &fetched
-		if err = s.queue.SaveSource(ctx, job.ID, job.LeaseToken, *source); err != nil {
-			// A failed checkpoint may still have committed before its response was
-			// lost. Only the Worker can consume the refresh intent on success.
-			return p.reportFailure(ctx, logger, job, failurePathSearch, err)
-		}
-		probe.succeed("source")
-		if err = p.persistSourceEvidence(ctx, job.ID, *source); err != nil {
-			// The refreshed source is durable already. A failed snapshot write
-			// must not turn that successful refresh into a failed fetch.
-			return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
-		}
-		// The Worker source checkpoint clears this refresh intent atomically.
-		// A separate success ack could lose its response after the source commit.
-		logger.InfoContext(ctx, "source refreshed; classification queued")
-		return p.finishReading(ctx, job, *source, nil, probe)
-	}
+	// Old refresh intents must never bypass the saved snapshot. New refresh
+	// requests are rejected by the Worker; an already claimed job can only read.
 	// Explicit manual text replaces a snapshot. Ordinary reruns reuse it.
 	if manual == "" {
 		source, err = s.queue.GetSource(ctx, job.ID)
@@ -554,32 +510,25 @@ func (p *Processor) processStages(ctx context.Context, job *cairn.Job, manual st
 		}
 	}
 	if source == nil {
-		// Caller-supplied text is a free source write. The Worker accepts it
-		// under the current lease without a provider attempt, then reading gets
-		// its own paid admission and permit below.
 		if manual == "" {
-			if err := p.admitPaidStage(ctx, job, "fetch", probe); err != nil {
-				return err
+			// Defensive compatibility with old Workers: release an unused lease
+			// without spending a provider permit or recording a model failure.
+			deferCtx, cancel := boundedStateReportContext(ctx)
+			defer cancel()
+			if err := s.queue.DeferSourceStage(deferCtx, job.ID, job.LeaseToken, "reading"); err != nil {
+				return fmt.Errorf("release uncaptured bookmark: %w", err)
 			}
+			return ErrJobDeferred
 		}
-		fetched, fetchErr := s.reader.FetchSource(ctx, input)
-		if fetchErr != nil {
-			if p.deferSourceGate(ctx, job, "fetch", fetchErr) {
-				return ErrJobDeferred
-			}
-			if p.deferSourceBudget(ctx, job, "fetch", fetchErr) {
-				return ErrJobDeferred
-			}
-			return p.reportStageFailure(ctx, logger, job, failurePathSearch, "fetch", fetchErr)
+		provided, sourceErr := enrich.SourceFromText(manual)
+		if sourceErr != nil {
+			return sourceErr
 		}
-		source = &fetched
+		source = &provided
 		if err = p.saveSourceWithEvidence(ctx, job, *source); err != nil {
-			return p.reportFailure(ctx, logger, job, failurePathSearch, err)
+			return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
 		}
-		if manual == "" {
-			probe.succeed("source")
-		}
-		logger.InfoContext(ctx, "source saved; classification queued")
+		logger.InfoContext(ctx, "manual source saved; classification queued")
 	} else if err = p.ensureSourceEvidence(ctx, job.ID, *source); err != nil {
 		return p.reportFailure(ctx, logger, job, failurePathRecovered, err)
 	}
@@ -639,8 +588,16 @@ func (p *Processor) persistSourceEvidence(ctx context.Context, id int64, source 
 // by construction, and the provenance of the stored context is honestly
 // labelled legacy_unknown rather than guessed (F05).
 func EvidenceSnapshot(source enrich.Source, now time.Time) map[string]any {
+	retrieval, acquired := "legacy_saved", "legacy_unknown"
+	switch source.Model {
+	case "manual":
+		retrieval, acquired = "manual", "manual"
+	case "browser_capture":
+		retrieval, acquired = "browser_capture", "browser_dom"
+	}
+
 	blocks := []map[string]any{{
-		"id": "primary-1", "role": "primary", "text": source.OriginalText, "acquired": "fetch",
+		"id": "primary-1", "role": "primary", "text": source.OriginalText, "acquired": acquired,
 	}}
 	if strings.TrimSpace(source.ContextText) != "" {
 		blocks = append(blocks, map[string]any{
@@ -650,7 +607,7 @@ func EvidenceSnapshot(source enrich.Source, now time.Time) map[string]any {
 	return map[string]any{
 		"blocks":     blocks,
 		"fetched_at": now.UTC().Format(time.RFC3339),
-		"retrieval":  "x_search",
+		"retrieval":  retrieval,
 		"truncation": map[string]any{"truncated": false},
 	}
 }

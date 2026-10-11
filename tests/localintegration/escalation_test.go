@@ -107,7 +107,7 @@ func TestLocalWorkerEvidenceExecutionRecovery(t *testing.T) {
 	id := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
 	lease := claimEnrichmentJob(t, base, token, id)
 	const storedURL = "https://allowed.example/article"
-	source := enrich.Source{OriginalText: "Primary model engineering source.", OriginalLanguage: "en", ContextText: "Stored context", RelatedLinks: []string{storedURL}, ImageURLs: []string{}, Model: "fixture"}
+	source := enrich.Source{OriginalText: "Primary model engineering source.", OriginalLanguage: "en", ContextText: "Stored context", RelatedLinks: []string{storedURL}, ImageURLs: []string{}, Model: "manual"}
 	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
 		t.Fatal(err)
 	}

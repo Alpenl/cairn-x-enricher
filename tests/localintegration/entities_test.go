@@ -110,7 +110,7 @@ func TestLocalWorkerEntitySnapshotIdentity(t *testing.T) {
 	queue := cairn.NewClient(base, token, client)
 	id := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
 	lease := claimEnrichmentJob(t, base, token, id)
-	source := enrich.Source{OriginalText: "ordinary source text", OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "fixture"}
+	source := enrich.Source{OriginalText: "ordinary source text", OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
 		t.Fatal(err)
 	}

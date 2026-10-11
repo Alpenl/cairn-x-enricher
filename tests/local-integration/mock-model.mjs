@@ -55,13 +55,7 @@ export function startMockModel() {
           translated_text: "本地集成的中文译文。", summary: "本地集成的摘要。"
         }));
       }
-      return send(envelope({
-        original_text: "BrowserEntity provides a practical guide to evaluating large language models. It compares methods, tools and data.",
-        original_language: "en",
-        context_text: "A related comment that is not the original post.",
-        related_links: [],
-        image_urls: []
-      }, { xSearch: true }));
+      return send({ error: "source retrieval is forbidden" }, 400);
     }
     if (request.url === "/v1/systemone") {
       const questions = body?.questions || {};

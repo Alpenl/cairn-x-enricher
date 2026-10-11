@@ -1,6 +1,6 @@
 # Cairn X Enricher
 
-一个独立于 Cairn Share App 的 Go 后台服务。Grok Responses API 和服务端 `x_search` 负责获取原帖，原文先保存到 D1；标题、译文和摘要由独立的阅读增强请求生成，相关图片复制到 R2。TypeSafe Jev 基于已存档原文，通过独立队列生成主题、资源类型和内容特征建议。每条以 2–5 个有依据的标签为目标，证据不足时允许更少；人工操作保留身份与历史。
+一个独立于 Cairn Share App 的 Go 后台服务。浏览器插件负责采集原文、相关链接及媒体，先保存到 D1/R2；Grok Responses API 仅根据已保存原文生成标题、译文和摘要。仅保存链接时等待插件采集，不调用模型获取原文。TypeSafe Jev 基于已存档原文，通过独立队列生成主题、资源类型和内容特征建议。每条以 2–5 个有依据的标签为目标，证据不足时允许更少；人工操作保留身份与历史。
 
 配套 Cairn Share App 可读取 AI 标题、双语正文、归档图片和人工整理结果。旧客户端默认的六字段响应仍兼容；新版 App 通过 `include=enrichment` 显式读取增强信息，继续使用独立的 App Token。
 
@@ -9,27 +9,24 @@
 ## 数据流
 
 ```text
-Cairn Share App -> 原有 Worker API -> D1 links
-                                      |
-                                      v
-定时器 -> 原文任务 -> Grok x_search -> 保存原文快照
-                                  |          |
-                                  |          +-> 独立 Jev 队列 -> 自动分类建议
-                                  +-> 阅读增强请求 -> 标题、译文、摘要、R2 图片
+App / 网页保存链接 -> D1 links -> 等待浏览器插件采集
+浏览器插件采集 -> 保存原文快照、相关链接和媒体到 D1/R2
+                  +-> 独立 Jev 队列 -> 自动分类建议
+                  +-> 阅读增强请求 -> 标题、译文、摘要与排版
 
-浏览器 -> NAS 收藏库（列表 + 阅读 + 整理）-> 搜索/筛选/后台重试 -> 同一处理流程
+网页 / App -> 已有收藏的阅读、搜索、筛选与人工整理
 ```
 
 核心保证：
 
 - Worker 用原子更新和 15 分钟 lease 分发任务，支持多实例并发而不重复领取。
-- 成功结果只有在响应包含已完成的 X Search 证据且通过严格 JSON/URL 校验后才写入。
+- 原文由插件采集并持久化；模型只处理已存原文，不能检索、生成或覆盖原文。历史原文继续复用。
 - 图片只接受 `https://pbs.twimg.com/media/...`，由 Worker 校验响应类型与大小后写入 R2，浏览器不接触 Cloudflare token。
 - 失败由 Worker 按 `1m / 5m / 30m / 2h` 退避，最多尝试 5 次。
-- 模型端点的临时 `408/429/5xx` 会在单次队列 attempt 内短重试；如果完整线程读取慢失败，会降级为只读原帖的结构化请求，避免上游抖动直接耗尽业务重试次数。
+- 缺少原文的收藏不领取处理租约、不申请付费许可；旧客户端的原文抓取、降级和刷新入口也不能触发检索。阅读增强的重试、账单核对及恢复机制保留。
 - 原文在阅读增强前保存。失败重试和普通重新处理复用快照；后台也支持粘贴原文后生成。
 - 分类失败独立退避，不改变原文/阅读增强状态；旧分类租约不能覆盖更新后的输入。
-- URL 改变会使来源与增强内容失效并重新入队；只改备注保留正文和分类，更新个人版本与读取缓存。
+- URL 改变会使来源与增强内容失效并等待重新采集；只改备注保留正文和分类，更新个人版本与读取缓存。
 - 日志不会输出 API key、完整提示词或模型响应。
 - 标签只从 Worker 提供的版本化词表中选择，未知标签被丢弃并标记待确认；人工整理结果不会被重新处理覆盖。
 
@@ -77,7 +74,6 @@ make test-ablation   # 离线重放已记录的消融结论，零模型调用
 go run ./cmd/cairn-x-enricher once --max-jobs 10
 go run ./cmd/cairn-x-enricher classify --max-jobs 10
 go run ./cmd/cairn-x-enricher replay --id 12 --topic-accept 0.6  # 零调用重放旧判断
-go run ./cmd/cairn-x-enricher refresh-source --id 12            # 显式重取原文
 go run ./cmd/cairn-x-enricher serve
 go run ./experiments/classification/main -dataset internal/evaluation/testdata/synthetic-dataset.json
 ```
@@ -99,7 +95,7 @@ go run ./experiments/classification/main -dataset internal/evaluation/testdata/s
 - `/api/bookmarks/{id}/curation`：通过 `PATCH` 保存人工整理，不调用模型。
 - `/api/images/{key...}`：受控的 R2 图片同源代理。
 - `/api/bookmarks/process`：提交最多 10 个收藏 ID 立即处理。
-- `/api/bookmarks/{id}/source`：提交人工补充的原帖正文，绕过 X Search 直接生成标题、语言、译文和摘要。
+- `/api/bookmarks/{id}/source`：提交人工补充的原帖正文，保存后生成标题、语言、译文和摘要。
 - `/healthz`：进程存活。只要进程还在就不会失败，因此在 Worker 或模型不可达时也不会被重启策略反复杀死。
 - `/readyz`：服务就绪。运行期被标记为降级时返回 `503`，响应体带上 `ready_reason` 与 `unhealthy_since`。
 - `/status`：最近一批的匿名统计、错误状态、就绪原因和构建信息。
@@ -115,7 +111,7 @@ node tests/browser/fixture-server.mjs --port 8099   # 打开 http://127.0.0.1:80
 node tests/browser/fixture-server.mjs --v1          # 模拟未启用多维分类的旧 Worker
 ```
 
-`classify` 仅消费 Jev 队列，不调用 X Search 或生成阅读增强。`classify --id 123` 会先将指定的已有原文入队，再消费队列（可能包含其他待处理条目）。新抓取的原文自动入队；历史收藏不会全库回填。
+`classify` 仅消费 Jev 队列，不调用 X Search 或生成阅读增强。`classify --id 123` 会先将指定的已有原文入队，再消费队列（可能包含其他待处理条目）。插件新采集的原文自动入队；历史收藏不会全库回填。
 
 ## 消融实验
 
@@ -123,7 +119,7 @@ node tests/browser/fixture-server.mjs --v1          # 模拟未启用多维分�
 线程读取、译文字段、分类词表、标题校验器、搜索证据门禁），用同一批已验证的真实帖子
 对真实模型端点测量质量与成本变化。
 
-结论摘要：
+以下是旧版模型检索方案的历史实验结论，不代表当前插件采集架构的要求：
 
 - strict JSON Schema 与 `x_search` 是**硬性前提**，移除后质量归零（前者输出不可解析，
   后者模型改写记忆而非读取原帖）。
@@ -175,7 +171,7 @@ Opt-in semantic extensions use a shared, persistent Worker budget. See [limits, 
 
 浏览器插件 0.2.0 可直接归档已加载正文与图片；Worker 迁移 `0053_capture_and_formatting.sql`
 及对应 API 需先发布。来源快照会标注 `browser_capture`，普通阅读增强复用该快照，
-仍保留已有翻译、摘要和分类流程。只有明确请求重新读取原帖才走原来的源站检索。
+仍保留已有翻译、摘要和分类流程。更新原文需打开原帖并通过浏览器插件重新采集。旧 `refresh-source` 命令与 API 返回采集提示，不再请求模型。网页“粘贴原文”保留为显式的人工修复入口。
 
 正文整理使用独立模型配置 `FORMAT_BASE_URL`（含 `/v1`）、`FORMAT_API_KEY` 和
 `FORMAT_MODEL`，使用与现有服务一致的 Responses API 结构化输出协议。三个变量需一起配置。
@@ -205,3 +201,7 @@ Opt-in semantic extensions use a shared, persistent Worker budget. See [limits, 
 自检状态保存在Worker/D1，以模型地址、密钥摘要、模型、输出上限、提示词和输出协议绑定。成功结果在24小时内可跨进程重用；失败以5/10/20/40/60分钟退避，重启不清除等待时间。旧的每日4次自检上限已被60秒防重复调用保护取代，既有全局/单篇付费限额保留。`/readyz`仍反映处理阶段是否就绪，阅读服务可用性由`/healthz`与页面判断。状态页只展示安全原因及下一次检查时间；没有成功结果时不会把恢复请求显示成恢复成功。
 
 网页工作区的组件构建、布局及性能验证见 [前端重构说明](docs/reader-workspace.md)。
+
+## 2026-10-09 原文采集迁移
+
+配套 Worker 需先应用 `0062_browser_source_only.sql` 并发布新代码，再升级此服务。迁移只新增已采集正文的队列索引，不删除原文、历史账单、标签、合集、笔记或媒体。没有原文的旧收藏显示等待插件采集，不自动全库重跑。既有正文继续用于整理、翻译、摘要和 Jev 分类；图片、视频及相关链接仍复用原有归档。历史支付结果继续可核对，绝不自动解除未知账单或付费锁。

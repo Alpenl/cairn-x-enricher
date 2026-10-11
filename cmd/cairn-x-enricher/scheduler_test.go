@@ -32,7 +32,7 @@ func (q *emptyNotifiedQueue) Claim(context.Context) (*cairn.Job, error) {
 	return nil, nil
 }
 func (q *emptyNotifiedQueue) GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error) {
-	return cairn.BookmarkDetail{}, nil
+	return cairn.BookmarkDetail{Bookmark: cairn.Bookmark{OriginalText: "archived source"}}, nil
 }
 func (q *emptyNotifiedQueue) StoreImages(context.Context, int64, string, []string) ([]cairn.ImageRef, error) {
 	return nil, nil
@@ -47,7 +47,7 @@ func (q *countingQueue) Claim(ctx context.Context) (*cairn.Job, error) {
 }
 
 func (q *countingQueue) GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error) {
-	return cairn.BookmarkDetail{}, nil
+	return cairn.BookmarkDetail{Bookmark: cairn.Bookmark{OriginalText: "archived source"}}, nil
 }
 
 func (q *countingQueue) StoreImages(context.Context, int64, string, []string) ([]cairn.ImageRef, error) {
@@ -72,7 +72,7 @@ func (q *blockingQueue) Claim(ctx context.Context) (*cairn.Job, error) {
 }
 
 func (q *blockingQueue) GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error) {
-	return cairn.BookmarkDetail{}, nil
+	return cairn.BookmarkDetail{Bookmark: cairn.Bookmark{OriginalText: "archived source"}}, nil
 }
 
 func (q *blockingQueue) StoreImages(context.Context, int64, string, []string) ([]cairn.ImageRef, error) {
@@ -313,7 +313,7 @@ func (q *finiteSourceQueue) Claim(context.Context) (*cairn.Job, error) {
 	return &cairn.Job{ID: int64(q.remaining + 1), URL: "https://x.com/a/status/1", LeaseToken: "lease"}, nil
 }
 func (*finiteSourceQueue) GetBookmark(context.Context, int64) (cairn.BookmarkDetail, error) {
-	return cairn.BookmarkDetail{}, nil
+	return cairn.BookmarkDetail{Bookmark: cairn.Bookmark{OriginalText: "archived source"}}, nil
 }
 func (*finiteSourceQueue) StoreImages(context.Context, int64, string, []string) ([]cairn.ImageRef, error) {
 	return nil, nil

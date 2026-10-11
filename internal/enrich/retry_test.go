@@ -14,7 +14,7 @@ import (
 // A 502 can arrive after a provider has executed a paid request. Its receipt
 // does not prove that a second POST is free.
 func TestAmbiguousHTTPFailureDoesNotStartAnotherModelRequest(t *testing.T) {
-	for _, operation := range []string{"fetch", "reading", "legacy"} {
+	for _, operation := range []string{"reading", "legacy"} {
 		t.Run(operation, func(t *testing.T) {
 			calls := 0
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
@@ -27,13 +27,9 @@ func TestAmbiguousHTTPFailureDoesNotStartAnotherModelRequest(t *testing.T) {
 			input := Input{ID: 7, URL: "https://x.com/a/status/7", Attempt: 1, SourceText: "saved source"}
 			var err error
 			switch operation {
-			case "fetch":
-				input.SourceText = ""
-				_, err = client.FetchSource(context.Background(), input)
 			case "reading":
 				_, err = client.Transform(context.Background(), input)
 			case "legacy":
-				input.SourceText = ""
 				_, err = client.Generate(context.Background(), input)
 			}
 			var modelErr *ModelHTTPError
@@ -78,7 +74,7 @@ func TestProviderPOSTDoesNotGetTransportRetryOnReusedConnection(t *testing.T) {
 		GotConn: func(info httptrace.GotConnInfo) { reused.Store(info.Reused) },
 	})
 	model := NewResponsesClient(server.URL, "key", "model", 1024, "", client, testTaxonomy())
-	_, err = model.FetchSource(ctx, Input{ID: 7, URL: "https://x.com/a/status/7", Attempt: 1})
+	_, err = model.Transform(ctx, Input{ID: 7, URL: "https://x.com/a/status/7", Attempt: 1, SourceText: "saved source"})
 	if err == nil || !reused.Load() || posts.Load() != 1 {
 		t.Fatalf("reused=%v posts=%d error=%v; want one ambiguous attempt", reused.Load(), posts.Load(), err)
 	}

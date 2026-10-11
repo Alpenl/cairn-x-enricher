@@ -80,7 +80,7 @@ func TestLocalWorkerProviderAttemptLedger(t *testing.T) {
 		t.Fatalf("process: %v", err)
 	}
 	detail, err := queue.GetBookmark(ctx, id)
-	if err != nil || detail.Status != "completed" || detail.OriginalText != "Fixture original text" || posts.Load() != 2 {
+	if err != nil || detail.Status != "completed" || detail.OriginalText != "Fixture original text" || posts.Load() != 1 {
 		t.Fatalf("detail=%+v posts=%d error=%v", detail, posts.Load(), err)
 	}
 	items := readProviderAttempts(ctx, t, base, "internal")
@@ -99,9 +99,10 @@ func TestLocalWorkerProviderAttemptLedger(t *testing.T) {
 		}
 		if item.Stage == "reading" {
 			reading++
+			sourceOperation = item.OperationKey
 		}
 	}
-	if source != 1 || reading != 1 {
+	if source != 0 || reading != 1 {
 		t.Fatalf("source=%d reading=%d items=%+v", source, reading, items)
 	}
 	operator := cairn.NewClient(base, "operator", httpClient)
@@ -123,7 +124,7 @@ func TestLocalWorkerProviderAttemptLedger(t *testing.T) {
 	if err := worker.Process(ctx, failedJob); err == nil {
 		t.Fatal("lost response unexpectedly succeeded")
 	}
-	if posts.Load() != 3 {
+	if posts.Load() != 2 {
 		t.Fatalf("provider posts=%d, want three", posts.Load())
 	}
 	items = readProviderAttempts(ctx, t, base, "internal")

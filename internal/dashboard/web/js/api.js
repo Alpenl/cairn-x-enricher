@@ -7,6 +7,7 @@ import { localFilterResult } from "./local-filters.js";
 let filterCatalog = null;
 
 const ERROR_LABELS = Object.freeze({
+  capture_required: "请先用浏览器插件采集原文",
   job_busy: "这条正在处理中",
   not_found: "这条收藏不存在",
   backend_error: "Cloudflare 后端暂时不可用",
@@ -162,27 +163,6 @@ async function processRequest(ids) {
   return result;
 }
 
-async function refreshSourceRequest(id) {
-  let key = pendingRefreshKeys.get(id);
-  if (!key) {
-    try { key = globalThis.sessionStorage?.getItem(`cairn:refresh-source:${id}`); } catch { /* optional storage */ }
-  }
-  if (!key) key = newOperationKey(`refresh-source-${id}`);
-  pendingRefreshKeys.set(id, key);
-  try { globalThis.sessionStorage?.setItem(`cairn:refresh-source:${id}`, key); } catch { /* optional storage */ }
-  try {
-    const result = await fetchJSON(`/api/bookmarks/${id}/refresh-source`, jsonBody("POST", { operation_key: key }));
-    pendingRefreshKeys.delete(id);
-    try { globalThis.sessionStorage?.removeItem(`cairn:refresh-source:${id}`); } catch { /* optional storage */ }
-    return result;
-  } catch (error) {
-    if ([409, 429].includes(error?.status)) {
-      pendingRefreshKeys.delete(id);
-      try { globalThis.sessionStorage?.removeItem(`cairn:refresh-source:${id}`); } catch { /* optional storage */ }
-    }
-    throw error;
-  }
-}
 
 const once = new Map();
 function cached(key, load) {
@@ -622,7 +602,6 @@ export const api = {
   entities: (id, identity, options) => readAux("entities", id, identity, options),
   correctEntity: (id, body) => mutate(() => fetchJSON(`/api/bookmarks/${id}/entities`, jsonBody("POST", body)), id),
   retryClassification: (id) => mutate(() => fetchJSON(`/api/bookmarks/${id}/retry-classification`, { method: "POST" }), id),
-  refreshSource: (id) => mutate(() => refreshSourceRequest(id), id),
   replayPolicy: (id, commit) => mutate(() => fetchJSON(`/api/bookmarks/${id}/replay-policy`, jsonBody("POST", commit ? { commit: true } : {})), id),
   process: (ids) => { ids.forEach(invalidateDetail); return mutate(() => processRequest(ids)); },
   submitSource: (id, submission) => mutate(() => processingRequest(`/api/bookmarks/${id}/source`, {

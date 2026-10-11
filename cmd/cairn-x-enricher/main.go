@@ -572,7 +572,7 @@ func newProcessor(
 	if withSource {
 		model := enrich.NewResponsesClient(
 			cfg.GrokBaseURL, cfg.GrokAPIKey, cfg.GrokModel, cfg.GrokMaxTokens,
-			"cairn-x-enricher/"+buildinfo.Version, upstreamHTTPClient(cfg.GrokFetchTimeout), catalog,
+			"cairn-x-enricher/"+buildinfo.Version, upstreamHTTPClient(cfg.GrokReadingTimeout), catalog,
 		)
 		model.SetReadingHTTPClient(upstreamHTTPClient(cfg.GrokReadingTimeout))
 		model.SetPaidAttemptLedger(queue)
@@ -697,7 +697,7 @@ func newProcessor(
 		tracker.MarkComponentDegraded("reading", "source provider contract check pending")
 	}
 	worker.SetClaimTimeout(batchTimeout(cfg))
-	worker.SetPaidStageTimeout(max(cfg.GrokFetchTimeout, cfg.GrokReadingTimeout))
+	worker.SetPaidStageTimeout(cfg.GrokReadingTimeout)
 	fetcher, policy := evidenceFetcher(cfg)
 	extensions, err := extensionService(cfg, classifier)
 	if err != nil {

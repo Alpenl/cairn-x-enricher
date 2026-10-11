@@ -65,7 +65,7 @@ func TestLocalWorkerDecisionReferences(t *testing.T) {
 	switchTarget(t, base, token, client)
 	id := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
 	lease := claimEnrichmentJob(t, base, token, id)
-	source := enrich.Source{OriginalText: "Language model engineering.", OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "fixture"}
+	source := enrich.Source{OriginalText: "Language model engineering.", OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
 		t.Fatal(err)
 	}

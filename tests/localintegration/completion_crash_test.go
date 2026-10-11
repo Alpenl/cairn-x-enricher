@@ -49,7 +49,7 @@ func TestLocalWorkerClassificationCompletionSurvivesProcessExit(t *testing.T) {
 	id := createLink(t, base, appToken)
 	lease := claimEnrichmentJob(t, base, enricherToken, id)
 	source := enrich.Source{OriginalText: "A reproducible guide to evaluating language models.",
-		OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "local-fetch"}
+		OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
 		t.Fatalf("save source: %v", err)
 	}

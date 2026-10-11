@@ -208,24 +208,6 @@ export async function retryClassification(id) {
   }
 }
 
-export async function refreshSource(id) {
-  const confirmed = await confirmAction({
-    title: "重新抓取原文？",
-    message: "会再次读取来源（一次检索调用）。旧内容与人工整理在新内容到达前保持不变。",
-    confirmLabel: "重新抓取"
-  });
-  if (!confirmed) return;
-  if (els.refresh) els.refresh.disabled = true;
-  try {
-    const payload = await api.refreshSource(id);
-    toast(payload.detail || "已提交来源刷新", { tone: "ok" });
-  } catch (error) {
-    toast(error?.message === "lease_conflict" ? "已有抓取任务在进行中" : errorLabel(error?.message), { tone: "error" });
-  } finally {
-    if (els.refresh) els.refresh.disabled = false;
-  }
-}
-
 export async function replayPolicy(id, commit = false) {
   if (!els.root.open) els.root.open = true;
   const holder = els.replay;
@@ -270,7 +252,7 @@ export function openDiagnostics() {
 export function initDiagnostics() {
   Object.assign(els, {
     root: byId("diagnostics"), status: byId("v2-classification-status"), retry: byId("v2-retry-classification"),
-    replayButton: byId("v2-replay-policy"), refresh: byId("v2-refresh-source"), replay: byId("v2-replay-result"),
+    replayButton: byId("v2-replay-policy"), replay: byId("v2-replay-result"),
     evidenceStatus: byId("v2-evidence-status"), evidenceBlocks: byId("v2-evidence-blocks"),
     provenance: byId("v2-entity-provenance"), observations: byId("v2-entity-observations")
   });
@@ -284,7 +266,6 @@ export function initDiagnostics() {
   });
   document.addEventListener("visibilitychange", syncVisibility);
   els.retry.addEventListener("click", () => retryClassification(currentId));
-  els.refresh.addEventListener("click", () => refreshSource(currentId));
   els.replayButton.addEventListener("click", () => replayPolicy(currentId, false));
   on("entities", (id) => { if (id === currentId && els.root.open) renderObservations(id); });
 }

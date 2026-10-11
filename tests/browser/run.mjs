@@ -460,12 +460,8 @@ async function partA(browser) {
   await page.click("#v2-retry-classification");
   await waitFor(() => state.actions.some((entry) => entry.action === "retry_classification"));
   check("classification retry is a separate action", state.actions.some((entry) => entry.action === "retry_classification"));
-  await page.click("#v2-refresh-source");
-  await page.waitForSelector("wa-dialog[open] [data-action='confirm']");
-  check("refresh-source asks before re-reading the source", !state.actions.some((entry) => entry.action === "refresh_source"));
-  await page.click("wa-dialog[open] [data-action='confirm']");
-  await waitFor(() => state.actions.some((entry) => entry.action === "refresh_source"));
-  check("refresh-source is a separate, confirmed action", state.actions.some((entry) => entry.action === "refresh_source"));
+  check("the retired source retrieval control is absent", await page.locator("#v2-refresh-source").count() === 0);
+  check("reading and classification actions do not retrieve source", !state.actions.some((entry) => entry.action === "refresh_source"));
   await page.click("#v2-replay-policy");
   await page.waitForSelector("#v2-replay-result button");
   check("policy replay reports zero model calls", /模型调用 0 次/.test(await page.textContent("#v2-replay-result") || ""));

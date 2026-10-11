@@ -104,6 +104,8 @@ function statusBadge(item) {
 }
 
 function processBadge(item) {
+  if (item.error === "capture_required")
+    return h("span.badge.badge-work", icon("clock", 12), "待采集");
   if (item.status === "processing")
     return h("span.badge.badge-work", icon("loader", 12, "spin"), "处理中");
   if (item.status === "pending")

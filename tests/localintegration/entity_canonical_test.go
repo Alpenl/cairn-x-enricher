@@ -108,7 +108,7 @@ func TestLocalWorkerCanonicalEntitiesCLI(t *testing.T) {
 	if err != nil || job == nil {
 		t.Fatalf("claim %v", err)
 	}
-	source := enrich.Source{OriginalText: "Acme https://example.com/a", ContextText: "Acme", OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "fixture"}
+	source := enrich.Source{OriginalText: "Acme https://example.com/a", ContextText: "Acme", OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := queue.SaveSource(ctx, id, job.LeaseToken, source); err != nil {
 		t.Fatal(err)
 	}

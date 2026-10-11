@@ -47,7 +47,7 @@ func TestLocalWorkerProviderRetryHintSurvivesProcessorRestart(t *testing.T) {
 	id := createLink(t, base, envOr("CAIRN_APP_TOKEN", "app"))
 	lease := claimEnrichmentJob(t, base, token, id)
 	source := enrich.Source{OriginalText: "A synthetic guide to model evaluation.", OriginalLanguage: "en",
-		RelatedLinks: []string{}, ImageURLs: []string{}, Model: "fixture"}
+		RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 	if err := queue.SaveSource(ctx, id, lease, source); err != nil {
 		t.Fatal(err)
 	}
@@ -59,6 +59,7 @@ func TestLocalWorkerProviderRetryHintSurvivesProcessorRestart(t *testing.T) {
 	created := postJSON(ctx, t, base+"/api/links", envOr("CAIRN_APP_TOKEN", "app"),
 		map[string]any{"url": "https://x.com/local/status/2", "note": ""})
 	secondID := int64(created["id"].(float64))
+	seedArchivedOriginal(ctx, t, secondID, "Fixture original text")
 	secondLease := claimEnrichmentJob(t, base, token, secondID)
 	if err := queue.SaveSource(ctx, secondID, secondLease, source); err != nil {
 		t.Fatal(err)

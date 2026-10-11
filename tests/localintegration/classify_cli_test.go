@@ -107,9 +107,10 @@ func TestLocalWorkerClassifyCLI(t *testing.T) {
 	for i := 1; i <= 2; i++ {
 		created := postJSON(ctx, t, base+"/api/links", envOr("CAIRN_APP_TOKEN", "app"), map[string]any{"url": fmt.Sprintf("https://x.com/cli/status/%d", i), "note": "synthetic private note must not be model evidence"})
 		id := int64(created["id"].(float64))
+		seedArchivedOriginal(ctx, t, id, "Fixture original text")
 		ids = append(ids, id)
 		lease := claimEnrichmentJob(t, base, token, id)
-		source := enrich.Source{OriginalText: fmt.Sprintf("Saved language model evaluation method %d.", i), OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "source-fixture"}
+		source := enrich.Source{OriginalText: fmt.Sprintf("Saved language model evaluation method %d.", i), OriginalLanguage: "en", RelatedLinks: []string{}, ImageURLs: []string{}, Model: "manual"}
 		sources[id] = source
 		if err := queue.SaveSource(ctx, id, lease, source); err != nil {
 			t.Fatal(err)

@@ -127,6 +127,7 @@ func (q *claimProbeQueue) Claim(ctx context.Context) (*cairn.Job, error) {
 func TestSourceSweepAcquiresCapacityBeforeClaimingLease(t *testing.T) {
 	queue := &claimProbeQueue{fakeQueue: newFakeQueue(&cairn.Job{ID: 2,
 		URL: "https://x.com/a/status/2", Attempt: 1, LeaseToken: "lease-2"}), firstClaim: make(chan struct{})}
+	queue.details[1] = cairn.BookmarkDetail{Bookmark: cairn.Bookmark{OriginalText: "archived source"}}
 	model := &capacityProbeEnricher{firstStarted: make(chan struct{}), releaseFirst: make(chan struct{})}
 	worker := New(queue, model, discardLogger(), 1)
 	manualDone := make(chan error, 1)
@@ -173,6 +174,7 @@ func (e *deadlineProbeEnricher) Enrich(ctx context.Context, _ enrich.Input) (enr
 
 func TestSourceJobIsBoundedByItsLeaseAndRejectsExpiredWork(t *testing.T) {
 	queue := newFakeQueue()
+	queue.details[12] = cairn.BookmarkDetail{Bookmark: cairn.Bookmark{OriginalText: "archived source"}}
 	model := &deadlineProbeEnricher{}
 	worker := New(queue, model, discardLogger(), 1)
 	leaseUntil := time.Now().Add(2 * time.Minute)
@@ -262,7 +264,7 @@ func TestRunContinuesAfterOneBookmarkFails(t *testing.T) {
 	}
 	// The stored message names the path so a retrieval failure is
 	// distinguishable from a failure to reformat already-stored text.
-	if queue.failures[1] != "[search] model failure" {
+	if queue.failures[1] != "[recovered_source] model failure" {
 		t.Fatalf("failure = %q, want the path-labelled cause", queue.failures[1])
 	}
 	if len(queue.jobs) != 0 || len(queue.completions) != 1 {
@@ -317,6 +319,7 @@ func TestRunReturnsClaimError(t *testing.T) {
 
 func TestProcessReportsImagePersistenceFailure(t *testing.T) {
 	queue := newFakeQueue()
+	queue.details[9] = cairn.BookmarkDetail{Bookmark: cairn.Bookmark{OriginalText: "archived source"}}
 	queue.imageErr = errors.New("R2 unavailable")
 	processor := New(queue, fakeEnricher{}, discardLogger(), 1)
 	job := &cairn.Job{ID: 9, URL: "https://x.com/a/status/9", Attempt: 1, LeaseToken: "lease-9"}
@@ -324,7 +327,7 @@ func TestProcessReportsImagePersistenceFailure(t *testing.T) {
 	if err := processor.Process(context.Background(), job); err == nil {
 		t.Fatal("Process() error = nil, want image persistence error")
 	}
-	if queue.failures[9] != "[search] store enrichment images: R2 unavailable" {
+	if queue.failures[9] != "[recovered_source] store enrichment images: R2 unavailable" {
 		t.Fatalf("failure = %q, want the path-labelled cause", queue.failures[9])
 	}
 	if _, exists := queue.completions[9]; exists {
@@ -389,13 +392,17 @@ func TestProcessWithSourceUsesManualSourceText(t *testing.T) {
 }
 
 func newFakeQueue(jobs ...*cairn.Job) *fakeQueue {
-	return &fakeQueue{
+	queue := &fakeQueue{
 		jobs:        jobs,
 		details:     make(map[int64]cairn.BookmarkDetail),
 		completions: make(map[int64]cairn.Completion),
 		failures:    make(map[int64]string),
 		imageURLs:   make(map[int64][]string),
 	}
+	for _, job := range jobs {
+		queue.details[job.ID] = cairn.BookmarkDetail{Bookmark: cairn.Bookmark{ID: job.ID, OriginalText: "archived source", OriginalLanguage: "en"}}
+	}
+	return queue
 }
 
 func discardLogger() *slog.Logger {
