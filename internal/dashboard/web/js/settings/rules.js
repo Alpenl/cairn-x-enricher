@@ -4,7 +4,7 @@
 import { h, clear } from "../dom.js";
 import { icon } from "../icons.js";
 import { toast } from "../ui.js";
-import { DIMENSIONS, MORE_DIMENSIONS, dotClass, fold, marked, ddButton, openMenu, openPick, closePick, renderPick, segmented, switchButton, closePopovers, uuid, send, failure } from "./core.js";
+import { DIMENSIONS, MORE_DIMENSIONS, dotClass, fold, marked, ddButton, openMenu, openPick, closePick, renderPick, segmented, switchButton, closePopovers, uuid, send } from "./core.js";
 import { db, loadTags, loadCollectionsData, collById, ruleOf, saveRule, saveCollectionMeta, collectionOp, rulePreview, ruleCandidates, tagByRef, refLabel } from "./data.js";
 import { registerSection, syncUrl, setActions, refreshBadge, openSettings } from "./page.js";
 import { invalidateQueryReads } from "../api.js";
@@ -325,7 +325,7 @@ function picker(anchor, list) {
   const groups = [...DIMENSIONS, ...MORE_DIMENSIONS];
   openPick(anchor, {
     title: list === "tags" ? "添加命中标签" : "添加排除标签", cls: "pk-chips", width: 420,
-    sub: () => `已选 ${ruleOf(collById(ui.sel)).length ?? ruleOf(collById(ui.sel))[list].length} 个`.replace("undefined", String(ruleOf(collById(ui.sel))[list].length)),
+    sub: () => `已选 ${ruleOf(collById(ui.sel))[list].length} 个`,
     body: (q) => {
       const r = ruleOf(collById(ui.sel)), ql = fold(q.trim());
       const out = [];

@@ -480,6 +480,10 @@
 .sp .dd:disabled { color: var(--faint); background: var(--secondary); cursor: not-allowed; }
 .sp .sx-sub-label { margin-top: 14px; }
 .sp .use-more { margin-top: 6px; }
+.sp .rd-name { flex: 1; min-width: 0; height: 30px; padding: 0 8px; margin-left: -8px; border: 1px solid var(--kraft); border-radius: var(--r-btn); background: var(--raised); font-family: var(--font-serif); font-size: 17px; font-weight: 600; color: var(--ink); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--kraft) 20%, transparent); }
+.sp .pv-main .link-title { display: block; max-width: 100%; padding: 0; text-align: left; font-size: 13px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp .pv-main .link-title:hover { color: var(--terracotta-deep); text-decoration: underline; text-underline-offset: 2px; }
+.sp .rd-titles + .btn { margin-left: auto; }
 .sp .sp-loading, .sp .sp-error { padding: 48px 32px; text-align: center; font-size: 13px; color: var(--tertiary); }
 .sp .sp-error .btn { margin-top: 12px; }
 .sp .sp-note-warn { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-btn); background: color-mix(in srgb, var(--clay) 10%, transparent); color: var(--ink-soft); font-size: 12.5px; line-height: 1.5; }
