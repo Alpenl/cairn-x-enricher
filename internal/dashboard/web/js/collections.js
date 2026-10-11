@@ -1,6 +1,5 @@
 import { openWorkspace, openEditor, restoreWorkspace } from "./workspace.js";
 import { control as h } from "./controls.js";
-import { managedTagChoices, tagPicker } from "./tag-manager.js";
 import { fetchJSON, errorLabel, invalidateQueryReads } from "./api.js";
 import { byId, clear, h as el } from "./dom.js";
 import { state, on, emit } from "./store.js";
@@ -276,13 +275,6 @@ export async function loadCollections(force = false) {
   }
   return load();
 }
-export async function setRuleTags(c, refs, { enabled = true, mode } = {}) {
-  return mutation(c.id, c.revision, "rule", {
-    enabled: enabled && refs.length > 0,
-    mode: mode || c.rule_mode || "any",
-    tag_refs: refs,
-  })();
-}
 const refsOf = (c) => {
   try {
     return JSON.parse(c.rule_tags || "[]");
@@ -291,10 +283,12 @@ const refsOf = (c) => {
   }
 };
 let tagLabels = new Map();
+// Rule tag names come from the settings data layer (one catalog read).
 async function loadTagLabels() {
   try {
-    const choices = await managedTagChoices();
-    tagLabels = new Map(choices.map((t) => [t.ref, t]));
+    const { loadTags } = await import("./settings/data.js");
+    const tags = await loadTags();
+    tagLabels = new Map(tags.map((t) => [t.ref, { label: t.label, group: t.d }]));
   } catch {}
   return tagLabels;
 }
@@ -423,21 +417,14 @@ export async function browse() {
         toast("合集已删除，收藏仍保留", { action: { label: "撤销", run: () => run(async () => { await mutation(c.id, deleted.revision, "restore", {})(); await after(); }) } });
       }) },
     ], { onClose: menuClosed }) }, icon("more", 18));
+    // Rules are edited on the settings page (合集规则); this card only summarises.
     const hookBox = el("section.cl-hooks",
-      el("header", icon("tag", 15), el("b", "挂着的标签"),
-        refs.length ? el("label.tl-inline-check.cl-switch", el("input", { type: "checkbox", checked: !!c.rule_enabled, onchange: (e) => run(async () => { await setRuleTags(latest(), refs, { enabled: e.target.checked }); await after(); toast(e.target.checked ? "已恢复自动归入" : "已暂停自动归入，已有收藏保留"); }) }), c.rule_enabled ? "自动归入中" : "已暂停") : null),
-      el("div.tl-chips", refs.map((r) => el("span.tl-chip.is-hook", tagText(r), el("button", { type: "button", "aria-label": `取下「${tagText(r)}」`, onclick: () => run(async () => {
-        const next = refs.filter((x) => x !== r);
-        await setRuleTags(latest(), next, { enabled: c.rule_enabled && next.length > 0 });
-        await after();
-        toast(`已取下「${tagText(r)}」，已归入的收藏保留`);
-      }) }, icon("x", 11)))), el("button.tl-chip-add", { type: "button", onclick: () => hookTags(c) }, icon("plus", 12), refs.length ? "挂标签" : "挂上标签")),
+      el("header", icon("tag", 15), el("b", "合集规则"), el("span.tl-tag", refs.length ? (c.rule_enabled ? "自动归入中" : "已暂停") : "未设置")),
+      refs.length ? el("div.tl-chips", refs.map((r) => el("span.tl-chip.is-hook", tagText(r)))) : null,
       el("p.cl-sentence", refs.length
-        ? [`新收藏带有${refs.length > 1 ? "" : "这个标签"}`, refs.length > 1 ? el("span.cl-mode", ["any", "all"].map((m) => el("button", { type: "button", "aria-pressed": String((c.rule_mode || "any") === m), onclick: () => run(async () => { await setRuleTags(latest(), refs, { enabled: c.rule_enabled, mode: m }); await after(); }) }, m === "any" ? "任一" : "全部"))) : null, refs.length > 1 ? "标签时" : "时", `，自动归入「${c.name}」`, c.rule_enabled ? "" : "（已暂停）", "。"]
-        : "挂上标签后，带这些标签的新收藏会自动归入这个合集，不用再手动添加。"),
-      el("div.cl-offer-host"),
-      el("details.tl-more.cl-how", el("summary", icon("chevronRight", 13), "自动归入怎么运作"), el("p.tl-note", "只看挂上标签之后的新收藏，按最终标签精确匹配，不调用模型。你手动移出的收藏不会再被自动加入。取下标签或暂停后，已经归入的收藏留在合集里。已搁置的收藏不会被归入。")));
-    if (refs.length && c.rule_enabled) offer(c, hookBox.querySelector(".cl-offer-host"));
+        ? `带有${refs.length > 1 ? ((c.rule_mode || "any") === "all" ? "全部" : "任一") + "所选" : "这个"}标签的收藏${c.rule_admission === "review" ? "经你审核后" : "会自动"}归入「${c.name}」${c.rule_enabled ? "" : "（已暂停）"}。`
+        : "给合集挂上标签后，带这些标签的收藏会自动归入，不用再手动添加。"),
+      el("button.btn.btn-sm", { type: "button", onclick: async () => { page.close(); const { openSettings } = await import("./settings/page.js"); openSettings("rules", c.id); } }, icon("settings", 14), refs.length ? "编辑规则" : "设置规则"));
     const members = items.length
       ? el("ol.cl-members", items.map((item, index) => member(c, items, item, index)))
       : el("div.tl-empty", "还没有内容。", refs.length ? "带挂着标签的新收藏会自动出现在这里，" : "", "也可以在阅读页或列表多选后加入。");
@@ -484,40 +471,6 @@ export async function browse() {
       });
     }
     return node;
-  }
-  async function offer(c, host) {
-    let preview;
-    try {
-      preview = await fetchJSON(`/api/collections/${c.id}/rules/preview`);
-    } catch {
-      return;
-    }
-    if (!preview.rule_valid || !preview.items.length || !host.isConnected) return;
-    clear(host, el("div.cl-offer", icon("layers", 15), el("span", `已有 ${preview.items.length}${preview.has_more ? "+" : ""} 条收藏也符合，还没在合集里。`),
-      el("button.btn.btn-sm", { type: "button", onclick: () => openDialog({
-        title: `把已有收藏归入「${c.name}」`,
-        body: [el("ul.cl-preview", preview.items.map((i) => el("li", i.title))), el("p.tl-note", "已搁置和你手动移出过的收藏不会被归入。")],
-        actions: [{ label: `归入 ${preview.items.length} 条`, primary: true, run: async () => { await mutation(c.id, preview.revision, "backfill")(); await after(); toast(`已归入 ${preview.items.length} 条`); } }],
-      }) }, "查看并归入")));
-  }
-  async function hookTags(c) {
-    const choices = await managedTagChoices().catch((e) => (failure(e), null));
-    if (!choices) return;
-    const selected = new Set(refsOf(c));
-    openDialog({
-      title: `给「${c.name}」挂标签`,
-      body: [tagPicker(choices, selected), el("p.tl-note", "带上任意一个（或全部，可在合集页切换）所选标签的新收藏会自动归入。")],
-      actions: [{ label: "保存", primary: true, run: async () => {
-        try {
-          await setRuleTags(latest(), [...selected], { enabled: selected.size > 0 });
-          await after();
-          toast(selected.size ? "已保存，之后的新收藏会自动归入" : "已取下全部标签");
-        } catch (e) {
-          failure(e);
-          return false;
-        }
-      } }],
-    });
   }
   async function run(task) {
     try {

@@ -14,7 +14,7 @@ export function registerSection(id, impl) {
 }
 const page = () => byId("settings-page");
 const app = () => byId("app");
-const router = { open: false, section: null, sub: "", idx: history.state?.cairnIdx ?? 0, wsIdx: null, title: "", ws: null, rendered: null };
+const router = { onExit: null, open: false, section: null, sub: "", idx: history.state?.cairnIdx ?? 0, wsIdx: null, title: "", ws: null, rendered: null };
 const SETTINGS = /^#\/settings(?:\/|$)/;
 
 export const isSettingsHash = (hash = location.hash) => SETTINGS.test(hash);
@@ -53,14 +53,19 @@ export function openSettings(section, sub = "", { replace = false } = {}) {
 }
 /** 「返回收藏库」 */
 export function leaveSettings() {
-  if (!router.open) return;
+  if (!router.open) return Promise.resolve();
   commitPending();
-  if (router.wsIdx != null && router.wsIdx < router.idx) history.go(router.wsIdx - router.idx);
-  else {
+  if (router.wsIdx != null && router.wsIdx < router.idx) {
+    const done = new Promise((resolve) => { router.onExit = resolve; setTimeout(resolve, 1000); });
+    history.go(router.wsIdx - router.idx);
+    return done;
+  }
+  {
     router.idx += 1;
     history.pushState({ cairnIdx: router.idx }, "", baseURL());
     applyRoute();
   }
+  return Promise.resolve();
 }
 function scrollSnapshot() {
   return ["list-scroll", "detail-scroll", "inspector-scroll"].map((id) => [id, byId(id)?.scrollTop ?? 0]);
@@ -118,6 +123,9 @@ function exit() {
   const f = ws?.focus;
   if (f && f !== document.body && document.contains(f) && f.getClientRects().length) f.focus({ preventScroll: true });
   else byId("settings-button")?.focus({ preventScroll: true });
+  const done = router.onExit;
+  router.onExit = null;
+  done?.();
 }
 function playIn(node) {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
