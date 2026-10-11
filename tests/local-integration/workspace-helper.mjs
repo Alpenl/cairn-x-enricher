@@ -27,7 +27,7 @@ export async function setCheckbox(scope, name, checked) {
 export async function openSettingsPage(page, section, sub = "") {
   await page.evaluate(([section, sub]) => { location.hash = `#/settings/${section}${sub ? `/${sub}` : ""}`; }, [section, sub]);
   await page.locator("#settings-page:not([hidden])").waitFor();
-  await page.locator(`#sp-nav-list [data-tab="${section}"][aria-current="page"]`).waitFor();
+  await page.locator(`#sp-nav-list [data-tab="${section}"][aria-current="page"]`).waitFor({ state: "attached" }); // the list is a dropdown on phones
 }
 export async function leaveSettingsPage(page) {
   await page.locator("#sp-back").click();
