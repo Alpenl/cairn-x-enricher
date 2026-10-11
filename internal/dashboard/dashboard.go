@@ -422,7 +422,7 @@ func servePage(writer http.ResponseWriter, request *http.Request, content []byte
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	writer.Header().Set("Content-Length", strconv.Itoa(len(content)))
 	writer.Header().Set("Cache-Control", "no-store")
-	writer.Header().Set("Content-Security-Policy", "default-src 'none'; connect-src 'self'; img-src 'self' blob:; media-src 'self' blob:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+	writer.Header().Set("Content-Security-Policy", "default-src 'none'; connect-src 'self'; img-src 'self' blob:; media-src 'self' blob:; style-src 'self'; font-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 	writer.Header().Set("Referrer-Policy", "no-referrer")
 	writer.Header().Set("X-Content-Type-Options", "nosniff")
 	writer.WriteHeader(http.StatusOK)

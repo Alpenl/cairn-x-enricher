@@ -19,7 +19,7 @@ const webDir = path.join(dashboardDir, "web");
 
 const TYPES = {
   ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8", ".svg": "image/svg+xml", ".json": "application/json", ".png": "image/png",
+  ".mjs": "text/javascript; charset=utf-8", ".svg": "image/svg+xml", ".json": "application/json", ".png": "image/png", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8",
   ".ico": "image/x-icon", ".webmanifest": "application/manifest+json"
 };
 
@@ -112,7 +112,7 @@ export function createFixtureHandler(state, { legacyPages = !existsSync(path.joi
       response.writeHead(200, {
         "Content-Type": TYPES[path.extname(file)] || "application/octet-stream",
         "Cache-Control": "no-cache",
-        "Content-Security-Policy": "default-src 'none'; connect-src 'self'; img-src 'self' blob:; media-src 'self' blob:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        "Content-Security-Policy": "default-src 'none'; connect-src 'self'; img-src 'self' blob:; media-src 'self' blob:; style-src 'self'; font-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
       });
       response.end(body);
     } catch {

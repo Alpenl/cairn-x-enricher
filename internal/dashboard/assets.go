@@ -42,6 +42,9 @@ var assetTypes = map[string]string{
 	".css": "text/css; charset=utf-8",
 	".js":  "text/javascript; charset=utf-8",
 	".svg": "image/svg+xml",
+	// Self-hosted Latin subsets of DM Sans / Source Serif 4 and their OFL texts.
+	".woff2": "font/woff2",
+	".txt":   "text/plain; charset=utf-8",
 }
 
 // webAssets is built once at start-up. Each file carries a content hash so a
@@ -76,8 +79,11 @@ func mustIndexWebAssets() map[string]webAsset {
 			contentType: contentType,
 			etag:        `"` + hex.EncodeToString(sum[:12]) + `"`,
 		}
-		if asset.gzipContent, err = gzipStatic(content); err != nil {
-			return err
+		// WOFF2 is already Brotli-compressed; gzip would only add bytes.
+		if contentType != "font/woff2" {
+			if asset.gzipContent, err = gzipStatic(content); err != nil {
+				return err
+			}
 		}
 		if len(asset.gzipContent) > 0 {
 			gzipSum := sha256.Sum256(asset.gzipContent)
