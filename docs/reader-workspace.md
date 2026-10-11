@@ -40,4 +40,4 @@ CHROME_PATH=/usr/bin/google-chrome npm run test-browser
 
 `tests/local-integration/browser-e2e.sh` 使用固定版本的真实 Worker、隔离 D1/R2 和本地模型替身，覆盖人工标签、管理目录、合集、冲突、响应丢失重试和自动整理审核。所有验证都不使用付费模型或生产写入。
 
-可用 `CHROME_PATH=/usr/bin/google-chrome node tests/browser/redesign-evidence.mjs` 重新生成合成数据页面截图，默认写入 `/tmp/cairn-redesign-evidence/`。合成截图仅用于开发验收，不代表生产内容或生产耗时。
+可用 `CHROME_PATH=/usr/bin/google-chrome node tests/browser/redesign-evidence.mjs` 重新生成合成数据页面截图，默认写入 `/tmp/cairn-redesign-evidence/`（`EVIDENCE_DIR` 可改）；2026-10 重设计的对照截图存放在 `docs/screenshots/redesign-2026-10/web/`。合成截图仅用于开发验收，不代表生产内容或生产耗时。

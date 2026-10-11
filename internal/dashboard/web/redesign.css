@@ -365,7 +365,8 @@ button.tag:hover { filter: brightness(.94) saturate(1.15); }
 
 /* 合集归属: one row per collection with a pill switch (prototype .coll-row/.switch). */
 .inspector-collections { display: block; }
-.inspector-collections-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+.inspector-collections-head { display: flex; align-items: baseline; justify-content: space-between; width: 100%; margin-bottom: 6px; }
+.inspector-collections-head h3 { margin: 0; }
 .inspector-collections-head .num { font-size: 12px; color: var(--tertiary); font-variant-numeric: tabular-nums; }
 .inspector-collections #inspector-memberships.coll-rows { display: flex; flex-direction: column; flex-wrap: nowrap; gap: 2px; margin: 0 -8px; }
 .coll-row { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 8px; border-radius: var(--r-btn); transition: background var(--t-fast); }

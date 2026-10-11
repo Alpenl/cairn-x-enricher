@@ -63,6 +63,8 @@ try {
   await idle(); await reading();
   await page.locator("#inspector-memberships .coll-row").first().waitFor();
   await shot("01-library-wide");
+  await page.locator("#inspector-memberships").scrollIntoViewIfNeeded();
+  await shot("12-inspector-collections");
 
   await page.locator("#search").click();
   await page.waitForFunction(() => document.querySelector("#tf-pop .tf-chip .n"));
@@ -72,13 +74,12 @@ try {
   await shot("03-tagfilter-selected-open");
   await page.keyboard.press("Escape");
   await shot("04-tagfilter-selected");
-  await page.locator("#search-clear").click().catch(() => {});
-  await idle();
-
-  await page.locator("#toggle-formatted").click().catch(() => {});
+  await page.goto(url);
+  await idle(); await reading();
+  await page.locator("#toggle-formatted").click();
+  await page.waitForFunction(() => document.querySelector("#toggle-formatted").getAttribute("aria-selected") === "true");
   await shot("05-reader-original");
-  await page.locator("#reading-version").click().catch(() => {});
-  await page.locator("#reason-block").scrollIntoViewIfNeeded().catch(() => {});
+  await page.locator("#reading-version").click();
 
   await page.locator("#command-button").click();
   await shot("06-command");
