@@ -1,4 +1,4 @@
-import { closeWorkspace, setCheckbox } from "./workspace-helper.mjs";
+import { closeWorkspace, setCheckbox, openPage } from "./workspace-helper.mjs";
 import { closeInspector, openCuration } from "../browser/workspace-helper.mjs";
 import assert from "node:assert/strict";
 
@@ -38,7 +38,7 @@ export async function verifyCollections(browser, base, bookmarkID) {
     );
     await page.goto(`${base}/bookmarks/${bookmarkID}`);
     await closeInspector(page);
-    await page.locator("#browse-collections").click();
+    await openPage(page, "collections");
     await page
       .locator("#management-page")
       .getByRole("button", { name: "新建合集", exact: true })
@@ -64,7 +64,7 @@ export async function verifyCollections(browser, base, bookmarkID) {
     );
 
     await closeInspector(page);
-    await page.locator("#browse-collections").click();
+    await openPage(page, "collections");
     let manager = page.locator("#management-page");
     await manager.locator(".collection-row").filter({ hasText: "项目资料" }).click();
     await manager.locator(".cl-detail").getByRole("button", { name: "阅读", exact: true }).click();
@@ -165,7 +165,7 @@ export async function verifyCollections(browser, base, bookmarkID) {
       description: "LLM实践参考",
     });
     await page.reload();
-    await page.locator("#browse-collections").click();
+    await openPage(page, "collections");
     await page
       .locator("#management-page")
       .getByRole("button", { name: "AI 整理", exact: true })
@@ -248,7 +248,7 @@ export async function verifyCollections(browser, base, bookmarkID) {
       [fresh.id],
     );
     await page.reload();
-    await page.locator("#browse-collections").click();
+    await openPage(page, "collections");
     await page
       .locator("#management-page")
       .getByRole("button", { name: "AI 整理", exact: true })
@@ -272,7 +272,7 @@ export async function verifyCollections(browser, base, bookmarkID) {
     );
     await closeWorkspace(page);
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.locator("#browse-collections").click();
+    await openPage(page, "collections");
     await page
       .locator("#management-page")
       .getByRole("button", { name: "AI 整理", exact: true })
