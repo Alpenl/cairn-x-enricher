@@ -271,8 +271,15 @@ function renderFoot(c) {
 }
 
 /* ---------- writes ---------- */
-async function change(c, patch, message) {
-  if (ui.busy) return;
+// Rule edits run one after another, each against the revision the previous
+// one returned, so quick clicks in the picker are queued rather than dropped.
+let chain = Promise.resolve();
+const serial = (fn) => (chain = chain.then(fn, fn));
+function change(c, patch, message) {
+  return serial(() => applyChange(collById(c.id) || c, typeof patch === "function" ? patch(collById(c.id) || c) : patch, message));
+}
+async function applyChange(c, patch, message) {
+  if (!patch) return;
   ui.busy = true;
   try {
     await saveRule(c, patch);
@@ -347,16 +354,20 @@ function picker(anchor, list) {
   });
 }
 async function toggle(ref, list) {
-  const c = collById(ui.sel);
-  if (!c || ui.busy) return;
-  const r = ruleOf(c);
-  const on = r[list].includes(ref);
-  if (!on && r[list].length >= 20) return toast("最多 20 个标签");
-  const next = on ? r[list].filter((x) => x !== ref) : [...r[list], ref];
-  // The first hit tag turns a fresh rule on; removing the last turns it off.
-  const patch = { [list]: next };
-  if (list === "tags" && !r.tags.length && next.length && !r.enabled) patch.enabled = true;
-  await change(c, patch, `${on ? "已移除" : "已添加"}${list === "tags" ? "命中" : "排除"}标签「${refLabel(ref)}」`);
+  const id = ui.sel;
+  if (!collById(id)) return;
+  await serial(async () => {
+    const c = collById(id);
+    if (!c) return;
+    const r = ruleOf(c);
+    const on = r[list].includes(ref);
+    if (!on && r[list].length >= 20) return toast("最多 20 个标签");
+    const next = on ? r[list].filter((x) => x !== ref) : [...r[list], ref];
+    // The first hit tag turns a fresh rule on; removing the last turns it off.
+    const patch = { [list]: next };
+    if (list === "tags" && !r.tags.length && next.length && !r.enabled) patch.enabled = true;
+    await applyChange(c, patch, `${on ? "已移除" : "已添加"}${list === "tags" ? "命中" : "排除"}标签「${refLabel(ref)}」`);
+  });
   renderPick();
 }
 async function newCollection() {

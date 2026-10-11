@@ -324,7 +324,7 @@ export async function browse() {
   const tabs = el("div.tl-filters", { role: "tablist", "aria-label": "合集范围" });
   const head = el("div.cl-head", el("div.tl-searchbox", icon("search", 16), search), tabs);
   let detailData = null, detailToken = 0, pendingPaint = false;
-  const menuClosed = () => { if (pendingPaint) { pendingPaint = false; paintDetail(); } };
+  const menuClosed = () => { if (pendingPaint) { pendingPaint = false; repaintKeepingDrafts(); } };
   const visible = () => {
     const fn = scopes.find((s) => s[0] === view.scope)[2];
     const q = view.q.trim().toLowerCase();
@@ -362,7 +362,21 @@ export async function browse() {
     if (same) return;
     // Never pull a menu out from under the pointer; repaint once it closes.
     if (detail.querySelector("wa-dropdown")) pendingPaint = true;
-    else paintDetail();
+    else repaintKeepingDrafts();
+  }
+  // A save elsewhere repaints the card; text the user is still typing (and the
+  // caret) carries over instead of snapping back to the stored value.
+  function repaintKeepingDrafts() {
+    const carry = [...detail.querySelectorAll("input.cl-title, input.cl-desc")]
+      .filter((i) => (i.dataset.dirty && !i.dataset.saving) || document.activeElement === i)
+      .map((i) => ({ cls: i.classList.contains("cl-title") ? "cl-title" : "cl-desc", value: i.value, dirty: Boolean(i.dataset.dirty && !i.dataset.saving), focus: document.activeElement === i, start: i.selectionStart, end: i.selectionEnd }));
+    paintDetail();
+    for (const k of carry) {
+      const n = detail.querySelector(`input.${k.cls}`);
+      if (!n) continue;
+      if (k.dirty) { n.value = k.value; n.dataset.dirty = "1"; }
+      if (k.focus) { n.focus({ preventScroll: true }); try { n.setSelectionRange(k.start, k.end); } catch {} }
+    }
   }
   const after = async () => {
     await load();

@@ -106,24 +106,33 @@ try {
         (theme) => (document.documentElement.dataset.theme = theme),
         theme,
       );
+      // 设置 · 标签库 is a full page now; the workspace stays mounted under it.
       await go("tags");
-      await page.getByLabel("搜索或新建标签", { exact: true }).fill("");
-      await page.locator(".tl-row").first().waitFor();
-      assert.ok((await page.locator("#management-page .tl-row").count()) > 10);
+      await page.locator("#settings-page:not([hidden])").waitFor();
+      if (width > 1100) {
+        await page.locator("#lib-search").fill("");
+        await page.locator("#lib-list .lib-row").first().waitFor();
+        assert.ok((await page.locator("#lib-list .lib-row").count()) > 10);
+        await overflow();
+        await page.locator("#lib-list .lib-row").nth(1).click();
+        await page.locator("#td-name").waitFor();
+        await page.locator("#lib-search").fill("无此标签");
+        await page.locator(".lib-empty").getByRole("button", { name: "新建「无此标签」" }).click();
+        assert.equal(await page.getByLabel("新标签名称", { exact: true }).inputValue(), "无此标签");
+        await page.locator("#lib-search").fill("");
+      } else {
+        // ≤1100px: the list collapses into the 选择标签 dropdown above the editor.
+        await page.getByRole("button", { name: "选择标签" }).click();
+        await page.locator(".sp-menu [role=menuitem], .sp-menu [role=option]").nth(1).click();
+        await page.locator("#td-name").waitFor();
+        await page.locator("#sp-actions").getByRole("button", { name: "新建标签" }).click();
+        await page.getByLabel("新标签名称", { exact: true }).fill("无此标签");
+      }
+      await page.locator("#new-desc").fill("低秩适配训练与模型应用");
       await overflow();
-      // Expanding a row edits in place; only one row is open at a time.
-      await page.locator("#management-page .tl-main").first().click();
-      await page.locator("#management-page .tl-panel").waitFor();
-      assert.equal(await page.locator("#management-page .tl-panel").count(), 1);
-      await page.getByLabel("搜索或新建标签", { exact: true }).fill("无此标签");
-      await page.locator(".tl-create").waitFor();
-      await page.getByLabel("搜索或新建标签", { exact: true }).press("Enter");
-      const add = page.locator('.tl-add[data-dim="topics"]');
-      await add.waitFor();
-      assert.equal(await add.getByLabel("新标签名称").inputValue(), "无此标签");
-      await add.getByLabel("新标签说明").fill("低秩适配训练与模型应用");
-      await overflow();
-      await add.getByRole("button", { name: "取消" }).click();
+      await page.locator("#lib-detail-foot").getByRole("button", { name: "取消" }).click();
+      await page.locator("#sp-back").click();
+      await page.locator("#settings-page").waitFor({ state: "hidden" });
       await go("collections");
       await page.locator("#management-page .collection-row").first().waitFor();
       await page.getByLabel("查找合集", { exact: true }).fill("AIGC");
@@ -133,7 +142,8 @@ try {
       await overflow();
       const pin = page.getByRole("checkbox", { name: "置顶", exact: true });
       assert.equal(await pin.isChecked(), true);
-      await page.getByText("挂着的标签", { exact: true }).waitFor();
+      // Rules are edited on 设置 · 合集规则; the collection card links there.
+      await page.locator("#management-page .cl-hooks").getByRole("button", { name: "设置规则" }).waitFor();
     }
     await page.evaluate(async () => {
       (await import("/assets/js/workspace.js")).closeWorkspace();

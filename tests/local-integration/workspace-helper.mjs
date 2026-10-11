@@ -22,3 +22,14 @@ export async function setCheckbox(scope, name, checked) {
   });
   assert.equal(await field.isChecked(), checked);
 }
+
+// Full-page settings (#/settings/<section>[/<sub>]); the workspace stays mounted underneath.
+export async function openSettingsPage(page, section, sub = "") {
+  await page.evaluate(([section, sub]) => { location.hash = `#/settings/${section}${sub ? `/${sub}` : ""}`; }, [section, sub]);
+  await page.locator("#settings-page:not([hidden])").waitFor();
+  await page.locator(`#sp-nav-list [data-tab="${section}"][aria-current="page"]`).waitFor();
+}
+export async function leaveSettingsPage(page) {
+  await page.locator("#sp-back").click();
+  await page.locator("#settings-page").waitFor({ state: "hidden" });
+}
