@@ -115,7 +115,8 @@ function renderLinks(item, extracted = []) {
 function tagClass(item, tag) {
   const pending = tag.field !== "custom_tags" && !item.classification_reviewed;
   const hit = selectedRefs().includes(tagRef(tag.field, tag.id));
-  return [pending ? "tag-ai" : "", hit ? "hit" : ""].filter(Boolean).join(" ");
+  const kind = tag.field === "resource_kinds" ? "tag-resource" : tag.field === "custom_tags" ? "tag-custom" : "";
+  return [kind, pending ? "tag-ai" : "", hit ? "hit" : ""].filter(Boolean).join(" ");
 }
 
 // Reader tags: the same primary tags as the list row; a click filters the

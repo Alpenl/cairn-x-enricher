@@ -327,8 +327,8 @@ button.tag:hover { filter: brightness(.94) saturate(1.15); }
 .inspector wa-tab-group { --indicator-color: var(--terracotta); --track-color: var(--hairline-soft); }
 .inspector wa-tab::part(base) { font-size: 13px; font-weight: 500; color: var(--muted); padding: 12px 14px; }
 .inspector wa-tab[active]::part(base) { color: var(--ink); }
-.tag.tag-ai { border: 1px dashed color-mix(in srgb, var(--fig) 75%, transparent); color: var(--fig); background: color-mix(in srgb, var(--fig) 6%, transparent); }
 .tag.tag-resource, .tag.tag-custom { background: color-mix(in srgb, var(--olive) 14%, transparent); color: var(--olive-ink); }
+.tag.tag-ai { border: 1px dashed color-mix(in srgb, var(--fig) 75%, transparent); color: var(--fig); background: color-mix(in srgb, var(--fig) 6%, transparent); }
 .tag.hit, .tag.tag-ai.hit { background: color-mix(in srgb, var(--terracotta) 10%, transparent); color: var(--danger); border-color: color-mix(in srgb, var(--terracotta) 42%, transparent); }
 .tag-ai.hit { border-style: dashed; }
 /* aria-current="false" is not current (the legacy rules matched any value). */

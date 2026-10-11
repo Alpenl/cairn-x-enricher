@@ -255,12 +255,13 @@ function wireSearch() {
       if (state.search) setFilters(state.filters, "");
     } else input.blur();
   });
+  // Clears the typed text and the tag tokens together (prototype field-clear).
   byId("search-clear").addEventListener("click", () => {
     input.value = "";
-    if (state.search) setFilters(state.filters, "");
+    if (state.search || selectedRefs().length) setFilters(withTags(state.filters, []), "");
     input.focus();
   });
-  const syncClear = () => { byId("search-clear").hidden = !input.value; };
+  const syncClear = () => { byId("search-clear").hidden = !input.value && !selectedRefs().length; };
   input.addEventListener("input", syncClear);
   on("list:loaded", syncClear);
 }
