@@ -147,10 +147,12 @@ function writeReceipt(value) {
   try {
     if (value === null) localStorage.removeItem(RECEIPT);
     else localStorage.setItem(RECEIPT, JSON.stringify(value));
-    return true;
   } catch {
     return false;
   }
+  // The page header shows 「重试 / 放弃」 while a write is unconfirmed.
+  window.dispatchEvent(new Event("cairn:settings-receipt"));
+  return true;
 }
 export const dropReceipt = () => writeReceipt(null);
 /** Send a receipt-backed write. Returns the result, or null after reporting the failure. */

@@ -20,7 +20,8 @@ const SETTINGS = /^#\/settings(?:\/|$)/;
 export const isSettingsHash = (hash = location.hash) => SETTINGS.test(hash);
 export const settingsOpen = () => router.open;
 export const currentSection = () => router.section;
-export const sectionPath = (id, sub) => `#/settings/${id}${sub ? `/${encodeURIComponent(sub)}` : ""}`;
+// ":" stays readable in the fragment (topics:ui_design); everything else is escaped.
+export const sectionPath = (id, sub) => `#/settings/${id}${sub ? `/${encodeURIComponent(sub).replace(/%3A/gi, ":")}` : ""}`;
 const baseURL = () => location.pathname + location.search;
 
 function parse(hash) {
@@ -170,10 +171,13 @@ function render() {
   impl.render(body, { sub: router.sub, syncUrl, setActions, refreshBadge, openSettings, leaveSettings });
   focusHeading();
 }
+let sectionActions = [], receiptShown = false;
 export function setActions(nodes) {
+  sectionActions = nodes || [];
   const box = byId("sp-actions");
   const receipt = readReceipt();
-  const items = [nodes, receipt ? receiptBar(receipt) : null].flat().filter(Boolean);
+  receiptShown = Boolean(receipt);
+  const items = [sectionActions, receipt ? receiptBar(receipt) : null].flat().filter(Boolean);
   clear(box, items);
   box.hidden = !items.length;
 }
@@ -307,6 +311,7 @@ export function highlight(key) {
 }
 
 export function initSettingsPage() {
+  window.addEventListener("cairn:settings-receipt", () => { if (router.open && Boolean(readReceipt()) !== receiptShown) setActions(sectionActions); });
   // The settings sidebar mirrors the workspace service indicator as it updates.
   const svc = byId("service-link");
   if (svc) new MutationObserver(syncService).observe(svc, { childList: true, subtree: true, characterData: true, attributes: true });
