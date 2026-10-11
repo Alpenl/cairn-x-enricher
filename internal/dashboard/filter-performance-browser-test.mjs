@@ -47,12 +47,12 @@ await page.route("**/api/bookmarks?*", async (route) => {
 });
 const checked = (label) => process.stdout.write(`ok   ${label}\n`);
 async function ready() {
-  await page.waitForFunction(() => document.querySelector("#list-pane")?.dataset.loading === "false" && document.querySelector('.facet-chip[data-facet="topics"][data-value="llm"]'));
+  await page.waitForFunction(() => document.querySelector("#list-pane")?.dataset.loading === "false" && document.querySelector('#tf-pop .tf-chip[data-ref="system/topics/llm"]'));
 }
 async function toggle(term) {
   return page.evaluate((value) => {
     const started = performance.now();
-    document.querySelector(`.facet-chip[data-facet="topics"][data-value="${value}"]`).click();
+    document.querySelector(`#tf-pop .tf-chip[data-ref="system/topics/${value}"]`).click();
     return { started, rows: document.querySelectorAll("#rows li.row:not(.skeleton)").length,
       busy: document.querySelector("#list-pane").getAttribute("aria-busy"), count: document.querySelector("#list-count").textContent };
   }, term);
@@ -65,8 +65,9 @@ try {
   await page.goto(`${url}/?curation_status=all`);
   await openFilters(page);
   await ready();
-  await page.locator('.facet-group[data-group="topics"] > summary').click();
-  await page.locator(".facet-chip-count").first().waitFor({ state: "attached" });
+  await page.locator("#tf-pop .tf-chip .n").first().waitFor({ state: "attached" });
+  // The old topic facets were OR; keep that so later steps still have rows.
+  await page.locator('#tf-mode [data-mode="any"]').click();
   await page.locator("#rows .row-thumb img").evaluateAll((images) => images.forEach((image) => { image.dataset.originalNode = image.closest("li.row").dataset.id; }));
   const before = lists.length;
   const first = await toggle("llm");
@@ -90,21 +91,25 @@ try {
     assert.equal(stats.repeat_list_requests, 0, "repeated complete query uses a short-lived snapshot");
     checked("previous rows and immediate busy feedback remain visible; exact repeat avoids a list request");
 
-    const countControl = await page.locator('[data-facet="topics"][data-value="llm"]').elementHandle();
+    const countControl = await page.locator('#tf-pop .tf-chip[data-ref="system/topics/llm"]').elementHandle();
     await countControl.focus();
     await delay(600);
     assert.equal(await countControl.evaluate(node => node.isConnected && node === document.activeElement), true);
+    // "all" counts depend on the selection ("any" counts do not), so measure there.
+    await page.locator('#tf-mode [data-mode="all"]').click(); await ready(); await delay(750);
+    await countControl.focus();
     const rapidCounts = counts.length;
     await toggle("eng"); await toggle("design"); await toggle("eng"); await ready();
     await delay(750);
     assert.equal(counts.length - rapidCounts, 1);
-    assert.match(counts.at(-1).query, /topics=llm%2Cdesign/);
-    checked("rapid selections coalesce facet counts into the final complete query");
+    assert.match(counts.at(-1).query, /tags=system%2Ftopics%2Fllm%2Csystem%2Ftopics%2Fdesign/);
+    checked("rapid chip selections coalesce tag counts into the final complete query");
+    await page.locator('#tf-mode [data-mode="any"]').click(); await ready();
 
     // Ignore an old response even when a transport/test double ignores abort.
     listGate = { promise: null, release: null };
     listGate.promise = new Promise((resolve) => { listGate.release = resolve; });
-    const slowRequest = page.waitForRequest((request) => request.url().includes("/api/bookmarks?") && new URL(request.url()).searchParams.get("topics")?.includes("health"));
+    const slowRequest = page.waitForRequest((request) => request.url().includes("/api/bookmarks?") && new URL(request.url()).searchParams.get("tags")?.includes("system/topics/health"));
     await toggle("health");
     await slowRequest;
     const release = listGate.release; listGate = null;

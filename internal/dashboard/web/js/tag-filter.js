@@ -82,8 +82,7 @@ const effectiveMode = () => selectedRefs().length ? tagMode() : pendingMode;
 // --- counts -----------------------------------------------------------------
 
 function scheduleCounts() {
-  // Counts follow the list: a foreground search or filter read goes first.
-  if (!open || state.loading || byId("list-pane")?.getAttribute("aria-busy") === "true") return;
+  if (!open) return;
   const mode = effectiveMode();
   // "all": a chip's number is the result size after adding it, i.e. its count
   // within the current result. "any": how many in scope carry the tag.
@@ -95,7 +94,8 @@ function scheduleCounts() {
   clearTimeout(countsTimer);
   countsAbort?.abort();
   countsTimer = setTimeout(() => {
-    // A search typed meanwhile owns the network; list:loaded reschedules.
+    // Counts follow the list: a foreground search or filter read goes first,
+    // and list:loaded reschedules once it lands.
     if (state.loading || byId("list-pane")?.getAttribute("aria-busy") === "true" || (els.input.value.trim() !== state.search)) { countsKey = ""; return; }
     const controller = new AbortController();
     countsAbort = controller;
@@ -119,6 +119,21 @@ function activeTerms(field) {
   return (terms(field) || []).filter((t) => t && t.active !== false && !t.deprecated && t.status !== "archived");
 }
 
+// Chip and group nodes are keyed and reused across renders so a focused chip
+// survives count updates, mode switches and selection changes.
+const chipNodes = new Map();
+const groupNodes = new Map();
+
+function place(parent, children) {
+  const keep = new Set(children);
+  for (const child of [...parent.children]) if (!keep.has(child)) child.remove();
+  let cursor = parent.firstChild;
+  for (const child of children) {
+    if (child !== cursor) parent.insertBefore(child, cursor);
+    cursor = child.nextSibling;
+  }
+}
+
 function chip(field, term, selected, query) {
   const ref = tagRef(field, term.id);
   const label = termLabel(field, term.id, term.label || term.id);
@@ -126,22 +141,41 @@ function chip(field, term, selected, query) {
   const on = selected.has(ref);
   const n = countOf(field, term.id);
   const disabled = !on && n === 0;
-  const node = h("button.tf-chip", {
-    type: "button", tabindex: "-1", "aria-pressed": String(on), disabled: disabled || null,
-    dataset: { ref }, class: on ? "on" : "",
-    title: disabled ? (effectiveMode() === "all" && selected.size ? "与已选标签同时满足的收藏为 0" : "当前范围内没有带此标签的收藏") : on ? "点击取消" : null
-  }, on ? icon("check", 12, "ck") : null, h("span.nm", label), n === null ? null : h("span.n", String(n)));
+  let node = chipNodes.get(ref);
+  if (!node) {
+    node = h("button.tf-chip", { type: "button", tabindex: "-1", dataset: { ref } });
+    chipNodes.set(ref, node);
+  }
+  node.classList.toggle("on", on);
+  node.setAttribute("aria-pressed", String(on));
+  node.disabled = disabled;
+  const title = disabled ? (effectiveMode() === "all" && selected.size ? "与已选标签同时满足的收藏为 0" : "当前范围内没有带此标签的收藏") : on ? "点击取消" : "";
+  if (title) node.title = title; else node.removeAttribute("title");
+  const signature = JSON.stringify([on, label, n]);
+  if (node.dataset.sig !== signature) {
+    node.dataset.sig = signature;
+    clear(node, on ? icon("check", 12, "ck") : null, h("span.nm", label), n === null ? null : h("span.n", String(n)));
+  }
   return { node, n: n ?? 0, label };
 }
 
 function group({ field, label, dot }, selected, query) {
   const list = activeTerms(field).map((t) => chip(field, t, selected, query)).filter(Boolean);
   if (!list.length) return null;
-  // Most used first (selected ones stay where they are by count).
+  // Most used first.
   list.sort((a, b) => b.n - a.n || a.label.localeCompare(b.label, "zh-CN"));
-  return h("div.tf-group", { role: "group", "aria-label": label },
-    h("div.tf-group-label", dot ? h(`span.type-dot.type-${dot}`) : null, label, h("span.n", String(list.length))),
-    h("div.tf-chips", list.map((c) => c.node)));
+  let entry = groupNodes.get(field);
+  if (!entry) {
+    const count = h("span.n");
+    const chips = h("div.tf-chips");
+    const root = h("div.tf-group", { role: "group", "aria-label": label, dataset: { field } },
+      h("div.tf-group-label", dot ? h(`span.type-dot.type-${dot}`) : null, label, count), chips);
+    entry = { root, count, chips };
+    groupNodes.set(field, entry);
+  }
+  entry.count.textContent = String(list.length);
+  place(entry.chips, list.map((c) => c.node));
+  return entry.root;
 }
 
 function render() {
@@ -155,13 +189,19 @@ function render() {
   const more = vocab.v2 ? MORE.map((g) => group(g, selected, query)).filter(Boolean) : [];
   const moreSelected = MORE.reduce((n, g) => n + [...selected].filter((r) => parseRef(r)?.field === g.field).length, 0);
   if (more.length) {
-    const details = h("details.tf-more-types", { open: moreOpen || moreSelected > 0 || Boolean(query) || null },
-      h("summary", "更多类型", moreSelected ? h("span.n", `已选 ${moreSelected}`) : null), more);
-    details.addEventListener("toggle", () => { moreOpen = details.open; });
-    groups.push(details);
+    if (!els.more) {
+      els.moreSummary = h("summary");
+      els.more = h("details.tf-more-types", els.moreSummary);
+      els.more.addEventListener("toggle", () => { moreOpen = els.more.open; });
+    }
+    els.more.open = moreOpen || moreSelected > 0 || Boolean(query);
+    clear(els.moreSummary, "更多类型", moreSelected ? h("span.n", `已选 ${moreSelected}`) : null);
+    place(els.more, [els.moreSummary, ...more]);
+    groups.push(els.more);
   }
   if (vocab.v2Available === false) clear(els.body, h("div.tf-none", "服务端暂未提供标签词表，只能搜索正文。"));
-  else clear(els.body, groups.length ? groups : h("div.tf-none", query ? ["没有匹配的标签，按 ", h("span.kbd", "Enter"), " 搜索正文"] : "暂无可筛选的标签"));
+  else if (groups.length) place(els.body, groups);
+  else clear(els.body, h("div.tf-none", query ? ["没有匹配的标签，按 ", h("span.kbd", "Enter"), " 搜索正文"] : "暂无可筛选的标签"));
   const chips = [...els.body.querySelectorAll(".tf-chip:not(:disabled)")];
   const current = chips.find((c) => c.dataset.ref === roving) || chips.find((c) => c.classList.contains("on")) || chips[0];
   if (current) { current.tabIndex = 0; roving = current.dataset.ref; }

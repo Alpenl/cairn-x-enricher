@@ -322,7 +322,8 @@ async function memberships(force = false) {
     }
   }
 }
-async function navigate(key) {
+// Exported for the settings entry points (sidebar, ⌘K, tests).
+export async function navigate(key) {
   try {
     if (key === "tags") {
       const { browseTags } = await import("./tag-manager.js");
