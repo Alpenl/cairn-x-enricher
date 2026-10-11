@@ -11,7 +11,7 @@ try{
  const page=await browser.newPage({viewport:{width:1280,height:960}}),errors=[],remote=[];
  page.on("pageerror",e=>errors.push(e.message));await page.route("https://**/*",r=>{remote.push(r.request().url());return r.abort();});
  await page.goto(`${url}/bookmarks/${item.id}`);await page.locator("#detail-body h2").waitFor();
- assert.equal(await page.locator("#reading-version").textContent(),"净读版");
+ assert.equal(await page.locator("#reading-version").textContent(),"整理版");
  const paragraphs=await page.locator("#detail-body > p").allTextContents();assert.ok(paragraphs.some(p=>p.includes("读完")&&p.includes("原始论文")&&p.includes("继续实践")));
  assert.ok(!paragraphs.some(p=>/作者|@Reader|评价此翻译|Premium|翻译自|7.1万/.test(p)));
  assert.match(await page.locator("#detail-body pre").textContent(),/评价此翻译/);

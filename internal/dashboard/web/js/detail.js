@@ -135,8 +135,9 @@ function renderTags(item) {
 const VERSION_NOTE = {
   original: "保存时采集到的文字与媒体，用于核对出处，不会被改写。",
   organized: "为检索与复用重写的结构化正文，可以多次改写；原文始终保留。",
-  cleaned: "自动整理了段落与排版的净读版，文字内容与原文一致；原文始终保留。",
-  only: "这条收藏还没有整理版，显示的是保存时采集到的内容。"
+  cleaned: "自动整理了段落与排版，文字内容与原文一致；原文始终保留。",
+  only: "这条收藏还没有整理版，显示的是保存时采集到的内容。",
+  translated: "原帖的中文译文；保存时采集到的原始文字可在正文下方「展开原文」查看。"
 };
 
 function renderProcessBanner(item) {
@@ -243,8 +244,10 @@ function renderVersions(item, body, label) {
   const active = organized && !showUnformatted ? "organized" : "original";
   const base = readingVersions(item, true).label;
   els.versions.hidden = !body;
-  els.versionOriginal.textContent = base === "译文" ? "译文" : "原文";
-  els.versionOrganized.textContent = processed === "净读版" && !item.formatted_content ? "净读版" : "整理版";
+  // Labels stay fixed to the design (原文 / 整理版); the note says when the
+  // original side is a translation or the organized side is a cleaned reading.
+  els.versionOriginal.textContent = "原文";
+  els.versionOrganized.textContent = "整理版";
   els.versionOrganized.disabled = !organized;
   els.versionOrganized.title = organized ? "" : "还没有整理版";
   for (const [button, mode] of [[els.versionOriginal, "original"], [els.versionOrganized, "organized"]]) {
@@ -254,7 +257,7 @@ function renderVersions(item, body, label) {
     button.tabIndex = on ? 0 : -1;
   }
   els.versionNote.textContent = !organized ? VERSION_NOTE.only
-    : active === "original" ? VERSION_NOTE.original
+    : active === "original" ? (base === "译文" ? VERSION_NOTE.translated : VERSION_NOTE.original)
     : item.formatted_content ? VERSION_NOTE.organized : VERSION_NOTE.cleaned;
   const waiting = ["pending", "processing"].includes(item.formatting_status);
   els.format.hidden = !aiFormatting;

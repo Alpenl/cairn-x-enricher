@@ -28,7 +28,7 @@ try {
  item.translated_text="AI改写的扁平中文正文，没有图文位置。";
  item.images=Array.from({length:21},(_,i)=>({key:`test/archive-${i}.png`}));
  await page.reload();await page.locator('#detail-body .reading-figure').first().waitFor();
- assert.equal(await page.locator('#reading-version').textContent(),'净读版');
+ assert.equal(await page.locator('#reading-version').textContent(),'整理版');
  assert.equal(await page.locator('#detail-body h3').count(),21);
  assert.equal(await page.locator('#detail-body .reading-figure').count(),21);
  assert.equal(await page.locator('#figures').isVisible(),false);
