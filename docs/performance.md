@@ -69,7 +69,7 @@ Filter selection updates mounted topic and vocabulary controls in place. Rows an
 
 Counts retain the previous response while the new query is pending, then update in place; an absent count retains an empty fixed-width slot. Labels keep the same font weight when selected, and the filter header reserves the clear-button line height. Together these prevent wrapped labels from widening, shrinking or shifting on every click. Actual section membership can still change when refinements, search, taxonomy or pins change.
 
-`stable-facets-browser-test.mjs` samples every animation frame while toggling multiline Chinese/Latin labels at normal and larger font sizes with delayed, changing counts. It asserts zero node removals and zero navigation-row geometry changes, and checks resource toggling, dynamic refinement roles, search preservation and disappearing refinement sections. It runs in both browser test entry points.
+`tag-filter-browser-test.mjs` (2026-10 redesign; replaces the facet-panel `stable-facets` test) checks that the tag-chip popover keeps the same chip nodes mounted and focused through count updates, mode switches and selection changes, plus any/all, keyboard, tokens, row pills and narrow layouts. It runs in both browser test entry points.
 
 ### Search feedback and archived Chinese reading
 

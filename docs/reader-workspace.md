@@ -36,7 +36,7 @@ CHROME_PATH=/usr/bin/google-chrome npm run test-browser
 
 ## 验收
 
-`management-ui.mjs` 覆盖 320/390/900/1100/1600px、浅色/深色、管理表单、抽屉和命令搜索；`stable-facets-browser-test.mjs` 逐帧验证换行标签无位移或节点移除。搜索、筛选、身份失效、离线缓存、富文本和媒体由现有浏览器套件验证。
+`management-ui.mjs` 覆盖 320/390/900/1100/1600px、浅色/深色、管理表单、抽屉和命令搜索；`tag-filter-browser-test.mjs` 覆盖搜索框下的标签筛选弹层（分组计数、全部/任一满足、键盘、令牌、行内标签、窄屏），计数更新时复用同一批标签节点、焦点不丢。搜索、筛选、身份失效、离线缓存、富文本和媒体由现有浏览器套件验证。
 
 `tests/local-integration/browser-e2e.sh` 使用固定版本的真实 Worker、隔离 D1/R2 和本地模型替身，覆盖人工标签、管理目录、合集、冲突、响应丢失重试和自动整理审核。所有验证都不使用付费模型或生产写入。
 
