@@ -1,4 +1,4 @@
-import { closeWorkspace, setCheckbox, openPage } from "./workspace-helper.mjs";
+import { closeWorkspace, openPage } from "./workspace-helper.mjs";
 import { closeInspector, openCuration } from "../browser/workspace-helper.mjs";
 import assert from "node:assert/strict";
 
@@ -53,11 +53,18 @@ export async function verifyCollections(browser, base, bookmarkID) {
     const id = catalog.items.find((c) => c.name === "项目资料").id;
     await closeWorkspace(page);
     await openCuration(page);
-    await page.locator("#inspector-add-collection").click();
-    const picker = page.locator('wa-dialog[label="加入合集"]');
-    await setCheckbox(picker, "项目资料", true);
-    await picker.getByRole("button", { name: "保存", exact: true }).click();
-    await picker.waitFor({ state: "detached" });
+    // 合集归属: each collection is a switch that writes immediately.
+    const membership = page
+      .locator("#inspector-memberships")
+      .getByRole("switch", { name: "加入「项目资料」" });
+    await membership.click();
+    await page
+      .locator("#inspector-memberships")
+      .getByRole("switch", { name: "移出「项目资料」" })
+      .waitFor();
+    await page.waitForFunction(
+      () => document.querySelector("#inspector-membership-count")?.textContent?.startsWith("1 /"),
+    );
     assert.deepEqual(
       (await api(`/${id}`)).items.map((i) => i.link_id),
       [bookmarkID],

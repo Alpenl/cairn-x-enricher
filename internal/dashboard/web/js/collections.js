@@ -237,6 +237,20 @@ function create(onCreated) {
     ],
   });
 }
+// Inspector membership switches: one collection, one link, one operation.
+export async function setMembership(id, linkId, selected, revision) {
+  const c = catalog.find((x) => x.id === id);
+  return mutation(id, revision ?? c?.revision ?? 0, selected ? "add" : "remove", {
+    link_ids: [linkId],
+  })();
+}
+// "新建合集" from the inspector: create, then add the open bookmark to it.
+export function createWith(linkId) {
+  create(async (id) => {
+    await setMembership(id, linkId, true, catalog.find((c) => c.id === id)?.revision);
+    toast("已新建合集并加入", { tone: "ok" });
+  });
+}
 // --- Collections page: list on the left, the selected collection on the right.
 export async function loadCollections(force = false) {
   if (force) {
