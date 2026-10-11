@@ -4,9 +4,9 @@ import { icon } from "../icons.js";
 import { toast } from "../ui.js";
 import { request } from "./core.js";
 import { groupHead, segmented, switchButton, dimLabel, dotClass } from "./core.js";
-import { db, loadTags, loadPrefs, savePrefs, PREF_DEFAULTS } from "./data.js";
+import { db, loadTags, loadCollectionsData, loadPrefs, savePrefs, PREF_DEFAULTS } from "./data.js";
 import { registerSection, setActions, openSettings } from "./page.js";
-import { FONT_SIZES, DEFAULT_SIZE, DEFAULT_VERSION, defaultVersion, setDefaultVersion, fontSize, setFontSize } from "../reading-prefs.js";
+import { FONT_SIZES, FONT_SIZE_LABELS, DEFAULT_SIZE, DEFAULT_VERSION, defaultVersion, setDefaultVersion, fontSize, setFontSize } from "../reading-prefs.js";
 import { SHORTCUTS } from "../shortcuts.js";
 
 let hooks = {};
@@ -52,7 +52,7 @@ function paintAi(body) {
       h("div.set-card",
         h("div.set-row", { dataset: { setting: "ai-count" } },
           h("div.txt", h("div.ttl#lbl-sc", "每条收藏最多建议 ", h("b", String(p.ai_suggestion_limit)), " 个标签"), h("div.dsc", "数量越少，建议越集中在最有把握的标签上。")),
-          withFk(segmented("每条建议数量", [1, 2, 3, 4, 5, 6, 8].map((n) => [n, String(n)]), p.ai_suggestion_limit, (n) => update(body, { ai_suggestion_limit: n }, `每条收藏最多建议 ${n} 个标签`), ".sm"), "sc")),
+          withFk(segmented("每条建议数量", [...new Set([2, 3, 4, 5, p.ai_suggestion_limit])].sort((x, y) => x - y).map((n) => [n, String(n)]), p.ai_suggestion_limit, (n) => update(body, { ai_suggestion_limit: n }, `每条收藏最多建议 ${n} 个标签`), ".sm"), "sc")),
         h("div.set-row", { dataset: { setting: "ai-confirm" } },
           h("div.txt", h("div.ttl#lbl-rc", "建议需人工确认后生效"), h("div.dsc", "开启后，AI 建议先以虚线标签显示，你确认后才算数，合集规则和筛选也只看确认过的；关闭时直接写入（现在的做法）。")),
           switchButton(confirmAll, { "aria-labelledby": "lbl-rc", dataset: { fk: "rc" }, onclick: () => update(body, { ai_confirm_before_apply: !confirmAll }, !confirmAll ? "AI 建议改为确认后生效" : "AI 建议改为直接写入") })),
@@ -109,7 +109,7 @@ function renderReading(body) {
           withFk(segmented("默认阅读版本", [["original", "原文"], ["organized", "整理版"]], version, (v) => { setDefaultVersion(v); toast(`打开收藏时先显示${v === "original" ? "原文" : "整理版"}`, { tone: "ok" }); rerender(); }, ".sm"), "rv")),
         h("div.set-row", { dataset: { setting: "read-size" } },
           h("div.txt", h("div.ttl", "正文字号"), h("div.dsc", "只影响阅读区正文，界面文字保持不变。")),
-          withFk(segmented("正文字号", FONT_SIZES.map((n) => [n, n === DEFAULT_SIZE ? `${n} 默认` : String(n)]), size, (n) => { setFontSize(n); rerender(); }, ".sm"), "fs")))),
+          withFk(segmented("正文字号", FONT_SIZES.map((n) => [n, FONT_SIZE_LABELS[n]]), size, (n) => { setFontSize(n); rerender(); }, ".sm"), "fs")))),
     h("section.sp-group", { "aria-labelledby": "g-read-2", dataset: { setting: "read-preview" } },
       groupHead("g-read-2", "预览", "", `${size} px · 默认${version === "original" ? "原文" : "整理版"}`),
       h("div.read-preview", h("p", "把最终有效的描述沉淀成可复用的提示片段：结构词、材质词、禁止项。下次练习从这里起步，而不是从空白对话框起步。")))));
@@ -118,10 +118,13 @@ function renderReading(body) {
 /* ---------- 关于 ---------- */
 function renderAbout(body) {
   setActions([]);
-  const status = document.querySelector("#service-link .service-text")?.textContent?.trim() || "服务状态";
+  const status = h("span#sp-about-service", document.querySelector("#sp-service-text")?.textContent?.trim() || "服务状态");
   const version = document.querySelector('meta[name="cairn-version"]')?.content || "";
   const legacy = h("span.val", "…");
-  const counts = h("span.val", db.tags.length ? `${db.tags.filter((t) => !t.archived && !t.mergedInto).length} 个标签 · ${db.collections.filter((c) => !c.deleted).length} 个合集` : "—");
+  const counts = h("span.val", "…");
+  const paintCounts = () => { counts.textContent = `${db.tags.filter((t) => !t.archived && !t.mergedInto).length} 个标签 · ${db.collections.filter((c) => !c.deleted).length} 个合集`; };
+  if (db.tags.length) paintCounts();
+  else Promise.all([loadTags(), loadCollectionsData(false)]).then(paintCounts, () => { counts.textContent = "—"; });
   const keys = SHORTCUTS.flatMap((g) => g.items.map(([k, label]) => [k.filter((x) => !["/", "+", "然后"].includes(x)), label]));
   const row = ([k, l]) => h("div.sc-row", h("span", l), h("span.keys", k.map((x) => h("span.kbd", x))));
   clear(body, h("div.sp-col",

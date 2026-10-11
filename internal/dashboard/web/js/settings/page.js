@@ -220,7 +220,10 @@ function syncService() {
   const text = byId("service-link")?.textContent?.trim();
   const mine = byId("sp-service");
   if (dot) mine.querySelector(".status-dot").dataset.tone = dot.dataset.tone || "ok";
-  if (text) byId("sp-service-text").textContent = text;
+  if (!text) return;
+  byId("sp-service-text").textContent = text;
+  const about = byId("sp-about-service");
+  if (about) about.textContent = text;
 }
 
 /* ---------- 搜索设置 ---------- */
@@ -304,6 +307,9 @@ export function highlight(key) {
 }
 
 export function initSettingsPage() {
+  // The settings sidebar mirrors the workspace service indicator as it updates.
+  const svc = byId("service-link");
+  if (svc) new MutationObserver(syncService).observe(svc, { childList: true, subtree: true, characterData: true, attributes: true });
   const dd = byId("sp-section-dd");
   clear(dd, GROUPS.map((g) => h("optgroup", { label: g }, TABS.filter((t) => t.group === g).map((t) => h("option", { value: t.id }, t.title)))));
   dd.addEventListener("change", () => openSettings(dd.value));
