@@ -10,8 +10,8 @@
 .sp .field input { flex: 1; min-width: 0; border: none; background: transparent; outline: none; font: inherit; font-size: 13px; color: var(--ink); }
 .sp .field input::placeholder { color: var(--faint); }
 .sp .field input::-webkit-search-cancel-button { -webkit-appearance: none; }
-.sp button { font: inherit; color: inherit; cursor: pointer; border: none; background: none; }
-.sp button:disabled { cursor: not-allowed; }
+:where(.sp) button { font: inherit; color: inherit; cursor: pointer; border: none; background: none; }
+:where(.sp) button:disabled { cursor: not-allowed; }
 .sp .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-btn); font-size: 13px; font-weight: 500; white-space: nowrap; transition: background .14s, color .14s, border-color .14s, box-shadow .14s; }
 .sp .btn svg { width: 15px; height: 15px; }
 .sp .btn-primary { background: var(--terracotta); color: var(--on-accent, #fff); }
