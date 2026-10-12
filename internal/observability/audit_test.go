@@ -21,7 +21,9 @@ func TestControlAuditSurvivesOffRestartAndExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC)
+	// Open prunes using the real clock before the test can replace it.
+	// Keep fixtures within retention regardless of the date this test runs.
+	now := time.Now().UTC()
 	store.now = func() time.Time { return now }
 	if _, err := store.Update(0, LogOff, 0); err != nil {
 		t.Fatal(err)
