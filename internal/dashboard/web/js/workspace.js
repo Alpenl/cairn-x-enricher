@@ -6,6 +6,7 @@ import { state, on, emit, getItem } from "./store.js";
 import { openDialog, toast } from "./ui.js";
 import { fetchJSON, errorLabel } from "./api.js";
 import { facetFilterCount } from "./query.js";
+import { applyFontSize } from "./reading-prefs.js";
 import { displayTitle } from "./format.js";
 const pages = new Map();
 let current = null,
@@ -353,74 +354,23 @@ function renderMemberships(host, id, list) {
 // Exported for the settings entry points (sidebar, ⌘K, tests).
 export async function navigate(key) {
   try {
-    if (key === "tags") {
-      const { browseTags } = await import("./tag-manager.js");
-      await browseTags();
+    if (key === "tags" || key === "settings" || key.startsWith("settings/")) {
+      closeWorkspace({ navigate: false });
+      const { openSettings } = await import("./settings/page.js");
+      openSettings(key === "tags" ? "tags" : key === "settings" ? undefined : key.slice(9), "", { replace: Boolean(location.hash && !location.hash.startsWith("#/")) });
     } else if (key === "collections") {
       const { browse } = await import("./collections.js");
       await browse();
     } else if (key === "organize") {
       const { organize } = await import("./collections.js");
       await organize();
-    } else if (key === "settings") settings();
-    else {
+    } else {
       closeWorkspace();
       if (key === "service") hooks.service();
       else hooks.library();
     }
   } catch (error) {
     toast(errorLabel(error.message), { tone: "error" });
-  }
-}
-function settings() {
-  const seg = (label, options, current, onPick) => {
-    const group = h("div.version-seg.settings-seg", { role: "radiogroup", "aria-label": label });
-    for (const [value, text] of options)
-      group.append(h("button", { type: "button", role: "radio", "aria-checked": String(value === current), onclick: (event) => {
-        for (const b of group.children) b.setAttribute("aria-checked", String(b === event.currentTarget));
-        onPick(value);
-      } }, text));
-    return group;
-  };
-  let theme = "system";
-  try { theme = localStorage.getItem("cairn.theme") || "system"; } catch {}
-  const row = (title, hint, control) => h("div.settings-row", h("span", title, h("small", hint)), control);
-  const card = (title, ...body) => h("section.settings-card", h("h2", title), body);
-  const action = (label, ic, run, cls = "") => h(`button.btn.btn-sm${cls}`, { type: "button", onclick: run }, icon(ic, 14), label);
-  openWorkspace({
-    key: "settings",
-    title: "设置与快捷键",
-    body: [
-      card(
-        "阅读与外观",
-        row("外观", "浅色、深色或跟随设备", seg("外观", [["system", "跟随系统"], ["light", "浅色"], ["dark", "深色"]], theme, (v) => hooks.theme(v))),
-        row("正文字号", "只影响这台设备", seg("正文字号", [16, 17, 18, 20, 22].map((n) => [n, n === 17 ? "17 默认" : String(n)]), readSize(), (v) => {
-          try { localStorage.setItem("cairn.reader.font-size", String(v)); } catch {}
-          document.documentElement.style.setProperty("--reader-font-size", `${v}px`);
-        })),
-      ),
-      card(
-        "离线与导出",
-        h("p.tl-note", "读过的文章会在这台设备上保存文字副本，断网时也能打开。"),
-        h("div.settings-actions",
-          action("下载离线阅读文件", "download", hooks.offline),
-          action("导出当前结果（Markdown）", "fileText", hooks.export),
-          action("清除本机离线副本", "x", hooks.forget, ".btn-ghost.btn-danger")),
-      ),
-      card(
-        "键盘",
-        h("dl.settings-keys", [["⌘ / Ctrl K", "搜索或执行命令"], ["J / K", "下一条 / 上一条"], ["I", "打开或关闭整理面板"], ["A", "确认自动标签"], ["Z", "撤销上一次操作"]].map(([k, d]) => [h("dt", h("kbd", k)), h("dd", d)])),
-        h("div.settings-actions", action("查看全部快捷键", "keyboard", hooks.help)),
-      ),
-    ],
-  });
-}
-function readSize() {
-  try {
-    const n = Number(localStorage.getItem("cairn.reader.font-size"));
-    return [16, 17, 18, 20, 22].includes(n) ? n : 17;
-  } catch {
-    return 17;
   }
 }
 function commandPalette() {
@@ -441,11 +391,14 @@ function commandPalette() {
         byId("search").focus();
       },
     ],
-    ["标签库", "tag", () => navigate("tags")],
+    ["设置 · 标签库", "tag", () => navigate("tags")],
     ["管理全部合集", "folder", () => navigate("collections")],
     ["AI 整理", "sparkles", () => navigate("organize")],
     ["服务状态", "activity", () => navigate("service")],
-    ["设置与快捷键", "keyboard", () => navigate("settings")],
+    ["设置 · AI 打标", "sparkles", () => navigate("settings/ai")],
+    ["设置 · 合集规则", "sliders", () => navigate("settings/rules")],
+    ["设置 · 阅读偏好", "book", () => navigate("settings/reading")],
+    ["设置 · 关于与快捷键", "keyboard", () => navigate("settings/about")],
   ];
   const render = () => {
     const q = query.value.trim().toLowerCase();
@@ -469,8 +422,13 @@ function commandPalette() {
             h(
               "button.command-option",
               {
-                onclick: () => {
+                onclick: async () => {
                   dialog.close();
+                  // Library commands leave the settings page first.
+                  if (!c.label.startsWith("设置") && document.body.classList.contains("settings-open")) {
+                    const { leaveSettings } = await import("./settings/page.js");
+                    await leaveSettings();
+                  }
                   c.run();
                 },
               },
@@ -504,10 +462,7 @@ function commandPalette() {
 }
 export function initWorkspace(options) {
   hooks = options;
-  document.documentElement.style.setProperty(
-    "--reader-font-size",
-    `${readSize()}px`,
-  );
+  applyFontSize();
   byId("inspector-toggle").addEventListener("click", () =>
     inspectorVisible() ? closeInspector() : showInspector(),
   );
@@ -521,7 +476,7 @@ export function initWorkspace(options) {
     createWith(state.selectedId);
   });
   byId("organize-button")?.addEventListener("click", () => navigate("organize"));
-  byId("settings-button").addEventListener("click", settings);
+  byId("settings-button").addEventListener("click", () => navigate("settings"));
   byId("command-button").addEventListener("click", commandPalette);
   for (const [key, label, ic] of [
     ["library", "阅读", "inbox"],
@@ -575,9 +530,11 @@ export function initWorkspace(options) {
   on("inspector:visibility", () => {
     if (inspectorVisible()) void memberships();
   });
+  // Old links: #tags → #/settings/tags, #settings → #/settings (replaced, not stacked).
   const hashRoute = () => {
     const key = location.hash.slice(1);
-    if (["tags", "collections", "organize", "settings"].includes(key)) {
+    if (key === "tags" || key === "settings") void navigate(key);
+    else if (["collections", "organize"].includes(key)) {
       if (current?.key !== key) void navigate(key);
     } else closeWorkspace({ navigate: false });
   };

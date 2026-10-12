@@ -41,6 +41,7 @@ export function initShortcuts(actions) {
   document.addEventListener("keydown", (event) => {
     if (event.defaultPrevented || event.isComposing) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (document.body.classList.contains("settings-open")) return;
     if (document.querySelector("wa-dialog[open], dialog[open], #sidebar[aria-modal='true']") || isMenuOpen()) return;
     const key = event.key;
     const target = event.target;

@@ -10,7 +10,7 @@
 // Run with: node frontend-check.mjs [dashboard-directory]
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -41,7 +41,11 @@ function equal(label, got, want) {
 
 // --- Every module parses ------------------------------------------------------
 
-const modules = readdirSync(jsDir).filter((name) => name.endsWith(".js")).sort();
+// Top-level modules plus feature folders (settings/…); vendor bundles excluded.
+const modules = [
+  ...readdirSync(jsDir).filter((name) => name.endsWith(".js")),
+  ...readdirSync(join(jsDir, "settings")).filter((name) => name.endsWith(".js")).map((name) => `settings/${name}`),
+].sort();
 for (const name of modules) {
   // theme-boot.js is a classic script; everything else is an ES module.
   const result = spawnSync(process.execPath, ["--check", join(jsDir, name)], { encoding: "utf8" });
@@ -63,16 +67,28 @@ const sources = new Map();
 for (const name of modules) {
   const source = readFileSync(join(jsDir, name), "utf8");
   sources.set(name, source);
-  exportsOf.set(name, new Set([...source.matchAll(/export (?:async )?(?:function|const|let|class) (\w+)/g)].map((match) => match[1])));
+  exportsOf.set(name, new Set([
+    ...[...source.matchAll(/export (?:async )?(?:function|const|let|class) (\w+)/g)].map((match) => match[1]),
+    ...[...source.matchAll(/export \{([^}]+)\}/g)].flatMap((match) => match[1].split(",").map((value) => value.trim().split(/\s+as\s+/).pop()).filter(Boolean)),
+  ]));
 }
+const resolveImport = (from, spec) => posix.normalize(posix.join(posix.dirname(from), spec));
 for (const [name, source] of sources) {
-  for (const [, list, target] of source.matchAll(/import \{([^}]+)\} from "\.\/([\w-]+\.js)"/g)) {
+  const imports = [
+    ...[...source.matchAll(/import \{([^}]+)\} from "(\.\.?\/[\w/-]+\.js)"/g)].map((m) => [m[1], m[2]]),
+    // Lazy imports: const { a, b } = await import("./x.js")
+    ...[...source.matchAll(/const \{([^}]+)\} = await import\("(\.\.?\/[\w/-]+\.js)"\)/g)].map((m) => [m[1], m[2]]),
+  ];
+  for (const [list, spec] of imports) {
+    const target = resolveImport(name, spec);
+    if (target.startsWith("vendor/")) continue; // minified bundles, checked by check-reader/check-components
     check(`${name} imports an existing ${target}`, exportsOf.has(target));
     for (const imported of list.split(",").map((value) => value.trim()).filter(Boolean)) {
-      check(`${name} imports ${imported} exported by ${target}`, exportsOf.get(target)?.has(imported.split(/\s+as\s+/)[0]));
+      check(`${name} imports ${imported} exported by ${target}`, exportsOf.get(target)?.has(imported.split(/\s+as\s+|\s*:\s*/)[0]));
     }
   }
-  for (const [, alias, target] of source.matchAll(/import \* as (\w+) from "\.\/([\w-]+\.js)"/g)) {
+  for (const [, alias, spec] of source.matchAll(/import \* as (\w+) from "(\.\.?\/[\w/-]+\.js)"/g)) {
+    const target = resolveImport(name, spec);
     for (const [, member] of source.matchAll(new RegExp(`\\b${alias}\\.(\\w+)\\(`, "g"))) {
       check(`${name} calls ${alias}.${member} exported by ${target}`, exportsOf.get(target)?.has(member));
     }

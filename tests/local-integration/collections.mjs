@@ -121,7 +121,15 @@ export async function verifyCollections(browser, base, bookmarkID) {
     await waitAPI(async () => (await api(`/${id}`)).collection.name === "我的项目资料");
 
     // A response lost AFTER commit reuses the exact operation identity.
+    // Let the resubmitted rename finish its own refresh first, so the next
+    // save starts from a settled card instead of racing that repaint.
     await manager.getByLabel("合集名称").waitFor();
+    await page.waitForFunction(() => {
+      const card = document.querySelector("#management-page .cl-detail");
+      return card?.querySelector('input[aria-label="合集名称"]')?.value === "我的项目资料"
+        && !card.querySelector("[data-saving]") && !document.querySelector("wa-dialog[open]");
+    });
+    await page.waitForTimeout(300);
     const keys = [];
     let lose = true;
     await page.route(`**/api/collections/${id}/operations`, async (route) => {

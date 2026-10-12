@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -46,7 +47,7 @@ func TestFrontendAssetsPassTheirChecks(t *testing.T) {
 
 var (
 	shellAssetPattern  = regexp.MustCompile(`(?:src|href)="(/assets/[^"]+)"`)
-	moduleImportPatten = regexp.MustCompile(`from "\./([\w-]+\.js)"`)
+	moduleImportPatten = regexp.MustCompile(`(?:from "|import\(")(\.\.?/[\w/-]+\.js)"`)
 )
 
 // TestDashboardAssetsAreEmbedded fails if the shell or a module references a
@@ -73,8 +74,9 @@ func TestDashboardAssetsAreEmbedded(t *testing.T) {
 	}
 	for name, asset := range webAssets {
 		if strings.HasPrefix(name, "js/") {
+			// Static and lazy imports, resolved against the importing module (js/settings/…).
 			for _, match := range moduleImportPatten.FindAllStringSubmatch(string(asset.content), -1) {
-				referenced["/assets/js/"+match[1]] = true
+				referenced["/assets/"+path.Join(path.Dir(name), match[1])] = true
 			}
 		}
 	}

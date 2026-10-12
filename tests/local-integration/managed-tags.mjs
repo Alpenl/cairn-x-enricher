@@ -1,4 +1,4 @@
-import { closeWorkspace, setCheckbox, openPage } from "./workspace-helper.mjs";
+import { openSettingsPage, leaveSettingsPage } from "./workspace-helper.mjs";
 import { openCuration, closeInspector } from "../browser/workspace-helper.mjs";
 import assert from "node:assert/strict";
 export async function verifyManagedTags(
@@ -54,52 +54,22 @@ export async function verifyManagedTags(
     );
     await page.goto(base + "/bookmarks/" + bookmarkID);
     await closeInspector(page);
-    await openPage(page, "tags");
-    let manager = page.locator("#management-page");
-    // Reproduce a pending legacy uses/contra archive from the real UI. Losing
-    // its response must keep the original operation identity and audit once.
-    await manager.getByLabel("搜索或新建标签", { exact: true }).fill("反对");
-    const opposition = manager.locator('.tl-group[data-dim="uses"] .tl-row').filter({ hasText: "反对" });
-    await opposition.locator(".tl-main").click();
-    const archiveKeys = [];
-    let loseArchive = true;
-    await page.route("**/api/tag-catalog/operations", async (route) => {
-      const body = route.request().postDataJSON();
-      if (body.dimension !== "uses" || body.id !== "contra" || body.type !== "archive") return route.continue();
-      archiveKeys.push(body.operation_key);
-      if (loseArchive) {
-        loseArchive = false;
-        const response = await route.fetch();
-        assert.equal(response.status(), 200, await response.text());
-        await route.abort("failed");
-      } else await route.continue();
-    });
-    await manager.locator(".tl-panel").getByRole("button", { name: "停用", exact: true }).click();
-    await manager.locator(".tl-receipt").getByRole("button", { name: "重试", exact: true }).click();
-    await manager.locator(".tl-receipt").waitFor({ state: "detached" });
-    assert.equal(archiveKeys.length, 2);
-    assert.equal(archiveKeys[0], archiveKeys[1]);
-    await page.unroute("**/api/tag-catalog/operations");
+    // Personal uses stay human-only on the server, whatever a client sends.
     let archived = await api("/api/tag-catalog");
-    assert.equal(archived.catalog.uses.find((t) => t.id === "contra").active, false);
-    assert.equal((await api("/api/tag-catalog/history?dimension=uses&id=contra")).items.length, 1);
-    await manager.locator(".tl-row.is-off").filter({ hasText: "反对" }).getByRole("button", { name: "恢复", exact: true }).click();
-    await wait(async () => (await api("/api/tag-catalog")).catalog.uses.find((t) => t.id === "contra").active);
-    archived = await api("/api/tag-catalog");
-    assert.equal(archived.catalog.uses.find((t) => t.id === "contra").ai_enabled, false);
     const forbidden = await fetch(base + "/api/tag-catalog/operations", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ operation_key: crypto.randomUUID(), expected_revision: archived.revision, dimension: "uses", id: "contra", type: "edit", definition: { ai_enabled: true } }),
     });
     assert.equal(forbidden.status, 400);
     assert.equal((await forbidden.json()).error, "personal_use_human_only");
-    await manager.getByLabel("搜索或新建标签", { exact: true }).fill("");
-    await manager
-      .getByRole("button", { name: "新建标签", exact: true })
-      .click();
-    const add = manager.locator('.tl-add[data-dim="topics"]');
-    await add.getByLabel("新标签名称").fill("LoRA");
-    await add.getByLabel("新标签说明").fill("LoRA 低秩适配器的训练和使用");
+
+    // 设置 · 标签库: create a topic. Losing the response keeps a durable
+    // receipt in the page header; 重试 replays the same operation key.
+    await openSettingsPage(page, "tags");
+    const lib = page.locator("#sp-body");
+    await page.locator("#sp-actions").getByRole("button", { name: "新建标签", exact: true }).click();
+    await lib.getByLabel("新标签名称").fill("LoRA");
+    await lib.locator("#new-desc").fill("LoRA 低秩适配器的训练和使用");
     const keys = [];
     let lose = true;
     await page.route("**/api/tag-catalog/operations", async (route) => {
@@ -110,9 +80,8 @@ export async function verifyManagedTags(
         await route.abort("failed");
       } else await route.continue();
     });
-    await add.getByRole("button", { name: "创建", exact: true }).click();
-    // A lost response keeps a durable receipt; retrying reuses the same key.
-    const receipt = manager.locator(".tl-receipt");
+    await lib.getByRole("button", { name: "创建", exact: true }).click();
+    const receipt = page.locator("#sp-actions .sp-note-warn");
     await receipt.waitFor();
     await receipt.getByRole("button", { name: "重试", exact: true }).click();
     await receipt.waitFor({ state: "detached" });
@@ -123,6 +92,39 @@ export async function verifyManagedTags(
       term = data.catalog.topics.find((t) => t.label === "LoRA");
     assert.equal(term.ai_enabled, true);
     const ref = "system/topics/" + term.id;
+
+    // Archive with a lost response: same identity on retry, audited once; then restore.
+    await openTag(page, "LoRA");
+    const archiveKeys = [];
+    let loseArchive = true;
+    await page.route("**/api/tag-catalog/operations", async (route) => {
+      const body = route.request().postDataJSON();
+      if (body.id !== term.id || body.type !== "archive") return route.continue();
+      archiveKeys.push(body.operation_key);
+      if (loseArchive) {
+        loseArchive = false;
+        const response = await route.fetch();
+        assert.equal(response.status(), 200, await response.text());
+        await route.abort("failed");
+      } else await route.continue();
+    });
+    await page.locator("#lib-detail-foot").getByRole("button", { name: "归档", exact: true }).click();
+    await receipt.waitFor();
+    await receipt.getByRole("button", { name: "重试", exact: true }).click();
+    await receipt.waitFor({ state: "detached" });
+    assert.equal(archiveKeys.length, 2);
+    assert.equal(archiveKeys[0], archiveKeys[1]);
+    await page.unroute("**/api/tag-catalog/operations");
+    archived = await api("/api/tag-catalog");
+    assert.equal(archived.catalog.topics.find((t) => t.id === term.id).active, false);
+    const archives = (await api(`/api/tag-catalog/history?dimension=topics&id=${term.id}`)).items.filter((i) => i.action === "archive");
+    assert.equal(archives.length, 1, JSON.stringify(archives));
+    assert.equal(archives[0].operation_key, archiveKeys[0]);
+    await page.locator("#lib-detail-foot").getByRole("button", { name: "恢复", exact: true }).click();
+    await wait(async () => (await api("/api/tag-catalog")).catalog.topics.find((t) => t.id === term.id).active);
+    // Archive/restore change what AI may use; a later rename alone must not.
+    data = await api("/api/tag-catalog");
+
     const human = await api("/api/bookmarks/" + bookmarkID + "/tags");
     await api("/api/bookmarks/" + bookmarkID + "/tags", {
       operation_key: crypto.randomUUID(),
@@ -136,10 +138,10 @@ export async function verifyManagedTags(
       .getByText("LoRA", { exact: true })
       .waitFor({ state: "visible" });
     await closeInspector(page);
-    await openPage(page, "tags");
-    manager = page.locator("#management-page");
-    await openTag(manager, "LoRA");
-    await renameOpen(manager, "LoRA 微调");
+    // Rename in settings; the workspace picks it up without a reload.
+    await openSettingsPage(page, "tags");
+    await openTag(page, "LoRA");
+    await rename(page, "LoRA 微调");
     await wait(async () => (await api("/api/tag-catalog")).catalog.topics.find((t) => t.id === term.id).label === "LoRA 微调");
     const renamed = await api("/api/tag-catalog");
     assert.equal(
@@ -150,11 +152,7 @@ export async function verifyManagedTags(
         after: renamed.catalog.topics.find((t) => t.id === term.id),
       }),
     );
-    assert.equal(
-      renamed.catalog.topics.find((t) => t.id === term.id).label,
-      "LoRA 微调",
-    );
-    await closeWorkspace(page);
+    await leaveSettingsPage(page);
     await openCuration(page);
     await page
       .locator('.tag-system-row[data-dimension="topics"]')
@@ -171,19 +169,12 @@ export async function verifyManagedTags(
     await page.goto(base + "/bookmarks/" + bookmarkID);
     await openCuration(page);
     await closeInspector(page);
-    await openPage(page, "tags");
-    manager = page.locator("#management-page");
-    await openTag(manager, existing.label);
-    await renameOpen(manager, "AI 编程实践");
+    await openSettingsPage(page, "tags", "topics:ai_coding");
+    await page.locator("#td-name").waitFor();
+    assert.equal(await page.locator("#td-name").inputValue(), existing.label);
+    await rename(page, "AI 编程实践");
     await wait(async () => (await api("/api/tag-catalog")).catalog.topics.find((t) => t.id === "ai_coding").label === "AI 编程实践");
-    await page.evaluate(async () => {
-      const { loadV1, loadV2 } = await import("/assets/js/taxonomy.js");
-      await loadV2();
-      await loadV1();
-      const { emit } = await import("/assets/js/store.js");
-      emit("taxonomy");
-    });
-    await closeWorkspace(page);
+    await leaveSettingsPage(page);
     await openCuration(page);
     await page
       .locator('.tag-system-row[data-dimension="topics"]')
@@ -197,20 +188,17 @@ export async function verifyManagedTags(
       type: "create",
       name: "AIGC 自动收录",
     });
-    await closeWorkspace(page);
+    // 设置 · 合集规则: the first hit tag switches the rule on.
     await closeInspector(page);
-    await openPage(page, "collections");
-    let collections = page.locator("#management-page");
-    await collections
-      .locator(".collection-row")
-      .filter({ hasText: "AIGC 自动收录" })
-      .click();
-    await collections.locator(".cl-hooks .tl-chip-add").click();
-    const rule = page.locator('wa-dialog[label="给「AIGC 自动收录」挂标签"]');
-    await rule.getByLabel("查找标签").fill("LoRA");
-    await rule.locator(".tag-pick", { hasText: "LoRA 微调" }).click();
-    await rule.getByRole("button", { name: "保存", exact: true }).click();
-    await rule.waitFor({ state: "detached" });
+    await openSettingsPage(page, "rules", collectionID);
+    await page.locator(".rd-titles h4", { hasText: "AIGC 自动收录" }).waitFor();
+    await page.locator(".rd").getByRole("button", { name: "添加标签", exact: true }).click();
+    const pick = page.locator(".pick-pop");
+    await pick.getByPlaceholder("搜索标签或别名").fill("LoRA");
+    await pick.locator(".tf-chip", { hasText: "LoRA 微调" }).click();
+    await pick.locator('.tf-chip[aria-pressed="true"]', { hasText: "LoRA 微调" }).waitFor();
+    await pick.getByRole("button", { name: "完成", exact: true }).click();
+    await pick.waitFor({ state: "hidden" }); // the picker is reused, only hidden
     await wait(async () => (await api("/api/collections/" + collectionID)).collection.rule_enabled);
     const created = await fetch(workerURL + "/api/links", {
       method: "POST",
@@ -271,21 +259,11 @@ export async function verifyManagedTags(
     await internal("collection-rules/drain", {});
     detail = await api("/api/collections/" + collectionID);
     assert.ok(!detail.items.some((i) => i.link_id === newID));
-    await closeWorkspace(page);
+    // Phone: the settings page fits 390px and the AI switch writes immediately.
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.locator("#detail-back").click();
-    await page.locator("#tabbar [data-page=tags]").click();
-    manager = page.locator("#management-page");
-    assert.equal(
-      await manager.evaluate((n) => n.scrollWidth <= n.clientWidth),
-      true,
-    );
-    await manager.getByLabel("搜索或新建标签").fill("LoRA");
-    await manager
-      .locator(".tl-row")
-      .filter({ hasText: "LoRA 微调" })
-      .locator(".tl-ai")
-      .click();
+    await openSettingsPage(page, "tags", "topics:" + term.id);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.locator("#sp-body").getByRole("switch", { name: "参与 AI 自动打标" }).click();
     await wait(async () => (await api("/api/tag-catalog")).catalog.topics.find((t) => t.id === term.id).ai_enabled === false);
     data = await api("/api/tag-catalog");
     assert.equal(
@@ -294,21 +272,22 @@ export async function verifyManagedTags(
     );
     assert.deepEqual(errors, []);
     process.stdout.write(
-      "ok managed tags: real D1 directory, HTTP UUID, uncertain response replay, AI hot reload, no historic rerun, rules, manual exclusion, phone layout\n",
+      "ok managed tags (settings page): real D1 directory, HTTP UUID, uncertain response replay (create + archive), rename hot reload, multi-tag rules, manual exclusion, phone layout\n",
     );
   } finally {
     await page.close();
   }
 }
 
-// Search, open the matching row in place, and rename it on blur.
-async function openTag(manager, label) {
-  await manager.getByLabel("搜索或新建标签").fill(label);
-  await manager.locator(".tl-row").filter({ hasText: label }).first().locator(".tl-main").click();
-  await manager.locator(".tl-panel").waitFor();
+// Search the library, select the row, then rename on Enter.
+async function openTag(page, label) {
+  await page.locator("#lib-search").fill(label);
+  await page.locator("#lib-list .lib-row").filter({ hasText: label }).first().click();
+  await page.locator("#td-name").waitFor();
+  assert.equal(await page.locator("#td-name").inputValue(), label);
 }
-async function renameOpen(manager, label) {
-  const name = manager.locator(".tl-panel").getByLabel("名称", { exact: true });
+async function rename(page, label) {
+  const name = page.locator("#td-name");
   await name.fill(label);
   await name.press("Enter");
 }

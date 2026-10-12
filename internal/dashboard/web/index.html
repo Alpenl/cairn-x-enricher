@@ -312,6 +312,37 @@
     </div>
     <nav class="tabbar" id="tabbar" aria-label="主导航"></nav>
   </div>
+  <div class="sp" id="settings-page" hidden>
+    <aside class="sp-nav" id="sp-nav" aria-label="设置导航">
+      <a class="brand" href="#/" aria-label="返回 Cairn 收藏库"><span class="brand-mark" aria-hidden="true"><svg class="logo" width="16" height="16" viewBox="0 0 24 24"><ellipse cx="12" cy="19.2" rx="8.6" ry="3.1"/><ellipse cx="11.4" cy="12.9" rx="6.2" ry="2.8"/><ellipse cx="12.4" cy="7.1" rx="3.9" ry="2.3"/></svg></span><span class="brand-name">Cairn</span><span class="brand-sub">设置</span></a>
+      <a class="sp-back" id="sp-back" href="#/" title="返回收藏库 (Esc)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg><span>返回收藏库</span></a>
+      <div class="sp-search" id="sp-search-wrap">
+        <div class="field sp-search-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input type="search" id="sp-search" placeholder="搜索设置" autocomplete="off" spellcheck="false" aria-label="搜索设置" role="combobox" aria-expanded="false" aria-controls="sp-results" aria-autocomplete="list">
+          <span class="kbd" aria-hidden="true">/</span>
+        </div>
+        <div class="sp-results" id="sp-results" role="listbox" aria-label="设置搜索结果" hidden></div>
+      </div>
+      <label class="sp-section-dd-wrap"><span class="visually-hidden">切换设置分区</span><select class="dd sp-section-dd" id="sp-section-dd" aria-label="切换设置分区"></select><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></label>
+      <nav class="nav-scroll" id="sp-nav-list" aria-label="设置分区"></nav>
+      <div class="sidebar-footer">
+        <a class="svc" id="sp-service" href="/backstage"><span class="status-dot" data-tone="ok"></span><span id="sp-service-text">服务状态</span></a>
+        <div class="sample-note">修改即时保存，可在其他设备上看到</div>
+      </div>
+    </aside>
+    <main class="sp-main" id="sp-main">
+      <header class="sp-head">
+        <div class="sp-titles">
+          <nav class="sp-crumb" aria-label="当前位置"><span>设置</span><span class="sep" aria-hidden="true">/</span><span id="sp-crumb" aria-current="page"></span></nav>
+          <h1 id="sp-title" tabindex="-1"></h1>
+          <p id="sp-desc"></p>
+        </div>
+        <div class="sp-actions" id="sp-actions" hidden></div>
+      </header>
+      <div class="sp-body" id="sp-body" role="region" aria-labelledby="sp-title"></div>
+    </main>
+  </div>
   <div class="toasts" id="toasts" aria-live="polite"></div>
 </body>
 </html>

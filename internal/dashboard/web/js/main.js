@@ -1,5 +1,5 @@
 import {initWorkspace,closeWorkspace,workspaceOpen} from "./workspace.js";
-import {initTagManager} from "./tag-manager.js";
+import { initSettings, openSettings, settingsOpen } from "./settings/index.js";
 import * as collections from "./collections.js";
 import { processingPaused } from "./process-status.js";
 // Application controller: routing, layout, selection and the curation actions
@@ -416,7 +416,7 @@ function openBackstage() {
 // --- Boot ------------------------------------------------------------------------------------------
 
 function onPopState() {
-  if(!location.hash)closeWorkspace({navigate:false});
+  if(!location.hash||location.hash.startsWith("#/settings"))closeWorkspace({navigate:false});
   const previousQuery = querySuffix();
   parseLocation();
   applyRouteClasses();
@@ -439,6 +439,7 @@ function onPopState() {
 }
 
 function escape() {
+  if (settingsOpen()) return false;
   if(workspaceOpen()){closeWorkspace();return true;}
   if (app.classList.contains("sidebar-open")) { setSidebarOpen(false); return true; }
   if (isFocusMode()) { toggleFocus(); return true; }
@@ -496,6 +497,14 @@ async function boot() {
     pick:()=>collections.pick([state.selectedId]),help:showHelp,export:exportCurrentList,
     offline:async()=>{if(!await downloadOffline())toast("请先打开一篇收藏阅读");},
     forget:async()=>{await forgetOffline();toast("已清除本机离线副本");}
+  });
+  initSettings({
+    openItem: (id) => { closeWorkspace(); select(Number(id)); },
+    showTag: (ref) => { closeWorkspace(); setFilters(withTags({ ...emptyFilters(), curation_status: "all" }, [ref], "any"), "", { push: true }); },
+    openCollection: (id) => { closeWorkspace(); setFilters({ ...emptyFilters(), collection_id: id, curation_status: "all" }, "", { push: true }); },
+    theme: saveTheme, service: openBackstage, export: exportCurrentList,
+    offline: async () => { if (!await downloadOffline()) toast("请先打开一篇收藏阅读"); },
+    forget: async () => { await forgetOffline(); toast("已清除本机离线副本"); },
   });
   on("workspace:navigate",()=>setSidebarOpen(false));
   on("workspace:visibility",()=>{detail.syncReaderVisibility();if(workspaceOpen())cancelPrefetch();});
@@ -579,6 +588,7 @@ async function boot() {
     focus: toggleFocus,
     view: (view) => hooksForFilters.setView(view),
     backstage: openBackstage,
+    settings: () => openSettings(),
     escape,
     scrollDetail: (direction) => {
       const scroller = byId("detail-scroll");
@@ -619,4 +629,3 @@ async function boot() {
 
 boot();
 
-initTagManager({select:filters=>setFilters(filters,"",{push:true})});

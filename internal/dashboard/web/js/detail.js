@@ -1,3 +1,4 @@
+import { defaultVersion } from "./reading-prefs.js";
 import { failureReason } from "./process-status.js";
 // The reading pane: one bookmark with its status control, curation card,
 // images, translation, lazily rendered original text and diagnostics.
@@ -220,7 +221,7 @@ function render(item) {
   const full = item.content_loaded !== false;
   els.bodyLoading.hidden = full;
   if (full) {
-    if (formattedItemId !== item.id) { showUnformatted=false;formattedItemId=item.id; }
+    if (formattedItemId !== item.id) { showUnformatted=defaultVersion()==="original";formattedItemId=item.id; }
     const { body, label } = readingVersions(item, showUnformatted);
     const reading = paragraphs(els.body, body, !showUnformatted);
     renderFigures(item, body, reading.images);
