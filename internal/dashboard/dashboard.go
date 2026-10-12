@@ -343,6 +343,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/collections/{collection}", s.collections)
 	mux.HandleFunc("GET /api/collections/{collection}/rules/preview", s.collections)
 	mux.HandleFunc("POST /api/collections/{collection}/operations", s.collections)
+	mux.HandleFunc("GET /api/collections/review-summary", s.collections)
+	mux.HandleFunc("GET /api/collections/{collection}/rules/candidates", s.collections)
 	mux.HandleFunc("GET /api/bookmarks", s.listBookmarks)
 	mux.HandleFunc("GET /api/taxonomy", s.getTaxonomy)
 	mux.HandleFunc("PATCH /api/bookmarks/{id}/curation", s.updateCuration)
@@ -352,6 +354,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/tag-catalog", s.tagSystemProxy)
 	mux.HandleFunc("POST /api/tag-catalog/operations", s.tagSystemProxy)
 	mux.HandleFunc("GET /api/tag-catalog/history", s.tagSystemProxy)
+	mux.HandleFunc("GET /api/tag-catalog/usage", s.tagSystemProxy)
+	mux.HandleFunc("POST /api/tag-catalog/merges", s.tagSystemProxy)
+	mux.HandleFunc("GET /api/tag-catalog/merges/{merge}", s.tagSystemProxy)
+	mux.HandleFunc("POST /api/tag-catalog/merges/{merge}/undo", s.tagSystemProxy)
+	mux.HandleFunc("GET /api/preferences", s.preferences)
+	mux.HandleFunc("POST /api/preferences/operations", s.preferences)
+	mux.HandleFunc("GET /api/links/legacy-dropped", s.preferences)
 	mux.HandleFunc("GET /api/custom-tags", s.tagSystemProxy)
 	mux.HandleFunc("POST /api/custom-tags", s.tagSystemProxy)
 	mux.HandleFunc("PATCH /api/custom-tags/{id}", s.tagSystemProxy)
@@ -1263,6 +1272,22 @@ func validCustomFilterID(term string) bool {
 	return true
 }
 
+// validTagRef accepts system/<dimension>/<id> or custom/default/<uuid>.
+func validTagRef(ref string) bool {
+	parts := strings.Split(ref, "/")
+	if len(parts) != 3 {
+		return false
+	}
+	if parts[0] == "custom" {
+		return parts[1] == "default" && validCustomFilterID(parts[2])
+	}
+	switch parts[1] {
+	case "topics", "resource_kinds", "content_functions", "carriers", "affordances", "forms", "uses":
+		return parts[0] == "system" && validFilterID(parts[2])
+	}
+	return false
+}
+
 // Validate transport syntax here; the Worker owns known/retired vocabulary IDs.
 func validFilterID(term string) bool {
 	if len(term) == 0 || len(term) > 40 || term[0] < 'a' || term[0] > 'z' {
@@ -1372,6 +1397,38 @@ func bookmarkQuery(request *http.Request) (cairn.BookmarkQuery, error) {
 			}
 			*mode.target = entries[0]
 		}
+	}
+	// Unified tag-chip filter from the search popover: system and personal tags.
+	if entries, present := values["tags"]; present {
+		if len(entries) != 1 || len(entries[0]) > 4096 {
+			return cairn.BookmarkQuery{}, errors.New("invalid filter")
+		}
+		refs := strings.Split(entries[0], ",")
+		if len(refs) > 32 {
+			return cairn.BookmarkQuery{}, errors.New("too many filter terms")
+		}
+		seen := map[string]bool{}
+		for _, ref := range refs {
+			if !validTagRef(ref) {
+				return cairn.BookmarkQuery{}, errors.New("invalid filter term")
+			}
+			if !seen[ref] {
+				query.Tags = append(query.Tags, ref)
+				seen[ref] = true
+			}
+		}
+	}
+	if entries, present := values["tags_mode"]; present {
+		if len(entries) != 1 || (entries[0] != "any" && entries[0] != "all") || len(query.Tags) == 0 {
+			return cairn.BookmarkQuery{}, errors.New("invalid tag mode")
+		}
+		query.TagsMode = entries[0]
+	}
+	if entries, present := values["tags_children"]; present {
+		if len(entries) != 1 || (entries[0] != "0" && entries[0] != "1") || len(query.Tags) == 0 {
+			return cairn.BookmarkQuery{}, errors.New("invalid tag mode")
+		}
+		query.TagsChildren = entries[0] == "1"
 	}
 	if entries, present := values["filter_contract_version"]; present {
 		if len(entries) != 1 || entries[0] != "1" {

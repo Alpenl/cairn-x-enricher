@@ -9,6 +9,15 @@ import (
 	"strings"
 )
 
+// CollectionsProtocol is the collections contract this service speaks. v2 adds
+// rule exclusions, review-before-add admission and confirmed-only rules; the
+// paired Worker (deploy/stack-contract.json) answers with the same version.
+const CollectionsProtocol = "2"
+
+// CollectionsHeaderOK accepts the paired version. A v1 echo means an older
+// Worker that cannot store v2 rule settings.
+func CollectionsHeaderOK(value string) bool { return value == CollectionsProtocol }
+
 // Collections forwards versioned user operations; retries preserve their identity.
 func (c *Client) Collections(ctx context.Context, method, path string, body any) (json.RawMessage, error) {
 	parsed, err := url.ParseRequestURI(path)
@@ -23,7 +32,7 @@ func (c *Client) Collections(ctx context.Context, method, path string, body any)
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return nil, apiError(response)
 	}
-	if response.Header.Get("X-Cairn-Collections") != "1" {
+	if !CollectionsHeaderOK(response.Header.Get("X-Cairn-Collections")) {
 		return nil, &APIError{StatusCode: http.StatusConflict, Code: "collections_unsupported"}
 	}
 	var payload json.RawMessage

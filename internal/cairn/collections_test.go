@@ -8,17 +8,17 @@ import (
 )
 
 func TestCollectionsRequiresAcknowledgementAndPreservesQuery(t *testing.T) {
-	ack := false
+	ack := ""
 	const id = "11111111-1111-4111-8111-111111111111"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Cairn-Collections") != "1" {
+		if r.Header.Get("X-Cairn-Collections") != "2" {
 			t.Error("missing capability request")
 		}
 		if r.URL.Path == "/api/enrichment/bookmarks" && r.URL.Query().Get("collection_id") != id {
 			t.Error("lost collection scope")
 		}
-		if ack {
-			w.Header().Set("X-Cairn-Collections", "1")
+		if ack != "" {
+			w.Header().Set("X-Cairn-Collections", ack)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"items":[]}`))
@@ -31,7 +31,12 @@ func TestCollectionsRequiresAcknowledgementAndPreservesQuery(t *testing.T) {
 	if _, err := client.ListBookmarks(context.Background(), BookmarkQuery{CollectionID: id}); err == nil {
 		t.Fatal("silently ignored collection scope")
 	}
-	ack = true
+	// A v1 Worker cannot store v2 rule settings: refuse it too.
+	ack = "1"
+	if _, err := client.Collections(context.Background(), "GET", "/api/enrichment/collections", nil); err == nil {
+		t.Fatal("silently accepted a v1 backend")
+	}
+	ack = "2"
 	if _, err := client.Collections(context.Background(), "GET", "/api/enrichment/collections", nil); err != nil {
 		t.Fatal(err)
 	}
