@@ -1,0 +1,119 @@
+/* Shared Cairn design tokens (cairn-share 2ac6efa056b2, design/tokens). Synced by scripts/sync-design-tokens.mjs; do not edit. */
+:root {
+  color-scheme: light;
+  --canvas: #faf9f5;
+  --raised: #ffffff;
+  --secondary: #f0eee6;
+  --sand: #efe9de;
+  --sand-hover: #e8e6dc;
+  --warm: #e3dacc;
+  --manilla: #ebdbbc;
+  --kraft: #d4a27f;
+  --ink: #141413;
+  --ink-soft: #3d3d3a;
+  --muted: #5e5d59;
+  --tertiary: #87867f;
+  --faint: #b0aea5;
+  --hairline: #d1cfc5;
+  --hairline-soft: #e8e6dc;
+  --terracotta: #c96442;
+  --terracotta-deep: #b5573a;
+  --clay: #d97757;
+  --fig: #c46686;
+  --olive: #788c5d;
+  --olive-ink: #5f7146;
+  --cactus: #bcd1ca;
+  --sky: #6a9bcc;
+  --dark: #30302e;
+  --danger: #a4492e;
+  --on-accent: #ffffff;
+  --r-btn: 8px;
+  --r-field: 10px;
+  --r-card: 12px;
+  --r-modal: 18px;
+  --r-pill: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --sidebar-w: 232px;
+  --list-w: 352px;
+  --organize-w: 300px;
+  --font-ui: "DM Sans", system-ui, -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-serif: "Source Serif 4", Georgia, "Songti SC", "Noto Serif SC", serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --article-size: 16.5px;
+  --shadow-pop: 0 10px 30px rgba(20,20,19,.10), 0 2px 6px rgba(20,20,19,.05);
+  --shadow-modal: 0 24px 64px rgba(48,40,30,.18), 0 4px 14px rgba(48,40,30,.07);
+  --ring: 0 0 0 3px rgba(217,119,87,.18);
+  --t-fast: 160ms;
+  --t-push: 260ms;
+  --t-sheet: 280ms;
+  --ease: cubic-bezier(.2,0,0,1);
+  --ease-out: cubic-bezier(.05,.7,.1,1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --canvas: #262624;
+    --raised: #30302e;
+    --secondary: #2b2a27;
+    --sand: #1f1e1d;
+    --sand-hover: #3a3936;
+    --warm: #3d3a35;
+    --manilla: #4d4232;
+    --kraft: #b8876a;
+    --ink: #faf9f5;
+    --ink-soft: #e5e3da;
+    --muted: #c2c0b6;
+    --tertiary: #9c9a92;
+    --faint: #6e6c66;
+    --hairline: #4a4945;
+    --hairline-soft: #3a3936;
+    --terracotta: #d97757;
+    --terracotta-deep: #c96442;
+    --clay: #e08a6b;
+    --fig: #d685a1;
+    --olive: #9cb07f;
+    --olive-ink: #b5c79a;
+    --cactus: #5d7a72;
+    --sky: #8bb4dd;
+    --dark: #141413;
+    --danger: #e07a5f;
+    --on-accent: #ffffff;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #262624;
+  --raised: #30302e;
+  --secondary: #2b2a27;
+  --sand: #1f1e1d;
+  --sand-hover: #3a3936;
+  --warm: #3d3a35;
+  --manilla: #4d4232;
+  --kraft: #b8876a;
+  --ink: #faf9f5;
+  --ink-soft: #e5e3da;
+  --muted: #c2c0b6;
+  --tertiary: #9c9a92;
+  --faint: #6e6c66;
+  --hairline: #4a4945;
+  --hairline-soft: #3a3936;
+  --terracotta: #d97757;
+  --terracotta-deep: #c96442;
+  --clay: #e08a6b;
+  --fig: #d685a1;
+  --olive: #9cb07f;
+  --olive-ink: #b5c79a;
+  --cactus: #5d7a72;
+  --sky: #8bb4dd;
+  --dark: #141413;
+  --danger: #e07a5f;
+  --on-accent: #ffffff;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --t-fast: 1ms; --t-push: 1ms; --t-sheet: 1ms; }
+}

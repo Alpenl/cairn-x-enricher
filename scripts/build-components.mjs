@@ -25,6 +25,8 @@ for (const [entry, target] of [
     target: "es2022",
     minify: true,
     legalComments: "eof",
+    // Self-hosted fonts are served as their own assets.
+    external: ["/assets/fonts/*"],
     write: false,
   });
   const content = result.outputFiles[0].text;

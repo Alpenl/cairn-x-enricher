@@ -8,7 +8,7 @@ import {openCuration,openFilters,closeFilters,closeInspector} from "./workspace-
 //
 //   Part A: field-level curation invariants against a focused mock that can
 //           delay responses and force CAS conflicts.
-//   Part B: library triage flows (keyboard, auto-advance, undo, batch, search,
+//   Part B: library flows (keyboard, reason editing, search, legacy views,
 //           phone layout) against the realistic fixture server.
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -492,44 +492,40 @@ async function partA(browser) {
   // 14. The library carries every dimension through requests and URLs.
   const latestQuery = () => state.listQueries.at(-1);
   await page.goto(`${base}/?topic=design&content_functions=method,data&carriers=single&affordances=practice&entity_state=failed`, { waitUntil: "networkidle" });
-  await page.waitForSelector("[data-facet='topics'][data-value='llm']", { state: "attached" });
+  await waitFor(() => state.listQueries.length > 0);
   equal("legacy topic URL becomes the full topic filter", latestQuery().topics, "design");
   equal("library filter negotiation is explicit", latestQuery().filter_contract_version, "1");
-  equal("URL restores selected function values", await page.$$eval("[data-facet='content_functions'][aria-pressed='true']", (nodes) => nodes.map((node) => node.dataset.value)), ["method", "data"]);
-  const toggleFacet = async (key, value) => {
+  // Old facet links keep working: forwarded as-is and listed as removable chips.
+  for (const [key, value] of Object.entries({ content_functions: "data,method", carriers: "single", affordances: "practice", entity_state: "failed" }))
+    equal(`legacy ${key} link is forwarded`, String(latestQuery()[key] || "").split(",").sort().join(","), value);
+  check("legacy facet filters are listed above the results", (await page.$$eval("#active-filters .filter-chip", (nodes) => nodes.length)) >= 5);
+  // The search popover (2026-10 redesign) sends one unified tag condition.
+  const toggleTag = async (field, value) => {
     await openFilters(page);
-    const group = page.locator(`details[data-group='${key}']`);
-    await group.evaluate((node) => {
-      for (let parent = node.parentElement; parent; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true;
-    });
-    if (!await group.evaluate((node) => node.open)) await group.locator("summary").click();
+    const more = page.locator("#tf-pop details.tf-more-types");
+    if (["carriers", "affordances"].includes(field) && await more.count() && !await more.evaluate((node) => node.open)) await more.locator("summary").click();
     const before = state.listQueries.length;
-    await page.click(`[data-facet='${key}'][data-value='${value}']`);
+    await page.click(`#tf-pop .tf-chip[data-ref='system/${field}/${value}']`);
     await waitFor(() => state.listQueries.length > before);
   };
-  await toggleFacet("topics", "llm");
-  await toggleFacet("content_functions", "tool");
-  await toggleFacet("content_functions", "method");
-  await toggleFacet("carriers", "author_continuation");
-  await toggleFacet("affordances", "background");
-  await toggleFacet("entity_state", "completed_empty");
-  await toggleFacet("entity_state", "stale");
-  await toggleFacet("entity_state", "failed");
-  const sorted = (value) => String(value || "").split(",").filter(Boolean).sort().join(",");
-  for (const [key, value] of Object.entries({ topics: "design,llm", content_functions: "data,tool", carriers: "author_continuation,single", affordances: "background,practice", entity_state: "completed_empty,stale" })) {
-    equal(`library forwards ${key}`, sorted(latestQuery()[key]), value);
-    equal(`library URL preserves ${key}`, sorted(new URL(page.url()).searchParams.get(key)), value);
-  }
-  check("active filters are listed above the results", (await page.$$eval("#active-filters .filter-chip", (nodes) => nodes.length)) >= 10);
+  await toggleTag("topics", "llm");
+  await toggleTag("content_functions", "tool");
+  await toggleTag("carriers", "author_continuation");
+  await toggleTag("affordances", "background");
+  equal("tag chips forward one unified condition", latestQuery().tags, "system/topics/llm,system/content_functions/tool,system/carriers/author_continuation,system/affordances/background");
+  equal("a new tag selection matches all tags", latestQuery().tags_mode, "all");
+  equal("the unified condition is in the URL", new URL(page.url()).searchParams.get("tags"), latestQuery().tags);
+  equal("tag tokens appear in the search field", await page.locator("#tf-tokens .tf-token, #tf-tokens .tf-more").count() >= 2, true);
   state.oldFilterBackend = true;
-  await toggleFacet("topics", "llm");
+  await toggleTag("topics", "llm");
   await page.waitForSelector("#list-notice:not([hidden])");
   check("an old backend cannot silently accept ignored filters", /不支持完整筛选/.test(await page.textContent("#list-notice") || ""));
+  await closeFilters(page);
   const beforeClear = state.listQueries.length;
-  await page.click("#clear-filters");
+  await page.click("#active-filters .link-btn");
   await waitFor(() => state.listQueries.length > beforeClear);
-  check("clearing filters stops negotiating the contract", !latestQuery().filter_contract_version && !latestQuery().topics);
-  equal("clearing filters clears every facet", await page.$$eval("[data-facet][aria-pressed='true']", (nodes) => nodes.length), 0);
+  check("clearing filters stops negotiating the contract", !latestQuery().filter_contract_version && !latestQuery().topics && !latestQuery().tags);
+  equal("clearing filters clears every tag token", await page.locator("#tf-tokens .tf-token").count(), 0);
   await waitFor(() => page.isHidden("#list-notice"));
   check("ordinary browsing still works with an old backend", await page.isHidden("#list-notice"));
   check("no JavaScript exceptions in part A", pageErrors.length === 0, pageErrors.join("; "));
@@ -554,11 +550,13 @@ async function partB(browser) {
   await page.goto(base, { waitUntil: "networkidle" });
   await idle();
   await page.waitForSelector("#rows li.row.selected");
-  const inbox = state.items.filter((item) => item.curation_status === "inbox").map((item) => item.id);
-  equal("the landing page is the inbox, newest first", (await rowIds()).slice(0, 5), inbox.slice(0, 5));
+  // 2026-10 redesign: 整理状态 left the UI; the landing page is the whole library.
+  const inbox = state.items.map((item) => item.id);
+  equal("the landing page is every bookmark, newest first", (await rowIds()).slice(0, 5), inbox.slice(0, 5));
   equal("the first bookmark opens without a click", await selectedId(), inbox[0]);
   check("the reading pane shows the selected bookmark", (await page.textContent("#detail-title")) === (state.items.find((item) => item.id === inbox[0]).ai_title || await page.textContent("#detail-title")));
-  check("the navigation shows live counts", /\d+/.test(await page.textContent("[data-view='inbox'] .nav-count") || ""));
+  check("the navigation shows live counts", /\d+/.test(await page.textContent("[data-view='all'] .nav-count") || ""));
+  check("the sidebar has no curation-status views", await page.locator("#nav-views [data-view='inbox'], #nav-views [data-view='kept']").count() === 0);
 
   // Enter on a list control must keep the button's native click behaviour.
   await page.locator("#list-menu").focus();
@@ -586,77 +584,41 @@ async function partB(browser) {
   await page.keyboard.press("j");
   await waitFor(async () => (await selectedId()) === inbox[1]);
 
-  // A number key files the bookmark, drops it from the inbox and advances.
-  const beforeKeep = curationRequests().length;
-  const overviewBeforeKeep = state.requests.filter((entry) => entry.path === "/api/overview").length;
-  const statusBeforeKeep = state.requests.filter((entry) => entry.path === "/status").length;
-  const inboxCountBefore = Number(await page.textContent("[data-view='inbox'] .nav-count"));
-  const uncertainCountBefore = Number(await page.textContent("[data-view='uncertain'] .nav-count"));
-  const filed = state.items.find((item) => item.id === inbox[1]);
-  const wasUncertain = !filed.classification_reviewed && (!filed.classification || filed.classification.uncertainty);
-  await page.keyboard.press("2");
-  await waitFor(() => curationRequests().length > beforeKeep);
-  const keep = curationRequests().at(-1);
-  equal("status keys send only the status", keep.body, { curation_status: "kept" });
-  await waitFor(async () => !(await rowIds()).includes(inbox[1]));
-  check("a filed bookmark leaves the inbox view", !(await rowIds()).includes(inbox[1]));
-  await waitFor(async () => Number(await page.textContent("[data-view='inbox'] .nav-count")) === inboxCountBefore - 1);
-  await waitFor(async () => Number(await page.textContent("[data-view='uncertain'] .nav-count")) === uncertainCountBefore - Number(wasUncertain));
-  await page.waitForTimeout(900);
-  equal("filing updates navigation before an overview request", state.requests.filter((entry) => entry.path === "/api/overview").length, overviewBeforeKeep);
-  equal("filing does not request service status", state.requests.filter((entry) => entry.path === "/status").length, statusBeforeKeep);
-  check("filing makes one trailing overview request", await waitFor(() =>
-    state.requests.filter((entry) => entry.path === "/api/overview").length === overviewBeforeKeep + 1, 5500));
-  equal("trailing overview does not request service status", state.requests.filter((entry) => entry.path === "/status").length, statusBeforeKeep);
-  equal("the next bookmark opens automatically", await selectedId(), inbox[2]);
-  await page.waitForSelector(".toast .toast-action");
-  check("the change can be undone from the toast", /撤销/.test(await page.textContent(".toast .toast-action") || ""));
+  // Status keys and batch filing are gone: 1-4 and X never write.
+  const beforeKeys = curationRequests().length;
+  for (const key of ["1", "2", "3", "4", "x"]) await page.keyboard.press(key);
+  await page.waitForTimeout(400);
+  equal("status keys and X no longer file bookmarks", curationRequests().length, beforeKeys);
+  check("there is no batch bar or row checkbox", await page.locator("#batch-bar, .row-check").count() === 0);
+  equal("the selection stays put", await selectedId(), inbox[1]);
 
-  // Z undoes it and brings the bookmark back where it was.
-  const beforeUndo = curationRequests().length;
-  await page.keyboard.press("z");
-  await waitFor(() => curationRequests().length > beforeUndo);
-  equal("undo restores the previous status", curationRequests().at(-1).body, { curation_status: "inbox" });
-  await waitFor(async () => (await rowIds()).includes(inbox[1]));
-  await waitFor(async () => Number(await page.textContent("[data-view='inbox'] .nav-count")) === inboxCountBefore);
-  equal("undo keeps an explicitly curated inbox item out of uncertain", Number(await page.textContent("[data-view='uncertain'] .nav-count")), uncertainCountBefore - Number(wasUncertain));
-  equal("undo puts the bookmark back in order", (await rowIds()).slice(0, 3), inbox.slice(0, 3));
-  equal("undo reopens the bookmark", await selectedId(), inbox[1]);
-
-  // Batch: X marks rows, one click files them all.
-  await page.keyboard.press("x");
-  await page.keyboard.press("j");
-  await page.keyboard.press("x");
-  await page.waitForSelector("#batch-bar:not([hidden])");
-  check("the batch bar counts the selection", /已选 2 条/.test(await page.textContent("#batch-bar") || ""));
-  const beforeBatch = curationRequests().length;
-  await page.click("#batch-bar [data-batch-status='drop']");
-  await waitFor(() => curationRequests().length >= beforeBatch + 2);
-  const batch = curationRequests().slice(beforeBatch);
-  equal("batch filing sends one status-only request per bookmark", batch.map((entry) => entry.body), [{ curation_status: "drop" }, { curation_status: "drop" }]);
-  await waitFor(async () => !(await rowIds()).includes(inbox[1]) && !(await rowIds()).includes(inbox[2]));
-  check("batch-filed bookmarks leave the inbox", !(await rowIds()).some((id) => id === inbox[1] || id === inbox[2]));
-  check("the batch bar closes after the action", await page.isHidden("#batch-bar"));
-
-  // The reason field saves on its own and never touches tags.
+  // R opens the reader's reason editor; ⌘/Ctrl+Enter saves only the reason.
   await page.keyboard.press("r");
-  check("R focuses the reason field", await page.evaluate(() => document.activeElement?.id === "curation-why"));
+  check("R opens the reader reason editor", await page.evaluate(() => document.activeElement?.matches("#reason-block textarea")));
   const beforeWhy = curationRequests().length;
   await page.keyboard.type("写进周报");
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Control+Enter");
   await waitFor(() => curationRequests().length > beforeWhy);
   equal("the reason saves by itself", curationRequests().at(-1).body, { why: "写进周报" });
+  await page.waitForSelector("#reason-block .reason-card");
+  check("the reader shows the saved reason card", /写进周报/.test(await page.textContent("#reason-block .reason-text") || ""));
   await waitFor(async () => /写进周报/.test(await page.textContent("#rows li.row.selected") || ""));
   check("the saved reason shows in the list row", /写进周报/.test(await page.textContent("#rows li.row.selected") || ""));
+  await page.keyboard.press("r");
+  await page.keyboard.type("（草稿）");
+  await page.keyboard.press("Escape");
+  check("Esc cancels the reason edit", !(await page.locator("#reason-block textarea").count()) && !/草稿/.test(await page.textContent("#reason-block") || ""));
 
-  // A reason draft stays with its bookmark even when the user moves away and
-  // back while the save is still in flight.
+  // A reason draft in the organize panel stays with its bookmark even when the
+  // user moves away and back while the save is still in flight.
+  await openCuration(page);
   const draftOwner = await selectedId();
   state.delayNextCurationMs = 900;
-  await page.keyboard.press("r");
+  await page.locator("#curation-why").focus();
   await page.keyboard.press("End");
   await page.keyboard.type("，下周复盘");
   await page.keyboard.press("Escape");
+  await page.locator("#detail-scroll").focus();
   await page.keyboard.press("j");
   await waitFor(async () => (await selectedId()) !== draftOwner);
   check("the next bookmark does not inherit the draft", !(await page.inputValue("#curation-why")).includes("下周复盘"));
@@ -666,6 +628,8 @@ async function partB(browser) {
   await waitFor(() => curationRequests().at(-1)?.body.why === "写进周报，下周复盘");
   await page.waitForTimeout(1000);
   check("the draft survives the save completing", (await page.inputValue("#curation-why")) === "写进周报，下周复盘");
+  check("the reader card follows the organize panel", /下周复盘/.test(await page.textContent("#reason-block") || ""));
+  await page.locator("#detail-scroll").focus();
 
   // Search: "/" focuses, typing filters with highlighted matches, Esc clears.
   await page.keyboard.press("/");
@@ -675,27 +639,28 @@ async function partB(browser) {
   await idle();
   await page.waitForSelector("#rows li.row mark");
   check("search results highlight the match", (await page.$$eval("#rows mark", (nodes) => nodes.map((node) => node.textContent))).every((text) => text === "评估"));
-  check("search keeps the view scope", state.requests.filter((entry) => entry.path === "/api/bookmarks").at(-1).query.curation_status === "inbox");
+  check("search keeps the view scope", ["all", undefined].includes(state.requests.filter((entry) => entry.path === "/api/bookmarks").at(-1).query.curation_status));
+  await page.press("#search", "Escape"); // first Esc closes the tag popover
   await page.press("#search", "Escape");
   await waitFor(() => new URL(page.url()).searchParams.get("q") === null);
   check("Esc clears the search", (await page.inputValue("#search")) === "");
 
-  // G then A jumps to every bookmark; the view is part of the URL.
+  // A legacy view link (?curation_status=kept) still opens, titled as before.
+  await page.goto(`${base}/?curation_status=kept`, { waitUntil: "networkidle" });
+  await idle();
+  check("a legacy status link still opens its list", /精选/.test(await page.textContent("#list-title") || ""), await page.textContent("#list-title"));
+  // G then A returns to every bookmark with a bare URL.
   await page.locator("#detail-scroll").focus();
   await page.keyboard.press("g");
   await page.keyboard.press("a");
-  await waitFor(() => new URL(page.url()).searchParams.get("curation_status") === "all");
+  await waitFor(async () => /全部收藏/.test(await page.textContent("#list-title") || ""));
   await idle();
-  check("G A opens every bookmark", /全部收藏/.test(await page.textContent("#list-title") || ""));
+  check("G A opens every bookmark", new URL(page.url()).searchParams.get("curation_status") === null);
 
-  // In the uncertain view, confirming tags files the bookmark out of the view.
-  await page.keyboard.press("g");
-  await page.keyboard.press("u");
-  await waitFor(() => new URL(page.url()).searchParams.get("uncertain") === "true");
+  // A legacy uncertain link: confirming tags files the bookmark out of it.
+  await page.goto(`${base}/?uncertain=true`, { waitUntil: "networkidle" });
   await idle();
-  await page.waitForSelector("#rows li.row.selected");
-  // Unprocessed bookmarks are also "uncertain" (nothing to confirm yet), so
-  // pick the first row that actually carries AI tags.
+  await page.waitForSelector("#rows li.row");
   const uncertainFirst = (await rowIds()).find((id) => state.items.find((item) => item.id === id)?.classification);
   await page.click(`#rows li.row[data-id='${uncertainFirst}'] a.row-main`);
   await page.locator("#detail-scroll").focus();
@@ -759,10 +724,8 @@ async function partB(browser) {
   await phone.click("#rows li.row a.row-main");
   await phone.waitForFunction(() => document.getElementById("app").classList.contains("detail-open"));
   check("tapping a row opens the reader", new URL(phone.url()).pathname === `/bookmarks/${phoneFirst}`);
-  const beforePhone = curationRequests().length;
-  await phone.click("#mobile-actions [data-status='compiled']");
-  await waitFor(() => curationRequests().length > beforePhone);
-  equal("the phone status bar files the bookmark", curationRequests().at(-1).body, { curation_status: "compiled" });
+  check("the phone reader has no status bar", await phone.locator("#mobile-actions").count() === 0);
+  check("the phone reader keeps the open-source action", await phone.locator("#open-source").isVisible());
   await phone.click("#detail-back");
   await phone.waitForFunction(() => !document.getElementById("app").classList.contains("detail-open"));
   check("back returns to the phone list", !new URL(phone.url()).pathname.startsWith("/bookmarks/"));
@@ -794,8 +757,12 @@ async function partC(browser) {
   await openCuration(page);
   await page.waitForSelector("#v1-topics .chip.on");
   check("the v1 editor replaces the multidimensional one", await page.isVisible("#v1-topics") && !(await page.$("#v2-topics")));
-  check("the capability gap is explained, not hidden", /多维词表暂不可用/.test(await page.textContent("#facets") || ""));
-  check("filters the backend cannot evaluate are not offered", !(await page.$("[data-facet='topics']")) && Boolean(await page.$("[data-facet='source']")));
+  await closeInspector(page).catch(() => {});
+  await openFilters(page);
+  check("the capability gap is explained, not hidden", /暂未提供标签词表/.test(await page.textContent("#tf-pop") || ""));
+  check("tags the backend cannot evaluate are not offered", await page.locator("#tf-pop .tf-chip").count() === 0);
+  await closeFilters(page);
+  await openCuration(page);
 
   const beforeWhy = curationRequests().length;
   await page.fill("#curation-why", "旧后端也能写原因");
@@ -918,7 +885,7 @@ async function partE(browser) {
 }
 
 // The first save of an unreviewed bookmark, a failed save and its retry must
-// keep reason/status independent from the explicit tag confirmation action.
+// keep the reason independent from the explicit tag confirmation action.
 async function partF(browser) {
   const state = createMock();
   const server = await startMockServer(state);
@@ -951,27 +918,23 @@ async function partF(browser) {
     check("reason retry succeeds without confirming tags", await waitFor(async () =>
       (await page.textContent("#save-state") || "").includes("已保存")) && await page.isVisible("#confirm-classification"));
 
-    await page.click("#status-seg button[data-status='kept']");
-    check("status-only save reaches Worker", await waitFor(() => curationRequests().length === 4));
-    equal("status-only save omits reason and tags", curationRequests()[3]?.body, { curation_status: "kept" });
+    // 2026-10: no status control in the UI any more, so confirm comes next.
+    check("the organize panel has no status control", await page.locator("#status-seg").count() === 0);
     await page.click("#confirm-classification");
-    check("explicit confirm sends a separate curation request", await waitFor(() => curationRequests().length === 5));
-    equal("explicit confirm sends guarded classification", Object.keys(curationRequests()[4]?.body || {}).sort(),
+    check("explicit confirm sends a separate curation request", await waitFor(() => curationRequests().length === 4));
+    equal("explicit confirm sends guarded classification", Object.keys(curationRequests()[3]?.body || {}).sort(),
       ["classification", "expected_revision", "operation_key"]);
-    check("explicit confirm uses the displayed revision", curationRequests()[4]?.body.expected_revision === 3);
+    check("explicit confirm uses the displayed revision", curationRequests()[3]?.body.expected_revision === 3);
     check("reviewed bookmark hides the confirm action", await waitFor(() => page.isHidden("#confirm-classification")));
     await page.fill("#curation-why", "确认后只改原因");
     await page.press("#curation-why", "Enter");
-    check("reviewed bookmark saves reason separately", await waitFor(() => curationRequests().length === 6));
-    equal("reviewed reason save still omits tags", curationRequests()[5]?.body, { why: "确认后只改原因" });
-    await page.click("#status-seg button[data-status='compiled']");
-    check("reviewed bookmark saves status separately", await waitFor(() => curationRequests().length === 7));
-    equal("reviewed status save still omits tags", curationRequests()[6]?.body, { curation_status: "compiled" });
+    check("reviewed bookmark saves reason separately", await waitFor(() => curationRequests().length === 5));
+    equal("reviewed reason save still omits tags", curationRequests()[4]?.body, { why: "确认后只改原因" });
     check("ordinary saves retain reviewed state", state.curation.reviewed && await page.isHidden("#confirm-classification"));
     const beforeEdit = overrides(state).length;
     await page.click("#v2-topics .chip.on[data-term='llm']");
     check("explicit tag edit uses its own override", await waitFor(() => overrides(state).length === beforeEdit + 1));
-    check("tag edit never resends the old confirmed selection", curationRequests().length === 7);
+    check("tag edit never resends the old confirmed selection", curationRequests().length === 5);
     check("first save, failure and confirmation cause no model call", state.modelCalls === 0 && state.xSearchCalls === 0);
     check("first save and retry cause no page error", pageErrors.length === 0, pageErrors.join("; "));
   } finally {

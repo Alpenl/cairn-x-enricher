@@ -1,5 +1,5 @@
-// Keyboard-first triage. Single keys act on the current bookmark, "g" starts a
-// two-key jump to a view, and "?" lists everything. Keys never fire while the
+// Keyboard-first reading. Single keys act on the open bookmark, "g" starts a
+// two-key jump, and "?" lists everything. Keys never fire while the
 // user is typing, and modified keys are left to the browser.
 import { h, isEditable } from "./dom.js";
 import { isMenuOpen } from "./ui.js";
@@ -10,18 +10,16 @@ import { openDialog } from "./ui.js";
 export const SHORTCUTS = Object.freeze([
   { group: "浏览", items: [
     [["J", "/", "↓"], "下一条"], [["K", "/", "↑"], "上一条"], [["Enter"], "打开 / 聚焦阅读区"],
-    [["Space"], "向下翻阅正文"], [["/"], "搜索"], [["Esc"], "返回 / 取消选择"], [["F"], "专注阅读"], [["Ctrl / ⌘", "+", "K"], "搜索命令"], [["I"], "整理面板"]
+    [["Space"], "向下翻阅正文"], [["/"], "搜索与标签筛选"], [["Esc"], "返回 / 关闭"], [["F"], "专注阅读"], [["Ctrl / ⌘", "+", "K"], "搜索命令"], [["I"], "整理面板"]
   ] },
   { group: "整理", items: [
-    [["1"], "收件箱"], [["2"], "精选"], [["3"], "已编入笔记"], [["4"], "搁置"],
-    [["R"], "写收藏原因"], [["A"], "确认 AI 标签"], [["T"], "编辑标签"], [["Z"], "撤销上一次状态修改"]
+    [["R"], "写收藏原因"], [["A"], "确认 AI 标签"], [["T"], "编辑标签"], [["Z"], "撤销上一次操作"]
   ] },
-  { group: "批量与其他", items: [
-    [["X"], "选中 / 取消选中"], [["Shift", "+", "点击"], "连续多选"], [["V"], "打开原帖"], [["E"], "导出当前或所选"]
+  { group: "其他", items: [
+    [["V"], "打开原帖"], [["E"], "导出当前收藏"], [[","], "设置"]
   ] },
   { group: "跳转", items: [
-    [["G", "然后", "I"], "收件箱"], [["G", "然后", "S"], "精选"], [["G", "然后", "C"], "已编入笔记"], [["G", "然后", "D"], "搁置"],
-    [["G", "然后", "A"], "全部收藏"], [["G", "然后", "U"], "待确认分类"], [["G", "然后", "B"], "服务状态"]
+    [["G", "然后", "A"], "全部收藏"], [["G", "然后", "B"], "服务状态"]
   ] }
 ]);
 
@@ -57,8 +55,7 @@ export function initShortcuts(actions) {
     if (pendingG) {
       clearTimeout(pendingG);
       pendingG = 0;
-      const view = { i: "inbox", s: "kept", c: "compiled", d: "drop", a: "all", u: "uncertain" }[key.toLowerCase()];
-      if (view) { event.preventDefault(); actions.view(view); return; }
+      if (key.toLowerCase() === "a") { event.preventDefault(); actions.view("all"); return; }
       if (key.toLowerCase() === "b") { event.preventDefault(); actions.backstage(); return; }
     }
 
@@ -83,15 +80,11 @@ export function initShortcuts(actions) {
         return;
       case "/": event.preventDefault(); actions.search(); return;
       case "?": event.preventDefault(); showHelp(); return;
-      case "1": case "2": case "3": case "4":
-        event.preventDefault();
-        actions.status(["inbox", "kept", "compiled", "drop"][Number(key) - 1]);
-        return;
       case "r": case "R": event.preventDefault(); actions.why(); return;
       case "a": case "A": event.preventDefault(); actions.confirm(); return;
       case "t": case "T": event.preventDefault(); actions.editTags(); return;
       case "z": case "Z": case "u": case "U": event.preventDefault(); actions.undo(); return;
-      case "x": case "X": event.preventDefault(); actions.check(); return;
+      case ",": if (actions.settings) { event.preventDefault(); actions.settings(); } return;
       case "v": case "V": event.preventDefault(); actions.openSource(); return;
       case "e": case "E": event.preventDefault(); actions.exportCurrent(); return;
       case "f": case "F": event.preventDefault(); actions.focus(); return;

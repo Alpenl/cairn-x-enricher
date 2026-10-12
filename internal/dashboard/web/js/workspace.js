@@ -205,6 +205,7 @@ function updateNav() {
     ["settings-button", "settings"],
   ]) {
     const node = byId(id);
+    if (!node) continue;
     if (current?.key === key) node.setAttribute("aria-current", "page");
     else node.removeAttribute("aria-current");
   }
@@ -219,14 +220,8 @@ function updateNav() {
       : button.removeAttribute("aria-current");
   }
 }
-function filterState() {
-  const n = facetFilterCount(state.filters),
-    button = byId("filter-button"),
-    count = byId("filter-count");
-  button.dataset.on = String(n > 0);
-  count.hidden = !n;
-  count.textContent = String(n);
-}
+// The tag filter popover (tag-filter.js) shows its own selection state.
+function filterState() {}
 function setInspectorTab(name) {
   byId("inspector-tabs").active = name;
   byId("diagnostics").open = name === "processing" && inspectorVisible();
@@ -297,22 +292,7 @@ async function memberships(force = false) {
   try {
     const data = await fetchJSON(`/api/collections?link_ids=${id}`);
     if (generation !== membershipGeneration || id !== state.selectedId) return;
-    const selected = data.items.filter(
-      (c) => c.selected_count > 0 && !c.deleted,
-    );
-    clear(
-      host,
-      selected.length
-        ? selected.map((c) =>
-            h(
-              "button.collection-membership",
-              { type: "button", onclick: () => hooks.collection(c.id) },
-              icon("folder", 12),
-              c.name,
-            ),
-          )
-        : h("p.collection-hint", "还没有加入合集"),
-    );
+    renderMemberships(host, id, data.items.filter((c) => !c.deleted && !c.archived));
   } catch {
     if (generation === membershipGeneration) {
       membershipID = 0;
@@ -327,7 +307,51 @@ async function memberships(force = false) {
     }
   }
 }
-async function navigate(key) {
+// 合集归属: every live collection with a switch, like the prototype. A switch
+// writes one add/remove immediately; failures roll the switch back.
+function renderMemberships(host, id, list) {
+  const count = byId("inspector-membership-count");
+  const sorted = [...list].sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || String(a.name).localeCompare(String(b.name), "zh-CN"));
+  const update = () => {
+    if (count) count.textContent = list.length ? `${list.filter((c) => c.selected_count > 0).length} / ${list.length}` : "";
+  };
+  update();
+  if (!sorted.length) {
+    clear(host, h("p.collection-hint", "还没有合集"));
+    return;
+  }
+  clear(host, sorted.map((c) => {
+    const on = c.selected_count > 0;
+    const sw = h("button.switch", { type: "button", role: "switch", "aria-checked": String(on), "aria-label": `${on ? "移出" : "加入"}「${c.name}」` });
+    const row = h("div.coll-row", { class: on ? "on" : "" },
+      h("button.coll-name", { type: "button", title: `打开合集：${c.name}`, onclick: () => hooks.collection(c.id) }, icon("folder", 15), h("span.name", c.name)),
+      sw);
+    sw.addEventListener("click", async () => {
+      const next = sw.getAttribute("aria-checked") !== "true";
+      sw.disabled = true;
+      sw.setAttribute("aria-checked", String(next));
+      row.classList.toggle("on", next);
+      try {
+        const { setMembership } = await import("./collections.js");
+        const saved = await setMembership(c.id, id, next, c.revision);
+        if (saved?.revision) c.revision = saved.revision;
+        c.selected_count = next ? 1 : 0;
+        sw.setAttribute("aria-label", `${next ? "移出" : "加入"}「${c.name}」`);
+        update();
+        toast(next ? `已加入「${c.name}」` : `已移出「${c.name}」`, { tone: "ok" });
+      } catch (error) {
+        sw.setAttribute("aria-checked", String(!next));
+        row.classList.toggle("on", !next);
+        toast(errorLabel(error.message), { tone: "error" });
+      } finally {
+        sw.disabled = false;
+      }
+    });
+    return row;
+  }));
+}
+// Exported for the settings entry points (sidebar, ⌘K, tests).
+export async function navigate(key) {
   try {
     if (key === "tags") {
       const { browseTags } = await import("./tag-manager.js");
@@ -385,7 +409,7 @@ function settings() {
       ),
       card(
         "键盘",
-        h("dl.settings-keys", [["⌘ / Ctrl K", "搜索或执行命令"], ["J / K", "下一条 / 上一条"], ["1 2 3 4", "收件箱 / 精选 / 已编入 / 搁置"], ["I", "打开或关闭整理面板"], ["A", "确认自动标签"], ["Z", "撤销上一次操作"]].map(([k, d]) => [h("dt", h("kbd", k)), h("dd", d)])),
+        h("dl.settings-keys", [["⌘ / Ctrl K", "搜索或执行命令"], ["J / K", "下一条 / 上一条"], ["I", "打开或关闭整理面板"], ["A", "确认自动标签"], ["Z", "撤销上一次操作"]].map(([k, d]) => [h("dt", h("kbd", k)), h("dd", d)])),
         h("div.settings-actions", action("查看全部快捷键", "keyboard", hooks.help)),
       ),
     ],
@@ -491,22 +515,14 @@ export function initWorkspace(options) {
   byId("inspector-tabs").addEventListener("wa-tab-show", (event) =>
     setInspectorTab(event.detail.name),
   );
-  byId("inspector-add-collection").addEventListener("click", () =>
-    hooks.pick(),
-  );
-  byId("organize-button").addEventListener("click", () => navigate("organize"));
+  byId("inspector-add-collection").addEventListener("click", async () => {
+    if (!state.selectedId) return;
+    const { createWith } = await import("./collections.js");
+    createWith(state.selectedId);
+  });
+  byId("organize-button")?.addEventListener("click", () => navigate("organize"));
   byId("settings-button").addEventListener("click", settings);
   byId("command-button").addEventListener("click", commandPalette);
-  const filters = byId("filter-panel"),
-    filter = byId("filter-button");
-  byId("filter-done").addEventListener("click", () => {
-    filters.open = false;
-  });
-  for (const event of ["wa-after-show", "wa-after-hide"])
-    filters.addEventListener(event, () => {
-      filter.setAttribute("aria-expanded", String(filters.open));
-      emit("filter:visibility");
-    });
   for (const [key, label, ic] of [
     ["library", "阅读", "inbox"],
     ["collections", "合集", "folder"],

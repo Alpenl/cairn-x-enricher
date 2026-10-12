@@ -144,15 +144,20 @@ equal("paragraphs drop blank lines", format.paragraphsOf("a\n\n b \n"), ["a", "b
 const query = await load("query.js");
 {
   const bare = query.parseQuery("");
-  equal("bare landing opens the inbox", bare.filters.curation_status, "inbox");
+  // 2026-10 redesign: 整理状态 left the UI, so the bare landing is the whole library.
+  equal("bare landing opens the whole library", bare.filters.curation_status, "all");
   equal("a link without status means every status", query.parseQuery("?topics=llm").filters.curation_status, "all");
   equal("legacy topic URL becomes the full topic filter", query.parseQuery("?topic=design&topics=llm").filters.topics, "llm,design");
-  equal("bare inbox builds the bare URL", query.buildQuery(bare.filters, ""), "");
+  equal("bare library builds the bare URL", query.buildQuery(bare.filters, ""), "");
   const round = query.parseQuery(query.buildQuery({ ...bare.filters, curation_status: "kept", topics: "llm,eval" }, "评估"));
   equal("filters survive a URL round trip", [round.filters.curation_status, round.filters.topics, round.search], ["kept", "llm,eval", "评估"]);
   const intersection = query.parseQuery(query.buildQuery({ ...bare.filters, content_functions: "method,case", functions_mode: "all" }, ""));
   equal("content intersection survives URL and API round trip", [intersection.filters.functions_mode, query.apiParams(intersection.filters, "").get("functions_mode")], ["all", "all"]);
-  equal("all view is explicit in the URL", query.buildQuery({ ...query.emptyFilters(), curation_status: "all" }, ""), "?curation_status=all");
+  equal("the default all view keeps the URL bare", query.buildQuery({ ...query.emptyFilters(), curation_status: "all" }, ""), "");
+  equal("a legacy inbox link stays explicit", query.buildQuery({ ...query.emptyFilters(), curation_status: "inbox" }, ""), "?curation_status=inbox");
+  const tagged = query.parseQuery("?tags=system/topics/llm,custom/default/c1&tags_mode=all");
+  equal("unified tag filter survives URL and API round trip", [tagged.filters.tags, tagged.filters.tags_mode, query.apiParams(tagged.filters, "").get("tags"), query.apiParams(tagged.filters, "").get("tags_mode")],
+    ["system/topics/llm,custom/default/c1", "all", "system/topics/llm,custom/default/c1", "all"]);
 }
 {
   const filters = { ...query.emptyFilters(), curation_status: "all", topics: "llm", source: "x" };

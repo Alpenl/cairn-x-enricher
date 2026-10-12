@@ -2,22 +2,28 @@
 // what the list shows, so every view, filter and search is linkable and the
 // browser history restores it. Pure module: no DOM access.
 
-export const MULTI_KEYS = Object.freeze(["topics", "topic_refinements", "resource_kinds", "custom_tags", "content_functions", "carriers", "affordances", "entity_state"]);
-export const SINGLE_KEYS = Object.freeze(["collection_id", "topics_mode", "resource_mode", "custom_mode", "functions_mode", "curation_status", "form", "use", "source", "since", "uncertain"]);
+export const MULTI_KEYS = Object.freeze(["tags", "topics", "topic_refinements", "resource_kinds", "custom_tags", "content_functions", "carriers", "affordances", "entity_state"]);
+export const SINGLE_KEYS = Object.freeze(["collection_id", "tags_mode", "topics_mode", "resource_mode", "custom_mode", "functions_mode", "curation_status", "form", "use", "source", "since", "uncertain"]);
 export const FILTER_KEYS = Object.freeze([...SINGLE_KEYS, ...MULTI_KEYS]);
 
 // Dimensions whose values only the multidimensional (v2) Worker can evaluate.
 // Sending them requires the explicit filter contract so an old backend fails
 // loudly instead of silently ignoring a condition.
-const CONTRACT_KEYS = Object.freeze([...MULTI_KEYS, "topics_mode", "resource_mode", "custom_mode", "functions_mode", "form", "use"]);
+const CONTRACT_KEYS = Object.freeze([...MULTI_KEYS, "tags_mode", "topics_mode", "resource_mode", "custom_mode", "functions_mode", "form", "use"]);
 
+// The redesigned workspace has one library view; collections are the only
+// other navigation. Curation status stays in the data (old links such as
+// ?curation_status=drop keep working) but is no longer a UI concept.
 export const VIEWS = Object.freeze([
-  { id: "inbox", label: "收件箱", icon: "inbox", key: "g i" },
-  { id: "kept", label: "精选", icon: "star", key: "g s" },
-  { id: "compiled", label: "已编入笔记", icon: "book", key: "g c" },
-  { id: "drop", label: "搁置", icon: "archive", key: "g d" },
-  { id: "all", label: "全部收藏", icon: "layers", key: "g a" },
-  { id: "uncertain", label: "待确认分类", icon: "help", key: "g u" }
+  { id: "all", label: "全部收藏", icon: "layers", key: "g a" }
+]);
+// Hidden legacy views: reachable from old URLs, labelled in the list title.
+export const LEGACY_VIEWS = Object.freeze([
+  { id: "inbox", label: "收件箱" },
+  { id: "kept", label: "精选" },
+  { id: "compiled", label: "已编入笔记" },
+  { id: "drop", label: "搁置" },
+  { id: "uncertain", label: "待确认分类" }
 ]);
 
 export const STATUSES = Object.freeze(["inbox", "kept", "compiled", "drop"]);
@@ -34,10 +40,9 @@ export function parseQuery(search) {
   const params = new URLSearchParams(search);
   const filters = emptyFilters();
   for (const key of FILTER_KEYS) filters[key] = params.get(key)?.trim() || "";
-  // The bare landing page is the inbox. Any other link keeps its historical
-  // meaning, where an absent status means every status.
-  if (![...params.keys()].length) filters.curation_status = "inbox";
-  else if (!filters.curation_status) filters.curation_status = "all";
+  // The bare landing page is the whole library; an absent status always
+  // means every status.
+  if (!filters.curation_status) filters.curation_status = "all";
   // Shared URLs from before multi-select used a single `topic`; it becomes
   // one value of the full topic filter instead of being silently dropped.
   const legacyTopic = params.get("topic")?.trim();
@@ -46,15 +51,14 @@ export function parseQuery(search) {
 }
 
 export function isDefault(filters, search) {
-  return !search && FILTER_KEYS.every((key) => (key === "curation_status" ? filters[key] === "inbox" : !filters[key]));
+  return !search && FILTER_KEYS.every((key) => (key === "curation_status" ? filters[key] === "all" : !filters[key]));
 }
 
 export function buildQuery(filters, search) {
   if (isDefault(filters, search)) return "";
   const params = new URLSearchParams();
   if (search) params.set("q", search);
-  for (const key of FILTER_KEYS) if (filters[key]) params.set(key, filters[key]);
-  if (!params.has("curation_status")) params.set("curation_status", "all");
+  for (const key of FILTER_KEYS) if (filters[key] && !(key === "curation_status" && filters[key] === "all")) params.set(key, filters[key]);
   return `?${params}`;
 }
 
@@ -113,7 +117,7 @@ export function toggleValue(filters, key, value) {
 export function facetFilterCount(filters) {
   let count = 0;
   for (const key of FILTER_KEYS) {
-    if (key === "curation_status" || key === "collection_id") continue;
+    if (key === "curation_status" || key === "collection_id" || key === "tags_mode") continue;
     if (key === "uncertain" && activeView(filters) === "uncertain") continue;
     count += MULTI_KEYS.includes(key) ? splitList(filters[key]).length : filters[key] ? 1 : 0;
   }

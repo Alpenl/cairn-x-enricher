@@ -273,20 +273,21 @@ async function main() {
       }
     });
     const libraryIdle = () => library.waitForFunction(() => document.querySelector("#list-pane")?.dataset.loading === "false");
-    // Facets live in the drawer on a phone; open it and the group, then toggle.
-    const toggleFacet = async (key, value) => {
+    // 2026-10 redesign: the tag-chip popover under the search field sends one
+    // unified `tags` condition (S2 Worker selection-filter).
+    const toggleTag = async (field, value) => {
       await openFilters(library);
-      if (["carriers", "affordances", "entity_state"].includes(key)) {
-        const more = library.locator("details[data-group='more']");
+      if (["carriers", "affordances"].includes(field)) {
+        const more = library.locator("#tf-pop details.tf-more-types");
         if (!await more.evaluate(node => node.open)) await more.locator(":scope > summary").click();
       }
-      const group = library.locator(`details[data-group='${key}']`);
-      if (!await group.evaluate((node) => node.open)) await group.locator("summary").click();
-      await library.click(`[data-facet='${key}'][data-value='${value}']`);
+      const chip = library.locator(`#tf-pop .tf-chip[data-ref='system/${field}/${value}']`);
+      await chip.waitFor();
+      await library.waitForFunction((ref) => !document.querySelector(`#tf-pop .tf-chip[data-ref='${ref}']`)?.disabled, `system/${field}/${value}`);
+      await chip.click();
       await libraryIdle();
     };
     await library.goto(`http://127.0.0.1:${goPort}/?topics=${encodeURIComponent(topics[3])}`, { waitUntil: "load" });
-    await library.waitForSelector(`[data-facet='topics'][data-value='${topics[3]}']`, { state: "attached" });
     await library.waitForSelector(`#rows a.row-main[href^='/bookmarks/${id}?']`).catch(async error => {
       process.stdout.write(`library diagnostic: ${JSON.stringify({
         errors: pageErrors, status: await library.locator("#list-notice").innerText(),
@@ -296,14 +297,17 @@ async function main() {
       throw error;
     });
     check("real blank-query library finds the fourth effective topic", await library.locator("#rows li.row").count() === 1);
-    const selectedTopics = await library.$$eval("[data-facet='topics'][aria-pressed='true']", nodes => nodes.map(node => node.dataset.value));
-    check("real library restores a saved multi-topic filter", JSON.stringify(selectedTopics) === JSON.stringify([topics[3]]));
+    check("real library restores a saved legacy topic link", new URL(library.url()).searchParams.get("topics") === topics[3] && await library.locator("#active-filters .filter-chip").count() >= 1);
     for (const dimension of ["content_functions", "carriers", "affordances"]) {
       const terms = selection.payload.selection[dimension];
       if (!terms?.length) throw new Error(`fixture has no ${dimension}`);
-      await toggleFacet(dimension, terms[0]);
+      await toggleTag(dimension, terms[0]);
     }
-    await toggleFacet("entity_state", "completed_nonempty");
+    check("real tag chips build one unified condition", new URL(library.url()).searchParams.get("tags")?.split(",").length === 3 && new URL(library.url()).searchParams.get("tags_mode") === "all");
+    await closeFilters(library);
+    const withEntity = new URL(library.url()); withEntity.searchParams.set("entity_state", "completed_nonempty");
+    await library.goto(withEntity.href, { waitUntil: "load" });
+    await libraryIdle();
     await library.waitForFunction(() => document.querySelector("#list-pane").dataset.loading === "false" && document.querySelectorAll("#rows li.row").length === 1);
     const filteredURL = new URL(library.url());
     const filtered = await jsonFetch(`http://127.0.0.1:${goPort}/api/bookmarks?${filteredURL.searchParams}&filter_contract_version=1`);
@@ -331,10 +335,11 @@ async function main() {
     await library.reload({ waitUntil: "load" });
     await library.waitForSelector("#empty:not([hidden])");
     check("real filtered library removes a confirmed human rejection", await library.locator("#rows li.row").count() === 0 && !await library.isVisible("#list-notice"));
-    await library.waitForSelector(`[data-facet='topics'][data-value='${rejected}']`, { state: "attached" });
-    await toggleFacet("topics", afterReject.payload.selection.topics[0]);
+    await library.goto(`http://127.0.0.1:${goPort}/?tags=${encodeURIComponent(`system/topics/${rejected}`)}&tags_mode=any`, { waitUntil: "load" });
+    await library.waitForSelector("#empty:not([hidden])");
+    await toggleTag("topics", afterReject.payload.selection.topics[0]);
     await library.waitForSelector(`#rows a.row-main[href^='/bookmarks/${id}?']`);
-    check("real multi-topic OR includes the remaining accepted topic", await library.locator("#rows li.row").count() === 1);
+    check("real tag OR (任一满足) includes the remaining accepted topic", await library.locator("#rows li.row").count() === 1);
     await library.close();
 
     // 6. Re-selecting an earlier single-valued option must use action order,

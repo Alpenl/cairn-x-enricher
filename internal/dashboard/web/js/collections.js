@@ -13,7 +13,10 @@ let catalog = [],
   hooks = {},
   loading = null,
   pinnedSignature = "",
-  loadEpoch = 0;
+  loadEpoch = 0,
+  // Pending rule candidates per collection (review admission); optional, an
+  // older Worker without the endpoint just shows no badges.
+  pendingReview = new Map();
 // randomUUID is unavailable on plain HTTP NAS addresses; getRandomValues works there.
 const uuid = () => {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -64,6 +67,7 @@ async function load() {
         catalog = data.items;
         renderNav();
         emit("collections:loaded");
+        void loadReviewSummary(epoch);
       }
       return catalog;
     })
@@ -73,6 +77,17 @@ async function load() {
   loading = flight;
   return flight;
 }
+async function loadReviewSummary(epoch) {
+  try {
+    const data = await fetchJSON("/api/collections/review-summary");
+    if (epoch !== loadEpoch) return;
+    pendingReview = new Map((data.items || []).map((r) => [r.collection_id, Number(r.pending) || 0]));
+  } catch {
+    pendingReview = new Map();
+  }
+  renderNav();
+}
+export const pendingReviewCount = (id) => pendingReview.get(id) || 0;
 function select(id) {
   hooks.select({
     ...emptyFilters(),
@@ -83,35 +98,39 @@ function select(id) {
 function renderNav() {
   const nav = byId("pinned-collections");
   if (!nav) return;
+  // Every active collection is navigation now (pinned first), replacing the
+  // old curation-status views.
   const pinned = live()
-    .filter((c) => c.pinned && !c.archived)
-    .slice(0, 6);
+    .filter((c) => !c.archived)
+    .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || String(a.name).localeCompare(String(b.name), "zh-CN"))
+    .slice(0, 200);
   const signature = JSON.stringify([
     state.filters.collection_id,
-    pinned.map((c) => [c.id, c.name, c.item_count]),
+    pinned.map((c) => [c.id, c.name, c.item_count, pendingReview.get(c.id) || 0]),
   ]);
   nav.hidden = !pinned.length;
-  const heading = byId("pinned-heading");
-  if (heading) heading.hidden = !pinned.length;
   if (signature !== pinnedSignature) {
     pinnedSignature = signature;
+    // Native buttons (not wa-button) so the rows share the 全部收藏 row metrics.
     clear(
       nav,
-      pinned.map((c) =>
-        h(
+      pinned.map((c) => {
+        const pending = pendingReview.get(c.id) || 0;
+        return el(
           "button.nav-item.collection-shortcut",
           {
             type: "button",
-            title: c.name,
+            title: pending ? `${c.name} · ${pending} 条待审核` : c.name,
             "aria-current":
               state.filters.collection_id === c.id ? "page" : null,
             onclick: () => select(c.id),
           },
-          h("span", { slot: "start" }, icon("folder", 16)),
-          h("span.nav-label", c.name),
-          h("span.nav-count", { slot: "end" }, String(c.item_count)),
-        ),
-      ),
+          icon("folder", 16),
+          el("span.nav-label", c.name),
+          pending ? el("span.nav-badge", { "aria-label": `${pending} 条待审核` }, String(pending)) : null,
+          el("span.nav-count", String(c.item_count)),
+        );
+      }),
     );
   }
   renderContext();
@@ -233,6 +252,20 @@ function create(onCreated) {
         },
       },
     ],
+  });
+}
+// Inspector membership switches: one collection, one link, one operation.
+export async function setMembership(id, linkId, selected, revision) {
+  const c = catalog.find((x) => x.id === id);
+  return mutation(id, revision ?? c?.revision ?? 0, selected ? "add" : "remove", {
+    link_ids: [linkId],
+  })();
+}
+// "新建合集" from the inspector: create, then add the open bookmark to it.
+export function createWith(linkId) {
+  create(async (id) => {
+    await setMembership(id, linkId, true, catalog.find((c) => c.id === id)?.revision);
+    toast("已新建合集并加入", { tone: "ok" });
   });
 }
 // --- Collections page: list on the left, the selected collection on the right.

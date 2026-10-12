@@ -259,7 +259,7 @@ func TestHandlerServesChineseDashboardAndBookmarkData(t *testing.T) {
 	if root.Code != http.StatusOK || !strings.Contains(root.Body.String(), "Cairn 收藏") {
 		t.Fatalf("GET / = %d %q", root.Code, root.Body.String())
 	}
-	for _, label := range []string{"搜索收藏", "/assets/js/main.js", "/backstage", "整理状态", "收藏原因", "展开原文", "下一条"} {
+	for _, label := range []string{"搜索收藏", "/assets/js/main.js", "/backstage", "原文", "整理版", "收藏原因", "展开原文", "下一条"} {
 		if !strings.Contains(root.Body.String(), label) {
 			t.Errorf("GET / does not contain %q", label)
 		}

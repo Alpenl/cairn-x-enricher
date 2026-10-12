@@ -1,4 +1,4 @@
-import { closeWorkspace, setCheckbox } from "./workspace-helper.mjs";
+import { closeWorkspace, setCheckbox, openPage } from "./workspace-helper.mjs";
 import { openCuration, closeInspector } from "../browser/workspace-helper.mjs";
 import assert from "node:assert/strict";
 export async function verifyManagedTags(
@@ -54,7 +54,7 @@ export async function verifyManagedTags(
     );
     await page.goto(base + "/bookmarks/" + bookmarkID);
     await closeInspector(page);
-    await page.locator("#browse-tags").click();
+    await openPage(page, "tags");
     let manager = page.locator("#management-page");
     // Reproduce a pending legacy uses/contra archive from the real UI. Losing
     // its response must keep the original operation identity and audit once.
@@ -136,7 +136,7 @@ export async function verifyManagedTags(
       .getByText("LoRA", { exact: true })
       .waitFor({ state: "visible" });
     await closeInspector(page);
-    await page.locator("#browse-tags").click();
+    await openPage(page, "tags");
     manager = page.locator("#management-page");
     await openTag(manager, "LoRA");
     await renameOpen(manager, "LoRA 微调");
@@ -171,7 +171,7 @@ export async function verifyManagedTags(
     await page.goto(base + "/bookmarks/" + bookmarkID);
     await openCuration(page);
     await closeInspector(page);
-    await page.locator("#browse-tags").click();
+    await openPage(page, "tags");
     manager = page.locator("#management-page");
     await openTag(manager, existing.label);
     await renameOpen(manager, "AI 编程实践");
@@ -199,7 +199,7 @@ export async function verifyManagedTags(
     });
     await closeWorkspace(page);
     await closeInspector(page);
-    await page.locator("#browse-collections").click();
+    await openPage(page, "collections");
     let collections = page.locator("#management-page");
     await collections
       .locator(".collection-row")

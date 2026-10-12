@@ -13,7 +13,10 @@ import { byId, clear, h } from "./dom.js";
 import { displaySummary, displayTitle, formatFull, isWorking, paragraphsOf, sourceLabels, sourceLine } from "./format.js";
 import { icon } from "./icons.js";
 import { forgetOffline, offlineItem, rememberOffline } from "./offline.js";
-import { STATUSES } from "./query.js";
+import { termLabel, terms } from "./taxonomy.js";
+import { primaryTags } from "./topic-presentation.js";
+import * as reason from "./reason.js";
+import { selectedRefs, tagRef } from "./tag-filter.js";
 import { emit, getItem, mergeItem, on, state } from "./store.js";
 import { confirmAction, openDialog, openMenu, toast } from "./ui.js";
 
@@ -109,17 +112,33 @@ function renderLinks(item, extracted = []) {
   }
 }
 
-function renderStatusControl(item) {
-  const status = item.curation_status || "inbox";
-  for (const button of els.statusButtons) {
-    const active = button.dataset.status === status;
-    button.setAttribute("aria-checked", String(active));
-    button.tabIndex = active ? 0 : -1;
-  }
-  for (const button of els.mobileStatus.querySelectorAll("button[data-status]")) {
-    button.setAttribute("aria-pressed", String(button.dataset.status === status));
-  }
+function tagClass(item, tag) {
+  const pending = tag.field !== "custom_tags" && !item.classification_reviewed;
+  const hit = selectedRefs().includes(tagRef(tag.field, tag.id));
+  const kind = tag.field === "resource_kinds" ? "tag-resource" : tag.field === "custom_tags" ? "tag-custom" : "";
+  return [kind, pending ? "tag-ai" : "", hit ? "hit" : ""].filter(Boolean).join(" ");
 }
+
+// Reader tags: the same primary tags as the list row; a click filters the
+// list through the search popover.
+function renderTags(item) {
+  const labels = primaryTags(item.classification, item.custom_tags, terms("topics"))
+    .map((tag) => ({ ...tag, label: termLabel(tag.field, tag.id, tag.label) }));
+  clear(els.tags, labels.length ? labels.map((tag) => h("button.tag.tag-filter", {
+    type: "button",
+    class: tagClass(item, tag),
+    title: `筛选：${tag.label}`,
+    onclick: () => emit("tag-filter-request", { field: tag.field, term: tag.id })
+  }, tag.label)) : h("span.tag.tag-empty", "暂无标签"));
+}
+
+const VERSION_NOTE = {
+  original: "保存时采集到的文字与媒体，用于核对出处，不会被改写。",
+  organized: "为检索与复用重写的结构化正文，可以多次改写；原文始终保留。",
+  cleaned: "自动整理了段落与排版，文字内容与原文一致；原文始终保留。",
+  only: "这条收藏还没有整理版，显示的是保存时采集到的内容。",
+  translated: "原帖的中文译文；保存时采集到的原始文字可在正文下方「展开原文」查看。"
+};
 
 function renderProcessBanner(item) {
   const banner = els.banner;
@@ -178,23 +197,25 @@ function render(item) {
   document.title = `${title.raw ? "阅读" : item.ai_title} · Cairn 收藏`;
   clear(els.meta,
     h("span.meta-source", sourceLine(item.url) || sourceLabels[item.source] || ""),
-    h("span.meta-sep", "·"),
-    h("time", { dateTime: item.created_at || "" }, formatFull(item.created_at)),
     item.source ? [h("span.meta-sep", "·"), h("span", sourceLabels[item.source] || item.source)] : null,
+    h("span.meta-sep", "·"),
+    h("time", { dateTime: item.created_at || "" }, `收藏于 ${formatFull(item.created_at)}`),
     item.note ? [h("span.meta-sep", "·"), h("span.meta-note", { title: "来自 App 的收藏备注" }, icon("pencil", 12), h("span", item.note))] : null);
   const source = sourceURL(item);
   els.source.hidden = !source;
   if (source) els.source.href = source;
   else els.source.removeAttribute("href");
-  renderStatusControl(item);
+  renderTags(item);
   renderProcessBanner(item);
+  reason.show(item.id);
 
   const summary = displaySummary(item);
   els.lede.textContent = summary.text;
-  els.lede.classList.toggle("wait", summary.wait);
+  els.summary.classList.toggle("queue", summary.wait);
+  els.summaryLabel.textContent = summary.wait ? "摘要 · 排队中" : "摘要 · 系统根据已保存正文生成";
   // A banner already explains a waiting or failed read; the placeholder
   // summary would only repeat it.
-  els.lede.hidden = summary.wait && !els.banner.hidden;
+  els.summary.hidden = !summary.text || (summary.wait && !els.banner.hidden);
 
   const full = item.content_loaded !== false;
   els.bodyLoading.hidden = full;
@@ -204,24 +225,51 @@ function render(item) {
     const reading = paragraphs(els.body, body, !showUnformatted);
     renderFigures(item, body, reading.images);
     void renderMedia(byId('detail-media'),item,els.body);
-    const cleaned = !showUnformatted && els.body.dataset.cleaned === "true";
-    const processed=showUnformatted ? (versionLabels.get(item.id) || "整理版") : (cleaned ? "净读版" : label);
-    if(!showUnformatted) versionLabels.set(item.id,processed);
-    byId("reading-version").textContent=processed;
-    byId("reading-version").setAttribute("aria-checked",String(!showUnformatted));
-    byId("toggle-formatted").hidden=!item.formatted_content && !cleaned && !showUnformatted;
-    byId("toggle-formatted").textContent="原内容";
-    byId("toggle-formatted").setAttribute("aria-checked",String(showUnformatted));
-    const waiting=["pending","processing"].includes(item.formatting_status);
-    byId("format-body").hidden=!aiFormatting;
-    byId("format-body").disabled=waiting || !body;
-    byId("format-body").textContent=waiting ? "AI 精排中" : item.formatting_status === "failed" ? "重试 AI 精排" : item.formatted_content ? "重新 AI 精排" : "AI 精排";
+    renderVersions(item, body, label);
     els.originalBlock.hidden = !item.original_text || item.original_text === body;
     if (!els.original.hidden) paragraphs(els.original, item.original_text || "", false);
     renderLinks(item, reading.links);
   }
   renderPosition();
   els.exportButton.disabled = false;
+}
+
+// 原文 / 整理版 segment above the reason. "整理版" is the formatted text, or
+// the cleaned reading of the original when no formatted text exists yet.
+function renderVersions(item, body, label) {
+  const cleaned = !showUnformatted && els.body.dataset.cleaned === "true";
+  const processed = showUnformatted ? (versionLabels.get(item.id) || "整理版") : (cleaned ? "净读版" : label);
+  if (!showUnformatted) versionLabels.set(item.id, processed);
+  const organized = Boolean(item.formatted_content) || processed === "整理版" || processed === "净读版";
+  const active = organized && !showUnformatted ? "organized" : "original";
+  const base = readingVersions(item, true).label;
+  els.versions.hidden = !body;
+  // Labels stay fixed to the design (原文 / 整理版); the note says when the
+  // original side is a translation or the organized side is a cleaned reading.
+  els.versionOriginal.textContent = "原文";
+  els.versionOrganized.textContent = "整理版";
+  els.versionOrganized.disabled = !organized;
+  els.versionOrganized.title = organized ? "" : "还没有整理版";
+  for (const [button, mode] of [[els.versionOriginal, "original"], [els.versionOrganized, "organized"]]) {
+    const on = mode === active;
+    button.classList.toggle("active", on);
+    button.setAttribute("aria-selected", String(on));
+    button.tabIndex = on ? 0 : -1;
+  }
+  els.versionNote.textContent = !organized ? VERSION_NOTE.only
+    : active === "original" ? (base === "译文" ? VERSION_NOTE.translated : VERSION_NOTE.original)
+    : item.formatted_content ? VERSION_NOTE.organized : VERSION_NOTE.cleaned;
+  const waiting = ["pending", "processing"].includes(item.formatting_status);
+  els.format.hidden = !aiFormatting;
+  els.format.disabled = waiting || !body;
+  els.format.textContent = waiting ? "AI 精排中" : item.formatting_status === "failed" ? "重试 AI 精排" : item.formatted_content ? "重新 AI 精排" : "AI 精排";
+}
+
+export function toggleVersion() {
+  const item = getItem(currentId);
+  if (!item || els.versionOrganized.disabled) return;
+  showUnformatted = !showUnformatted;
+  render(item);
 }
 
 // --- Loading ---------------------------------------------------------------------
@@ -321,6 +369,7 @@ export function showItem(id) {
   if (changed) {
     els.source.hidden = true;
     els.source.removeAttribute("href");
+    els.versions.hidden = true;
     renderedImages = "";
     renderedLinks = "";
     els.original.hidden = true;
@@ -481,6 +530,7 @@ function openDetailMenu(anchor) {
     { label: "导出这条（Markdown）", icon: "download", run: () => hooks.exportItems([item.id]) },
     "separator",
     { heading: "阅读内容" },
+    { label: "切换原文 / 整理版", icon: "refresh", disabled: !els.versions || els.versions.hidden || els.versionOrganized.disabled, run: toggleVersion },
     processable ? {
       label: item.translated_text ? "重新处理" : "立即处理", icon: "refresh", hint: "会调用模型读取原帖",
       disabled: item.status === "processing" || item.paid_call_unresolved, run: () => processItem(item.id)
@@ -501,10 +551,17 @@ function openDetailMenu(anchor) {
 
 export function initDetail(options) {
   hooks = options;
+  reason.initReason();
   byId("format-body").hidden=true;
   fetchJSON("/api/reading-capabilities").then(result=>{aiFormatting=result.ai_formatting===true;if(currentId&&getItem(currentId))render(getItem(currentId));}).catch(()=>{});
-  byId("toggle-formatted").addEventListener("click",()=>{showUnformatted=!showUnformatted;render(getItem(currentId));});
-  byId("reading-version").addEventListener("click",()=>{if(showUnformatted){showUnformatted=false;render(getItem(currentId));}});
+  byId("toggle-formatted").addEventListener("click", () => { if (!showUnformatted && !byId("reading-version").disabled) { showUnformatted = true; render(getItem(currentId)); } });
+  byId("reading-version").addEventListener("click", () => { if (showUnformatted) { showUnformatted = false; render(getItem(currentId)); } });
+  byId("version-seg").addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    event.preventDefault();
+    toggleVersion();
+    byId("version-seg").querySelector("button.active")?.focus();
+  });
   byId("format-body").addEventListener("click",async()=>{
     const id=currentId;const button=byId("format-body");button.disabled=true;
     try {
@@ -518,7 +575,9 @@ export function initDetail(options) {
     pane: byId("detail-pane"), empty: byId("detail-empty"), article: byId("detail"), error: byId("detail-error"),
     errorText: byId("detail-error-text"), scroll: byId("detail-scroll"), back: byId("detail-back"),
     prev: byId("prev-item"), next: byId("next-item"), position: byId("detail-position"),
-    statusButtons: [...byId("status-seg").querySelectorAll("button[data-status]")], mobileStatus: byId("mobile-actions"),
+    tags: byId("detail-tags"), versions: byId("version-block"), versionOriginal: byId("toggle-formatted"),
+    versionOrganized: byId("reading-version"), versionNote: byId("version-note"), format: byId("format-body"),
+    summary: byId("summary-card"), summaryLabel: byId("summary-label"),
     source: byId("open-source"), menuButton: byId("detail-menu"), exportButton: byId("detail-export"),
     meta: byId("detail-meta"), title: byId("detail-title"), banner: byId("process-banner"), lede: byId("detail-lede"),
     figures: byId("figures"), bodyLoading: byId("body-loading"), body: byId("detail-body"),
@@ -526,25 +585,11 @@ export function initDetail(options) {
     original: byId("original"), links: byId("related-links"), nextLink: byId("detail-next"), nextTitle: byId("detail-next-title")
   });
 
-  for (const button of [...els.statusButtons, ...els.mobileStatus.querySelectorAll("button[data-status]")]) {
-    button.addEventListener("click", () => hooks.setStatus(currentId, button.dataset.status));
-  }
-  // Arrow keys move within the radio group, as the ARIA pattern expects.
-  byId("status-seg").addEventListener("keydown", (event) => {
-    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const current = els.statusButtons.findIndex((button) => button === document.activeElement);
-    const next = els.statusButtons[(current + (event.key === "ArrowRight" ? 1 : -1) + STATUSES.length) % STATUSES.length];
-    next.focus();
-    next.click();
-  });
   els.prev.addEventListener("click", () => hooks.step(-1));
   els.next.addEventListener("click", () => hooks.step(1));
   els.back.addEventListener("click", () => hooks.closeDetail());
   els.menuButton.addEventListener("click", () => openDetailMenu(els.menuButton));
   els.exportButton.addEventListener("click", () => hooks.exportItems([currentId]));
-  byId("mobile-more").addEventListener("click", (event) => openDetailMenu(event.currentTarget));
   els.nextLink.addEventListener("click", (event) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
     event.preventDefault();

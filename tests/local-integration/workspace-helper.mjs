@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
 
+// The redesign dropped the sidebar shortcuts; management pages open through
+// the workspace router (settings / ⌘K use the same entry).
+export async function openPage(page, key) {
+  await page.evaluate(async (key) => (await import("/assets/js/workspace.js")).navigate(key), key);
+}
+
 export async function closeWorkspace(page) {
   await page.evaluate(async () =>
     (await import("/assets/js/workspace.js")).closeWorkspace(),

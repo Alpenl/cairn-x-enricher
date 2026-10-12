@@ -3,16 +3,15 @@ import {initTagManager} from "./tag-manager.js";
 import * as collections from "./collections.js";
 import { processingPaused } from "./process-status.js";
 // Application controller: routing, layout, selection and the curation actions
-// that span several components (status changes with auto-advance and undo,
-// batch operations, export).
+// that span several components (tag confirmation with auto-advance, export).
 import { api, errorLabel, fetchJSON } from "./api.js";
 import * as backstage from "./backstage.js";
 import * as curation from "./curation.js";
 import * as detail from "./detail.js";
+import * as reason from "./reason.js";
 import * as diagnostics from "./diagnostics.js";
 import { byId } from "./dom.js";
 import { exportItems, exportServer } from "./export.js";
-import { curationLabels, needsReview } from "./format.js";
 import * as list from "./list.js";
 import { downloadOffline, forgetOffline } from "./offline.js";
 import {
@@ -23,7 +22,8 @@ import { initShortcuts, showHelp } from "./shortcuts.js";
 import * as sidebar from "./sidebar.js";
 import { createSidebarModal } from "./sidebar-modal.js";
 import { emit, getItem, mergeItem, on, state } from "./store.js";
-import { ENTITY_STATES, loadV1, loadV2, vocab } from "./taxonomy.js";
+import { ENTITY_STATES, loadV1, loadV2, termLabel, vocab } from "./taxonomy.js";
+import { initTagFilter, selectedRefs, syncTagFilter, tagRef, withTags } from "./tag-filter.js";
 import { initTheme, saveTheme } from "./theme.js";
 import { confirmAction, openMenu, runLastToastAction, toast } from "./ui.js";
 
@@ -33,7 +33,6 @@ const app = byId("app");
 let bootDeepLink = 0;
 let overviewTimer = 0;
 let overviewGeneration = 0;
-let pendingCuration = 0;
 let healthState = "ok";
 let overviewState = "ok";
 let prefetchTimer = 0;
@@ -199,6 +198,7 @@ function setFilters(filters, search = state.search, { push = false } = {}) {
   backstage.showBackstage(false);
   state.checked.clear();
   sidebar.renderSidebar();
+  syncTagFilter();
   list.reload({ reuse: true });
   if (state.layout !== "wide") setSidebarOpen(false);
 }
@@ -252,12 +252,13 @@ function wireSearch() {
       if (state.search) setFilters(state.filters, "");
     } else input.blur();
   });
+  // Clears the typed text and the tag tokens together (prototype field-clear).
   byId("search-clear").addEventListener("click", () => {
     input.value = "";
-    if (state.search) setFilters(state.filters, "");
+    if (state.search || selectedRefs().length) setFilters(withTags(state.filters, []), "");
     input.focus();
   });
-  const syncClear = () => { byId("search-clear").hidden = !input.value; };
+  const syncClear = () => { byId("search-clear").hidden = !input.value && !selectedRefs().length; };
   input.addEventListener("input", syncClear);
   on("list:loaded", syncClear);
 }
@@ -286,12 +287,11 @@ async function loadStatus() {
 }
 
 function refreshOverview() {
-  if (pendingCuration) return;
   if (overviewFlight) return overviewFlight;
   const generation = overviewGeneration;
   overviewFlight = loadOverview().finally(() => {
     overviewFlight = null;
-    if (generation !== overviewGeneration && !pendingCuration && !overviewTimer && !document.hidden) refreshOverview();
+    if (generation !== overviewGeneration && !overviewTimer && !document.hidden) refreshOverview();
   });
   return overviewFlight;
 }
@@ -301,7 +301,7 @@ async function loadOverview() {
     const overview = await api.overview();
     // A read started before a local edit may contain the old counts. Let
     // the edit's trailing refresh fetch a new snapshot after it is saved.
-    if (generation !== overviewGeneration || pendingCuration) return;
+    if (generation !== overviewGeneration) return;
     state.overview = overview;
     overviewState = overview?.stale ? "backend" : "ok";
     renderServiceState();
@@ -319,26 +319,6 @@ function scheduleOverview(delay = OVERVIEW_EDIT_DELAY) {
   overviewTimer = setTimeout(() => { overviewTimer = 0; refreshOverview(); }, delay);
 }
 
-function adjustOverviewCounts(changes, reverse = false) {
-  if (!state.overview?.views) return;
-  const views = { ...state.overview.views };
-  for (const { previous, next } of changes) {
-    if (!previous || !next || previous === next) continue;
-    const from = reverse ? next : previous;
-    const to = reverse ? previous : next;
-    if (Number.isFinite(views[from])) views[from] = Math.max(0, views[from] - 1);
-    if (Number.isFinite(views[to])) views[to]++;
-  }
-  for (const { uncertainBefore, uncertainAfter } of changes) {
-    if (typeof uncertainBefore !== "boolean" || typeof uncertainAfter !== "boolean") continue;
-    if (Number.isFinite(views.uncertain)) views.uncertain = Math.max(0,
-      views.uncertain + (reverse ? Number(uncertainBefore) - Number(uncertainAfter) : Number(uncertainAfter) - Number(uncertainBefore)));
-  }
-  overviewGeneration++;
-  state.overview = { ...state.overview, views };
-  emit("overview", state.overview);
-}
-
 // --- Curation actions ----------------------------------------------------------------------------
 
 function afterRemoval(removedSelected, successor) {
@@ -351,112 +331,6 @@ function afterRemoval(removedSelected, successor) {
     else history.replaceState(null, "", libraryURL());
     state.route = state.layout === "narrow" ? state.route : { name: "library", id: 0 };
   }
-}
-
-async function undoStatus(changes) {
-  const countChanges = changes.map(({ id, previous }) => ({
-    id, previous: getItem(id)?.curation_status, next: previous,
-    previousReviewed: getItem(id)?.classification_reviewed,
-    uncertainBefore: getItem(id) ? needsReview(getItem(id)) : false, uncertainAfter: false
-  }));
-  pendingCuration++;
-  for (const { id, previous } of changes) {
-    const item = getItem(id);
-    if (!item) continue;
-    mergeItem({ ...item, curation_status: previous, classification_reviewed: true });
-    if (matchesStatusView(getItem(id), state.filters)) list.restoreRow(getItem(id));
-    emit("item", id);
-  }
-  adjustOverviewCounts(countChanges);
-  if (changes.length === 1 && state.order.includes(changes[0].id)) select(changes[0].id);
-  const failures = [];
-  await Promise.all(changes.map(async ({ id, previous }) => {
-    try {
-      mergeItem(await api.curation(id, { curation_status: previous }));
-      emit("item", id);
-    } catch (error) {
-      failures.push({ id, error });
-    }
-  }));
-  const failed = countChanges.filter(({ id }) => failures.some((entry) => entry.id === id));
-  adjustOverviewCounts(failed, true);
-  const leaving = [];
-  for (const { id, previous, previousReviewed } of failed) {
-    const item = getItem(id);
-    if (!item || !previous) continue;
-    mergeItem({ ...item, curation_status: previous, classification_reviewed: previousReviewed });
-    if (matchesStatusView(getItem(id), state.filters)) list.restoreRow(getItem(id));
-    else if (state.order.includes(id)) leaving.push(id);
-    emit("item", id);
-  }
-  if (leaving.length) {
-    const successor = list.removeRows(leaving);
-    afterRemoval(leaving.includes(state.selectedId), successor);
-  }
-  pendingCuration--;
-  scheduleOverview();
-  if (failures.length) toast(`撤销没有全部完成：${errorLabel(failures[0].error.message)}`, { tone: "error" });
-  else toast("已撤销", { tone: "ok" });
-}
-
-// setStatuses applies one curation status to several bookmarks. Rows that
-// leave the current view disappear immediately and, when the open bookmark
-// leaves, the next one opens: the core of inbox triage.
-async function setStatuses(ids, status, { advance = true } = {}) {
-  const changes = ids
-    .map((id) => ({
-      id, previous: getItem(id)?.curation_status || "inbox",
-      previousReviewed: getItem(id)?.classification_reviewed,
-      uncertainBefore: needsReview(getItem(id))
-    }))
-    .filter((change) => getItem(change.id) && change.previous !== status);
-  if (!changes.length) return;
-  pendingCuration++;
-  const leaving = [];
-  for (const { id } of changes) {
-    const next = mergeItem({ ...getItem(id), curation_status: status, classification_reviewed: true });
-    if (state.order.includes(id) && !matchesStatusView(next, state.filters)) leaving.push(id);
-    else list.updateRow(id);
-    emit("item", id);
-  }
-  const removedSelected = leaving.includes(state.selectedId);
-  const successor = leaving.length ? list.removeRows(leaving) : 0;
-  if (advance) afterRemoval(removedSelected, successor);
-  else if (removedSelected) detail.showItem(state.selectedId);
-  adjustOverviewCounts(changes.map(({ previous, uncertainBefore }) => ({ previous, next: status, uncertainBefore, uncertainAfter: false })));
-
-  const failed = [];
-  const queue = changes.slice();
-  const worker = async () => {
-    while (queue.length) {
-      const change = queue.shift();
-      try {
-        // Only the status travels: a status change never confirms AI tags.
-        mergeItem(await api.curation(change.id, { curation_status: status }));
-        emit("item", change.id);
-      } catch (error) {
-        failed.push({ ...change, error });
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(4, changes.length) }, worker));
-  if (failed.length) {
-    adjustOverviewCounts(failed.map(({ previous, uncertainBefore }) => ({ previous, next: status, uncertainBefore, uncertainAfter: false })), true);
-    for (const { id, previous, previousReviewed } of failed) {
-      mergeItem({ ...getItem(id), curation_status: previous, classification_reviewed: previousReviewed });
-      if (matchesStatusView(getItem(id), state.filters)) list.restoreRow(getItem(id));
-      emit("item", id);
-    }
-    toast(`${failed.length} 条没有保存：${errorLabel(failed[0].error?.message)}`, { tone: "error" });
-  }
-  pendingCuration--;
-  scheduleOverview();
-  const saved = changes.filter((change) => !failed.some((entry) => entry.id === change.id));
-  if (!saved.length) return;
-  const label = curationLabels[status];
-  toast(saved.length === 1 ? `已移到「${label}」` : `已把 ${saved.length} 条移到「${label}」`, {
-    tone: "ok", action: { label: "撤销", key: "Z", run: () => undoStatus(saved) }
-  });
 }
 
 async function confirmOne(id) {
@@ -481,65 +355,6 @@ async function confirmOne(id) {
   } else list.updateRow(id);
 }
 
-async function confirmMany(ids) {
-  const candidates = ids.filter((id) => {
-    const item = getItem(id);
-    return item && (vocab.tagSystemAvailable || !item.classification_reviewed) && (item.classification?.topics?.length || item.classification?.resource_kinds?.length || item.classification?.content_functions?.length || item.classification?.form || item.classification?.use);
-  });
-  if (!candidates.length) {
-    toast("所选收藏没有待确认的 AI 标签");
-    return;
-  }
-  let done = 0;
-  for (const id of candidates) {
-    try {
-      if (await curation.confirmTags(id, { quiet: true })) done++;
-    } catch {
-      // Reported in the summary below.
-    }
-  }
-  const leaving = candidates.filter((id) => state.order.includes(id) && !matchesStatusView(getItem(id), state.filters));
-  const removedSelected = leaving.includes(state.selectedId);
-  const successor = leaving.length ? list.removeRows(leaving) : 0;
-  afterRemoval(removedSelected, successor);
-  for (const id of candidates) list.updateRow(id);
-  scheduleOverview();
-  toast(done === candidates.length ? `已确认 ${done} 条的 AI 标签` : `已确认 ${done} 条，${candidates.length - done} 条失败`, { tone: done ? "ok" : "error" });
-}
-
-async function processMany(ids) {
-  const items = ids.map(getItem).filter((item) => item && item.processable !== false && item.status !== "unsupported");
-  if (!items.length) {
-    toast("所选收藏都不能自动读取（只有 X 链接可以）", { tone: "error" });
-    return;
-  }
-  const rewrite = items.filter((item) => item.ai_title || item.translated_text).length;
-  const confirmed = await confirmAction({
-    title: `处理 ${items.length} 条收藏？`,
-    message: `会为每条调用模型读取原帖${rewrite ? `，其中 ${rewrite} 条已有内容会被覆盖` : ""}。人工整理不受影响。`,
-    confirmLabel: "开始处理"
-  });
-  if (!confirmed) return;
-  let accepted = 0;
-  const rejected = [];
-  for (let index = 0; index < items.length; index += 10) {
-    try {
-      const result = await api.process(items.slice(index, index + 10).map((item) => item.id));
-      accepted += result.accepted.length;
-      rejected.push(...result.rejected);
-      for (const id of result.accepted) {
-        mergeItem({ ...getItem(id), status: "processing" });
-        list.updateRow(id);
-        emit("item", id);
-      }
-    } catch (error) {
-      rejected.push({ error: error.message });
-    }
-  }
-  scheduleOverview();
-  toast(rejected.length ? `已提交 ${accepted} 条，${rejected.length} 条未提交：${errorLabel(rejected[0].error)}` : `已提交 ${accepted} 条处理请求`,
-    { tone: rejected.length && !accepted ? "error" : "ok" });
-}
 
 async function exportIds(ids) {
   const items = ids.map(getItem).filter(Boolean);
@@ -575,7 +390,6 @@ async function exportCurrentList() {
 function openListMenu(anchor) {
   openMenu(anchor, [
     { label: "导出当前结果（Markdown）", icon: "download", hint: state.total ? `${Math.min(state.total, 500)} 条，不调用模型` : "不调用模型", run: exportCurrentList },
-    { label: state.checked.size ? "取消全部选择" : "选择全部已加载", icon: "checkSquare", kbd: "X", run: list.checkAllLoaded },
     { label: "刷新列表", icon: "refresh", run: () => list.reload() },
     { label: "下载离线阅读文件", icon: "download", hint: "最近 20 条 · 文字副本", run: async () => {
       if (!await downloadOffline()) toast("还没有离线副本，请先打开一篇收藏阅读。");
@@ -583,19 +397,6 @@ function openListMenu(anchor) {
     { label: "清除本机离线副本", icon: "trash", run: async () => { await forgetOffline(); toast("已清除本机离线副本"); } },
     "separator",
     { label: "键盘快捷键", icon: "keyboard", kbd: "?", run: showHelp }
-  ]);
-}
-
-function openBatchMenu(anchor, ids) {
-  openMenu(anchor, [
-    { label: "加入合集", icon: "layers", run: () => collections.pick(ids) },
-    { label: "整理正文", icon: "sparkles", hint: "整理已存正文，保留原内容", run: async () => {
-      let accepted=0;for(const id of ids){try{await fetchJSON(`/api/bookmarks/${id}/presentation`,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});accepted++;}catch{}}
-      toast(`已提交 ${accepted} 条正文整理${accepted < ids.length ? `，${ids.length-accepted} 条未提交（无正文或连接失败）` : ""}`);
-    } },
-    { label: "确认 AI 标签", icon: "sparkles", hint: "只确认有 AI 建议且未确认的", run: () => confirmMany(ids) },
-    { label: "导出所选（Markdown）", icon: "download", run: () => exportIds(ids) },
-    { label: "重新读取原帖", icon: "refresh", hint: "会调用模型", run: () => processMany(ids) }
   ]);
 }
 
@@ -639,7 +440,6 @@ function onPopState() {
 
 function escape() {
   if(workspaceOpen()){closeWorkspace();return true;}
-  if (state.checked.size) { list.clearChecked(); return true; }
   if (app.classList.contains("sidebar-open")) { setSidebarOpen(false); return true; }
   if (isFocusMode()) { toggleFocus(); return true; }
   if (state.layout === "narrow" && state.route.name === "bookmark") { closeDetail(); return true; }
@@ -655,18 +455,19 @@ async function boot() {
   mediumQuery.addEventListener("change", updateLayout);
   applyRouteClasses();
 
+  initTagFilter({
+    setFilters: (filters, search = state.search) => setFilters(filters, search),
+    focusResults: () => { const row = byId("rows").querySelector("li.row.selected a.row-main") || byId("rows").querySelector("a.row-main"); row?.focus({ preventScroll: true }); }
+  });
   list.initList({
     select: (id, options) => select(id, options),
     querySuffix,
-    batchStatus: (ids, status) => { setStatuses(ids, status, { advance: true }); list.clearChecked(); },
-    batchMenu: openBatchMenu,
     ...hooksForFilters
   });
   detail.initDetail({
     href: bookmarkURL,
     step,
     closeDetail,
-    setStatus: (id, status) => setStatuses([id], status),
     exportItems: exportIds,
     isFocusMode,
     toggleFocus
@@ -701,7 +502,14 @@ async function boot() {
 
   on("account:changed", () => location.reload());
   on("tags:changed", () => { scheduleOverview(); list.reload({ silent: true }); });
-  on("tag-filter-request", ({ field, term }) => setFilters(toggleValue(state.filters, field, term)));
+  // Tag pills in rows and the reader toggle the unified search-popover filter.
+  on("tag-filter-request", ({ field, term }) => {
+    const ref = tagRef(field === "topic_refinements" ? "topics" : field, term);
+    const refs = selectedRefs();
+    const on = !refs.includes(ref);
+    setFilters(withTags(state.filters, on ? [...refs, ref] : refs.filter((r) => r !== ref)));
+    toast(`${on ? "已按标签筛选" : "已移除标签筛选"}：${termLabel(field === "topic_refinements" ? "topics" : field, term, term)}`);
+  });
   on("confirm-request", (id) => confirmOne(id));
   on("select-request", (id) => select(id));
   on("list:loaded", ({ silent } = {}) => {
@@ -730,7 +538,7 @@ async function boot() {
   on("backstage:loading", () => { backstageOverviewGeneration = overviewGeneration; });
   on("backstage", (summary) => {
     backstageOverviewAvailable = Boolean(summary.overview);
-    if (summary.overview && !pendingCuration && backstageOverviewGeneration === overviewGeneration) {
+    if (summary.overview && backstageOverviewGeneration === overviewGeneration) {
       overviewGeneration++; state.overview = summary.overview;
       overviewState = summary.overview.stale ? "backend" : "ok";
       renderServiceState(); emit("overview", summary.overview);
@@ -762,14 +570,12 @@ async function boot() {
       if (state.layout !== "narrow") byId("detail-scroll").focus({ preventScroll: true });
     },
     search: () => { if (state.layout === "narrow" && state.route.name === "bookmark") closeDetail(); byId("search").focus(); byId("search").select(); },
-    status: (status) => { if (state.selectedId) setStatuses([state.selectedId], status); },
-    why: () => { if (state.selectedId) curation.focusWhy(); },
-    confirm: () => { if (state.checked.size) confirmMany([...state.checked]); else if (state.selectedId) confirmOne(state.selectedId); },
+    why: () => { if (state.selectedId) reason.startEdit(); },
+    confirm: () => { if (state.selectedId) confirmOne(state.selectedId); },
     editTags: () => curation.toggleEditingAll(),
     undo: () => { if (!runLastToastAction()) toast("没有可以撤销的操作"); },
-    check: () => { if (state.selectedId) list.toggleChecked(state.selectedId); },
     openSource: () => detail.openSource(),
-    exportCurrent: () => { if (state.checked.size) exportIds([...state.checked]); else if (state.selectedId) exportIds([state.selectedId]); },
+    exportCurrent: () => { if (state.selectedId) exportIds([state.selectedId]); },
     focus: toggleFocus,
     view: (view) => hooksForFilters.setView(view),
     backstage: openBackstage,

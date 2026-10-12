@@ -31,11 +31,10 @@ test-browser:
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome)} node tests/browser/clean-reading.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome)} node tests/browser/media-preview.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node internal/dashboard/search-preview-browser-test.mjs
-	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node internal/dashboard/stable-facets-browser-test.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node internal/dashboard/filter-performance-browser-test.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node internal/dashboard/local-filter-browser-test.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/reading.mjs
-	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node internal/dashboard/topic-navigation-browser-test.mjs
+	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node internal/dashboard/tag-filter-browser-test.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/run.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/offline.mjs
 	CHROME_PATH=$${CHROME_PATH:-$$(command -v google-chrome || command -v chromium || command -v chromium-browser)} node tests/browser/diagnostics.mjs

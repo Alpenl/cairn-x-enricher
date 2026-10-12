@@ -1,15 +1,20 @@
+// The 2026-10 redesign replaced the filter panel with the tag-chip popover
+// under the list search field.
 export async function openFilters(page) {
-  const panel = page.locator("#filter-panel");
-  if (!(await panel.evaluate((node) => node.open)))
-    await page.locator("#filter-button").click();
-  await page.waitForFunction(
-    () => document.querySelector("#filter-panel").open,
-  );
+  if (await page.locator("#tf-pop").isHidden()) await page.locator("#tf-toggle").click();
+  await page.locator("#tf-pop").waitFor();
   await page.waitForTimeout(120);
 }
 export async function closeFilters(page) {
-  if (await page.locator("#filter-panel").evaluate((node) => node.open))
-    await page.locator("#filter-done").click();
+  if (await page.locator("#tf-pop").isVisible()) await page.locator("#tf-toggle").click();
+  await page.locator("#tf-pop").waitFor({ state: "hidden" });
+}
+export async function chooseTag(page, ref) {
+  await openFilters(page);
+  const chip = page.locator(`#tf-pop .tf-chip[data-ref="${ref}"]`);
+  await chip.waitFor();
+  await page.waitForFunction((value) => !document.querySelector(`#tf-pop .tf-chip[data-ref="${value}"]`)?.disabled, ref);
+  await chip.click();
 }
 export async function openCuration(page) {
   await closeFilters(page);

@@ -68,12 +68,9 @@ try {
       ),
       false,
     );
+  // The redesign removed the sidebar shortcuts; pages open from settings / ⌘K.
   const go = async (key) => {
-    if (await page.locator("#sidebar").isVisible())
-      await page
-        .locator(`#${key === "tags" ? "browse-tags" : "browse-collections"}`)
-        .click();
-    else await page.locator(`#tabbar button[data-page="${key}"]`).click();
+    await page.evaluate(async (key) => (await import("/assets/js/workspace.js")).navigate(key), key);
   };
   await page.goto(url);
   await page.waitForFunction(
@@ -86,14 +83,14 @@ try {
       getComputedStyle(node).gridTemplateColumns.split(" ").map(parseFloat),
     );
   assert.equal(columns.length, 3);
-  assert.equal(columns[0], 350);
-  assert.equal(columns[2], 316);
+  assert.equal(columns[0], 352); // prototype 232 / 352 / flex / 300
+  assert.equal(columns[2], 300);
   await page.locator("#pinned-collections .nav-item").click();
   await page.waitForFunction(() =>
     document.querySelector("#pinned-collections [aria-current]"),
   );
   assert.equal(await page.locator("#nav-views [aria-current]").count(), 0);
-  await page.locator('#nav-views [data-view="inbox"]').click();
+  await page.locator('#nav-views [data-view="all"]').click();
   await page.locator("#inspector-toggle").click(); // preserve the user's closed panel across page changes
   for (const width of [1600, 1100, 900, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -142,7 +139,7 @@ try {
       (await import("/assets/js/workspace.js")).closeWorkspace();
     });
     if (width === 1600)
-      await page.locator('#nav-views [data-view="inbox"]').click();
+      await page.locator('#nav-views [data-view="all"]').click();
   }
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(async () => {
@@ -169,11 +166,10 @@ try {
     await page.locator("#inspector").evaluate((node) => node.parentElement.id),
     "library",
   );
-  await page.locator("#filter-button").click();
-  await page.locator("#filter-panel").evaluate((node) => {
-    if (!node.open) throw Error("Filter did not open");
-  });
+  await page.locator("#tf-toggle").click();
+  await page.locator("#tf-pop").waitFor();
   await page.keyboard.press("Escape");
+  await page.locator("#tf-pop").waitFor({ state: "hidden" });
   await page.keyboard.press("Control+k");
   const palette = page.locator('wa-dialog[label="搜索或执行命令"]');
   await palette.getByLabel("搜索命令", { exact: true }).waitFor();

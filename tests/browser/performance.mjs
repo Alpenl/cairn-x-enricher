@@ -72,12 +72,11 @@ try{
   ok("failed tag refresh keeps previous data without recursive retries");
   const taxonomyEvents=await page.evaluate(async()=>{const store=await import('/assets/js/store.js');const tax=await import('/assets/js/taxonomy.js');const {api}=await import('/assets/js/api.js');let count=0;store.on('taxonomy',()=>count++);await Promise.all([tax.loadCustomTags(),tax.loadCustomTags()]);await api.createCustomTag({label:'我的实验'});await Promise.all([tax.loadCustomTags(),tax.loadCustomTags()]);await tax.loadCustomTags();return count;});
   assert.equal(customReads,2);assert.equal(taxonomyEvents,1);ok("custom mutation invalidates one shared catalog and broadcasts only changed values");
-  await closeInspector(page);await openFilters(page);
-  await page.locator('details[data-group="topics"] > summary').click();await wait(()=>counts===1);
-  await page.locator('details[data-group="topics"] > summary').click();
-  await page.evaluate(async()=>{const {state}=await import('/assets/js/store.js');state.filters.topics=['llm'];(await import('/assets/js/sidebar.js')).renderSidebar();});await pause(300);assert.equal(counts,1);
-  await page.locator('details[data-group="topics"] > summary').click();await wait(()=>counts===2);
-  ok("closed facet groups defer requests and reopening fetches the current query");
+  await closeInspector(page);await openFilters(page);await wait(()=>counts===1);
+  await closeFilters(page);
+  await page.evaluate(async()=>{const {state}=await import('/assets/js/store.js');state.filters={...state.filters,tags:'system/topics/llm',tags_mode:'all'};(await import('/assets/js/tag-filter.js')).syncTagFilter();});await pause(300);assert.equal(counts,1);
+  await openFilters(page);await wait(()=>counts===2);
+  ok("a closed tag popover defers count requests and reopening fetches the current query");
   await closeFilters(page);await page.setViewportSize({width:375,height:812});
   await page.waitForFunction(()=>document.querySelector("#app").dataset.layout==="narrow");
   await page.locator("#detail-back").click();
@@ -105,21 +104,10 @@ try{
   assert.equal(backstageReads,1);await pause(50);assert.equal(overviewReads,overviewBefore);
   assert.equal(await page.evaluate(async()=>(await import('/assets/js/store.js')).state.overview.views.all),30);
   ok("backstage refresh shares one summary and reuses overview without another GET");
-  holdBackstage=true;
-  await page.evaluate(async()=>{window.heldBackstage=(await import('/assets/js/backstage.js')).refresh();});
-  await wait(()=>releaseBackstage!==null);
-  await page.evaluate(()=>document.querySelector('#status-seg [data-status="kept"]').click());
-  await page.getByText('已移到「精选」',{exact:true}).waitFor(); // emitted only after pendingCuration--
-  const afterMutation=await page.evaluate(async()=>(await import('/assets/js/store.js')).state.overview.views.inbox);
-  assert.equal(afterMutation,11);
-  releaseBackstage();await page.evaluate(()=>window.heldBackstage);
-  assert.equal(await page.evaluate(async()=>(await import('/assets/js/store.js')).state.overview.views.inbox),afterMutation);
-  ok("late backstage overview cannot replace counts after a local mutation has finished");
+  // (2026-10) Status filing left the UI, so no local mutation adjusts view
+  // counts any more; the late-overview race it guarded no longer exists.
   holdBackstage=false;backstageCombined=false;
   await page.evaluate(async()=>(await import('/assets/js/backstage.js')).refresh());
-  await page.evaluate(async()=>{window.trailingOverviewApplied=false;(await import('/assets/js/store.js')).on('overview',()=>{window.trailingOverviewApplied=true;});});
-  const trailingBefore=overviewReads;await page.clock.fastForward(6_000);
-  await page.waitForFunction(()=>window.trailingOverviewApplied);assert.ok(overviewReads>trailingBefore);
   await page.close();
   // A new page isolates periodic fallback from the prior mutation's trailing
   // read and its in-flight async interval. A request-start counter alone cannot

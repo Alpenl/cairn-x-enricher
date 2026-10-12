@@ -2,7 +2,7 @@
 // entity state, partial pages and unknown query syntax always go to the server.
 const modes = { topics: "topics_mode", resource_kinds: "resource_mode", content_functions: "functions_mode", custom_tags: "custom_mode" };
 const baseKeys = new Set(["limit", "view", "include_cache_identity", "filter_contract_version", "curation_status", "local_filter"]);
-const allowed = new Set([...baseKeys, ...Object.keys(modes), ...Object.values(modes), "topic_refinements"]);
+const allowed = new Set([...baseKeys, ...Object.keys(modes), ...Object.values(modes), "topic_refinements", "tags", "tags_mode"]);
 const statuses = ["pending", "processing", "completed", "failed", "exhausted", "unsupported"];
 const curations = ["all", "inbox", "kept", "compiled", "drop"];
 
@@ -34,12 +34,29 @@ export function localFilterResult(path, params, sourceParams, page, catalog) {
     if (raw.length > 1024 || raw.split(",").length > 64 || terms.some(id => !catalog.topics?.some(term => term.id === id && term.granularity === "specific"))) return null;
     groups.push({ field: "topics", terms, mode: "all" });
   }
+  // Unified tag chips (search popover): one any/all group across dimensions.
+  // Only the four locally indexed dimensions qualify; anything else (and
+  // tags_children, which needs the topic graph) goes to the server.
+  if (params.has("tags_mode") && (!params.has("tags") || !["any", "all"].includes(params.get("tags_mode")))) return null;
+  if (params.has("tags")) {
+    const raw = params.get("tags"), refs = [...new Set(raw.split(","))], terms = [];
+    if (raw.length > 4096 || raw.split(",").length > 32) return null;
+    for (const ref of refs) {
+      const [kind, field, id] = ref.split("/");
+      if (kind === "custom" && field === "default" && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(id || "")) terms.push(["custom_tags", id]);
+      else if (kind === "system" && modes[field] && field !== "custom_tags" && catalog[field]?.some(entry => entry.id === id) && ref.split("/").length === 3) terms.push([field, id]);
+      else return null;
+    }
+    groups.push({ refs: terms, mode: params.get("tags_mode") || "any" });
+  }
   // Fail closed if a future/legacy summary cannot express the count contract.
   if (new Set(page.items.map(item => item.id)).size !== page.items.length ||
       page.items.some(item => !statuses.includes(item.status) || !curations.includes(item.curation_status))) return null;
   const values = (item, field) => field === "custom_tags" ? (item.custom_tags || []).map(tag => tag.id) : item.classification?.[field] || [];
   const items = page.items.filter(item => (targetView === "all" || item.curation_status === targetView) &&
-    groups.every(({ field, terms, mode }) => terms[mode === "all" ? "every" : "some"](term => values(item, field).includes(term))));
+    groups.every(({ field, terms, refs, mode }) => refs
+      ? refs[mode === "all" ? "every" : "some"](([f, term]) => values(item, f).includes(term))
+      : terms[mode === "all" ? "every" : "some"](term => values(item, field).includes(term))));
   if (path === "/api/tag-counts") {
     const counts = { total: items.length };
     for (const field of Object.keys(modes)) {
