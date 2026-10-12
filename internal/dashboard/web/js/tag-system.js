@@ -4,7 +4,7 @@ import { icon } from "./icons.js";
 import { emit, getItem, mergeItem } from "./store.js";
 import { loadCustomTags, termActive, termLabel, terms, vocab } from "./taxonomy.js";
 import { confirmAction, openDialog, openMenu, toast } from "./ui.js";
-import { PRIMARY_TAG_FIELDS, findTagName, parseTagRef, previewTagActions, rejectedTags, reviewCandidates, tagFieldState, tagOrigin, tagRef, tagStatusText } from "./tag-state.js";
+import { PRIMARY_TAG_FIELDS, aiPending, findTagName, parseTagRef, previewTagActions, rejectedTags, reviewCandidates, tagFieldState, tagOrigin, tagRef, tagStatusText } from "./tag-state.js";
 
 const sessions = new Map();
 let currentID = 0;
@@ -197,6 +197,20 @@ function conflictView(session) {
   const difference = blocked.current ? PRIMARY_TAG_FIELDS.map(({ key, label }) => `${label}：${(blocked.current.selection?.[key] || []).map((term) => termLabel(key, term)).join("、") || "无"}`).join("；") : "";
   return h("div.tag-system-conflict", { role: "alert" }, h("p", `${blocked.error}。你的修改还保留着。`), difference ? h("p", `最新结果：${difference}`) : null, h("div.conflict-actions", retry, discard));
 }
+// E4: a suggestion held for confirmation. Not a tag yet: it is excluded from
+// filters and collection rules until confirmed. Click confirms, × dismisses.
+function pendingChip(session, field, entry) {
+  const label = termLabel(field, entry.term);
+  const low = entry.reason === "low_confidence";
+  const title = low ? "AI 不太确定的建议，确认后才生效" : "AI 建议，确认后才生效";
+  return h("span.tag-system-chip.pending", { dataset: { origin: "pending", reason: entry.reason, term: entry.term } },
+    h("span.tag-dot", { "aria-hidden": "true" }),
+    h("button.tag-name", { type: "button", title: `${title}；点击确认`, "aria-label": `确认${label}`,
+      onclick: () => queue(session, [{ action: "confirm", tag_ref: tagRef(field, entry.term) }]) }, label,
+      low ? h("span.lowc", { title: "低置信度", "aria-hidden": "true" }, "?") : null),
+    h("button.tag-remove", { type: "button", "aria-label": `忽略${label}`, title: "忽略这条建议",
+      onclick: () => queue(session, [{ action: "reject", tag_ref: tagRef(field, entry.term) }]) }, icon("x", 12)));
+}
 export function renderTagSystem(id) {
   const session = sessionFor(id);
   if (session.status === "idle" || session.status === "unsupported") return false;
@@ -226,8 +240,9 @@ export function renderTagSystem(id) {
   const payload = session.draft || session.payload;
   const rows = PRIMARY_TAG_FIELDS.map(({ key, label }) => {
     const selected = payload.selection?.[key] || [];
-    const content = h("div.tag-system-values", selected.map((term) => effectiveChip(session, key, term)));
-    if (!selected.length) content.append(h("span.chip-empty", tagStatusText(payload, key) || "暂无匹配标签"));
+    const content = h("div.tag-system-values", selected.map((term) => effectiveChip(session, key, term)),
+      aiPending(payload, key).map((entry) => pendingChip(session, key, entry)));
+    if (!selected.length && !aiPending(payload, key).length) content.append(h("span.chip-empty", tagStatusText(payload, key) || "暂无匹配标签"));
     const groupMore = h("button.icon-btn", { type: "button", "aria-label": `${label}更多操作` }, icon("more", 14));
     groupMore.addEventListener("click", () => groupMenu(session, key, label, groupMore));
     const stateText = selected.length ? tagStatusText(payload, key) : "";
@@ -246,7 +261,12 @@ export function renderTagSystem(id) {
   if (suggestions.length) rows.push(h("details.tag-suggestions", h("summary", `其他建议（${suggestions.length}）`), h("p.tag-system-status", "这些候选尚未作为标签，不参与默认筛选。"),
     h("div.tag-system-values", suggestions.map((entry) => h("button.chip.option", { type: "button", title: "采用这项建议", onclick: () => queue(session, [{ action: "accept", tag_ref: tagRef(entry.field, entry.term_id) }]) }, termLabel(entry.field, entry.term_id), icon("plus", 12))))));
   const autoCount = PRIMARY_TAG_FIELDS.reduce((n, { key }) => n + (payload.selection?.[key] || []).filter((term) => tagOrigin(payload, key, term) === "自动标签").length, 0);
+  const pendingAll = aiPending(payload);
+  if (pendingAll.length) rows.push(h("div.tag-pending-note", { role: "note" },
+    h("span", `${pendingAll.length} 个 AI 建议待你确认，确认前不参与筛选和合集规则。`),
+    h("button.link-btn.small", { type: "button", onclick: () => queue(session, pendingAll.map((entry) => ({ action: "confirm", tag_ref: tagRef(entry.field, entry.term) }))) }, "全部确认")));
   rows.push(h("div.tag-legend", h("span", h("i.is-auto"), "自动标签"), h("span", h("i.is-confirmed"), "你已确认"), h("span", h("i.is-added"), "你添加"),
+    pendingAll.length ? h("span", h("i.is-pending"), "待确认") : null,
     autoCount ? h("button.link-btn.small", { type: "button", title: "确认全部自动标签 (A)", onclick: () => queue(session, PRIMARY_TAG_FIELDS.flatMap(({ key }) => (payload.selection?.[key] || []).filter((term) => tagOrigin(payload, key, term) === "自动标签").map((term) => ({ action: "confirm", tag_ref: tagRef(key, term) })))) }, `确认 ${autoCount} 个自动标签`) : null));
   rows.push(h("div.tag-system-toolbar", h("button.btn.btn-sm", { type: "button", onclick: () => openPicker(session) }, icon("plus", 14), "添加标签"),
     h("button.link-btn.small", { type: "button", onclick: () => showHistory(session) }, "查看变更"),

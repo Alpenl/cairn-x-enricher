@@ -48,7 +48,7 @@ function paintAi(body) {
   const pendN = shown.filter(pending).length, autoN = shown.length - pendN;
   clear(body, h("div.sp-col",
     h("section.sp-group", { "aria-labelledby": "g-ai-1" },
-      groupHead("g-ai-1", "建议与确认", "新收藏保存后，AI 会依据每个标签的含义说明给出建议。这些设置在所有设备上同步。"),
+      groupHead("g-ai-1", "建议与确认", "新收藏保存后，AI 会依据每个标签的含义说明给出建议。这些设置在所有设备上同步，只影响之后新判断的收藏，已有标签不会被改动。"),
       h("div.set-card",
         h("div.set-row", { dataset: { setting: "ai-count" } },
           h("div.txt", h("div.ttl#lbl-sc", "每条收藏最多建议 ", h("b", String(p.ai_suggestion_limit)), " 个标签"), h("div.dsc", "数量越少，建议越集中在最有把握的标签上。")),
