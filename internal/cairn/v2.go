@@ -91,7 +91,7 @@ func (c *Client) GetV2Selection(ctx context.Context, id int64) (V2SelectionView,
 		return V2SelectionView{}, err
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed {
+	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed || response.StatusCode == http.StatusNotImplemented {
 		return V2SelectionView{}, ErrV2Unsupported
 	}
 	if response.StatusCode != http.StatusOK {
@@ -290,7 +290,7 @@ func (c *Client) ApplyV2Override(ctx context.Context, id int64, override V2Overr
 		return nil, err
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed {
+	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed || response.StatusCode == http.StatusNotImplemented {
 		return nil, ErrV2Unsupported
 	}
 	if response.StatusCode != http.StatusOK {

@@ -51,3 +51,38 @@ func TestSelectionProxyPreservesOptionalStoredLifecycle(t *testing.T) {
 		})
 	}
 }
+
+func TestSelectionAndEntityWriteProxyDistinguishUnsupportedWorker(t *testing.T) {
+	for _, status := range []int{http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusNotImplemented} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			worker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"error":"unsupported"}`))
+			}))
+			defer worker.Close()
+			server := &Server{backend: cairn.NewClient(worker.URL, "test-internal", worker.Client()),
+				logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+			for _, method := range []string{http.MethodGet, http.MethodPost} {
+				request := httptest.NewRequestWithContext(context.Background(), method, "/",
+					strings.NewReader(`{"field":"entities","action":"accept","term":"Manual","operation_key":"unsupported","expected_revision":0}`))
+				request.SetPathValue("id", "4")
+				request.Header.Set("Content-Type", "application/json")
+				response := httptest.NewRecorder()
+				if method == http.MethodGet {
+					server.getV2Selection(response, request)
+					var result map[string]any
+					if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &result) != nil ||
+						result["available"] != false || result["reason"] != "v2_unsupported" {
+						t.Fatalf("unsupported read became known data/error: %d %s", response.Code, response.Body.String())
+					}
+				} else {
+					server.applyV2Override(response, request)
+					if response.Code != 409 || !strings.Contains(response.Body.String(), "v2_unsupported") {
+						t.Fatalf("unsupported write lost its capability result: %d %s", response.Code, response.Body.String())
+					}
+				}
+			}
+		})
+	}
+}
