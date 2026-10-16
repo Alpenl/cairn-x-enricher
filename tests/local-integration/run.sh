@@ -217,6 +217,7 @@ run_case manualrestart TestLocalWorkerManualSourceSurvivesProcessExit
 run_case competition TestLocalWorkerVersionCompetition
 run_case rename TestLocalWorkerDisplayRenameKeepsSemantics
 run_case evidence TestLocalWorkerEvidenceCheckpointAndBoundRead
+run_case entitysource TestLocalWorkerEntitySourceRead
 
 run_case entities TestLocalWorkerEntitySnapshotIdentity
 
