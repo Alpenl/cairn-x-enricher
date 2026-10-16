@@ -663,7 +663,13 @@ func (s *Server) getV2Selection(writer http.ResponseWriter, request *http.Reques
 		s.writeBackendError(writer, "get v2 selection", id, err)
 		return
 	}
-	writeJSON(writer, http.StatusOK, map[string]any{"available": true, "selection": view.Selection, "automatic": view.Automatic, "v1_projection": view.V1Projection, "taxonomy_version": view.TaxonomyVersion, "v1_only": view.V1Only, "revision": view.Revision})
+	payload := map[string]any{"available": true, "selection": view.Selection, "automatic": view.Automatic, "v1_projection": view.V1Projection, "taxonomy_version": view.TaxonomyVersion, "v1_only": view.V1Only, "revision": view.Revision}
+	// Forward only the stored lifecycle/origins. Older Workers omit this field;
+	// absence must remain unknown rather than become an invented empty result.
+	if len(view.State) != 0 {
+		payload["state"] = view.State
+	}
+	writeJSON(writer, http.StatusOK, payload)
 }
 
 func (s *Server) updateV2Selection(writer http.ResponseWriter, request *http.Request) {
@@ -1512,7 +1518,7 @@ func (s *Server) writeBackendError(writer http.ResponseWriter, operation string,
 		case "job_busy":
 			writeError(writer, http.StatusConflict, apiErr.Code)
 			return
-		case "invalid_limit", "invalid_before_id", "invalid_status", "invalid_query", "invalid_curation":
+		case "invalid_limit", "invalid_before_id", "invalid_status", "invalid_query", "invalid_curation", "invalid_override":
 			writeError(writer, http.StatusBadRequest, apiErr.Code)
 			return
 		case "invalid_tag_operation", "invalid_tag_definition", "invalid_dimension", "invalid_tag", "invalid_label", "personal_use_human_only":

@@ -448,11 +448,14 @@ async function partA(browser) {
   check("classification status is shown independently", /分类完成/.test(await page.textContent("#v2-classification-status") || ""));
   check("the entity row renders the stored entities", /acme/.test(await page.textContent("#v2-entity-list") || ""));
   await openCuration(page);
-  await page.fill("#v2-entity-input", "widget");
+  const manualEntity = "widget" + "x".repeat(114);
+  await page.locator("#v2-entity-input").pressSequentially(manualEntity);
   await page.click("#v2-entity-add");
-  await waitFor(() => state.actions.some((entry) => entry.action === "entity" && entry.body.term === "widget"));
-  await waitFor(async () => /widget/.test(await page.textContent("#v2-entity-list") || ""));
-  check("a human entity correction is submitted and shown", /widget/.test(await page.textContent("#v2-entity-list") || ""));
+  await waitFor(() => state.actions.some((entry) => entry.action === "entity" && entry.body.term === manualEntity));
+  await waitFor(async () => (await page.textContent("#v2-entity-list") || "").includes(manualEntity));
+  check("every valid-length human entity name is submitted and shown without truncation",
+    state.actions.some((entry) => entry.action === "entity" && entry.body.term === manualEntity) &&
+    (await page.textContent("#v2-entity-list") || "").includes(manualEntity));
   const entityRequest = state.actions.find((entry) => entry.action === "entity");
   check("entity corrections carry an operation key and revision", typeof entityRequest?.body.operation_key === "string" && Number.isInteger(entityRequest.body.expected_revision));
 
