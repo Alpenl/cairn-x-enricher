@@ -15,6 +15,20 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 enricher_root="$(cd "$here/../.." && pwd)"
 share_root="$(cd "${CAIRN_SHARE_ROOT:-$enricher_root/../cairn-share}" && pwd)"
 
+suite_shards="${CAIRN_INTEGRATION_SHARDS:-1}"
+suite_shard="${CAIRN_INTEGRATION_SHARD:-0}"
+if ! [[ "$suite_shards" =~ ^(0|[1-9][0-9]?)$ ]] || ! [[ "$suite_shard" =~ ^(0|[1-9][0-9]?)$ ]] ||
+  (( suite_shards < 1 || suite_shards > 16 || suite_shard >= suite_shards )); then
+  echo "Invalid integration shard: use 1..16 shards and an index in 0..shards-1" >&2
+  exit 2
+fi
+if (( suite_shards > 1 )) && [ -n "${CAIRN_INTEGRATION_CASE:-}${CAIRN_INTEGRATION_FROM:-}" ]; then
+  echo "A sharded suite cannot also select or resume one scenario" >&2
+  exit 2
+fi
+case_index=0
+selected_cases=0
+
 if [ ! -d "$share_root/worker/node_modules" ]; then
   echo "worker dependencies are not installed; run npm ci in $share_root/worker" >&2
   exit 1
@@ -165,6 +179,8 @@ stop_worker() {
 
 run_case() {
   local name="$1" test_name="$2"
+  local ordinal="$case_index"
+  case_index=$((case_index + 1))
   if [ -n "${CAIRN_INTEGRATION_CASE:-}" ] && [ "$CAIRN_INTEGRATION_CASE" != "$name" ]; then return; fi
   # Local failure recovery may resume at one named scenario. CI leaves this
   # unset and always exercises the entire suite against fresh databases.
@@ -172,12 +188,14 @@ run_case() {
     if [ "$resume_pending" != "$name" ]; then return; fi
     resume_pending=""
   fi
+  if (( ordinal % suite_shards != suite_shard )); then return; fi
+  selected_cases=$((selected_cases + 1))
   local port work race_change
   port="$(free_port)"
   work="$work_root/$name"
   race_change="${name#completionrace}"
   race_change="${race_change#processor}"
-  echo "== $test_name: starting worker on 127.0.0.1:$port =="
+  echo "== $name / $test_name: starting worker on 127.0.0.1:$port =="
   start_worker "$name" "$port" "$work"
   (
     cd "$enricher_root"
@@ -190,6 +208,7 @@ run_case() {
     go test ./tests/localintegration/ -run "$test_name" -count=1 -v
   )
   stop_worker
+  echo "== passed scenario: $name =="
 }
 
 run_case lifecycle TestLocalWorkerFullLifecycle
@@ -259,3 +278,8 @@ if [ -n "$resume_pending" ]; then
   echo "Unknown integration resume scenario: $resume_pending" >&2
   exit 1
 fi
+if (( selected_cases == 0 )); then
+  echo "No integration scenarios selected; check CAIRN_INTEGRATION_CASE/shard configuration" >&2
+  exit 2
+fi
+echo "Integration shard $suite_shard/$suite_shards: $selected_cases of $case_index scenarios passed"
