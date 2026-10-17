@@ -239,6 +239,7 @@ run_case evidence TestLocalWorkerEvidenceCheckpointAndBoundRead
 run_case entitysource TestLocalWorkerEntitySourceRead
 run_case entityhuman TestLocalWorkerEntityHumanCuration
 run_case apprunhistory TestLocalWorkerAppRunHistory
+run_case savedrecords TestLocalWorkerSavedRecords
 
 run_case entities TestLocalWorkerEntitySnapshotIdentity
 
