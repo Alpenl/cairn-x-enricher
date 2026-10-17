@@ -829,7 +829,11 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, body an
 		}
 		reader = bytes.NewReader(payload)
 	}
+	return c.doRequest(ctx, method, path, reader, extraHeaders)
+}
 
+func (c *Client) doRequest(ctx context.Context, method, path string, reader io.Reader,
+	extraHeaders map[string]string) (*http.Response, error) {
 	request, err := http.NewRequestWithContext(traceUpstream(ctx), method, c.baseURL+path, reader)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -863,7 +867,7 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, body an
 		request.Header.Set("X-Cairn-Classification-Gate", "1")
 	}
 	request.Header.Set("Accept", "application/json")
-	if body != nil {
+	if reader != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
 	for name, value := range extraHeaders {

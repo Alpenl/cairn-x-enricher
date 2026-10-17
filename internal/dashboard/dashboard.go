@@ -381,6 +381,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/bookmarks/{id}/run-history", s.appRunHistory)
 	mux.HandleFunc("/api/bookmarks/{id}/run-history/{run_id}", s.appRunHistory)
 	mux.HandleFunc("/api/bookmarks/{id}/saved-records/{kind}", s.savedRecords)
+	mux.HandleFunc("/api/bookmarks/{id}/manual-material", s.manualMaterial)
 	mux.HandleFunc("GET /api/bookmarks/{id}/entities", s.getEntities)
 	mux.HandleFunc("GET /api/bookmarks/{id}/entity-evidence", s.getEntityEvidence)
 	mux.HandleFunc("POST /api/bookmarks/{id}/entities", s.correctEntity)
