@@ -1040,10 +1040,12 @@ func evidenceFromSnapshot(payload json.RawMessage) (*classify.Evidence, error) {
 	var view struct {
 		Snapshot struct {
 			Blocks []struct {
-				ID   string `json:"id"`
-				Role string `json:"role"`
-				Text string `json:"text"`
-				URL  string `json:"url"`
+				ID       string `json:"id"`
+				Role     string `json:"role"`
+				Text     string `json:"text"`
+				URL      string `json:"url"`
+				Relation string `json:"relation"`
+				Acquired string `json:"acquired"`
 			} `json:"blocks"`
 			Truncation struct {
 				Truncated bool `json:"truncated"`
@@ -1082,6 +1084,7 @@ func evidenceFromSnapshot(payload json.RawMessage) (*classify.Evidence, error) {
 		}
 		evidence.Context = append(evidence.Context, classify.EvidenceBlock{
 			ID: block.ID, Role: role, Text: block.Text, URL: block.URL,
+			Relation: block.Relation, Acquired: block.Acquired,
 		})
 	}
 	if strings.TrimSpace(evidence.Primary) == "" {

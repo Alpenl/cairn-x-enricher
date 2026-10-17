@@ -86,12 +86,12 @@ func (c *Client) GetV2Selection(ctx context.Context, id int64) (V2SelectionView,
 	if id < 1 {
 		return V2SelectionView{}, errors.New("bookmark ID must be positive")
 	}
-	response, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v2/links/%d/selection?include_automatic=1", id), nil)
+	response, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v2/links/%d/selection?include_automatic=1&include_state=1", id), nil)
 	if err != nil {
 		return V2SelectionView{}, err
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed {
+	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed || response.StatusCode == http.StatusNotImplemented {
 		return V2SelectionView{}, ErrV2Unsupported
 	}
 	if response.StatusCode != http.StatusOK {
@@ -290,7 +290,7 @@ func (c *Client) ApplyV2Override(ctx context.Context, id int64, override V2Overr
 		return nil, err
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed {
+	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed || response.StatusCode == http.StatusNotImplemented {
 		return nil, ErrV2Unsupported
 	}
 	if response.StatusCode != http.StatusOK {

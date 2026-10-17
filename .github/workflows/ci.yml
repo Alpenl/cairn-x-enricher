@@ -45,12 +45,18 @@ jobs:
       - name: Build
         run: go build -trimpath ./cmd/cairn-x-enricher
 
-  integration:
-    name: Real Worker, D1 and browser contracts
+  integration-tests:
+    name: Worker/D1 shard ${{ matrix.shard }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
     env:
       WRANGLER_SEND_METRICS: "false"
+      CAIRN_INTEGRATION_SHARDS: "2"
+      CAIRN_INTEGRATION_SHARD: ${{ matrix.shard }}
     defaults:
       run:
         working-directory: cairn-x-enricher
@@ -95,6 +101,7 @@ jobs:
           npm ci --no-audit --no-fund
           npm ci --prefix ../cairn-share/worker --no-audit --no-fund
       - name: Select the browser for contract tests
+        if: matrix.shard == 0
         timeout-minutes: 5
         run: |
           chrome_path="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
@@ -115,9 +122,25 @@ jobs:
       - name: Run real Go and Worker integration
         run: bash tests/local-integration/run.sh
       - name: Run browser interaction regressions
+        if: matrix.shard == 0
         run: npm run test-browser
       - name: Run browser against the real local stack
+        if: matrix.shard == 0
         run: bash tests/local-integration/browser-e2e.sh
+
+  # Keep the existing required check name and container dependency. A failed,
+  # cancelled or skipped shard cannot turn the aggregate gate green.
+  integration:
+    name: Real Worker, D1 and browser contracts
+    needs: integration-tests
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every integration shard
+        env:
+          RESULT: ${{ needs.integration-tests.result }}
+        run: test "$RESULT" = success
 
   docker:
     name: Build container

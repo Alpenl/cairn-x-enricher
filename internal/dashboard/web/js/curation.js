@@ -678,7 +678,7 @@ function renderEntityRow(session) {
   const state = payload.stale ? "stale" : payload.state || "not_run";
   const stateText = ENTITY_STATE_LABELS[state];
   if (!entities.length || state === "stale") field.append(h("span.chip-empty#v2-entity-state", stateText || "无"));
-  const input = h("input.entity-input#v2-entity-input", { type: "text", maxLength: 80, placeholder: "添加实体", "aria-label": "人工添加实体" });
+  const input = h("input.entity-input#v2-entity-input", { type: "text", maxLength: 120, placeholder: "添加实体", "aria-label": "人工添加实体" });
   const add = h("button.chip.chip-edit#v2-entity-add", { type: "button", title: "添加实体" }, icon("plus", 12), h("span", "添加"));
   const submit = () => {
     const value = input.value.trim();
