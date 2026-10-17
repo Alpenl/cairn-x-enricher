@@ -112,6 +112,7 @@ type Server struct {
 	stopWorkers          context.CancelFunc
 	tracker              *health.Tracker
 	backend              Backend
+	appPolicyToken       string
 	processor            JobProcessor
 	logger               *slog.Logger
 	jobs                 chan manualJob
@@ -383,6 +384,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/bookmarks/{id}/saved-records/{kind}", s.savedRecords)
 	mux.HandleFunc("/api/bookmarks/{id}/manual-material", s.manualMaterial)
 	mux.HandleFunc("/api/bookmarks/{id}/processing", s.processing)
+	mux.HandleFunc("/api/app-policy/bookmarks/{id}/{action}", s.appPolicy)
 	mux.HandleFunc("GET /api/bookmarks/{id}/entities", s.getEntities)
 	mux.HandleFunc("GET /api/bookmarks/{id}/entity-evidence", s.getEntityEvidence)
 	mux.HandleFunc("POST /api/bookmarks/{id}/entities", s.correctEntity)
