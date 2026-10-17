@@ -58,6 +58,8 @@ PY
 
 start_worker() {
   local name="$1" port="$2" work="$3"
+  local policy_url=""
+  if [ -n "${4:-}" ]; then policy_url="http://127.0.0.1:$4"; fi
   local entry="$share_root/worker/src/index.ts"
   mkdir -p "$work"
   cp -r "$share_root/worker/migrations" "$work/migrations"
@@ -140,12 +142,12 @@ EOF
   "r2_buckets": [
     { "binding": "ENRICHMENT_IMAGES", "bucket_name": "cairn-x-enrichment-images-$name" }
   ],
-  "vars": { "CAIRN_API_TOKEN": "app", "CAIRN_ENRICHER_TOKEN": "internal", "CAIRN_OPERATOR_TOKEN": "operator" }
+  "vars": { "CAIRN_API_TOKEN": "app", "CAIRN_ENRICHER_TOKEN": "internal", "CAIRN_OPERATOR_TOKEN": "operator", "CAIRN_POLICY_REPLAY_URL": "$policy_url" }
 }
 EOF
   (cd "$share_root/worker" && ./node_modules/.bin/wrangler d1 migrations apply "cairn-share-$name" --local --config "$work/wrangler.jsonc" >"$work/migrations.log" 2>&1) \
     || { cat "$work/migrations.log"; exit 1; }
-  if [ "$name" = "imageprivacy" ] || [ "$name" = "processing" ]; then
+  if [ "$name" = "imageprivacy" ] || [ "$name" = "processing" ] || [ "$name" = "appreplay" ]; then
     # A synthetic 1px PNG seeded through the real local R2 CLI. The test
     # creates/deletes its owner through authenticated Worker HTTP.
     python3 -c 'import base64,sys; open(sys.argv[1], "wb").write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM7sAAAAASUVORK5CYII="))' "$work/pixel.png"
@@ -190,19 +192,24 @@ run_case() {
   fi
   if (( ordinal % suite_shards != suite_shard )); then return; fi
   selected_cases=$((selected_cases + 1))
-  local port work race_change
+  local port work race_change policy_port=""
   port="$(free_port)"
+  if [ "$name" = "appreplay" ]; then
+    policy_port="$(free_port)"
+    while [ "$policy_port" = "$port" ]; do policy_port="$(free_port)"; done
+  fi
   work="$work_root/$name"
   race_change="${name#completionrace}"
   race_change="${race_change#processor}"
   echo "== $name / $test_name: starting worker on 127.0.0.1:$port =="
-  start_worker "$name" "$port" "$work"
+  start_worker "$name" "$port" "$work" "$policy_port"
   (
     cd "$enricher_root"
     CAIRN_WORKER_URL="http://127.0.0.1:$port" \
     CAIRN_WRANGLER_CONFIG="$work/wrangler.jsonc" \
     CAIRN_SHARE_ROOT="$share_root" \
     CAIRN_RACE_CHANGE="$race_change" \
+    CAIRN_POLICY_EXECUTOR_ADDR="127.0.0.1:${policy_port:-0}" \
     CAIRN_APP_TOKEN=app \
     CAIRN_ENRICHER_TOKEN=internal \
     go test ./tests/localintegration/ -run "$test_name" -count=1 -v
@@ -276,6 +283,9 @@ run_case entitycache TestLocalWorkerEntityCacheCLI
 run_case sourcerevision TestLocalWorkerSourceRevisionOnce
 
 run_case canonicalentities TestLocalWorkerCanonicalEntitiesCLI
+
+# Append to preserve all previous scenario ordinals and shard assignments.
+run_case appreplay TestLocalWorkerAppPolicyPreviewAndLostReceipt
 
 if [ -n "$resume_pending" ]; then
   echo "Unknown integration resume scenario: $resume_pending" >&2
