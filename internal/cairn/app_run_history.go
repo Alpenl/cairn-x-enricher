@@ -33,7 +33,7 @@ func (c *Client) GetAppRunHistory(ctx context.Context, id, runID, after int64) (
 			path += fmt.Sprintf("?after_id=%d", after)
 		}
 	}
-	response, err := c.doWithHeaders(ctx, http.MethodGet, path, nil, map[string]string{"X-Cairn-App-Run-History": "1"})
+	response, err := c.doHistoryRead(ctx, path, "X-Cairn-App-Run-History")
 	if err != nil {
 		return nil, err
 	}
