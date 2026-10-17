@@ -145,7 +145,7 @@ EOF
 EOF
   (cd "$share_root/worker" && ./node_modules/.bin/wrangler d1 migrations apply "cairn-share-$name" --local --config "$work/wrangler.jsonc" >"$work/migrations.log" 2>&1) \
     || { cat "$work/migrations.log"; exit 1; }
-  if [ "$name" = "imageprivacy" ]; then
+  if [ "$name" = "imageprivacy" ] || [ "$name" = "processing" ]; then
     # A synthetic 1px PNG seeded through the real local R2 CLI. The test
     # creates/deletes its owner through authenticated Worker HTTP.
     python3 -c 'import base64,sys; open(sys.argv[1], "wb").write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM7sAAAAASUVORK5CYII="))' "$work/pixel.png"
@@ -241,6 +241,7 @@ run_case entityhuman TestLocalWorkerEntityHumanCuration
 run_case apprunhistory TestLocalWorkerAppRunHistory
 run_case savedrecords TestLocalWorkerSavedRecords
 run_case manualmaterial TestLocalWorkerManualMaterialRecoveryAndClassification
+run_case processing TestLocalWorkerProcessingSourceAndIndependentStages
 
 run_case entities TestLocalWorkerEntitySnapshotIdentity
 
