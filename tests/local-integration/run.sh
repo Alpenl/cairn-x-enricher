@@ -219,6 +219,7 @@ run_case rename TestLocalWorkerDisplayRenameKeepsSemantics
 run_case evidence TestLocalWorkerEvidenceCheckpointAndBoundRead
 run_case entitysource TestLocalWorkerEntitySourceRead
 run_case entityhuman TestLocalWorkerEntityHumanCuration
+run_case apprunhistory TestLocalWorkerAppRunHistory
 
 run_case entities TestLocalWorkerEntitySnapshotIdentity
 
